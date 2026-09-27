@@ -33,7 +33,7 @@ import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
-import { ArtAssets, SceneManager, resolveQuality } from '@render/index';
+import { ArtAssets, CARD_FONT, SceneManager, resolveQuality } from '@render/index';
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
@@ -272,6 +272,19 @@ async function boot(): Promise<void> {
     if (missing.length > 0) {
       console.warn(`[FungiFlush] ${missing.length} claves i18n faltantes:`, missing.slice(0, 10));
     }
+  }
+
+  // --- Tipografia ---
+  // El texto de las cartas se HORNEA en un canvas 2D. Si una webfont todavia no
+  // termino de cargar cuando se genera la primera textura, la carta queda con
+  // la fuente de respaldo hasta que algo la regenere (un cambio de idioma o de
+  // nivel), y eso no se nota hasta que se ve una carta vieja al lado de una
+  // nueva. Esperar aca es barato: sin fuente propia resuelve al toque.
+  try {
+    await document.fonts.load(`800 31px ${CARD_FONT}`);
+    await document.fonts.ready;
+  } catch {
+    // Un navegador sin la API de fuentes no puede tener webfonts propias.
   }
 
   // --- Render ---

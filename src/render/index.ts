@@ -5,7 +5,14 @@ export { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from
 export type { ArtKey, CardArtKey, LegacyArtKey } from './ArtAssets';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
 export type { CardHome, CardKind } from './Card3D';
-export { CardTextureCache, createCardCanvas, createCardBackCanvas, createTableCanvas } from './CardTexture';
+export {
+  CARD_FONT,
+  CardTextureCache,
+  createCardBackCanvas,
+  createCardCanvas,
+  createShadowCanvas,
+  createTableCanvas,
+} from './CardTexture';
 export type { CardTextureSpec } from './CardTexture';
 export { CameraRig } from './CameraRig';
 export { DropZone, rectContains, resolveDropZone } from './DropZone';

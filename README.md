@@ -875,6 +875,50 @@ the bottom 38% carries the stat chips and the description, both over a darkening
 
 ---
 
+## 📦 Assets still missing
+
+Everything here can be dropped in without touching code. After adding files, run
+`npm run art` (optimise + rebuild the manifest).
+
+### Cards — the big one
+
+| File | Purpose | Format and specs |
+| --- | --- | --- |
+| `art-source/art_card_<element>_<rarity>.png` × 40 | Today 30 cards share 9 illustrations. This is what makes each card its own thing. | Source PNG **1024×1488** (the script downsizes to **512×744**). **Composition (full-bleed):** the subject lives in the band between **18% and 62% of the height** — the top 18% carries the element label and the card name, the bottom 38% carries the stat chips and the description, both over a darkening gradient. Silhouette readable at 96 px wide. No text, no frame, no signature. |
+
+Elements: `neutral poison spore decay symbiosis crystal mycelium parasite` · Rarities: `common
+uncommon rare legendary mythic` — **40 files**. The style guide and the per-element subject /
+per-rarity treatment tables are in the project plan (`§7.1`–`§7.3`).
+
+You do **not** need all 40 to ship: the fallback chain means any subset works, and the manifest
+means the missing ones are never requested.
+
+### Identity
+
+| File | Purpose | Format and specs |
+| --- | --- | --- |
+| `public/fonts/<family>-var.woff2` | The system font stack is the last thing that says "prototype". | **One variable file**, weight 400–900. WOFF2, subset to Latin-1 + `ÁÉÍÓÚÜÑáéíóúüñ¿¡·—→✓` and digits. `font-display: swap`. **The licence must allow embedding in a paid app** (SIL OFL or an explicit commercial licence) — leave it in `public/fonts/LICENSE.txt`. Then: add the family to `CARD_FONT` in `src/render/CardTexture.ts` and to the CSS `font-family`. The boot already waits for `document.fonts.ready` before baking any card texture, so no other change is needed. |
+| `public/art/ui_logo_mark.webp` | Menu, loader, About; the app icon comes from `make_icons.py` instead. | **1024×1024**, WebP with alpha, readable at 48 px on `#080b10`, one centred subject, 12% margin. |
+| `public/art/ui_icon_<id>.svg` × 24 | Buttons are text-only today; the only glyphs in the whole UI are `✓` and `→`. | **SVG, not WebP**: a sprite with `viewBox="0 0 24 24"` and `fill="currentColor"` tints from CSS and stays crisp at any size. Uniform 2 px stroke, no fill, 20 px safe area. IDs: `money hand discard ante joker_slot reroll sell settings language collection store lock xp tier claim upgrade evolve flip drag hotseat online sfx music haptics close`. **Monochrome is required** for tinting. |
+
+### Optional
+
+| File | Purpose | Format and specs |
+| --- | --- | --- |
+| `public/lut/night_grade.png` | Replace the procedural colour grade with one authored by hand (DaVinci / Photoshop). | **1024×32** — a horizontal strip of 32 slices of 32×32, R fastest, then G, slices are B. PNG without alpha, sRGB. Requires ~40 lines of loader (strip → `Data3DTexture`); without it the procedural grade is used. |
+| `art-source/art_table.png` | A darker felt if the current forest floor is too busy. | **1024×1024 tileable**. Used at `repeat(6,6)` over a 90×64 table. |
+| `board_tile_*.webp` / `board_arrow_*.webp` | Only if the duel gets a skinned board. The DOM board works today. | 256×256 tiles, 128×128 arrows, alpha. |
+| `public/feature-1024x500.png`, `keyart_pack_base.webp`, `public/shots/<lang>/*.png` | Play Store listing (phase 8). | 1024×500 no alpha with 15% margins; 1600×900; 1920×1080. **The screenshots are better generated than hand-made** — a script can drive the game to specific states with `?quality=high` and capture them. |
+
+### Not needed
+
+- **Normal / roughness maps**: cards are flat quads and the style guide asks for a matte finish.
+- **KTX2 / Basis**: 40 WebPs are ~2.4 MB; the loader plus transcoder WASM would cost more than it
+  saves. Revisit only if VRAM becomes a measured problem.
+- **App icons**: `tools/make_icons.py` already generates every size from `art-source/art_legendary.png`.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |
@@ -887,12 +931,12 @@ the bottom 38% carries the stat chips and the description, both over a darkening
 | `npm run sim:board` | **10,000 random duels** checking no mutation (deep-frozen state), determinism (double play + command-log replay), termination, and that the depth net never fires. `--runs N`, `--hand N` for tuning. |
 | `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → **Mycelial Duel (curtain, a real placement, hidden-hand check, finish, close)** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 106/106**, **`npm run validate` 0 errors / 0 warnings**
+Latest runs: **`npm test` 116/116**, **`npm run validate` 0 errors / 0 warnings**
 (35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions, 35 board entries),
 **`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
 **`npm run sim:board` 10,000 duels, 0 mutation / 0 replay drift / 0 truncation, 10.7% draws**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.79 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
+**`npm run build:release` 0.80 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
 loads only when a duel starts).
 
 > **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under

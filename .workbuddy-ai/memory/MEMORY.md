@@ -101,8 +101,38 @@ Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `a
 - Una evolución **conserva el uid**: es la identidad de la carta para la selección, el mapa del
   render y `deck.remove(uid)`.
 
-## Trampas del render / del smoke (ya resueltas, no reintroducir)
-- **El dorso no se toca por frame.** Cara `FrontSide` + dorso `BackSide` coplanares: el culling
+## Calidad gráfica y post-procesamiento (v1.4)
+- **`low` ES el camino de render de siempre** (`renderer.render` directo, DPR 1.75): ningún
+  dispositivo queda peor que antes, y el smoke corre ahí porque SwiftShader es render por
+  software. Si se saca esa regla, las aserciones de tiempo del smoke dejan de valer.
+- Tres tiers (`src/render/Quality.ts`) con auto-detección y **auto-degradación por p95 del
+  frame** (28 ms en medium, 20 en high, 0 en low; ventana de 90 frames para que un pico
+  aislado no cuente).
+- `src/render/PostFx.ts`: bloom propio (4 pases, 3 a ¼ de resolución) + `OutputPass` +
+  `LUTPass`. **El tone mapping vive en `OutputPass`**; los materiales de `Shaders.ts` son
+  `ShaderMaterial` crudos y no incluyen los chunks de tone mapping ni de colorspace.
+- **El composer no hereda el `antialias` del renderer** (dibuja sobre un target): el MSAA se
+  pasa como `samples` al `WebGLRenderTarget`.
+- **`composer.setPixelRatio` redimensiona con las dimensiones viejas**: `setPixelRatio` y
+  después `setSize` lógicos, en cada resize.
+- **El FPS del smoke no sirve para juzgar el post-procesamiento** (render por software: el
+  cociente sale 5–13×). Solo detecta que algo se disparó.
+- Un halo por carta (halo + anillo + foil en un shader): 8 cartas pasaron de 45 a 37 draw
+  calls. Las sombras de contacto son UN `InstancedMesh` (+1 draw call para todas).
+- Las esporas de ambiente se calculan en la GPU; los `burst`/`stream` siguen en CPU (homing).
+
+## Assets
+- **Arte de cartas**: `art_card_<elemento>_<rareza>.webp` (8×5 = 40) a 512×744, dibujado a
+  SANGRE. Cadena de respaldo: nuevo → `card_<elemento>_common` → los 11 viejos → procedural.
+  `public/art/index.json` (generado por `npm run art:index`) lista los que existen: sin él
+  serían 40 404 en cada arranque.
+- **El sujeto del arte nuevo va entre el 18% y el 62% de la altura** (arriba el nombre, abajo
+  los chips).
+- Las fuentes PNG viven en `art-source/` (gitignored), no en `public/art/`.
+- Falta: 40 ilustraciones, una tipografía propia (el arranque ya espera `document.fonts.ready`),
+  el logo, y 24 iconos SVG monocromo.
+
+## Trampas del render / del smoke (ya resueltas, no reintroducir)- **El dorso no se toca por frame.** Cara `FrontSide` + dorso `BackSide` coplanares: el culling
   del GPU decide cuál se ve y el raycaster respeta `material.side`. No volver a alternar
   `.visible` ni a poner los dos con el mismo `side` (el dorso saldría invisible al girar).
 - **El tween del flip va aparte del tween del layout.** `cancelFor(home)` (reordenar la mano)

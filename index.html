@@ -24,6 +24,15 @@
     <link rel="icon" type="image/png" href="./favicon.png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
 
+    <!--
+      Manifest PWA. Existe sobre todo por `display: fullscreen` + `orientation:
+      landscape`: instalado desde el navegador, el juego abre a pantalla completa
+      y no deja que el sistema lo rote a vertical. Ademas es lo que hace que
+      `icon-192.png` e `icon-512.png` (que se generaban con make_icons.py y no
+      los referenciaba nadie) se usen de verdad.
+    -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+
     <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
