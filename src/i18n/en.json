@@ -513,6 +513,14 @@
     "title": "Settings",
     "language": "Language",
     "reduceMotion": "Reduce motion",
+    "quality": {
+      "label": "Graphics quality",
+      "auto": "Auto",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "downgraded": "We lowered the quality to keep things smooth. You can change it in Settings."
+    },
     "sfx": "Sound effects",
     "music": "Music",
     "haptics": "Vibration",

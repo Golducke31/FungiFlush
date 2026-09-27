@@ -13,6 +13,23 @@ export type { DropZoneHandle, DropZoneId, DropZoneOptions, ZoneRect } from './Dr
 export { Interaction, DRAG_PLANE_Y } from './Interaction';
 export type { InteractionCallbacks } from './Interaction';
 export { SporeField } from './Particles';
+export {
+  FRAME_BUDGET_MS,
+  FrameMonitor,
+  TIER_CONFIG,
+  detectTier,
+  nextTierDown,
+  readDeviceInfo,
+  resolveQuality,
+} from './Quality';
+export type {
+  DeviceInfo,
+  QualitySetting,
+  QualityTier,
+  TierConfig,
+  TierDetection,
+  TierReason,
+} from './Quality';
 export { TweenManager, Easing } from './Tween';
 export type { TweenHandle, TweenOptions, EaseName } from './Tween';
 export { ELEMENT_COLOR, RARITY_COLOR, UI_COLORS, hexToCss, hexToRgba, mixHex } from './palette';

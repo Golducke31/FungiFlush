@@ -513,6 +513,14 @@
     "title": "Ajustes",
     "language": "Idioma",
     "reduceMotion": "Reducir movimiento",
+    "quality": {
+      "label": "Calidad gráfica",
+      "auto": "Auto",
+      "low": "Baja",
+      "medium": "Media",
+      "high": "Alta",
+      "downgraded": "Bajamos la calidad para mantener la fluidez. Podés cambiarla en Ajustes."
+    },
     "sfx": "Efectos de sonido",
     "music": "Música",
     "haptics": "Vibración",

@@ -13,6 +13,9 @@
   --border-strong: rgba(95, 216, 232, 0.5);
   --text: #e8f0f7;
   --dim: #93a4b5;
+  /* Alias de `--dim`. Estaba usado con `var(--muted, #93a4b5)` en cuatro
+     lugares sin estar definido: funcionaba por el fallback, en silencio. */
+  --muted: #93a4b5;
   --substrate: #f2a63b;
   --spores: #4fd18b;
   --money: #ffc857;
@@ -1657,4 +1660,73 @@ body {
   .panel.is-board .panel-subtitle {
     display: none;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Movimiento reducido (accesibilidad)
+   --------------------------------------------------------------------------
+   El ajuste `reduceMotion` del perfil apaga las cartas decorativas del menu y
+   las esporas ambiente (eso lo hace el render). Esto cubre el resto: las
+   animaciones y transiciones de CSS, que son muchas y no pasan por el motor.
+
+   No se usa `animation: none` a secas: varios elementos dependen de que la
+   animacion TERMINE (el destello del mazo y el volteo del tablero se quedan a
+   mitad de camino y el navegador los pinta en su estado inicial). Con una
+   duracion casi nula llegan al estado final sin parpadear.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* El ajuste del juego hace lo mismo que el del sistema: quien lo activa espera
+   que se apague TODO, no solo lo que pasa por el motor. La clase la pone el
+   controlador en <html> al arrancar y cada vez que cambia el perfil. */
+:root.reduce-motion *,
+:root.reduce-motion *::before,
+:root.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* --------------------------------------------------------------------------
+   Control segmentado (Ajustes -> Calidad grafica)
+   -------------------------------------------------------------------------- */
+.settings-segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.settings-segment {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-segment + .settings-segment {
+  border-left: 1px solid var(--border);
+}
+
+.settings-segment.is-on {
+  background: rgba(79, 209, 139, 0.18);
+  color: var(--spores);
+}
+
+.settings-segment:hover:not(.is-on) {
+  background: rgba(255, 255, 255, 0.05);
 }

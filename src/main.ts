@@ -33,7 +33,8 @@ import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
-import { ArtAssets, SceneManager } from '@render/index';
+import { ArtAssets, SceneManager, resolveQuality } from '@render/index';
+import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
 import type { CollectionEntry, CollectionState } from '@ui/CollectionScreen';
@@ -81,6 +82,14 @@ function buildLoader(): { setProgress: (r: number) => void; hide: () => void } {
   };
 }
 
+/**
+ * El movimiento reducido tiene que apagar tambien las animaciones de CSS, que
+ * no pasan por el render. La clase vive en `<html>` y el CSS hace el resto.
+ */
+function applyReduceMotionClass(reduceMotion: boolean): void {
+  document.documentElement.classList.toggle('reduce-motion', reduceMotion);
+}
+
 /** Aviso de rotacion: el juego esta pensado para landscape. */
 function buildRotateNotice(): void {
   const notice = document.createElement('div');
@@ -124,6 +133,7 @@ async function boot(): Promise<void> {
   // El idioma guardado en el perfil gana sobre el detectado.
   if (profile.settings.lang !== currentLanguage()) await setLanguage(profile.settings.lang);
   document.documentElement.lang = currentLanguage();
+  applyReduceMotionClass(profile.settings.reduceMotion);
 
   // --- Assets ---
   const assets = new ArtAssets();
@@ -137,6 +147,12 @@ async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const seedParam = params.get('seed');
   const seed = seedParam ? Number(seedParam) || undefined : undefined;
+  /** Override de calidad por URL. Es la via que usa el smoke para probar el tier alto. */
+  const qualityParam = params.get('quality');
+  const forcedQuality: QualityTier | null =
+    qualityParam === 'low' || qualityParam === 'medium' || qualityParam === 'high'
+      ? qualityParam
+      : null;
 
   const engine = new GameEngine({
     bundle: content.registry.toBundle(gate),
@@ -302,6 +318,10 @@ async function boot(): Promise<void> {
         hud.showTooltip(card, lastPointer.x, lastPointer.y, hint);
       },
       onScorePopup: (x, y, text, color) => hud?.popup(x, y, text, color),
+      // El monitor de frames bajo el nivel solo. El render no muestra avisos:
+      // avisa y el controlador decide. NO se persiste en el perfil a proposito:
+      // es un ajuste de la sesion, y el jugador puede forzarlo en Ajustes.
+      onQualityDowngraded: () => hud?.toast(t('settings.quality.downgraded'), 'warn'),
       /**
        * El jugador arrastro una carta y la solto en una zona.
        *
@@ -335,6 +355,24 @@ async function boot(): Promise<void> {
       },
     },
   });
+
+  // --- Calidad grafica ---
+  // El SceneManager ya aplico lo que detecto por dispositivo al construirse.
+  // Aca solo se corrige si el perfil (o la URL) piden otra cosa. Cuando el
+  // ajuste es `auto` y coincide con lo detectado no se toca nada: asi el motivo
+  // reportado sigue siendo el de la deteccion (`software`, `mobile`, ...).
+  const applyQualitySetting = (): void => {
+    const detected = scene.detectedQuality();
+    const setting = profileStore.current.settings.quality;
+    const tier = forcedQuality ?? resolveQuality(setting, detected.tier);
+    const reason = forcedQuality || setting !== 'auto' ? 'manual' : detected.reason;
+    if (tier !== scene.quality().tier || scene.quality().reason !== reason) {
+      scene.applyQuality(tier, reason);
+    }
+  };
+  applyQualitySetting();
+
+  if (params.get('perf') === '1') scene.startPerf();
 
   // --- HUD ---
   hud = new HUD({
@@ -542,6 +580,11 @@ async function boot(): Promise<void> {
     profileStore.patch((p) => {
       Object.assign(p.settings, patch);
     });
+    // Cambiar la calidad rearma el DPR, las particulas y (mas adelante) los
+    // pases de post-procesamiento: se resuelve contra lo detectado por si el
+    // jugador volvio a `auto`.
+    if (patch.quality !== undefined) applyQualitySetting();
+    if (patch.reduceMotion !== undefined) applyReduceMotionClass(profileStore.current.settings.reduceMotion);
     scene.setMode(engine.run?.status === 'menu' ? 'menu' : 'run', {
       reduceMotion: profileStore.current.settings.reduceMotion,
     });
@@ -577,9 +620,18 @@ async function boot(): Promise<void> {
     window.setInterval(() => {
       if (!visible) return;
       const stats = scene.stats();
-      debug.textContent = Object.entries(stats)
-        .map(([key, value]) => `${key.padEnd(11)} ${value}`)
-        .join('\n');
+      const quality = scene.quality();
+      const perf = scene.perfReport();
+      const lines = [
+        // La calidad va primero: sin esto, un "va lento" no se puede interpretar.
+        `tier        ${quality.tier} (${quality.reason}) dpr ${quality.dpr.toFixed(2)}`,
+        `fx          ${quality.composer ? 'composer' : 'directo'} bloom ${quality.bloom ? 'si' : 'no'} grade ${quality.gradeMix}`,
+        ...Object.entries(stats).map(([key, value]) => `${key.padEnd(11)} ${value}`),
+      ];
+      if (perf) {
+        lines.push(`perf        p50 ${perf.p50.toFixed(1)}ms p95 ${perf.p95.toFixed(1)}ms (${perf.frames})`);
+      }
+      debug.textContent = lines.join('\n');
     }, 250);
   }
 
@@ -619,6 +671,9 @@ async function boot(): Promise<void> {
         // necesita leer el estado real (sobre todo para comprobar que la mano
         // del rival NO esta en el DOM).
         board: () => match,
+        // Calidad y medicion: el smoke y el panel F3 leen de aca.
+        quality: () => scene.quality(),
+        perf: () => scene.perfReport(),
       },
     });
   }

@@ -176,6 +176,45 @@ const settingsOpened = await page.evaluate(async () => {
 });
 await page.screenshot({ path: join(shotsDir, '02-settings.png') });
 
+// --- Calidad grafica ---
+// SwiftShader es un renderer por SOFTWARE: la deteccion tiene que caer a `low`
+// (sin composer). Es lo que mantiene validas todas las aserciones de tiempo de
+// este test, que asumen los ~12 FPS del baseline.
+const qualityBoot = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const q = ff.quality();
+  return {
+    tier: q.tier,
+    reason: q.reason,
+    composer: q.composer,
+    bloom: q.bloom,
+    dpr: q.dpr,
+    segments: document.querySelectorAll('.panel.is-settings .settings-segment').length,
+    active: document.querySelector('.panel.is-settings .settings-segment.is-on')?.dataset.value ?? null,
+  };
+});
+console.log('\n--- Calidad grafica (deteccion) ---');
+console.log(JSON.stringify(qualityBoot, null, 2));
+
+const qualitySwitch = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ff = window.__fungiflush;
+
+  document.querySelector('.panel.is-settings .settings-segment[data-value="high"]')?.click();
+  await wait(300);
+  const high = { tier: ff.quality().tier, active: document.querySelector('.settings-segment.is-on')?.dataset.value };
+
+  // Se vuelve a `auto` para no dejar el perfil tocado ni arrancar el monitor
+  // de frames en un tier que bajo render por software no se sostiene.
+  document.querySelector('.panel.is-settings .settings-segment[data-value="auto"]')?.click();
+  await wait(300);
+  const auto = { tier: ff.quality().tier, reason: ff.quality().reason, persisted: ff.profileStore.current.settings.quality };
+
+  return { high, auto };
+});
+console.log('\n--- Calidad grafica (cambio manual) ---');
+console.log(JSON.stringify(qualitySwitch, null, 2));
+
 const settingsRoundTrip = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   document.querySelector('.panel.is-settings [data-act="close"]')?.click();
@@ -784,7 +823,19 @@ const ok =
   menuState?.hudHidden === true &&
   menuState?.continueEnabled === false &&
   settingsOpened?.opened === true &&
-  settingsOpened?.fields === 5 &&
+  settingsOpened?.fields === 6 &&
+  // --- Calidad grafica (V0) ---
+  qualityBoot?.tier === 'low' &&
+  qualityBoot?.reason === 'software' &&
+  qualityBoot?.composer === false &&
+  qualityBoot?.bloom === false &&
+  qualityBoot?.segments === 4 &&
+  qualityBoot?.active === 'auto' &&
+  qualitySwitch?.high?.tier === 'high' &&
+  qualitySwitch?.high?.active === 'high' &&
+  qualitySwitch?.auto?.tier === 'low' &&
+  qualitySwitch?.auto?.reason === 'software' &&
+  qualitySwitch?.auto?.persisted === 'auto' &&
   settingsRoundTrip?.backToMenu === true &&
   // --- Fase 5: duelo micelial ---
   boardChunkBeforeOpen === 0 &&

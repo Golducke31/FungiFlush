@@ -52,6 +52,50 @@ function slider(value: number, onChange: (value: number) => void): HTMLInputElem
   return el;
 }
 
+/**
+ * Control segmentado para elegir entre pocas opciones excluyentes.
+ *
+ * NO es un `<select>` a proposito: en movil un select nativo abre la rueda del
+ * sistema operativo, que rompe por completo la estetica del panel.
+ *
+ * El estado visual se actualiza al hacer clic y no esperando a que se rearme el
+ * panel: el HUD solo reconstruye Ajustes al abrirlo, asi que sin esto el
+ * jugador tocaria una opcion y no veria ninguna respuesta.
+ */
+function segmented<T extends string>(
+  value: T,
+  options: ReadonlyArray<{ value: T; label: string }>,
+  onChange: (value: T) => void,
+): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'settings-segmented';
+  el.dataset['act'] = 'quality';
+
+  const buttons: Array<{ button: HTMLButtonElement; value: T }> = [];
+
+  for (const option of options) {
+    const button = document.createElement('button');
+    button.className = `settings-segment${option.value === value ? ' is-on' : ''}`;
+    button.textContent = option.label;
+    button.dataset['value'] = option.value;
+    button.setAttribute('aria-pressed', String(option.value === value));
+
+    button.addEventListener('click', () => {
+      for (const entry of buttons) {
+        const on = entry.value === option.value;
+        entry.button.classList.toggle('is-on', on);
+        entry.button.setAttribute('aria-pressed', String(on));
+      }
+      onChange(option.value);
+    });
+
+    buttons.push({ button, value: option.value });
+    el.appendChild(button);
+  }
+
+  return el;
+}
+
 export function buildSettingsPanel(settings: ProfileSettings, callbacks: SettingsCallbacks): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'panel is-settings';
@@ -74,9 +118,19 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
 
   body.append(
     field(t('settings.language'), langButton),
+    field(t('settings.reduceMotion'), checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
     field(
-      t('settings.reduceMotion'),
-      checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v })),
+      t('settings.quality.label'),
+      segmented(
+        settings.quality,
+        [
+          { value: 'auto', label: t('settings.quality.auto') },
+          { value: 'low', label: t('settings.quality.low') },
+          { value: 'medium', label: t('settings.quality.medium') },
+          { value: 'high', label: t('settings.quality.high') },
+        ] as const,
+        (v) => callbacks.onPatch({ quality: v }),
+      ),
     ),
     field(t('settings.haptics'), checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
     field(t('settings.sfx'), slider(settings.sfxVolume, (v) => callbacks.onPatch({ sfxVolume: v }))),

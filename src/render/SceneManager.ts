@@ -30,6 +30,16 @@ import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
+import {
+  FrameMonitor,
+  TIER_CONFIG,
+  detectTier,
+  readDeviceInfo,
+  type QualityTier,
+  type TierConfig,
+  type TierDetection,
+  type TierReason,
+} from './Quality';
 import { TweenManager } from './Tween';
 import { ELEMENT_COLOR, UI_COLORS } from './palette';
 
@@ -88,6 +98,19 @@ const ZONE_COLOR: Record<'play' | 'discard' | 'hand', number> = {
 /** Mitad de la profundidad de una carta (para calcular el encuadre). */
 const CARD_HALF_DEPTH = CARD_HEIGHT / 2;
 
+/**
+ * Capacidad del pool de esporas para un nivel de calidad.
+ *
+ * Hasta que el ambiente tenga su propio buffer en GPU comparten un solo
+ * `THREE.Points`, asi que la capacidad es la suma de los dos. El tier `low`
+ * suma 1200, que es exactamente lo que el juego usaba en movil antes de que
+ * existieran los niveles de calidad: `low` no puede quedar peor que antes.
+ */
+function particleCapacity(tier: QualityTier): number {
+  const config = TIER_CONFIG[tier];
+  return config.ambientSpores + config.transientSpores;
+}
+
 /** Cuantos pasos de score se animan. El resto se agrupa para no eternizar la mano. */
 const MAX_ANIMATED_STEPS = 22;
 
@@ -104,6 +127,12 @@ export interface SceneCallbacks {
    * descartar esa carta, "hand" = devolverla). El render no toca el motor.
    */
   onCardDrop?: (uid: string, zone: DropZoneId) => void;
+  /**
+   * El monitor de frames bajo el nivel de calidad por su cuenta. El render NO
+   * muestra avisos (no es su trabajo): avisa y el controlador decide si
+   * mostrarlo por toast y si lo persiste.
+   */
+  onQualityDowngraded?: (tier: QualityTier, from: QualityTier) => void;
 }
 
 /** Instantanea de una carta de la mano, para el panel de debug (F3) y los tests. */
@@ -179,6 +208,17 @@ export class SceneManager {
   private menuBaseZ: number[] = [];
   private reduceMotion = false;
 
+  // --- Calidad grafica ---
+  /** Nivel efectivo. Arranca en `low` (el camino de siempre) hasta que se detecte. */
+  private tier: QualityTier = 'low';
+  private tierReason: TierReason = 'default';
+  /** Lo que eligio la deteccion, antes de que el jugador fuerce un nivel. */
+  private detected: TierDetection = { tier: 'low', reason: 'default' };
+  /** Vigila el frame time y degrada solo. Null en `low` (no hay a donde bajar). */
+  private frameMonitor: FrameMonitor | null = null;
+  /** Medicion opcional (`?perf=1`). Null si no se pidio. */
+  private perf: { samples: number[]; target: number } | null = null;
+
   constructor(options: SceneOptions) {
     this.engine = options.engine;
     this.assets = options.assets;
@@ -201,9 +241,19 @@ export class SceneManager {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    // Los contadores de `renderer.info` se leen a mano UNA vez por frame: cuando
+    // entre el composer, cada pase hace su propio `renderer.render()` y con el
+    // autoReset puesto el conteo final seria el del ultimo pase (1).
+    this.renderer.info.autoReset = false;
+
+    // El nivel de calidad se detecta ANTES de crear el rig y las particulas:
+    // el DPR y la capacidad de esporas salen del tier, y cambiarlos despues
+    // obligaria a reconstruir cosas.
+    const detected = detectTier(readDeviceInfo(this.isMobile, this.renderer.getContext()));
+    this.detected = detected;
 
     this.rig = new CameraRig(width / height, 40);
-    this.particles = new SporeField(this.isMobile ? 1200 : 2400);
+    this.particles = new SporeField(particleCapacity(detected.tier));
 
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
@@ -218,7 +268,80 @@ export class SceneManager {
     this.buildWorld();
     this.buildDropZones();
     this.subscribe();
+    this.applyQuality(detected.tier, detected.reason, false);
     this.resize();
+  }
+
+  // ==========================================================================
+  // Calidad grafica
+  // ==========================================================================
+
+  /** Configuracion efectiva del nivel actual. */
+  get tierConfig(): TierConfig {
+    return TIER_CONFIG[this.tier];
+  }
+
+  /**
+   * Fija el nivel de calidad. `resizeNow` en false sirve para el constructor,
+   * que todavia no tiene el rig creado y hace un solo `resize()` al final.
+   */
+  applyQuality(tier: QualityTier, reason: TierReason = 'default', resizeNow = true): void {
+    this.tier = tier;
+    this.tierReason = reason;
+    // En `low` no hay a donde bajar: el monitor no se crea.
+    this.frameMonitor = tier === 'low' ? null : new FrameMonitor(tier);
+    this.syncAmbient();
+
+    if (resizeNow) this.resize();
+  }
+
+  /** Las esporas de fondo son decorativas: se apagan con `reduceMotion`. */
+  private syncAmbient(): void {
+    this.particles.setAmbientEnabled(!this.reduceMotion && TIER_CONFIG[this.tier].ambientSpores > 0);
+  }
+
+  /** Estado de calidad actual. Lo consume el panel de debug (F3) y el smoke. */
+  quality(): {
+    tier: QualityTier;
+    reason: TierReason;
+    dpr: number;
+    composer: boolean;
+    bloom: boolean;
+    gradeMix: number;
+  } {
+    const config = TIER_CONFIG[this.tier];
+    return {
+      tier: this.tier,
+      reason: this.tierReason,
+      dpr: Math.min(window.devicePixelRatio, config.maxDpr),
+      composer: config.composer,
+      bloom: config.bloom,
+      gradeMix: config.gradeMix,
+    };
+  }
+
+  /**
+   * Lo que eligio la deteccion por dispositivo, ignorando lo que haya forzado
+   * el jugador. Lo necesita el controlador para resolver el ajuste `auto`.
+   */
+  detectedQuality(): TierDetection {
+    return this.detected;
+  }
+
+  /**
+   * Arranca una medicion de frame times. Devuelve el resumen cuando junto
+   * `frames` muestras. Bajo render por software los valores absolutos no
+   * significan nada, pero el COCIENTE entre dos configuraciones si.
+   */
+  startPerf(frames = 240): void {
+    this.perf = { samples: [], target: frames };
+  }
+
+  perfReport(): { frames: number; p50: number; p95: number; tier: QualityTier } | null {
+    if (!this.perf || this.perf.samples.length === 0) return null;
+    const sorted = [...this.perf.samples].sort((a, b) => a - b);
+    const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 0;
+    return { frames: sorted.length, p50: at(0.5), p95: at(0.95), tier: this.tier };
   }
 
   // ==========================================================================
@@ -354,7 +477,13 @@ export class SceneManager {
    * partida siguiente y se romperia la reproducibilidad.
    */
   setMode(mode: 'menu' | 'run', options?: { reduceMotion?: boolean }): void {
-    this.reduceMotion = options?.reduceMotion ?? this.reduceMotion;
+    const reduceMotion = options?.reduceMotion ?? this.reduceMotion;
+    // Va ANTES del early return: cambiar `reduceMotion` con el mismo modo tiene
+    // que apagar las esporas igual, y el modo no cambia.
+    if (reduceMotion !== this.reduceMotion) {
+      this.reduceMotion = reduceMotion;
+      this.syncAmbient();
+    }
     if (this.mode === mode) return;
     this.mode = mode;
 
@@ -363,7 +492,7 @@ export class SceneManager {
     if (this.discardMesh) this.discardMesh.visible = !inMenu;
     // Las esporas ambientales se quedan en los dos modos: son un solo
     // THREE.Points y son lo que hace que el menu no se vea como una foto.
-    this.particles.setAmbientEnabled(true);
+    this.syncAmbient();
     // En el menu no hay cartas en la mano: las zonas de destino sobran.
     if (inMenu) for (const zone of this.dropZones) zone.setEnabled(false);
 
@@ -1100,7 +1229,8 @@ export class SceneManager {
       this.frameId = requestAnimationFrame(frame);
 
       // dt acotado: si la pestana estuvo en background, no queremos un salto.
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const rawDt = (now - last) / 1000;
+      const dt = Math.min(0.05, rawDt);
       last = now;
       this.clock += dt;
 
@@ -1129,10 +1259,40 @@ export class SceneManager {
       // WebView (por ejemplo, la captura de pantalla de Play o un test
       // headless). El ahorro de bateria del menu viene por otro lado: 6
       // cartas decorativas, sin MSAA, DPR acotado y cero logica de juego.
+      //
+      // `info` se resetea a mano porque `autoReset` esta apagado: cuando entre
+      // el composer, cada pase hace su propio `render()` y el conteo se pisaria.
+      this.renderer.info.reset();
       this.renderer.render(this.scene, this.rig.camera);
+
+      this.sampleFrame(rawDt);
     };
 
     this.frameId = requestAnimationFrame(frame);
+  }
+
+  /**
+   * Alimenta el monitor de frames y la medicion opcional.
+   *
+   * Se usa el tiempo REAL del frame, no el `dt` acotado: el acotado existe para
+   * que las animaciones no salten cuando la pestana vuelve del background, no
+   * para medir rendimiento. Un salto de background no es un frame lento, asi
+   * que se descarta en vez de contar como degradacion.
+   */
+  private sampleFrame(seconds: number): void {
+    if (seconds <= 0 || seconds > 0.5) return;
+
+    if (this.perf && this.perf.samples.length < this.perf.target) {
+      this.perf.samples.push(seconds * 1000);
+    }
+
+    if (!this.frameMonitor) return;
+    const downgraded = this.frameMonitor.sample(seconds);
+    if (!downgraded) return;
+
+    const from = this.tier;
+    this.applyQuality(downgraded, 'auto-downgrade');
+    this.callbacks.onQualityDowngraded?.(downgraded, from);
   }
 
   stop(): void {
@@ -1226,8 +1386,9 @@ export class SceneManager {
     const height = canvas.clientHeight || window.innerHeight;
     const aspect = width / Math.max(1, height);
 
-    // DPR limitado: en celular, 3x de DPR mata el framerate sin verse mejor.
-    const maxDpr = this.isMobile ? 1.75 : 2;
+    // DPR limitado por el nivel de calidad: en celular, 3x de DPR mata el
+    // framerate sin verse mejor. El tope de `low` es el mismo de siempre.
+    const maxDpr = TIER_CONFIG[this.tier].maxDpr;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
     this.renderer.setSize(width, height, false);
 
@@ -1280,6 +1441,7 @@ export class SceneManager {
 
   /** Resumen para el panel de debug. */
   stats(): Record<string, number> {
+    const info = this.renderer.info;
     return {
       hand: this.handCards.size,
       jokers: this.jokerCards.size,
@@ -1287,8 +1449,16 @@ export class SceneManager {
       particles: this.particles.activeCount,
       tweens: this.tweens.activeCount,
       textures: this.textures.size,
-      drawCalls: this.renderer.info.render.calls,
-      triangles: this.renderer.info.render.triangles,
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      // Memoria de GPU: es lo que delata una fuga de materiales o de texturas
+      // (cada carta crea 4-5 materiales propios, asi que esto tiene que subir y
+      // bajar con la mano, no crecer sin techo).
+      programs: info.programs?.length ?? 0,
+      gpuGeometries: info.memory.geometries,
+      gpuTextures: info.memory.textures,
+      // p95 de la ventana del monitor. 0 en `low`, que no tiene monitor.
+      frameP95: Math.round(this.frameMonitor?.p95 ?? 0),
     };
   }
 }

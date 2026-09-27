@@ -14,9 +14,18 @@ export const PROFILE_SAVE_VERSION = 1;
 
 export type Language = 'en' | 'es';
 
+/**
+ * Nivel de calidad grafica. `auto` deja que el juego lo detecte por
+ * dispositivo; el resto lo fuerza el jugador. Vive en el perfil y no en un
+ * ajuste suelto porque un celular de gama baja tiene que poder dejarlo en `low`
+ * y no volver a tocarlo nunca.
+ */
+export type QualitySetting = 'auto' | 'low' | 'medium' | 'high';
+
 export interface ProfileSettings {
   lang: Language;
   reduceMotion: boolean;
+  quality: QualitySetting;
   sfxVolume: number;
   musicVolume: number;
   haptics: boolean;
@@ -85,6 +94,7 @@ export function defaultProfile(): ProfileSave {
     settings: {
       lang: 'es',
       reduceMotion: false,
+      quality: 'auto',
       sfxVolume: 0.8,
       musicVolume: 0.6,
       haptics: true,

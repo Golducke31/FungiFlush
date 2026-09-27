@@ -619,24 +619,66 @@ Toggle live with the language button in the HUD or the menu (or `toggleLanguage(
 
 ---
 
+## 🎚️ Graphics quality tiers
+
+The target is phone landscape, where post-processing is the most expensive thing you can add.
+Instead of choosing between "looks good" and "runs", there are three tiers — and one rule that
+is not negotiable:
+
+**`low` IS the previous render path**: `renderer.render()` directly, no composer, same DPR. No
+device can end up worse than before the visual work started, and the smoke test runs on `low`
+(software rendering), so its timing assertions stay valid.
+
+| | low | medium | high |
+| --- | --- | --- | --- |
+| Render path | direct | composer | composer |
+| Bloom | off | ¼ res, 1 iteration | ¼ res, 2 iterations |
+| Color grade | off | 0.6 | 1.0 |
+| Max DPR | 1.75 | 1.75 | 2.0 |
+| Ambient spores | 0 | 400 | 900 |
+| Transient spores | 1200 | 1200 | 2000 |
+| Contact shadows | off | on | on |
+
+Detection reads the unmasked WebGL renderer string first: **anything software (SwiftShader,
+llvmpipe, "basic render") goes straight to `low`**. That is not an optimisation — it is what
+keeps the smoke test usable, because with a composer on top the same test would start reading
+animation states mid-flight. Then it looks at `deviceMemory` and `hardwareConcurrency`, and when
+those are missing (Safari, Firefox) it falls back to `medium` instead of guessing `high`.
+
+On top of that, a **frame monitor** degrades on its own: if the p95 frame time stays above the
+tier's budget for 3 seconds it drops a step and tells the player. The budget is 28 ms for
+`medium`, 20 ms for `high`, and 0 for `low` (nowhere to go). It deliberately prefers *not* to
+downgrade: it uses the p95 of a 90-frame window, so a single slow frame — a texture upload, a
+GC — never counts.
+
+`?quality=low|medium|high` forces a tier, and `?perf=1` records frame times and exposes p50/p95
+through `window.__fungiflush.perf()`. Under software rendering the absolute numbers are
+meaningless, but the **ratio** between two configurations is not.
+
+Also in this pass: `reduceMotion` now also silences the ambient spores and every CSS animation
+(`:root.reduce-motion`, plus a `prefers-reduced-motion` media query), and `--muted` — used in
+four places but never defined, so it was silently falling back — exists in `:root`.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, **drop-zone resolution (priority order, `accepts` gating) and `discardCards` (single-card discard that leaves the rest of the selection alone)**, **the duel (arrow maths, reveals, tie rules, flip chains, purity, the reducer, `viewFor` redaction, `board.json` coverage)**, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, **drop-zone resolution (priority order, `accepts` gating) and `discardCards` (single-card discard that leaves the rest of the selection alone)**, **the duel (arrow maths, reveals, tie rules, flip chains, purity, the reducer, `viewFor` redaction, `board.json` coverage)**, **graphics tiers (software-renderer detection, `low` staying the old path, tier table coherence, frame-monitor hysteresis)**, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
 | `npm run validate` | Content gate: validates every pack's JSON, content i18n coverage, **and scans `src/**` for `t('...')` keys missing from a dictionary**. Exits 1 on error. |
 | `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
 | `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
 | `npm run sim:board` | **10,000 random duels** checking no mutation (deep-frozen state), determinism (double play + command-log replay), termination, and that the depth net never fires. `--runs N`, `--hand N` for tuning. |
 | `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → **Mycelial Duel (curtain, a real placement, hidden-hand check, finish, close)** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 88/88**, **`npm run validate` 0 errors / 0 warnings**
+Latest runs: **`npm test` 102/102**, **`npm run validate` 0 errors / 0 warnings**
 (35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions, 35 board entries),
 **`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
 **`npm run sim:board` 10,000 duels, 0 mutation / 0 replay drift / 0 truncation, 10.7% draws**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.80 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
+**`npm run build:release` 0.81 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
 loads only when a duel starts).
 
 > **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under
