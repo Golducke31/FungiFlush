@@ -778,6 +778,47 @@ mythic side by side) are the visual checks.
 
 ---
 
+## 🌫️ Particles: two systems, two costs
+
+The spore field used to be one `THREE.Points` with the whole simulation in JS: 2400 particles
+integrated every frame, forever, even though most of them were just background spores bobbing
+about. It is now split by what each half actually needs.
+
+**Ambient spores are 100% GPU.** They have no target and no interaction, so their position is
+computed in the vertex shader from a seed and `uTime` — a slow fall with a wrap, plus a lateral
+drift from two sine waves of unrelated frequencies (so it never reads as an orbit). The CPU
+writes the buffers **once**, at construction, and afterwards only updates one uniform. The
+fall is cyclic, so the alpha fades in at the top and out near the floor, otherwise the spore
+that leaves the bottom would pop back in at the ceiling.
+
+**Transient spores stay on the CPU.** `burst` and `stream` need per-particle homing — each one
+chases a different target — and they live under a second, so a JS integration loop is both
+correct and bounded.
+
+### The invariant, and why it is testable
+
+`BufferAttribute.version` increments every time someone sets `needsUpdate = true`. So the test
+runs 10 seconds of frames and asserts the ambient seed and colour buffers **never** got a new
+version, while `uTime` did advance:
+
+```ts
+assert.equal(seeds.version, seedVersion);   // el movimiento vive en el shader
+assert.ok(field.ambient.material.uniforms['uTime'].value > 5);
+```
+
+If someone ever reintroduces a JS integration loop for the ambient half, that test fails on the
+next run instead of quietly costing frames on a phone.
+
+**Pools are sized to the maximum across all tiers**, and a tier only moves the *limit*
+(`setDrawRange` for the ambient field, a slot cap for the transient pool). Changing quality
+therefore never reallocates a buffer or uploads one. The smoke asserts the two ends: `particles
+=== 0` at `low` (the tier does not pay for ambient spores) and `particles >= 900` at `high`.
+
+Cost: **+1 draw call** (the ambient field is its own `Points`), against 900 integrations per
+frame that no longer happen.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |

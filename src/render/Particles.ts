@@ -1,19 +1,109 @@
 /**
  * Particles.ts — Campo de esporas.
  *
- * Un UNICO THREE.Points para todas las particulas del juego. Es la diferencia
- * entre 60 FPS y 12 FPS: si cada espora fuera un mesh tendriamos miles de draw
- * calls. Aca hay una sola geometria, un solo material y cero asignaciones por
- * frame (los buffers se reutilizan en modo circular).
+ * DOS SISTEMAS, DOS COSTOS
+ * ------------------------
+ *   1. AMBIENTE (100% GPU). Las esporas de fondo que flotan todo el tiempo no
+ *      tienen objetivo ni interaccion: su posicion se calcula entera en el
+ *      vertex shader a partir de una semilla y `uTime`. La CPU escribe los
+ *      buffers UNA vez, al construir, y despues solo actualiza un uniform.
+ *   2. TRANSITORIO (CPU). Los `burst` y los `stream` necesitan homing por
+ *      particula (cada una persigue un objetivo distinto) y viven menos de un
+ *      segundo: ahi la simulacion en JS es lo correcto y el costo es acotado.
  *
- * Tres usos:
- *   - ambient(): esporas flotando de fondo.
- *   - burst():   explosion en un punto (al puntuar).
- *   - stream():  esporas que viajan de la carta A a la carta B (combo).
+ * Antes TODO era CPU. Con 2400 particulas, el bucle de integracion corria en
+ * cada frame para siempre, aunque el 90% fueran esporas de fondo meciendose.
+ *
+ * El pool transitorio reutiliza slots en modo circular: cero asignaciones por
+ * frame, que es lo que evita que el recolector de basura meta un tiron.
  */
 
 import * as THREE from 'three';
-import { createSporeMaterial } from './Shaders';
+import { createAmbientSporeMaterial, createSporeMaterial } from './Shaders';
+
+// ---------------------------------------------------------------------------
+// Ambiente: todo en la GPU
+// ---------------------------------------------------------------------------
+
+/**
+ * Esporas de fondo. Los buffers se llenan una sola vez.
+ *
+ * La invariante — que el movimiento vive en el shader y no volvio a la CPU — se
+ * verifica con el `version` de los `BufferAttribute`: three lo incrementa cada
+ * vez que se les asigna `needsUpdate = true`. Si alguien reintroduce un bucle de
+ * integracion en JS, el test lo ve (ver `tests/render.test.ts`).
+ */
+export class AmbientSporeField {
+  readonly points: THREE.Points;
+  readonly geometry: THREE.BufferGeometry;
+  readonly material: THREE.ShaderMaterial;
+
+  private readonly capacity: number;
+  private count: number;
+
+  constructor(options: { count: number; area: number; height: number }) {
+    this.capacity = Math.max(1, options.count);
+    this.count = this.capacity;
+
+    const seeds = new Float32Array(this.capacity * 3);
+    const colors = new Float32Array(this.capacity * 3);
+    const sizes = new Float32Array(this.capacity);
+    const color = new THREE.Color();
+
+    for (let i = 0; i < this.capacity; i++) {
+      // Semilla: posicion base + fase de la caida (en `y`).
+      seeds[i * 3] = (Math.random() - 0.5) * options.area;
+      seeds[i * 3 + 1] = Math.random() * options.height;
+      seeds[i * 3 + 2] = (Math.random() - 0.5) * options.area * 0.7;
+
+      color.setHex(Math.random() > 0.5 ? 0x4fd18b : 0xa78bfa);
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+
+      sizes[i] = 0.03 + Math.random() * 0.045;
+    }
+
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 3));
+    this.geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    this.geometry.setDrawRange(0, this.capacity);
+    this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 200);
+
+    this.material = createAmbientSporeMaterial(options.height);
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.points.frustumCulled = false;
+    this.points.renderOrder = 10;
+  }
+
+  /**
+   * Cuantas esporas se dibujan. Se cambia con el tier sin reconstruir nada:
+   * bajar el rango de dibujo no cuesta memoria ni una subida de buffer.
+   */
+  setCount(value: number): void {
+    this.count = Math.max(0, Math.min(this.capacity, Math.floor(value)));
+    this.geometry.setDrawRange(0, this.count);
+  }
+
+  /** Unico trabajo por frame: avanzar el reloj del shader. */
+  update(time: number): void {
+    (this.material.uniforms['uTime'] as { value: number }).value = time;
+  }
+
+  get activeCount(): number {
+    return this.points.visible ? this.count : 0;
+  }
+
+  dispose(): void {
+    this.geometry.dispose();
+    this.material.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transitorio: CPU, con homing
+// ---------------------------------------------------------------------------
 
 interface Particle {
   /** Indice fijo en los buffers: evita busquedas O(n) al emitir. */
@@ -40,8 +130,15 @@ export interface BurstOptions {
   upward?: number;
 }
 
+/**
+ * El campo completo: ambiente (GPU) + transitorio (CPU) detras de una sola API.
+ *
+ * `group` contiene los dos `THREE.Points`; el resto del juego no necesita saber
+ * que son dos.
+ */
 export class SporeField {
-  readonly points: THREE.Points;
+  readonly group = new THREE.Group();
+  readonly ambient: AmbientSporeField;
 
   private readonly capacity: number;
   private readonly positions: Float32Array;
@@ -52,18 +149,21 @@ export class SporeField {
   private readonly geometry: THREE.BufferGeometry;
   private readonly material: THREE.ShaderMaterial;
   private cursor = 0;
-  private ambientTimer = 0;
-  private ambientEnabled = true;
+  /** Cuantos slots del pool transitorio puede usar el tier actual. */
+  private limit: number;
+  private clock = 0;
   private readonly tmpColor = new THREE.Color();
 
-  constructor(capacity = 2400) {
-    this.capacity = capacity;
-    this.positions = new Float32Array(capacity * 3);
-    this.colors = new Float32Array(capacity * 3);
-    this.sizes = new Float32Array(capacity);
-    this.lives = new Float32Array(capacity);
+  constructor(options: { transient: number; ambient: number }) {
+    this.capacity = Math.max(1, options.transient);
+    this.limit = this.capacity;
 
-    for (let i = 0; i < capacity; i++) {
+    this.positions = new Float32Array(this.capacity * 3);
+    this.colors = new Float32Array(this.capacity * 3);
+    this.sizes = new Float32Array(this.capacity);
+    this.lives = new Float32Array(this.capacity);
+
+    for (let i = 0; i < this.capacity; i++) {
       this.particles.push({
         index: i,
         active: false,
@@ -87,14 +187,32 @@ export class SporeField {
     this.geometry.setAttribute('aColor', new THREE.BufferAttribute(this.colors, 3));
     this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1));
     this.geometry.setAttribute('aLife', new THREE.BufferAttribute(this.lives, 1));
-    this.geometry.setDrawRange(0, capacity);
+    this.geometry.setDrawRange(0, this.capacity);
     // Sin frustum culling: las particulas se mueven fuera de su bounding box inicial.
     this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 200);
 
     this.material = createSporeMaterial();
-    this.points = new THREE.Points(this.geometry, this.material);
-    this.points.frustumCulled = false;
-    this.points.renderOrder = 10;
+    const transientPoints = new THREE.Points(this.geometry, this.material);
+    transientPoints.frustumCulled = false;
+    transientPoints.renderOrder = 10;
+
+    this.ambient = new AmbientSporeField({
+      count: Math.max(1, options.ambient),
+      area: 16,
+      height: 10,
+    });
+
+    this.group.add(this.ambient.points, transientPoints);
+  }
+
+  /**
+   * Ajusta cuantas particulas puede usar cada sistema. Los pools se dimensionan
+   * al maximo al construir (no se reasigna memoria) y el tier solo mueve el
+   * limite: cambiar de calidad no puede costar una subida de buffers.
+   */
+  setLimits(options: { transient: number; ambient: number }): void {
+    this.limit = Math.max(1, Math.min(this.capacity, Math.floor(options.transient)));
+    this.ambient.setCount(options.ambient);
   }
 
   // -------------------------------------------------------------------------
@@ -164,30 +282,8 @@ export class SporeField {
     }
   }
 
-  /** Esporas de fondo, cayendo lentamente. */
-  ambient(area = 16, height = 10): void {
-    for (let i = 0; i < 3; i++) {
-      const p = this.allocate();
-      if (!p) return;
-      p.vx = (Math.random() - 0.5) * 0.25;
-      p.vy = -0.18 - Math.random() * 0.3;
-      p.vz = (Math.random() - 0.5) * 0.25;
-      p.gravity = 0;
-      p.homing = 0;
-      p.maxLife = 6 + Math.random() * 5;
-      p.life = p.maxLife;
-
-      const origin = new THREE.Vector3(
-        (Math.random() - 0.5) * area,
-        height,
-        (Math.random() - 0.5) * area * 0.7,
-      );
-      this.writeParticle(p, origin, Math.random() > 0.5 ? 0x4fd18b : 0xa78bfa, 0.03 + Math.random() * 0.04);
-    }
-  }
-
   setAmbientEnabled(value: boolean): void {
-    this.ambientEnabled = value;
+    this.ambient.points.visible = value;
   }
 
   // -------------------------------------------------------------------------
@@ -195,10 +291,14 @@ export class SporeField {
   // -------------------------------------------------------------------------
 
   update(dt: number): void {
+    this.clock += dt;
+    // El ambiente solo necesita el reloj: el movimiento lo hace el shader.
+    this.ambient.update(this.clock);
+
     const pos = this.positions;
     const lives = this.lives;
 
-    for (let i = 0; i < this.capacity; i++) {
+    for (let i = 0; i < this.limit; i++) {
       const p = this.particles[i];
       if (!p || !p.active) continue;
 
@@ -234,23 +334,16 @@ export class SporeField {
       lives[i] = t < 0.85 ? Math.min(1, (1 - t) * 8) * t : t;
     }
 
-    if (this.ambientEnabled) {
-      this.ambientTimer -= dt;
-      if (this.ambientTimer <= 0) {
-        this.ambientTimer = 0.12;
-        this.ambient();
-      }
-    }
-
     (this.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     (this.geometry.getAttribute('aColor') as THREE.BufferAttribute).needsUpdate = true;
     (this.geometry.getAttribute('aSize') as THREE.BufferAttribute).needsUpdate = true;
     (this.geometry.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
   }
 
+  /** Particulas vivas: transitorias activas + esporas de ambiente dibujadas. */
   get activeCount(): number {
-    let n = 0;
-    for (const p of this.particles) if (p.active) n++;
+    let n = this.ambient.activeCount;
+    for (let i = 0; i < this.limit; i++) if (this.particles[i]?.active) n++;
     return n;
   }
 
@@ -260,11 +353,11 @@ export class SporeField {
 
   private allocate(): Particle | null {
     // Busqueda circular: reutiliza el slot mas viejo si esta todo ocupado.
-    for (let attempt = 0; attempt < this.capacity; attempt++) {
-      const index = (this.cursor + attempt) % this.capacity;
+    for (let attempt = 0; attempt < this.limit; attempt++) {
+      const index = (this.cursor + attempt) % this.limit;
       const p = this.particles[index];
       if (p && !p.active) {
-        this.cursor = (index + 1) % this.capacity;
+        this.cursor = (index + 1) % this.limit;
         p.active = true;
         return p;
       }
@@ -292,5 +385,6 @@ export class SporeField {
   dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.ambient.dispose();
   }
 }

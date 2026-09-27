@@ -112,17 +112,9 @@ const SHADOW_SPREAD = 1.04;
 /** Mitad de la profundidad de una carta (para calcular el encuadre). */
 const CARD_HALF_DEPTH = CARD_HEIGHT / 2;
 
-/**
- * Capacidad del pool de esporas para un nivel de calidad.
- *
- * Hasta que el ambiente tenga su propio buffer en GPU comparten un solo
- * `THREE.Points`, asi que la capacidad es la suma de los dos. El tier `low`
- * suma 1200, que es exactamente lo que el juego usaba en movil antes de que
- * existieran los niveles de calidad: `low` no puede quedar peor que antes.
- */
-function particleCapacity(tier: QualityTier): number {
-  const config = TIER_CONFIG[tier];
-  return config.ambientSpores + config.transientSpores;
+/** El maximo de una perilla de particulas entre todos los tiers. */
+function maxParticles(key: 'ambientSpores' | 'transientSpores'): number {
+  return Math.max(...Object.values(TIER_CONFIG).map((config) => config[key]));
 }
 
 /** Cuantos pasos de score se animan. El resto se agrupa para no eternizar la mano. */
@@ -272,7 +264,13 @@ export class SceneManager {
     this.detected = detected;
 
     this.rig = new CameraRig(width / height, 40);
-    this.particles = new SporeField(particleCapacity(detected.tier));
+    // Los pools se dimensionan al MAXIMO de todos los tiers y despues el tier
+    // solo mueve el limite: cambiar de calidad no puede costar una subida de
+    // buffers ni una reasignacion.
+    this.particles = new SporeField({
+      transient: maxParticles('transientSpores'),
+      ambient: maxParticles('ambientSpores'),
+    });
 
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
@@ -309,9 +307,14 @@ export class SceneManager {
     this.tierReason = reason;
     // En `low` no hay a donde bajar: el monitor no se crea.
     this.frameMonitor = tier === 'low' ? null : new FrameMonitor(tier);
+    const config = TIER_CONFIG[tier];
+    this.particles.setLimits({
+      transient: config.transientSpores,
+      ambient: config.ambientSpores,
+    });
     this.syncAmbient();
     this.syncPostFx();
-    if (this.shadowMesh) this.shadowMesh.visible = TIER_CONFIG[tier].contactShadows;
+    if (this.shadowMesh) this.shadowMesh.visible = config.contactShadows;
 
     if (resizeNow) this.resize();
   }
@@ -449,7 +452,7 @@ export class SceneManager {
     this.scene.add(sky, key);
 
     // --- Particulas ---
-    this.scene.add(this.particles.points);
+    this.scene.add(this.particles.group);
 
     // --- Dorso (una sola textura para todo el juego) ---
     // La comparten el mazo, el descarte y el dorso de cada carta: dibujarla una

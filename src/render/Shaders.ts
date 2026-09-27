@@ -150,6 +150,83 @@ export function createHaloMaterial(options: {
 // 2. Esporas (particulas)
 // ---------------------------------------------------------------------------
 
+/**
+ * Esporas de AMBIENTE: la posicion se calcula entera aca.
+ *
+ * La CPU escribe `aSeed` una sola vez al construir y despues solo actualiza
+ * `uTime`. Con 900 esporas eso es la diferencia entre 900 integraciones por
+ * frame en JS y cero.
+ *
+ * El desvanecido de los extremos existe porque la caida es ciclica (`mod`): sin
+ * el, la espora que sale por abajo reaparece de golpe arriba.
+ */
+export const AMBIENT_SPORE_VERT = /* glsl */ `
+  attribute vec3  aSeed;
+  attribute float aSize;
+  attribute vec3  aColor;
+
+  uniform float uTime;
+  uniform float uHeight;
+  uniform float uFallSpeed;
+  uniform float uDrift;
+
+  varying float vAlpha;
+  varying vec3  vColor;
+
+  void main() {
+    vColor = aColor;
+
+    // Caida con wrap: al salir por abajo vuelve a entrar por arriba.
+    float t = uTime * uFallSpeed + aSeed.y;
+    float y = uHeight - mod(t, uHeight);
+
+    // Deriva lateral: dos senos de frecuencias inconmensurables, para que el
+    // movimiento no se lea como una orbita.
+    float x = aSeed.x + sin(uTime * 0.21 + aSeed.x * 0.7) * uDrift;
+    float z = aSeed.z + cos(uTime * 0.17 + aSeed.z * 0.9) * uDrift;
+
+    // Aparece al entrar por arriba, se apaga antes de tocar el suelo.
+    vAlpha = smoothstep(0.0, uHeight * 0.2, y) * (1.0 - smoothstep(uHeight * 0.8, uHeight, y));
+
+    vec4 mv = modelViewMatrix * vec4(x, y, z, 1.0);
+    // Atenuacion por perspectiva: las esporas lejanas se ven mas chicas.
+    gl_PointSize = aSize * (340.0 / max(0.001, -mv.z)) * vAlpha;
+    gl_Position  = projectionMatrix * mv;
+  }
+`;
+
+export const AMBIENT_SPORE_FRAG = /* glsl */ `
+  varying float vAlpha;
+  varying vec3  vColor;
+
+  void main() {
+    vec2  c = gl_PointCoord - 0.5;
+    float d = length(c);
+    float core = smoothstep(0.5, 0.0, d);
+    float halo = smoothstep(0.5, 0.15, d) * 0.45;
+    float a = (core + halo) * vAlpha;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(vColor * (0.6 + 0.4 * core), a);
+  }
+`;
+
+export function createAmbientSporeMaterial(height = 10): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: AMBIENT_SPORE_VERT,
+    fragmentShader: AMBIENT_SPORE_FRAG,
+    uniforms: {
+      uTime: { value: 0 },
+      uHeight: { value: height },
+      uFallSpeed: { value: 0.22 },
+      uDrift: { value: 1.6 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
+
 export const SPORE_VERT = /* glsl */ `
   attribute float aSize;
   attribute float aLife;

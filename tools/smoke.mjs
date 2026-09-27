@@ -153,6 +153,9 @@ const menuState = await page.evaluate(() => {
     deckSize: ff.engine.run.deck.totalSize,
     jokers: ff.engine.run.jokers.length,
     stats,
+    // En `low` las esporas de ambiente estan apagadas por diseño (el tier no
+    // las paga): si esto no da 0, el limite del tier no se esta aplicando.
+    particles: ff.scene.stats().particles,
     canvas: canvas ? `${canvas.width}x${canvas.height}` : 'sin canvas',
     webgl: gl ? 'contexto activo' : 'SIN CONTEXTO WEBGL',
     renderer: gl ? gl.getParameter(gl.VERSION) : '',
@@ -820,6 +823,7 @@ const postFx = await page.evaluate(() => {
     drawCallsTotal: stats.drawCallsTotal,
     programs: stats.programs,
     gpuTextures: stats.gpuTextures,
+    particles: stats.particles,
     canvas: canvas ? `${canvas.width}x${canvas.height}` : 'sin canvas',
   };
 });
@@ -914,6 +918,7 @@ const ok =
   menuState?.status === 'menu' &&
   menuState?.menuVisible === true &&
   menuState?.hudHidden === true &&
+  menuState?.particles === 0 &&
   menuState?.continueEnabled === false &&
   settingsOpened?.opened === true &&
   settingsOpened?.fields === 6 &&
@@ -962,6 +967,8 @@ const ok =
   fxPlaying?.status === 'playing' &&
   (fxPlaying?.hand ?? 0) > 0 &&
   fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0) &&
+  // Las esporas de ambiente del tier alto: son 900 y las calcula la GPU.
+  (postFx?.particles ?? 0) >= 900 &&
   afterStart?.status === 'blind_select' &&
   afterStart?.blindSelectVisible === true &&
   afterStart?.hudHidden === false &&

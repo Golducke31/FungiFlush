@@ -18,7 +18,9 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import * as THREE from 'three';
 
+import { SporeField } from '../src/render/Particles.ts';
 import {
   FRAME_BUDGET_MS,
   FrameMonitor,
@@ -279,4 +281,61 @@ test('el halo arranca con el anillo apagado y expone los tres terminos', () => {
   assert.equal(material.transparent, true);
 
   material.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// Particulas
+// ---------------------------------------------------------------------------
+
+test('las esporas de ambiente se calculan en la GPU: sus buffers no se reescriben', () => {
+  const field = new SporeField({ transient: 64, ambient: 32 });
+  field.setAmbientEnabled(true);
+  field.update(0.016);
+
+  const seeds = field.ambient.geometry.getAttribute('aSeed') as THREE.BufferAttribute;
+  const colors = field.ambient.geometry.getAttribute('aColor') as THREE.BufferAttribute;
+  const seedVersion = seeds.version;
+  const colorVersion = colors.version;
+
+  // Diez segundos de juego a 60 FPS.
+  for (let i = 0; i < 600; i++) field.update(0.016);
+
+  // `BufferAttribute.version` se incrementa cada vez que alguien le asigna
+  // `needsUpdate = true`. Si el movimiento volviera a la CPU, esto lo delata.
+  assert.equal(seeds.version, seedVersion, 'la semilla no se reescribe: el movimiento vive en el shader');
+  assert.equal(colors.version, colorVersion, 'el color tampoco');
+  assert.ok(
+    (field.ambient.material.uniforms['uTime']?.value as number) > 5,
+    'el reloj del shader si tiene que avanzar',
+  );
+
+  field.dispose();
+});
+
+test('las esporas transitorias si se simulan en CPU', () => {
+  const field = new SporeField({ transient: 32, ambient: 8 });
+  field.setAmbientEnabled(true);
+  assert.equal(field.activeCount, 8, 'solo las de ambiente');
+
+  field.burst(new THREE.Vector3(0, 1, 0), 5);
+  assert.equal(field.activeCount, 13, 'el burst tiene que sumar a las de ambiente');
+
+  // Al terminar su vida, se liberan.
+  for (let i = 0; i < 300; i++) field.update(0.05);
+  assert.equal(field.activeCount, 8, 'las transitorias se reciclan solas');
+
+  field.dispose();
+});
+
+test('bajar el limite de particulas no reasigna memoria', () => {
+  const field = new SporeField({ transient: 100, ambient: 50 });
+  field.setAmbientEnabled(true);
+
+  field.setLimits({ transient: 10, ambient: 5 });
+  // Se piden 50 y solo hay 10 slots disponibles.
+  field.burst(new THREE.Vector3(0, 1, 0), 50);
+
+  assert.equal(field.activeCount, 15, '5 de ambiente + 10 transitorias, sin pasar el limite');
+
+  field.dispose();
 });
