@@ -2,10 +2,11 @@
 #
 # Orden pensado para fallar RAPIDO y barato:
 #   1. tipos    -> segundos
-#   2. tests    -> segundos (packs, migraciones, entitlements)
+#   2. tests    -> segundos (packs, migraciones, entitlements, duelo)
 #   3. contenido-> valida los JSON de los packs (gate de contenido)
 #   4. balance  -> 500 partidas headless (regresion de balance)
-#   5. build    -> produce el bundle y avisa si crecio demasiado
+#   5. duelo    -> 1000 duelos headless (determinismo, no mutacion, terminacion)
+#   6. build    -> produce el bundle y avisa si crecio demasiado
 #
 # El smoke test de WebGL NO corre aca: necesita Chromium con SwiftShader y
 # rutas absolutas al binario del entorno de desarrollo. Se corre a mano con
@@ -46,6 +47,9 @@ jobs:
 
       - name: Regresion de balance (500 partidas headless)
         run: npm run sim:balance
+
+      - name: Regresion del duelo micelial (1000 partidas headless)
+        run: npm run sim:board -- --runs 1000 --quiet
 
       - name: Build de produccion
         run: npm run build:release

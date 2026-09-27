@@ -25,6 +25,9 @@ import type {
   OfferTable,
   UpgradeTrack,
 } from '@engine/index';
+// Solo el TIPO: no arrastra `@engine/board` al bundle de contenido. El modo
+// tablero se carga con `await import('@engine/board')` cuando se juega.
+import type { BoardCardDef } from '@engine/board/types';
 
 // Los tipos de tabla de oferta viven en el MOTOR (`src/engine/types.ts`)
 // porque son parte del contrato de datos que el motor consume. Aca solo se
@@ -118,6 +121,8 @@ export interface LoadedPack extends RawPack {
   antes: AnteRow[];
   upgrades: UpgradeTrack[];
   evolutions: EvolutionRule[];
+  /** Flechas del modo tablero. Indexadas por `cardId`, no por posicion. */
+  board: BoardCardDef[];
 }
 
 // ---------------------------------------------------------------------------

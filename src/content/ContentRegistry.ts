@@ -24,6 +24,10 @@ import {
   type JokerDefinition,
   type UpgradeTrack,
 } from '@engine/index';
+// El validador vive en la capa de contenido y solo toma el TIPO del tablero:
+// asi el arranque no arrastra el chunk diferido del duelo.
+import { validateBoardDefs } from './boardValidation';
+import type { BoardCardDef } from '@engine/board/types';
 
 import {
   comparePacks,
@@ -79,6 +83,8 @@ export class ContentRegistry {
   private readonly offers: OfferTable[] = [];
   private readonly upgrades: UpgradeTrack[] = [];
   private readonly evolutions: EvolutionRule[] = [];
+  /** Flechas del modo tablero, indexadas por `cardId`. */
+  private readonly board: BoardCardDef[] = [];
 
   private readonly appVersion: string;
 
@@ -111,6 +117,7 @@ export class ContentRegistry {
     this.offers.length = 0;
     this.upgrades.length = 0;
     this.evolutions.length = 0;
+    this.board.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
 
@@ -143,6 +150,10 @@ export class ContentRegistry {
       this.offers.push(...pack.offers);
       this.upgrades.push(...pack.upgrades);
       this.evolutions.push(...pack.evolutions);
+      // Mismo criterio que upgrades y evolutions: se acumulan y el validador
+      // del tipo detecta duplicados. Un `cardId` repetido entre packs es un
+      // error de contenido, no un override silencioso.
+      this.board.push(...pack.board);
     }
   }
 
@@ -233,6 +244,11 @@ export class ContentRegistry {
 
   offerTables(): OfferTable[] {
     return [...this.offers];
+  }
+
+  /** Entradas del modo tablero, tal como las consume `createMatch()`. */
+  boardDefs(): BoardCardDef[] {
+    return this.board.map((def) => ({ ...def, arrows: [...def.arrows] }));
   }
 
   /** Objetivo base de un ante. Extrapola si el contenido definio mas antes. */
@@ -396,6 +412,20 @@ export class ContentRegistry {
       });
     }
 
+    // --- Tablero (Tetra Master) ---
+    // Se valida contra las cartas del registro: una flecha que apunta a un id
+    // inexistente es contenido muerto y el duelo se rompe al repartir.
+    if (this.board.length > 0) {
+      for (const issue of validateBoardDefs(this.board, new Set(this.cards.keys()))) {
+        issues.push({
+          level: issue.level,
+          pack: this.packOf(issue.where.replace(/^board:/, '')) ?? '<registry>',
+          where: issue.where,
+          message: issue.message,
+        });
+      }
+    }
+
     // --- Validacion semantica del motor, etiquetada por pack ---
     const registry = new CardRegistry();
     registry.load(this.toBundle());
@@ -495,6 +525,7 @@ export class ContentRegistry {
     offers: number;
     upgrades: number;
     evolutions: number;
+    board: number;
   } {
     return {
       packs: this.packs.length,
@@ -505,6 +536,7 @@ export class ContentRegistry {
       offers: this.offers.length,
       upgrades: this.upgrades.length,
       evolutions: this.evolutions.length,
+      board: this.board.length,
     };
   }
 }

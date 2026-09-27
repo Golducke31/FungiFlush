@@ -19,6 +19,7 @@
     "offers": ["offers.json"],
     "antes": ["antes.json"],
     "upgrades": ["upgrades.json"],
-    "evolutions": ["evolutions.json"]
+    "evolutions": ["evolutions.json"],
+    "board": ["board.json"]
   }
 }

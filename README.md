@@ -39,6 +39,8 @@ to game events through a deterministic **Trigger Engine**.
 - **Card flipping & drag & drop**: cards have a real back face and turn over (used by the
   evolution VFX and the idle menu), and cards can be **dragged onto drop zones** to select
   them, return them, or discard exactly one — while **tap-to-select keeps working on mobile**.
+- **Mycelial Duel**: a second, self-contained game — a 4×4 Tetra Master-style duel with
+  arrows, chains of flips and hidden hands. Hot-seat today, the same reducer online later.
 - **Versioned saves with a migration chain** (`SAVE_VERSION = 2`), plus a permanent
   **profile** (collection, settings, entitlements, stats) that survives updates.
 - **Entitlements + PackGate**: DLC gating as a pure predicate injected into the engine.
@@ -449,6 +451,103 @@ the menu's New Run button and the HUD's Play button with real mouse events.
 
 ---
 
+## ⚔️ Mycelial Duel: the board mode
+
+A second game lives inside the first one: a 4×4 **Tetra Master**-style duel. It shares no
+rule with the deckbuilder — no Substrate, no Spores, no Trigger Engine — only the *identity*
+of the cards. Nothing in `src/engine/board/**` imports scoring, triggers or the deck.
+
+### Where the arrows live
+
+In `board.json`, **indexed by `cardId`**, not as a field of `CardDefinition`:
+
+```json
+{ "cardId": "destroying_angel", "arrows": [6,5,5,4,5,4,5,5], "power": 4, "defense": 4 }
+```
+
+Four reasons that file is separate:
+
+1. **Zero changes to `src/engine/types.ts`** — `CardDefinition` is the contract shared by the
+   deckbuilder, the validator, the card texture and the save file.
+2. An **expansion can give board data to base-game cards** without overwriting the base file
+   or tripping the merge's "first one wins" rule.
+3. It allows **board-only cards** that never enter the deckbuilder pool.
+4. A broken `board.json` cannot block a card release — it has its own validation.
+
+### How a placement resolves
+
+Placing a card makes it the only initial attacker, then a BFS walks outward. For every arrow
+with a value > 0: `attack = own arrow + power` against `defense = opposite arrow + defense`.
+A face-down defender is revealed first and contributes `defense = 0`. If the attacker wins,
+the card **changes owner and keeps attacking from its new cell** — that chain is what makes
+Tetra Master fun.
+
+`resolvePlacement(state, cell, uid)` is pure: it returns a **new** state plus a list of
+`BattleStep`s. The render replays the steps; it never recomputes anything.
+
+**Termination is guaranteed three times over**, and the code says which one is real:
+
+1. **Monotonicity (the actual reason).** Only the active player's side attacks, so every flip
+   adds a cell to them and removes one from the opponent. Ownership can't go back.
+2. **The rule.** A cell never attacks twice in the same resolution.
+3. **The net.** `MAX_COMBAT_DEPTH` caps any chain that escapes. It surfaces as
+   `truncated: true` so the simulation can *assert* it never fires instead of assuming it.
+
+### Hidden information
+
+`viewFor(state, player)` redacts the opponent's hand down to a count before the state reaches
+any presentation layer. The HUD never sees `BoardState` — only a `BoardView`. That is not just
+hot-seat hygiene: when the duel goes online, the server will send exactly this object to each
+client, and a HUD that read the raw state would have leaked the opponent's hand over the wire.
+
+Hot-seat adds a **curtain**: after each move the next player has to tap "Ready" before their
+hand is drawn, so the player handing over the device never sees it. The smoke test asserts
+this the only way that means anything — it greps the rendered panel for the opponent's card
+uids and requires zero matches.
+
+### Lazy loading
+
+`await import('@engine/board')` — `combat`, `MatchController` and the rest ship as a **5.2 kB
+chunk** that is not preloaded and costs nothing until someone opens a duel. The smoke test
+asserts this the only way that means anything: it watches the network and requires that zero
+board modules were fetched before the button was pressed.
+
+Two things had to be true for that to work, and both are easy to get wrong:
+
+- **The arrow constants live in `src/engine/constants.ts`, not in the board module.** The
+  boot-time content validation needs them, so keeping them inside the lazy module would drag
+  the whole thing back into the boot path.
+- **No `manualChunks` rule names the board chunk.** Forcing a name made Rollup relocate the
+  modules the board *re-exports* into it, so the engine chunk ended up importing the board
+  chunk — a cycle, which made Vite preload it. Left alone, the module with no static importers
+  falls into the dynamic-import chunk on its own.
+
+### What the simulation changed
+
+`npm run sim:board` plays **10,000 random games** and checks three properties: no mutation
+(the state goes in deep-frozen, so any write throws), determinism (each game is played twice
+*and* its command log is replayed onto a fresh state), and termination. All of them hold, with
+`truncated` never firing.
+
+It also settled two design questions that guessing would have gotten wrong:
+
+| Hand size | Draws | Flips per game |
+| --- | --- | --- |
+| 4 | 22.8% | 3.3 |
+| 5 | 15.2% | 5.7 |
+| **6** | **10.8%** | **9.3** |
+| 7 | 8.3% | 13.3 |
+
+Four cards leave 8 empty cells and almost nobody to attack; seven stretch the game to 14
+placements. **Six** is the pick.
+
+And it caught a real fairness bug: with a fixed first player the split was **25% / 63%** —
+placing second is worth an extra attack (the first player places a card with nothing to attack
+yet). `createMatch` now draws the starting player from a derived seed, and the sim asserts the
+decided games come out 50/50 (it measures 50.5% / 49.5% of 8,929).
+
+---
+
 ## 🔥 The Trigger Engine & infinite-loop protection
 
 *"How do I stop the trigger engine from entering an infinite cascade when a card re-fires
@@ -525,17 +624,20 @@ Toggle live with the language button in the HUD or the menu (or `toggleLanguage(
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, **drop-zone resolution (priority order, `accepts` gating) and `discardCards` (single-card discard that leaves the rest of the selection alone)**, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, **drop-zone resolution (priority order, `accepts` gating) and `discardCards` (single-card discard that leaves the rest of the selection alone)**, **the duel (arrow maths, reveals, tie rules, flip chains, purity, the reducer, `viewFor` redaction, `board.json` coverage)**, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
 | `npm run validate` | Content gate: validates every pack's JSON, content i18n coverage, **and scans `src/**` for `t('...')` keys missing from a dictionary**. Exits 1 on error. |
 | `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
 | `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
-| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
+| `npm run sim:board` | **10,000 random duels** checking no mutation (deep-frozen state), determinism (double play + command-log replay), termination, and that the depth net never fires. `--runs N`, `--hand N` for tuning. |
+| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → **Mycelial Duel (curtain, a real placement, hidden-hand check, finish, close)** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 62/62**, **`npm run validate` 0 errors / 0 warnings**
-(35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions),
+Latest runs: **`npm test` 88/88**, **`npm run validate` 0 errors / 0 warnings**
+(35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions, 35 board entries),
 **`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
+**`npm run sim:board` 10,000 duels, 0 mutation / 0 replay drift / 0 truncation, 10.7% draws**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.78 MB of JS, no sourcemaps**.
+**`npm run build:release` 0.80 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
+loads only when a duel starts).
 
 > **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under
 > SwiftShader (~12 FPS) animations run slower than wall-clock. Waits around animated
@@ -605,7 +707,7 @@ paid for.
 | **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | ✅ done |
 | **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | ✅ done |
 | **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | ✅ done |
-| **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | planned |
+| **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | ✅ done |
 | **6** | Battle pass + store + Google Play Billing bridge | planned |
 | **7** | Real audio on top of `AudioBus` | deferred by design |
 | **8** | Android packaging, Play listing, release pipeline | planned |

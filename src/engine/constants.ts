@@ -66,3 +66,47 @@ export const ECONOMY = {
   /** Precio de venta de un joker respecto a su coste. */
   jokerSellRatio: 0.5,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Modo tablero (Tetra Master)
+// ---------------------------------------------------------------------------
+//
+// Estas constantes viven ACA y no en `src/engine/board/` a proposito: el
+// tablero se carga con `await import()`, pero la validacion de contenido
+// (que corre al arrancar) necesita las mismas flechas para revisar los JSON.
+// Si vivieran dentro del modulo diferido, el chunk dejaria de ser diferido.
+
+/** Lado del tablero. 4x4, como Tetra Master. */
+export const BOARD_SIZE = 4;
+export const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
+
+/**
+ * Profundidad maxima de una cadena de volteos dentro de UNA colocacion.
+ * Es una red de seguridad, no una regla de balance: la garantia real de
+ * terminacion es que cada volteo le saca una celda al rival (ver combat.ts).
+ */
+export const MAX_COMBAT_DEPTH = 16;
+
+/** Orden canonico de las flechas. El indice ES la direccion. */
+export const ARROW_DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
+export type ArrowDir = (typeof ARROW_DIRS)[number];
+
+/** (dcol, drow) de cada direccion, en el orden de `ARROW_DIRS`. */
+export const ARROW_OFFSET: ReadonlyArray<readonly [number, number]> = [
+  [0, -1], // N
+  [1, -1], // NE
+  [1, 0], // E
+  [1, 1], // SE
+  [0, 1], // S
+  [-1, 1], // SW
+  [-1, 0], // W
+  [-1, -1], // NW
+];
+
+/** Valor maximo de una flecha. 0 = la carta no apunta para ese lado. */
+export const MAX_ARROW_VALUE = 9;
+
+/** La direccion opuesta: el indice + 4 (mod 8). */
+export function oppositeDir(dir: number): number {
+  return (dir + 4) % 8;
+}

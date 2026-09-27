@@ -15,6 +15,7 @@
     "validate": "tsx tools/validate-content.ts",
     "sim": "tsx tools/simulate.ts",
     "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
+    "sim:board": "tsx tools/boardSim.ts",
     "smoke": "node tools/smoke.mjs",
     "art": "python tools/optimize_art.py",
     "icons": "python tools/make_icons.py",

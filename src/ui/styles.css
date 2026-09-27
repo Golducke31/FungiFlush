@@ -1329,3 +1329,332 @@ body {
     font-size: 11.5px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Duelo micelial (Fase 5)
+   --------------------------------------------------------------------------
+   El tablero se lleva TODA la pantalla, no un panel centrado: son 16 celdas
+   con 8 numeros cada una, y en landscape de celular (390 px de alto) no hay
+   forma de que entren en un panel con titulo, mano y botones. Por eso la
+   grilla se dimensiona con `min(altura disponible, ancho disponible)` en vez
+   de con un tamano fijo, y el resto se aprieta.
+
+   Los colores de dueño son los del plan: jugador 0 teal, jugador 1 magenta.
+   No se usa el color del ELEMENTO para el borde: en el tablero lo que hay que
+   leer de un vistazo es de quien es la celda, no de que esta hecha.
+   -------------------------------------------------------------------------- */
+
+.panel.is-board {
+  --p0: #5fd8e8;
+  --p1: #e05c8a;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel.is-board .panel-title {
+  font-size: 17px;
+  margin: 0;
+}
+
+.panel.is-board .panel-subtitle {
+  font-size: 11px;
+  margin: 0;
+}
+
+.panel.is-board .panel-actions {
+  margin-top: 0;
+  gap: 6px;
+}
+
+.panel.is-board .panel-actions .btn {
+  min-height: 32px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.board-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.board-main {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* La grilla se estira para llenar el alto disponible; las celdas se reparten
+   ese espacio. No se fuerza a que sea cuadrada: en landscape de celular el
+   alto es el recurso escaso, y una celda un poco mas ancha que alta se lee
+   mejor (el nombre tiene mas lugar). */
+.board-grid {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.board-side {
+  flex: 0 0 44%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+/* --- Celda --- */
+
+.board-cell {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.board-cell[data-owner='0'] {
+  border-color: var(--p0);
+  background: rgba(95, 216, 232, 0.12);
+}
+
+.board-cell[data-owner='1'] {
+  border-color: var(--p1);
+  background: rgba(224, 92, 138, 0.12);
+}
+
+.board-cell.is-legal {
+  border-style: dashed;
+  border-color: rgba(79, 209, 139, 0.75);
+}
+
+.board-cell.is-flipped {
+  animation: board-flip 0.55s ease-out;
+}
+
+@keyframes board-flip {
+  0% {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 3px rgba(255, 200, 87, 0.9);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 200, 87, 0);
+  }
+}
+
+/* --- Cara de la carta: 8 flechas alrededor del nombre --- */
+
+.board-face {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.board-face-name {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8.5px;
+  line-height: 1.05;
+  text-align: center;
+  opacity: 0.7;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.board-face::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--card-color, #9aa5b1);
+  opacity: 0.5;
+}
+
+.board-arrow {
+  position: absolute;
+  font-size: 9.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #eaf3fb;
+  text-shadow: 0 1px 2px #000;
+}
+
+.board-arrow[data-dir='N'] { top: 1px; left: 50%; transform: translateX(-50%); }
+.board-arrow[data-dir='NE'] { top: 1px; right: 2px; }
+.board-arrow[data-dir='E'] { top: 50%; right: 2px; transform: translateY(-50%); }
+.board-arrow[data-dir='SE'] { bottom: 1px; right: 2px; }
+.board-arrow[data-dir='S'] { bottom: 1px; left: 50%; transform: translateX(-50%); }
+.board-arrow[data-dir='SW'] { bottom: 1px; left: 2px; }
+.board-arrow[data-dir='W'] { top: 50%; left: 2px; transform: translateY(-50%); }
+.board-arrow[data-dir='NW'] { top: 1px; left: 2px; }
+
+/* --- Estado, mano y registro --- */
+
+.board-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.board-turn {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.board-hint,
+.board-counts {
+  color: var(--muted, #93a4b5);
+  font-size: 11px;
+}
+
+.board-result {
+  font-weight: 900;
+  font-size: 15px;
+  color: var(--spores, #4fd18b);
+}
+
+.board-hand {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.board-hand-label {
+  width: 100%;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #93a4b5);
+}
+
+.board-hand-card {
+  width: 58px;
+  height: 66px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.board-hand-card.is-selected {
+  border-color: var(--spores, #4fd18b);
+  box-shadow: 0 0 0 2px rgba(79, 209, 139, 0.45);
+}
+
+.board-log {
+  flex: 1 1 auto;
+  min-height: 34px;
+  max-height: 58%;
+  margin: 0;
+  padding: 6px 6px 6px 22px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 11px;
+  line-height: 1.35;
+  list-style: decimal;
+  scrollbar-width: thin;
+}
+
+/* Sin jugadas todavia el recuadro quedaria mudo: se explica solo. Va con
+   `::before` para no ensuciar el DOM (el smoke cuenta los `<li>` reales). */
+.board-log:empty::before {
+  content: attr(data-empty);
+  opacity: 0.45;
+  font-size: 11px;
+}
+
+.board-log-step.is-flip {
+  color: #ffc857;
+  font-weight: 700;
+}
+
+.board-log-step.is-place {
+  color: #7f8fa0;
+}
+
+/* --- Cortina de "pasa el dispositivo" --- */
+
+.board-curtain {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(4, 7, 11, 0.97);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 5;
+}
+
+.board-curtain.is-open {
+  display: flex;
+}
+
+.board-curtain-player {
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.board-curtain-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted, #93a4b5);
+}
+
+/* En pantallas muy bajas (landscape de celular) la mano se achica antes de
+   empujar el tablero fuera de cuadro. */
+@media (max-height: 460px) {
+  .board-hand-card {
+    width: 50px;
+    height: 58px;
+  }
+  .panel.is-board .panel-subtitle {
+    display: none;
+  }
+}

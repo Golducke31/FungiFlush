@@ -11,6 +11,7 @@
  */
 
 import { bus, type CardInstance, type GameEngine, type RunSnapshot, type ShopOffer } from '@engine/index';
+import type { BoardView } from '@engine/board';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import type { ProfileSettings } from '@meta/ProfileState';
@@ -20,6 +21,7 @@ import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
 import { buildDeckBuilderPanel, type DeckCardInfo } from './DeckBuilderScreen';
 import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
+import { BoardScreen, type BoardResolvers, type BoardScreenCallbacks } from './BoardScreen';
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -47,6 +49,8 @@ export interface HudCallbacks {
   onUpgrade: (uid: string) => void;
   onEvolve: (uid: string) => void;
   onOpenDeck: () => void;
+  // --- Fase 5: duelo micelial (hot-seat) ---
+  onOpenBoard: () => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -453,6 +457,10 @@ export class HUD {
       {
         version: this.appInfo.version,
         continueLabel: this.continueLabel,
+        // El duelo solo se ofrece si el contenido trae datos de tablero: un
+        // boton que abre un panel vacio es peor que no tener el boton.
+        showBoard: this.boardAvailable,
+        onOpenBoard: () => this.callbacks.onOpenBoard(),
       },
       {
         onStartRun: () => this.callbacks.onStartRun(),
@@ -466,6 +474,49 @@ export class HUD {
       },
     );
     this.openOverlay(panel);
+  }
+
+  /**
+   * Habilita el boton de duelo. Lo llama el controlador despues de leer el
+   * contenido, porque el HUD no conoce el registro de packs.
+   */
+  private boardAvailable = false;
+
+  setBoardAvailable(available: boolean): void {
+    this.boardAvailable = available;
+  }
+
+  // ==========================================================================
+  // Fase 5: duelo micelial
+  // ==========================================================================
+
+  /** Pantalla del duelo activa, o null. */
+  private boardScreen: BoardScreen | null = null;
+
+  /**
+   * Abre el tablero con una vista YA redactada.
+   *
+   * El HUD no arma el `BoardView` ni aplica comandos: recibe la vista del
+   * controlador (que es quien tiene el estado del duelo) y le devuelve una
+   * pantalla viva para poder actualizarla turno a turno.
+   */
+  showBoard(
+    view: BoardView,
+    resolve: BoardResolvers,
+    callbacks: BoardScreenCallbacks,
+  ): BoardScreen {
+    this.boardScreen?.destroy();
+    const screen = new BoardScreen(view, resolve, callbacks);
+    this.boardScreen = screen;
+    this.openOverlay(screen.element);
+    return screen;
+  }
+
+  /** Cierra el tablero (al salir del duelo). */
+  closeBoard(): void {
+    this.boardScreen?.destroy();
+    this.boardScreen = null;
+    this.hideOverlay();
   }
 
   showSettings(settings: ProfileSettings): void {

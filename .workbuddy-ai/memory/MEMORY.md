@@ -28,15 +28,25 @@ Repo: `https://github.com/Golducke31/FungiFlush` (rama `main`). Workspace: `C:\U
 9. **El tap manda.** Los umbrales de gesto están separados a propósito
    (`CLICK_SLOP_PX = 6` < `DRAG_START_PX = 10`): un tap nunca puede iniciar un arrastre.
    No igualarlos ni invertirlos: el tap-to-select de móvil es el camino principal.
+10. **La mano del rival solo sale por `viewFor()`.** El HUD del duelo nunca ve `BoardState`:
+    si lo viera, hoy filtraría la mano rival en la pantalla y mañana la mandaría por la red.
+11. **Las constantes del tablero viven en `src/engine/constants.ts`**, no dentro de
+    `src/engine/board/`: el validador de contenido las necesita al arrancar y si estuvieran
+    adentro del módulo diferido el chunk dejaría de ser diferido.
+12. **Ningún módulo diferido puede tener un `manualChunks` con nombre propio.** Forzarlo hace
+    que Rollup reubique ahí lo que el módulo reexporta, el chunk del motor lo importe (ciclo) y
+    Vite lo precargue: el chunk existe y se carga igual. Dejar que Rollup lo decida.
 
 ## Estructura clave
 - `src/engine/` motor puro · `src/content/` packs y merge · `src/meta/` perfil, entitlements, gate
 - `src/data/packs/base/` contenido (declarado por `pack.json`)
 - `src/render/` Three.js · `src/ui/` HUD DOM · `src/persistence/` Storage + RunStore + ProfileStore + migrations
 - `src/audio/AudioBus.ts` no-op con ganchos ya cableados
-- `tools/` sim, smoke, validate-content, genPackIndex, loadContent.node
+- `tools/` sim, smoke, validate-content, genPackIndex, loadContent.node, boardSim
 - Render: `Card3D` (cara + dorso + `home.flip`) · `Interaction` (tap y drag) ·
   `DropZone` (regla pura + marco visual) · `SceneManager` (vista, zonas, VFX)
+- Tablero: `src/engine/board/**` (puro, chunk diferido) · `board.json` en el pack ·
+  `src/content/boardValidation.ts` · `src/ui/BoardScreen.ts` (hot-seat)
 
 ## Comandos
 `npm run dev | typecheck | test | validate | sim | sim:balance | smoke | build | build:release | packs | tauri`
@@ -67,6 +77,13 @@ Un pack sin tabla `reward` degrada al flujo viejo (`playing -> shop`).
 
 La Fase 4 no toca balance: el ante promedio se mantuvo. `discardCards()` es el mismo camino
 que `discardSelected()`, así que el simulador (que usa la selección) no cambia.
+
+## Duelo micelial (v1.3) — parámetros medidos
+Tablero 4x4, 6 cartas por jugador, `tieRule: defender_holds`, quién arranca se sortea.
+Con mano 4: 22.8% de empates y 3.3 volteos por partida; con 6: 10.8% y 9.3; con 7: 8.3% y
+13.3 pero 14 colocaciones. Con el inicio fijo el reparto era 25% / 63% (colocar segundo vale
+un ataque extra); sorteando el inicio, 50.5% / 49.5% entre las decididas.
+`npm run sim:board -- --runs N --hand N` es la herramienta para volver a medirlo.
 
 **Mirar el ante promedio para juzgar balance**, no la tasa de victorias: al cambiar el consumo
 del RNG de la tienda la tasa se movió 10 puntos mientras el ante promedio casi no cambió (es la
@@ -104,6 +121,12 @@ Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `a
 - **La lógica nueva del render va a un módulo puro** (`DropZone.ts`: rectángulos y
   `resolveDropZone`) para poder testearla en Node sin DOM ni WebGL. Los tests de gestos
   quedan solo para el smoke.
+- **La carga diferida se verifica mirando la RED** (`requestedUrls` en el smoke), no el
+  bundle: un chunk puede existir y estar precargado igual. Cero requests del módulo antes de
+  abrir la pantalla, al menos uno después.
+- **La información oculta se verifica sobre el DOM renderizado**: buscar los uid del rival en
+  el `innerHTML` del panel y exigir cero coincidencias. Un `expect` sobre el estado no prueba
+  que la pantalla no lo muestre.
 
 ## Modelo de negocio (decidido)
 App de pago único en Google Play + expansiones de contenido + pases de batalla como

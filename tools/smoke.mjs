@@ -97,6 +97,10 @@ const page = await context.newPage();
 const consoleErrors = [];
 const consoleWarnings = [];
 const pageErrors = [];
+/** URLs pedidas, para poder afirmar que un chunk NO se cargo. */
+const requestedUrls = [];
+
+page.on('request', (request) => requestedUrls.push(request.url()));
 
 page.on('console', (msg) => {
   const type = msg.type();
@@ -180,6 +184,136 @@ const settingsRoundTrip = await page.evaluate(async () => {
 });
 console.log('\n--- Ajustes (abrir / cerrar) ---');
 console.log(JSON.stringify({ ...settingsOpened, ...settingsRoundTrip }, null, 2));
+
+// ===========================================================================
+// Fase 5 — DUELO MICELIAL (hot-seat)
+// ===========================================================================
+// El duelo es el unico modo con informacion oculta: lo que mas importa probar
+// no es que el tablero dibuje, sino que la mano del rival NO llegue al DOM.
+
+const center = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+
+// El motor del tablero se carga con `await import()`: hasta aca no puede
+// haber viajado NI UN byte. Es la unica forma de verificar la carga diferida
+// (el bundle puede verse bien y estar precargado igual). En dev los modulos
+// se sirven sueltos; en build, ya empaquetados en su chunk.
+const isBoardModule = (url) => /\/src\/engine\/board\/|\/assets\/board-/.test(url);
+const boardChunkBeforeOpen = requestedUrls.filter(isBoardModule).length;
+
+const boardButton = await page.locator('.panel.is-menu [data-act="board"]').boundingBox();
+if (boardButton) await page.mouse.click(center(boardButton).x, center(boardButton).y);
+// El motor del tablero se carga con `await import()`: hay que darle tiempo.
+await page.waitForTimeout(1400);
+
+const boardChunkAfterOpen = requestedUrls.filter(isBoardModule).length;
+
+const boardOpened = await page.evaluate(() => {
+  const match = window.__fungiflush.board();
+  return {
+    panel: Boolean(document.querySelector('.panel.is-board')),
+    cells: document.querySelectorAll('.panel.is-board .board-cell').length,
+    curtain: Boolean(document.querySelector('.panel.is-board .board-curtain.is-open')),
+    starter: match ? match.state.currentPlayer : null,
+    handSize: match ? match.state.hands[match.state.currentPlayer].length : 0,
+    // Con la cortina puesta no puede haber NINGUNA carta de mano dibujada.
+    handChips: document.querySelectorAll('.panel.is-board .board-hand-card').length,
+  };
+});
+console.log('\n--- Duelo: abrir ---');
+console.log(JSON.stringify(boardOpened, null, 2));
+await page.screenshot({ path: join(shotsDir, '14-board-curtain.png') });
+
+// --- Levantar la cortina y colocar una carta con gestos reales ---
+const readyBox = await page.locator('.panel.is-board [data-act="ready"]').boundingBox();
+if (readyBox) await page.mouse.click(center(readyBox).x, center(readyBox).y);
+await page.waitForTimeout(350);
+await page.screenshot({ path: join(shotsDir, '15-board-hand.png') });
+
+const handBox = await page.locator('.panel.is-board .board-hand-card').first().boundingBox();
+if (handBox) await page.mouse.click(center(handBox).x, center(handBox).y);
+await page.waitForTimeout(200);
+
+const cellBox = await page.locator('.panel.is-board .board-cell').first().boundingBox();
+if (cellBox) await page.mouse.click(center(cellBox).x, center(cellBox).y);
+await page.waitForTimeout(500);
+await page.screenshot({ path: join(shotsDir, '16-board-placed.png') });
+
+const afterTurn = await page.evaluate(() => {
+  const match = window.__fungiflush.board();
+  return {
+    turn: match ? match.state.turn : -1,
+    currentPlayer: match ? match.state.currentPlayer : -1,
+    placed: match ? match.state.cells.filter(Boolean).length : 0,
+    logEntries: document.querySelectorAll('.panel.is-board .board-log-step').length,
+    curtainBack: Boolean(document.querySelector('.panel.is-board .board-curtain.is-open')),
+  };
+});
+console.log('\n--- Duelo: un turno ---');
+console.log(JSON.stringify(afterTurn, null, 2));
+
+// --- La prueba que importa: la mano del rival no esta en el DOM ---
+const hiddenInfo = await page.evaluate(() => {
+  const match = window.__fungiflush.board();
+  const panel = document.querySelector('.panel.is-board');
+  const rival = match.state.hands[match.state.currentPlayer].map((c) => c.uid);
+  const html = panel ? panel.innerHTML : '';
+  return {
+    rivalCards: rival.length,
+    leaked: rival.filter((uid) => html.includes(uid)),
+    handChips: document.querySelectorAll('.panel.is-board .board-hand-card').length,
+  };
+});
+console.log('\n--- Duelo: informacion oculta ---');
+console.log(JSON.stringify(hiddenInfo, null, 2));
+
+// --- Terminar la partida por el motor y verificar el cierre ---
+const boardFinished = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const match = window.__fungiflush.board();
+  if (!match) return { skipped: 'no hay duelo abierto' };
+
+  for (let i = 0; i < 40 && match.state.status === 'placing'; i++) {
+    const player = match.state.currentPlayer;
+    const card = match.state.hands[player][0];
+    const cell = match.state.cells.findIndex((c) => c === null);
+    if (!card || cell < 0) break;
+    const result = match.api.applyCommand(match.state, {
+      t: 'place',
+      by: player,
+      cell,
+      uid: card.uid,
+    });
+    if (result.error) return { error: result.error };
+    match.state = result.state;
+    match.screen.logSteps(result.steps);
+    match.screen.markFlips(result.steps);
+    match.screen.update(match.api.viewFor(match.state, match.state.currentPlayer));
+  }
+  await wait(300);
+
+  return {
+    status: match.state.status,
+    winner: match.state.winner,
+    filled: match.state.cells.filter(Boolean).length,
+    result: document.querySelector('.panel.is-board .board-result')?.textContent ?? null,
+    rematch: Boolean(document.querySelector('.panel.is-board [data-act="rematch"]')),
+  };
+});
+console.log('\n--- Duelo: final ---');
+console.log(JSON.stringify(boardFinished, null, 2));
+await page.screenshot({ path: join(shotsDir, '17-board-over.png') });
+
+const boardClosed = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.panel.is-board [data-act="close"]')?.click();
+  await wait(500);
+  return {
+    backToMenu: Boolean(document.querySelector('.panel.is-menu')),
+    boardGone: !document.querySelector('.panel.is-board'),
+  };
+});
+console.log('\n--- Duelo: cerrar ---');
+console.log(JSON.stringify(boardClosed, null, 2));
 
 // --- Nueva partida desde el MENU (camino real del jugador) ---
 // CLICK REAL, no `element.click()`: el arreglo de `pointer-events` de la Fase
@@ -652,6 +786,27 @@ const ok =
   settingsOpened?.opened === true &&
   settingsOpened?.fields === 5 &&
   settingsRoundTrip?.backToMenu === true &&
+  // --- Fase 5: duelo micelial ---
+  boardChunkBeforeOpen === 0 &&
+  boardChunkAfterOpen > 0 &&
+  boardOpened?.panel === true &&
+  boardOpened?.cells === 16 &&
+  boardOpened?.curtain === true &&
+  boardOpened?.handSize > 0 &&
+  boardOpened?.handChips === 0 &&
+  afterTurn?.turn === 1 &&
+  afterTurn?.placed === 1 &&
+  afterTurn?.logEntries > 0 &&
+  afterTurn?.curtainBack === true &&
+  hiddenInfo?.rivalCards > 0 &&
+  (hiddenInfo?.leaked?.length ?? 1) === 0 &&
+  hiddenInfo?.handChips === 0 &&
+  boardFinished?.status === 'finished' &&
+  boardFinished?.filled > 0 &&
+  boardFinished?.result !== null &&
+  boardFinished?.rematch === true &&
+  boardClosed?.backToMenu === true &&
+  boardClosed?.boardGone === true &&
   afterStart?.status === 'blind_select' &&
   afterStart?.blindSelectVisible === true &&
   afterStart?.hudHidden === false &&

@@ -12,6 +12,7 @@ import type {
   JokerDefinition,
   UpgradeTrack,
 } from '@engine/index';
+import type { BoardCardDef } from '@engine/board/types';
 
 import type { AnteRow, LoadedPack, OfferTable, RawPack } from './types';
 
@@ -60,5 +61,19 @@ export function parsePack(pack: RawPack): LoadedPack {
   const evolutions: EvolutionRule[] = [];
   for (const path of contents.evolutions ?? []) evolutions.push(...read<EvolutionRule>(pack, path));
 
-  return { ...pack, cards, jokers, mutations, blinds, offers, antes, upgrades, evolutions };
+  const board: BoardCardDef[] = [];
+  for (const path of contents.board ?? []) board.push(...read<BoardCardDef>(pack, path));
+
+  return {
+    ...pack,
+    cards,
+    jokers,
+    mutations,
+    blinds,
+    offers,
+    antes,
+    upgrades,
+    evolutions,
+    board,
+  };
 }

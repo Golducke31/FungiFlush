@@ -45,6 +45,14 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks(id: string) {
           if (id.includes('node_modules/three')) return 'three';
+          // El duelo se carga con `await import('@engine/board')`. NO se le
+          // asigna un chunk a mano: si se lo fuerza, Rollup reubica ahi los
+          // modulos que el tablero REEXPORTA (las constantes de flechas) y el
+          // chunk del motor termina importando al del tablero — el ciclo hace
+          // que Vite lo precargue y la carga diferida deja de existir.
+          // Dejandolo decidir, el modulo sin importadores estaticos se va solo
+          // al chunk de la importacion dinamica.
+          if (id.includes('/src/engine/board/')) return undefined;
           if (id.includes('/src/engine/')) return 'engine';
           if (id.includes('/src/data/')) return 'content';
           return undefined;

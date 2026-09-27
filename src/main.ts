@@ -25,6 +25,7 @@ import {
   type JokerDefinition,
   type RunSaveData,
 } from '@engine/index';
+import type { BoardState } from '@engine/board';
 import { bootstrapContent } from '@content/bootstrap';
 import { currentLanguage, initI18n, setLanguage, t, toggleLanguage, validateDictionaryCoverage } from '@i18n/index';
 import { ProfileStore } from '@persistence/ProfileStore';
@@ -33,8 +34,10 @@ import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
 import { ArtAssets, SceneManager } from '@render/index';
+import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
 import type { CollectionEntry, CollectionState } from '@ui/CollectionScreen';
+import type { BoardScreen } from '@ui/BoardScreen';
 import { attachAudioHooks } from '@audio/AudioBus';
 import en from '@i18n/en.json';
 import es from '@i18n/es.json';
@@ -389,6 +392,9 @@ async function boot(): Promise<void> {
       onOpenPass: () => hud?.toast(t('pass.comingSoon'), 'info'),
       onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
       onOpenAbout: () => hud?.showAbout(),
+      onOpenBoard: () => {
+        void openBoard();
+      },
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
@@ -432,6 +438,101 @@ async function boot(): Promise<void> {
   });
 
   hud.bindCollectionProvider(buildCollection);
+
+  // ==========================================================================
+  // Fase 5: duelo micelial (hot-seat)
+  // ==========================================================================
+  //
+  // El duelo NO es parte de la run: es un modo aparte, con su propio estado y
+  // su propio ciclo. Por eso no toca `engine.run.status` ni el autoguardado —
+  // un duelo no se guarda, se juega y se termina.
+  //
+  // El motor del tablero se carga con `await import()`: `combat` y
+  // `MatchController` no viajan hasta que alguien abre un duelo.
+  let match: {
+    state: BoardState;
+    screen: BoardScreen;
+    api: typeof import('@engine/board');
+  } | null = null;
+
+  const boardDefs = content.registry.boardDefs();
+  hud.setBoardAvailable(boardDefs.length > 0);
+
+  const boardResolvers = {
+    // Se resuelve contra el registro del MOTOR (ya filtrado por el gate de
+    // DLC), no contra el de contenido: el duelo solo puede usar lo que el
+    // jugador tiene. Si un id no existe, se muestra el id crudo en vez de
+    // romper la pantalla.
+    nameOf: (defId: string): string => {
+      const def = engine.registry.tryGetCard(defId);
+      return def ? t(def.nameKey) : defId;
+    },
+    colorOf: (defId: string): number => {
+      const def = engine.registry.tryGetCard(defId);
+      return def ? ELEMENT_COLOR[def.element] : 0x9aa5b1;
+    },
+  };
+
+  /** Redibuja la pantalla con la vista redactada del jugador activo. */
+  const paintMatch = (): void => {
+    if (!match) return;
+    const { state, screen, api } = match;
+    screen.update(api.viewFor(state, state.currentPlayer));
+  };
+
+  const openBoard = async (): Promise<void> => {
+    if (boardDefs.length === 0) {
+      hud?.toast(t('board.noData'), 'warn');
+      return;
+    }
+    const api = await import('@engine/board');
+
+    const callbacks = {
+      onPlace: (cell: number, uid: string, faceDown: boolean) => {
+        const current = match;
+        if (!current || current.state.status !== 'placing') return;
+        const result = api.applyCommand(current.state, {
+          t: 'place',
+          by: current.state.currentPlayer,
+          cell,
+          uid,
+          faceDown,
+        });
+        if (result.error) {
+          hud?.toast(result.error, 'warn');
+          return;
+        }
+        current.state = result.state;
+        current.screen.logSteps(result.steps);
+        current.screen.markFlips(result.steps);
+        paintMatch();
+      },
+      onConcede: () => {
+        const current = match;
+        if (!current || current.state.status !== 'placing') return;
+        const result = api.applyCommand(current.state, {
+          t: 'concede',
+          by: current.state.currentPlayer,
+        });
+        current.state = result.state;
+        paintMatch();
+      },
+      onRematch: () => {
+        void openBoard();
+      },
+      onClose: () => {
+        match = null;
+        hud?.closeBoard();
+        hud?.showMenu();
+      },
+    };
+
+    const seed = (Date.now() ^ 0x5bf03635) >>> 0;
+    const state = api.createMatch({ defs: boardDefs, seed });
+    const screen = hud?.showBoard(api.viewFor(state, state.currentPlayer), boardResolvers, callbacks);
+    if (!screen) return;
+    match = { state, screen, api };
+  };
 
   // La purga y la recompensa avisan por toast: son acciones irreversibles y el
   // jugador merece una confirmacion visible, no solo un cambio silencioso.
@@ -505,7 +606,20 @@ async function boot(): Promise<void> {
 
   if (import.meta.env.DEV) {
     Object.assign(window as unknown as Record<string, unknown>, {
-      __fungiflush: { engine, scene, hud, bus, content, profileStore, runStore },
+      __fungiflush: {
+        engine,
+        scene,
+        hud,
+        bus,
+        content,
+        profileStore,
+        runStore,
+        // El duelo vive en una clausura de `boot()`. Se expone como funcion
+        // porque la sesion se reemplaza en cada revancha, y el smoke test
+        // necesita leer el estado real (sobre todo para comprobar que la mano
+        // del rival NO esta en el DOM).
+        board: () => match,
+      },
     });
   }
 }
