@@ -68,7 +68,19 @@ body {
   justify-content: space-between;
 }
 
-#ui-root > * {
+/*
+ * SOLO las capas que reciben input se llevan los toques.
+ *
+ * Antes esto era `#ui-root > * { pointer-events: auto }`, y como ese selector
+ * (1 id) le gana a cualquier clase, anulaba los `pointer-events: none` de las
+ * capas de dibujo. `.hud-popups` es `inset: 0`, asi que se comia TODOS los
+ * toques: ninguno llegaba al canvas y las cartas no se podian tocar ni
+ * arrastrar. Ni el smoke test lo veia, porque clickeaba por JS.
+ */
+#ui-root > .hud-top,
+#ui-root > .hud-jokers,
+#ui-root > .hud-bottom,
+#ui-root > .overlay {
   pointer-events: auto;
 }
 

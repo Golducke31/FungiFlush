@@ -36,6 +36,9 @@ to game events through a deterministic **Trigger Engine**.
 - **Unlimited upgrades**: level any card for an escalating cost with **no hard ceiling**,
   and **evolving cards** that transform into another species when they hit a level or a
   play count — keeping their uid, level and bonuses.
+- **Card flipping & drag & drop**: cards have a real back face and turn over (used by the
+  evolution VFX and the idle menu), and cards can be **dragged onto drop zones** to select
+  them, return them, or discard exactly one — while **tap-to-select keeps working on mobile**.
 - **Versioned saves with a migration chain** (`SAVE_VERSION = 2`), plus a permanent
   **profile** (collection, settings, entitlements, stats) that survives updates.
 - **Entitlements + PackGate**: DLC gating as a pure predicate injected into the engine.
@@ -363,6 +366,89 @@ holding (and may have selected) would be a rules change mid-play.
 
 ---
 
+## 🃏 Handling: card flipping & drag & drop
+
+### Flipping (`Card3D.back` + `home.flip`)
+
+`Card3D` now has a **back face**. Both faces are coplanar and look in opposite
+directions: the front uses `FrontSide`, the back `BackSide`. Nothing toggles
+`.visible` per frame — the GPU's back-face culling decides which one you see, and
+because `Mesh.raycast()` honours `material.side`, the raycaster picks the same one.
+So a face-down card is still clickable, and there is no z-fighting to babysit.
+
+`home.flip` is a plain tweenable number (`0` = face up, `1` = face down) composed into
+the rotation the same way position is:
+
+```ts
+group.rotation.set(home.rx, home.ry + Math.PI * home.flip, home.rz);
+```
+
+Because the card is already lying flat, rotating around its own long axis really does
+turn it over — no special-case code. The flip tween handle is kept **separately** from
+the layout tween: `TweenManager.cancelFor(home)` (used when re-laying out the hand)
+would otherwise kill a half-finished flip and strand the card mid-turn.
+
+Where it is used today, before the board mode needs it:
+
+- **Menu** — the six idle cards slowly turn over, one at a time, each on its own phase.
+- **Evolution VFX** — the card flips face-down, the texture is swapped *while it is
+  face-down* (so the change is invisible), and it flips back showing the new art. That
+  is what makes an evolution read differently from a level-up flash.
+- **Leaving play** — played and discarded cards turn face-down as they retire, because
+  the discard pile has no business showing faces the player can no longer use.
+
+### Dragging (`Interaction` + `DropZone`)
+
+Two gestures share one code path, and the thresholds are deliberately **not** the same:
+
+```
+CLICK_SLOP_PX = 6    →  tap: select
+DRAG_START_PX = 10   →  drag: pick the card up
+```
+
+A tap can never start a drag, so **tap-to-select on mobile is untouched** — a 7 px
+wobble is neither, exactly as before. `pointerdown` captures the pointer (only when it
+actually lands on a card, so page gestures survive), `pointermove` projects the finger
+onto a fixed-height plane (`pointerOnPlane`) and writes `home.x/z` **with no tween** —
+interpolating towards the finger every frame feels laggy — and `pointerup` resolves the
+drop zone by XZ containment.
+
+`src/render/DropZone.ts` splits the two halves of a zone on purpose:
+
+- the **rule** (`ZoneRect`, `accepts`, `resolveDropZone`) is pure and unit-tested in Node;
+- the **hint** is a plane with a glowing rounded frame, drawn with no text at all — so
+  changing language never rebuilds the table.
+
+| Zone | Where | Dropping there means |
+| --- | --- | --- |
+| `discard` | over the discard pile | discard **that one card** |
+| `play` | the middle of the table | add it to the selection |
+| `hand` | the band in front of you | return it / deselect it |
+
+Two decisions worth keeping:
+
+1. **Zones are resolved by list order, not by proximity.** The discard rectangle
+   overlaps the hand band, so it is checked first.
+2. **The discard zone stops *behind* the hand** (`maxZ: 2.8` vs. the hand's `z ≥ 3.0`).
+   If it reached into the hand band, dragging the leftmost card would discard it by
+   accident. Discarding now requires throwing the card backwards, towards the pile.
+
+Dropping on `discard` needed one additive engine method: `discardCards(uids)`, which is
+the same path as `discardSelected()` with explicit uids — dragging one card must not
+discard the whole selection. Everything else reuses `toggleSelect`.
+
+### The bug this phase uncovered
+
+`.hud-popups` is `position: fixed; inset: 0` and was written with `pointer-events: none`
+— but a blanket `#ui-root > * { pointer-events: auto }` (1 id beats any class) overrode
+it. The popup layer was swallowing **every** pointer event over the whole table: no tap
+ever reached the canvas. It went unnoticed because the smoke test clicked cards by
+calling `engine.toggleSelect()` directly, never with a real gesture. The blanket rule is
+now an explicit list of the layers that genuinely take input, and the smoke test presses
+the menu's New Run button and the HUD's Play button with real mouse events.
+
+---
+
 ## 🔥 The Trigger Engine & infinite-loop protection
 
 *"How do I stop the trigger engine from entering an infinite cascade when a card re-fires
@@ -439,17 +525,21 @@ Toggle live with the language button in the HUD or the menu (or `toggleLanguage(
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, **drop-zone resolution (priority order, `accepts` gating) and `discardCards` (single-card discard that leaves the rest of the selection alone)**, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
 | `npm run validate` | Content gate: validates every pack's JSON, content i18n coverage, **and scans `src/**` for `t('...')` keys missing from a dictionary**. Exits 1 on error. |
 | `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
 | `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
-| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → **reward draft** → shop → **deck purge** → **upgrade** → **evolve** → **collection** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
+| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 48/48**, **`npm run validate` 0 errors / 0 warnings**
+Latest runs: **`npm test` 62/62**, **`npm run validate` 0 errors / 0 warnings**
 (35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions),
 **`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.75 MB of JS, no sourcemaps**.
+**`npm run build:release` 0.78 MB of JS, no sourcemaps**.
+
+> **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under
+> SwiftShader (~12 FPS) animations run slower than wall-clock. Waits around animated
+> assertions have to budget for that, or the check reads a card mid-flight.
 
 > **Balance notes.** The bot plays greedily: it drafts the best card, buys jokers first, and
 > spends leftover money (above a 20-coin reserve) on upgrading its strongest card.
@@ -514,7 +604,7 @@ paid for.
 | **1** | Start screen, settings, about, audio hooks | ✅ done |
 | **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | ✅ done |
 | **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | ✅ done |
-| **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | next |
+| **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | ✅ done |
 | **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | planned |
 | **6** | Battle pass + store + Google Play Billing bridge | planned |
 | **7** | Real audio on top of `AudioBus` | deferred by design |

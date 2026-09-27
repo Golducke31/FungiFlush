@@ -182,9 +182,15 @@ console.log('\n--- Ajustes (abrir / cerrar) ---');
 console.log(JSON.stringify({ ...settingsOpened, ...settingsRoundTrip }, null, 2));
 
 // --- Nueva partida desde el MENU (camino real del jugador) ---
-await page.evaluate(() => {
-  document.querySelector('.panel.is-menu [data-act="new"]')?.click();
-});
+// CLICK REAL, no `element.click()`: el arreglo de `pointer-events` de la Fase
+// 4 dependia de que la capa de UI recibiera los toques de verdad, y un click
+// por JS lo habria dado por bueno sin probar nada.
+const newButton = await page.locator('.panel.is-menu [data-act="new"]').boundingBox();
+if (newButton) {
+  await page.mouse.click(newButton.x + newButton.width / 2, newButton.y + newButton.height / 2);
+} else {
+  await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+}
 await page.waitForTimeout(1600);
 
 const afterStart = await page.evaluate(() => {
@@ -222,6 +228,156 @@ const afterBlind = await page.evaluate(() => {
 console.log('\n--- Tras elegir ciego ---');
 console.log(JSON.stringify(afterBlind, null, 2));
 
+// ===========================================================================
+// Fase 4 — FLIP + ARRASTRE con gestos de puntero REALES
+// ===========================================================================
+// Nada de `engine.toggleSelect()` aca: lo que hay que probar es que el TAP siga
+// seleccionando y que el ARRASTRE resuelva zonas. Se apunta a las coordenadas
+// que reporta la escena, no a numeros a ojo.
+
+await page.evaluate(() => window.__fungiflush.engine.clearSelection());
+await page.waitForTimeout(300);
+
+const handBefore = await page.evaluate(() => window.__fungiflush.scene.handState());
+console.log('\n--- Fase 4: mano en pantalla ---');
+console.log(
+  JSON.stringify(
+    handBefore.map((c) => ({ uid: c.uid, sx: c.screenX, sy: c.screenY, back: c.hasBack })),
+  ),
+);
+
+// --- Tap: debe seguir seleccionando ---
+const tapCard = handBefore[1];
+await page.mouse.move(tapCard.screenX, tapCard.screenY);
+await page.mouse.down();
+await page.mouse.up();
+await page.waitForTimeout(420);
+
+const afterTap = await page.evaluate((uid) => {
+  const ff = window.__fungiflush;
+  const card = ff.scene.handState().find((c) => c.uid === uid);
+  return { selected: Boolean(card?.selected), count: ff.engine.round.selected.length };
+}, tapCard.uid);
+console.log('\n--- Fase 4: tap-to-select ---');
+console.log(JSON.stringify(afterTap, null, 2));
+await page.screenshot({ path: join(shotsDir, '05a-tap.png') });
+
+// --- Arrastre a la zona de juego: debe seleccionar ---
+const playPoint = await page.evaluate(() =>
+  window.__fungiflush.scene.projectPointToScreen(0, 0.95, -1.7),
+);
+const dragCard = handBefore[3];
+await page.mouse.move(dragCard.screenX, dragCard.screenY);
+await page.mouse.down();
+await page.mouse.move(playPoint.x, playPoint.y, { steps: 14 });
+// La captura se toma CON la carta en el aire: es la unica forma de ver el
+// resaltado de las zonas. La pausa es para que el render presente el ultimo
+// frame del arrastre (a 12 FPS, sin esperar la captura sale atrasada).
+await page.waitForTimeout(250);
+await page.screenshot({ path: join(shotsDir, '05b-drag.png') });
+await page.mouse.up();
+// OJO con el tiempo de espera: el bucle acota `dt` a 0.05 s, asi que con los
+// ~12 FPS de SwiftShader las animaciones corren mas lento que en tiempo real.
+// 1.6 s alcanzan para que la carta termine de volver a su lugar.
+await page.waitForTimeout(1600);
+
+const afterDragPlay = await page.evaluate((uid) => {
+  const ff = window.__fungiflush;
+  const card = ff.scene.handState().find((c) => c.uid === uid);
+  return {
+    selected: Boolean(card?.selected),
+    count: ff.engine.round.selected.length,
+    x: card ? Number(card.x.toFixed(2)) : null,
+    z: card ? Number(card.z.toFixed(2)) : null,
+    // La carta tiene que haber VUELTO a su lugar (misma z que las demas).
+    backInHand: card ? Math.abs(card.z - 3) < 0.6 : false,
+  };
+}, dragCard.uid);
+console.log('\n--- Fase 4: arrastre a la zona de juego ---');
+console.log(JSON.stringify(afterDragPlay, null, 2));
+
+// --- Arrastre al descarte: debe descartar ESA carta y respetar la seleccion ---
+const discardPoint = await page.evaluate(() =>
+  window.__fungiflush.scene.projectPointToScreen(-7.8, 0.95, 2.4),
+);
+const beforeDiscard = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    discardsLeft: ff.engine.round.discardsLeft,
+    selected: [...ff.engine.round.selected],
+  };
+});
+
+const discardCard = handBefore[5];
+await page.mouse.move(discardCard.screenX, discardCard.screenY);
+await page.mouse.down();
+await page.mouse.move(discardPoint.x, discardPoint.y, { steps: 14 });
+await page.mouse.up();
+await page.waitForTimeout(900);
+
+const afterDiscard = await page.evaluate((uid) => {
+  const ff = window.__fungiflush;
+  return {
+    discardsLeft: ff.engine.round.discardsLeft,
+    stillInHand: ff.engine.round.hand.some((c) => c.uid === uid),
+    cardsDiscarded: ff.engine.round.cardsDiscardedThisRound,
+    selected: [...ff.engine.round.selected],
+    handSize: ff.engine.round.hand.length,
+  };
+}, discardCard.uid);
+console.log('\n--- Fase 4: arrastre al descarte ---');
+console.log(JSON.stringify({ beforeDiscard, afterDiscard }, null, 2));
+await page.screenshot({ path: join(shotsDir, '05c-discard.png') });
+
+// --- Arrastre dentro de la banda de la mano: devuelve y deselecciona ---
+const tapNow = (await page.evaluate(() => window.__fungiflush.scene.handState())).find(
+  (c) => c.uid === tapCard.uid,
+);
+const afterDragHand = await (async () => {
+  if (!tapNow) return { skipped: 'la carta del tap ya no esta en la mano' };
+  await page.mouse.move(tapNow.screenX, tapNow.screenY);
+  await page.mouse.down();
+  // Se mueve en horizontal: se queda dentro de la banda de la mano.
+  await page.mouse.move(tapNow.screenX + 90, tapNow.screenY, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  return page.evaluate((uid) => {
+    const ff = window.__fungiflush;
+    const card = ff.scene.handState().find((c) => c.uid === uid);
+    return { selected: Boolean(card?.selected), count: ff.engine.round.selected.length };
+  }, tapCard.uid);
+})();
+console.log('\n--- Fase 4: arrastre dentro de la mano (devuelve) ---');
+console.log(JSON.stringify(afterDragHand, null, 2));
+
+// --- Flip: el dorso existe y la carta se da vuelta y vuelve ---
+const flipTest = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ff = window.__fungiflush;
+  const uid = ff.engine.round.hand[0].uid;
+
+  const accepted = ff.scene.setCardFaceUp(uid, false);
+  await wait(700);
+  const down = ff.scene.handState().find((c) => c.uid === uid);
+
+  ff.scene.setCardFaceUp(uid, true);
+  await wait(700);
+  const up = ff.scene.handState().find((c) => c.uid === uid);
+
+  return {
+    accepted,
+    // Todas las cartas de la mano tienen dorso texturizado.
+    allHaveBack: ff.scene.handState().every((c) => c.hasBack),
+    back: { flip: Number((down?.flip ?? -1).toFixed(3)), faceUp: down?.faceUp },
+    front: { flip: Number((up?.flip ?? -1).toFixed(3)), faceUp: up?.faceUp },
+  };
+});
+console.log('\n--- Fase 4: flip (dorso + home.flip) ---');
+console.log(JSON.stringify(flipTest, null, 2));
+
+await page.evaluate(() => window.__fungiflush.engine.clearSelection());
+await page.waitForTimeout(250);
+
 // --- Jugar una mano: elegir 3 cartas y jugar ---
 await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -240,7 +396,14 @@ const preview = await page.evaluate(() => {
 console.log('\n--- Previsualizacion ---');
 console.log(JSON.stringify(preview, null, 2));
 
-await page.evaluate(() => window.__fungiflush.engine.playHand());
+// El boton "Jugar Mano" se aprieta de verdad: es la otra punta del cable de
+// `pointer-events` (la barra inferior del HUD).
+const playButton = await page.locator('.hud-actions .btn.is-play').boundingBox();
+if (playButton) {
+  await page.mouse.click(playButton.x + playButton.width / 2, playButton.y + playButton.height / 2);
+} else {
+  await page.evaluate(() => window.__fungiflush.engine.playHand());
+}
 // La secuencia de puntuacion anima ~2 s; esperamos a que termine.
 await page.waitForTimeout(3200);
 await page.screenshot({ path: join(shotsDir, '06-after-play.png') });
@@ -495,6 +658,25 @@ const ok =
   menuState?.webgl === 'contexto activo' &&
   (afterBlind?.sceneHand ?? 0) > 0 &&
   (afterBlind?.hand ?? 0) > 0 &&
+  // --- Fase 4: tap, arrastre y flip ---
+  afterTap?.selected === true &&
+  afterTap?.count === 1 &&
+  afterDragPlay?.selected === true &&
+  afterDragPlay?.count === 2 &&
+  afterDragPlay?.backInHand === true &&
+  afterDiscard?.discardsLeft === (beforeDiscard?.discardsLeft ?? 0) - 1 &&
+  afterDiscard?.stillInHand === false &&
+  afterDiscard?.cardsDiscarded === 1 &&
+  afterDiscard?.handSize === (afterBlind?.hand ?? 0) &&
+  JSON.stringify(afterDiscard?.selected) === JSON.stringify(beforeDiscard?.selected) &&
+  afterDragHand?.selected === false &&
+  afterDragHand?.count === 1 &&
+  flipTest?.accepted === true &&
+  flipTest?.allHaveBack === true &&
+  (flipTest?.back?.flip ?? 0) > 0.9 &&
+  flipTest?.back?.faceUp === false &&
+  (flipTest?.front?.flip ?? 1) < 0.1 &&
+  flipTest?.front?.faceUp === true &&
   afterPlay?.score > 0 &&
   afterWin?.status === 'shop' &&
   realErrors.length === 0 &&

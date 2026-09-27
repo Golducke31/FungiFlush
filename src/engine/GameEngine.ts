@@ -299,14 +299,38 @@ export class GameEngine {
   }
 
   discardSelected(): ResolutionContext | null {
-    const round = this.requireRound();
+    const round = this.round;
+    if (!round) return null;
+    return this.discardCards([...round.selected]);
+  }
+
+  /**
+   * Descarta cartas concretas por uid.
+   *
+   * Existe por el arrastre: soltar una carta sobre el descarte tiene que
+   * descartar ESA carta, no la seleccion entera. `discardSelected()` es este
+   * mismo camino con la seleccion como entrada, asi que las reglas (un solo
+   * descarte por accion, efectos ON_DISCARD, relleno de mano) son las mismas.
+   *
+   * Las cartas descartadas salen de la seleccion; el resto de la seleccion se
+   * mantiene (el jugador puede estar armando una mano y tirar una carta suelta).
+   */
+  discardCards(uids: readonly string[]): ResolutionContext | null {
+    const round = this.round;
+    if (!round) return null;
     if (this.run.status !== 'playing') return null;
     if (round.discardsLeft <= 0) return null;
 
-    const discarded = selectedCards(round);
+    // Se respeta el orden pedido y se ignora lo que ya no esta en la mano.
+    const discarded: CardInstance[] = [];
+    for (const uid of uids) {
+      const card = round.hand.find((c) => c.uid === uid);
+      if (card && !discarded.includes(card)) discarded.push(card);
+    }
     if (discarded.length === 0) return null;
 
-    const held = round.hand.filter((c) => !round.selected.includes(c.uid));
+    const discardedUids = new Set(discarded.map((card) => card.uid));
+    const held = round.hand.filter((c) => !discardedUids.has(c.uid));
     const res = this.scorer.resolveDiscards(discarded, this.handOptions([], held));
 
     discarded.forEach((card, index) => bus.emit('card:discarded', { card, index }));
@@ -320,7 +344,7 @@ export class GameEngine {
       round.hand = round.hand.filter((c) => c.uid !== card.uid);
       this.run.deck.discard(card);
     }
-    round.selected = [];
+    round.selected = round.selected.filter((uid) => !discardedUids.has(uid));
 
     this.fillHand();
     this.emitState();

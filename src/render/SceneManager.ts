@@ -27,6 +27,7 @@ import { ArtAssets, artKeyFor, artKeyForJoker } from './ArtAssets';
 import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createTableCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
+import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
 import { TweenManager } from './Tween';
@@ -54,6 +55,36 @@ const PLAY_Y = 0.18;
 const PLAY_Z = -0.6;
 const PLAY_SCALE = 0.86;
 
+// --- Arrastre ---
+/** Altura a la que flota la carta mientras se la arrastra. */
+const DRAG_Y = 1.05;
+/** Inclinacion durante el arrastre: la carta se para y se lee. */
+const DRAG_TILT_RX = -1.0;
+
+// --- Zonas de destino (rectangulos sobre el plano XZ de la mesa) ---
+//
+// El ORDEN de la lista es la prioridad: el descarte se evalua antes que la mano
+// porque sus rectangulos se solapan. Ver `resolveDropZone`.
+//
+// Las medidas salen del layout real: la mano vive en z = 3.0..3.5, el mazo y el
+// descarte en z = 2.4, y la camara encuadra z entre -4.2 y 4.6. Por eso las tres
+// zonas entran enteras en cuadro (si no, el marco se ve cortado) y son
+// contiguas: la unica forma de "fallar" un drop es soltarlo fuera de la mesa.
+//
+// CLAVE del descarte: su borde cercano (z = 2.8) queda POR DETRAS de la mano
+// (z >= 3.0). Descartar exige tirar la carta hacia atras, hacia el pilar, y
+// ninguna carta de la mano cae ahi por accidente. Si el rectangulo llegara
+// hasta la mano, arrastrar la carta de la punta izquierda la descartaria sola.
+const ZONE_DISCARD: ZoneRect = { minX: -10.2, maxX: -5.4, minZ: 0.6, maxZ: 2.8 };
+const ZONE_PLAY: ZoneRect = { minX: -8.8, maxX: 8.8, minZ: -4.4, maxZ: 1.5 };
+const ZONE_HAND: ZoneRect = { minX: -11, maxX: 11, minZ: 1.5, maxZ: 4.6 };
+
+const ZONE_COLOR: Record<'play' | 'discard' | 'hand', number> = {
+  play: 0x4fd18b,
+  discard: 0xe05c8a,
+  hand: 0x5fd8e8,
+};
+
 /** Mitad de la profundidad de una carta (para calcular el encuadre). */
 const CARD_HALF_DEPTH = CARD_HEIGHT / 2;
 
@@ -67,6 +98,28 @@ export interface SceneCallbacks {
   onHoverChange: (card: CardInstance | null) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
   onScorePopup?: (screenX: number, screenY: number, text: string, color: number) => void;
+  /**
+   * El jugador solto una carta sobre una zona. El render sabe QUE zona es; el
+   * controlador decide que significa ("play" = seleccionar, "discard" =
+   * descartar esa carta, "hand" = devolverla). El render no toca el motor.
+   */
+  onCardDrop?: (uid: string, zone: DropZoneId) => void;
+}
+
+/** Instantanea de una carta de la mano, para el panel de debug (F3) y los tests. */
+export interface HandCardState {
+  uid: string;
+  /** 0 = boca arriba, 1 = boca abajo. */
+  flip: number;
+  faceUp: boolean;
+  /** `true` si el dorso tiene textura aplicada. */
+  hasBack: boolean;
+  selected: boolean;
+  /** Posicion en el mundo (XZ) y en pantalla (px, relativa al canvas). */
+  x: number;
+  z: number;
+  screenX: number;
+  screenY: number;
 }
 
 export interface SceneOptions {
@@ -93,6 +146,13 @@ export class SceneManager {
   private readonly jokerCards = new Map<string, Card3D>();
   /** Cartas que estan en la zona de puntuacion (ya salieron de la mano). */
   private readonly scoringCards: Card3D[] = [];
+
+  /** Zonas de destino del arrastre, en orden de prioridad. */
+  private readonly dropZones: DropZone[] = [];
+  /** Textura del dorso, compartida por las cartas, el mazo y el descarte. */
+  private backTexture: THREE.CanvasTexture | null = null;
+  /** Carta que se esta arrastrando (uid), o null. */
+  private dragUid: string | null = null;
 
   private readonly unsubscribes: Array<() => void> = [];
   private readonly fxQueue: Array<{ at: number; run: () => void }> = [];
@@ -148,10 +208,15 @@ export class SceneManager {
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
       onClick: (card) => this.handleClick(card),
+      onDragStart: (card) => this.handleDragStart(card),
+      onDrag: (card, point, zone) => this.handleDrag(card, point, zone),
+      onDrop: (card, zone) => this.handleDrop(card, zone),
+      onDragCancel: (card) => this.handleDragCancel(card),
     });
     this.interaction.setCamera(this.rig.camera);
 
     this.buildWorld();
+    this.buildDropZones();
     this.subscribe();
     this.resize();
   }
@@ -198,6 +263,13 @@ export class SceneManager {
     // --- Particulas ---
     this.scene.add(this.particles.points);
 
+    // --- Dorso (una sola textura para todo el juego) ---
+    // La comparten el mazo, el descarte y el dorso de cada carta: dibujarla una
+    // vez por carta seria subir decenas de canvas identicos a la GPU.
+    this.backTexture = new THREE.CanvasTexture(createCardBackCanvas(this.assets.get('cardback')));
+    this.backTexture.colorSpace = THREE.SRGBColorSpace;
+    this.disposables.push(this.backTexture);
+
     // --- Mazo y descarte ---
     this.deckMesh = this.buildPile(DECK_X, DECK_Z, 7);
     this.discardMesh = this.buildPile(DISCARD_X, DISCARD_Z, 4);
@@ -207,15 +279,10 @@ export class SceneManager {
   /** Pila de cartas (mazo o descarte): N planos apilados con el dorso. */
   private buildPile(x: number, z: number, layers: number): THREE.Group {
     const group = new THREE.Group();
-    const backTexture = new THREE.CanvasTexture(
-      createCardBackCanvas(this.assets.get('cardback')),
-    );
-    backTexture.colorSpace = THREE.SRGBColorSpace;
-    this.disposables.push(backTexture);
 
     const geometry = new THREE.PlaneGeometry(CARD_WIDTH * 0.92, CARD_HEIGHT * 0.92);
     const material = new THREE.MeshStandardMaterial({
-      map: backTexture,
+      map: this.backTexture,
       roughness: 0.7,
       metalness: 0.2,
       emissive: new THREE.Color(0x1a3a4a),
@@ -235,6 +302,43 @@ export class SceneManager {
       group.add(layer);
     }
     return group;
+  }
+
+  /**
+   * Zonas de destino del arrastre.
+   *
+   * `accepts` consulta el estado del motor, que es lo unico que el render
+   * necesita saber para decidir si una zona esta disponible. El SIGNIFICADO de
+   * cada zona (que hace el motor al soltar) lo decide el controlador.
+   */
+  private buildDropZones(): void {
+    const inPlay = (card: Card3D): boolean =>
+      card.kind === 'card' && this.engine.run.status === 'playing';
+
+    const discard = new DropZone({
+      id: 'discard',
+      rect: ZONE_DISCARD,
+      color: ZONE_COLOR.discard,
+      accepts: (card) => inPlay(card) && (this.engine.round?.discardsLeft ?? 0) > 0,
+    });
+    const play = new DropZone({
+      id: 'play',
+      rect: ZONE_PLAY,
+      color: ZONE_COLOR.play,
+      accepts: inPlay,
+    });
+    const hand = new DropZone({
+      id: 'hand',
+      rect: ZONE_HAND,
+      color: ZONE_COLOR.hand,
+      accepts: inPlay,
+    });
+
+    // El descarte primero: su rectangulo cae dentro de la banda de la mano.
+    this.dropZones.push(discard, play, hand);
+    for (const zone of this.dropZones) this.scene.add(zone.group);
+
+    this.interaction.setDropZones(this.dropZones);
   }
 
   // ==========================================================================
@@ -260,6 +364,8 @@ export class SceneManager {
     // Las esporas ambientales se quedan en los dos modos: son un solo
     // THREE.Points y son lo que hace que el menu no se vea como una foto.
     this.particles.setAmbientEnabled(true);
+    // En el menu no hay cartas en la mano: las zonas de destino sobran.
+    if (inMenu) for (const zone of this.dropZones) zone.setEnabled(false);
 
     if (inMenu) this.buildMenuDecor();
     else this.clearMenuDecor();
@@ -314,8 +420,22 @@ export class SceneManager {
       card3d.home.y = 0.32 + Math.sin(t) * 0.16;
       card3d.home.z = (this.menuBaseZ[i] ?? 0) + Math.cos(t * 0.72) * 0.45;
       card3d.home.rz = Math.sin(t * 0.5) * 0.14;
+      // Cada tanto una carta se da vuelta: es la presentacion natural del
+      // dorso y ejercita el giro en un camino que corre siempre. Usa
+      // `this.clock`, nunca el RNG del motor.
+      card3d.home.flip = this.menuFlip(i);
       card3d.update(dt, this.clock);
     });
+  }
+
+  /**
+   * Giro de las cartas decorativas: onda triangular lenta con suavizado, y
+   * cada carta desfasada de las demas. Nunca dos giran a la vez.
+   */
+  private menuFlip(index: number): number {
+    const cycle = (this.clock * 0.11 + index * 0.37) % 1;
+    const triangle = cycle < 0.5 ? cycle * 2 : 2 - cycle * 2;
+    return triangle * triangle * (3 - 2 * triangle);
   }
 
   // ==========================================================================
@@ -378,8 +498,7 @@ export class SceneManager {
         // textura (la cache incluye id + nivel, asi que sale una nueva).
         const target = this.handCards.get(card.uid);
         if (!target) return;
-        target.setCard(card, this.textures, this.lang(), this.artForCard(card));
-        this.queueFx(0, () => this.celebrateCard(target, 0xa78bfa, 60));
+        this.queueFx(0, () => this.playEvolution(target, card));
       }),
 
       bus.on('i18n:changed', () => this.rebuildTextures()),
@@ -412,6 +531,34 @@ export class SceneManager {
     const origin = card3d.worldPosition();
     this.particles.burst(origin, particles, { color, speed: 4.2, spread: 0.55, size: 0.1, life: 0.8 });
     this.rig.addShake(0.08);
+  }
+
+  /**
+   * VFX de evolucion: medio giro para cambiar la cara.
+   *
+   * El intercambio de textura ocurre con la carta BOCA ABAJO (flip = 1), no a
+   * mitad del giro: ahi el cambio es literalmente invisible y la carta vuelve
+   * mostrando el arte nuevo. Leer el cambio como "se dio vuelta y volvio
+   * transformada" es lo que hace que una evolucion se sienta distinta de una
+   * mejora (que solo destella).
+   */
+  private playEvolution(card3d: Card3D, card: CardInstance): void {
+    this.tweens.cancelFor(card3d.home);
+    // El giro se encadena a mano en vez de usar `setFaceUp` + `delay`: la
+    // `from` de un tween se resuelve al crearlo, y en ese momento `home.flip`
+    // todavia vale 0. Encadenando en `onComplete` el segundo tramo arranca
+    // desde 1 de verdad.
+    this.tweens.to(card3d.home, { flip: 1 }, {
+      duration: 0.2,
+      ease: 'quadIn',
+      onComplete: () => {
+        // La textura se regenera aca: la cache indexa por id + nivel, asi que
+        // la definicion nueva produce una textura nueva.
+        card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
+        this.tweens.to(card3d.home, { flip: 0 }, { duration: 0.32, ease: 'quadOut' });
+      },
+    });
+    this.celebrateCard(card3d, 0xa78bfa, 60);
   }
 
   // ==========================================================================
@@ -449,6 +596,13 @@ export class SceneManager {
       card3d.setSelected(selectedUids.includes(card.uid));
     }
 
+    // Si la carta que se estaba arrastrando salio de la mano (el motor la
+    // descarto, la jugo o se transformo), el gesto queda colgado: se aborta.
+    if (this.dragUid !== null && !this.handCards.has(this.dragUid)) {
+      this.dragUid = null;
+      this.interaction.cancelDrag();
+    }
+
     this.layoutHand();
     this.refreshTargets();
   }
@@ -484,6 +638,7 @@ export class SceneManager {
     const rarity = card?.def.rarity ?? joker?.def.rarity ?? 'common';
 
     const card3d = new Card3D(uid, isJoker ? 'joker' : 'card', elementColor, rarity);
+    if (this.backTexture) card3d.setBackTexture(this.backTexture);
     if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
     if (joker) card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
 
@@ -606,7 +761,15 @@ export class SceneManager {
 
     this.tweens.to(
       card3d.home,
-      { x: DISCARD_X + (Math.random() - 0.5) * 0.4, y: 0.4, z: DISCARD_Z, rz: (Math.random() - 0.5) * 0.5 },
+      {
+        x: DISCARD_X + (Math.random() - 0.5) * 0.4,
+        y: 0.4,
+        z: DISCARD_Z,
+        // `rx` explicito: si la carta venia de un arrastre esta inclinada, y
+        // sin esto volaria al descarte torcida.
+        rx: -Math.PI / 2,
+        rz: (Math.random() - 0.5) * 0.5,
+      },
       {
         duration: 0.45,
         ease: 'quadOut',
@@ -747,6 +910,9 @@ export class SceneManager {
 
   /** Saca una carta de escena con una animacion corta. */
   private retire(card3d: Card3D): void {
+    // Se va boca abajo: es a donde va a parar (el descarte), y el descarte no
+    // tiene por que mostrar caras que el jugador ya no puede usar.
+    card3d.setFaceUp(false, { tweens: this.tweens, duration: 0.3 });
     this.tweens.to(
       card3d.home,
       { y: -1.2, rz: card3d.home.rz + 0.6 },
@@ -778,18 +944,10 @@ export class SceneManager {
         card3d.setJoker(card3d.joker, this.textures, this.lang(), this.artForJoker(card3d.joker));
       }
     }
-    // El dorso tambien lleva texto de nada, pero se regenera por consistencia.
-    const back = this.assets.get('cardback');
-    if (back && this.deckMesh) {
-      const texture = new THREE.CanvasTexture(createCardBackCanvas(back));
-      texture.colorSpace = THREE.SRGBColorSpace;
-      for (const child of this.deckMesh.children) {
-        const mesh = child as THREE.Mesh;
-        const material = mesh.material as THREE.MeshStandardMaterial;
-        material.map = texture;
-        material.needsUpdate = true;
-      }
-    }
+    // El dorso NO se regenera: no tiene texto. Antes se volvia a dibujar "por
+    // consistencia", pero solo se aplicaba al mazo (el descarte quedaba con la
+    // textura vieja) y ahora ademas lo comparten todas las cartas. Redibujarlo
+    // seria subir canvas nuevos a la GPU para no cambiar un pixel.
   }
 
   // ==========================================================================
@@ -809,9 +967,121 @@ export class SceneManager {
     else this.callbacks.onHoverChange(null);
   }
 
+  // -------------------------------------------------------------------------
+  // Arrastre
+  // -------------------------------------------------------------------------
+
+  private handleDragStart(card: Card3D): void {
+    const card3d = this.handCards.get(card.uid);
+    if (!card3d) return;
+
+    this.dragUid = card.uid;
+    // A partir de aca `home` lo escribe el dedo: el tween de layout se cancela
+    // o pelearia por la misma posicion.
+    this.tweens.cancelFor(card3d.home);
+    card3d.setHover(false);
+    card3d.setDragging(true);
+
+    for (const zone of this.dropZones) zone.highlight(zone.canAccept(card3d), false);
+    this.rig.addShake(0.04);
+  }
+
+  private handleDrag(card: Card3D, point: THREE.Vector3, zone: DropZoneHandle | null): void {
+    const card3d = this.handCards.get(card.uid);
+    if (!card3d) return;
+
+    // SIN tween: perseguir el dedo interpolando se siente con lag. `home` es
+    // un objeto plano, escribir x/z por frame no cuesta nada.
+    card3d.home.x = point.x;
+    card3d.home.y = DRAG_Y;
+    card3d.home.z = point.z;
+    card3d.home.rx = DRAG_TILT_RX;
+    card3d.home.ry = 0;
+    card3d.home.rz = 0;
+
+    for (const candidate of this.dropZones) {
+      candidate.highlight(candidate.canAccept(card3d), candidate === zone);
+    }
+  }
+
+  private handleDrop(card: Card3D, zone: DropZoneHandle | null): void {
+    const card3d = this.handCards.get(card.uid) ?? null;
+    this.dragUid = null;
+    for (const candidate of this.dropZones) candidate.highlight(false);
+
+    if (card3d) {
+      card3d.setDragging(false);
+      card3d.setHover(false);
+    }
+
+    // El render no decide NADA: avisa "se solto en la zona X" y el controlador
+    // traduce (seleccionar / descartar / devolver). Sin zona, la carta vuelve.
+    // El `card3d` puede faltar si el motor saco la carta de la mano a mitad del
+    // gesto; en ese caso no hay nada que avisar.
+    if (card3d && zone && this.callbacks.onCardDrop) {
+      this.callbacks.onCardDrop(card.uid, zone.id);
+    }
+
+    // Vuelve a su lugar. Si el motor saco la carta de la mano, `layoutHand` ya
+    // no la ve y la animacion de salida la maneja el evento correspondiente.
+    this.layoutHand();
+    this.refreshTargets();
+  }
+
+  private handleDragCancel(card: Card3D): void {
+    this.handleDrop(card, null);
+  }
+
+  // -------------------------------------------------------------------------
+  // Giro
+  // -------------------------------------------------------------------------
+
+  /**
+   * Da vuelta una carta de la mano.
+   *
+   * Es la API que va a usar el modo tablero (una carta boca abajo no es de
+   * nadie). Hoy la usan el menu y el VFX de evolucion, y es lo que ejercita el
+   * smoke test.
+   */
+  setCardFaceUp(uid: string, faceUp: boolean, animated = true): boolean {
+    const card3d = this.handCards.get(uid);
+    if (!card3d) return false;
+    card3d.setFaceUp(faceUp, { animated, tweens: this.tweens });
+    return true;
+  }
+
+  /**
+   * Instantanea de la mano: donde esta cada carta EN PANTALLA, su giro y si
+   * esta seleccionada.
+   *
+   * La usa el panel de debug (F3) y el smoke test: sin las coordenadas de
+   * pantalla no hay forma de apuntar un gesto real a una carta.
+   */
+  handState(): HandCardState[] {
+    const selected = this.engine.round?.selected ?? [];
+    const out: HandCardState[] = [];
+    for (const card3d of this.handCards.values()) {
+      const screen = this.projectToScreen(card3d.worldPosition());
+      out.push({
+        uid: card3d.uid,
+        flip: card3d.flip,
+        faceUp: card3d.faceUp,
+        hasBack: card3d.hasBack,
+        selected: selected.includes(card3d.uid),
+        x: card3d.home.x,
+        z: card3d.home.z,
+        screenX: Math.round(screen.x),
+        screenY: Math.round(screen.y),
+      });
+    }
+    return out;
+  }
+
   private refreshTargets(): void {
     const targets: THREE.Object3D[] = [];
-    for (const card3d of this.handCards.values()) targets.push(card3d.pickTarget);
+    // Cara y dorso: el raycaster respeta `material.side`, asi que solo acierta
+    // el que se esta viendo. Ver `Card3D.pickTargets`.
+    for (const card3d of this.handCards.values()) targets.push(...card3d.pickTargets);
     this.interaction.setTargets(targets);
   }
 
@@ -840,6 +1110,14 @@ export class SceneManager {
       for (const card3d of this.jokerCards.values()) card3d.update(dt, this.clock);
       for (const card3d of this.scoringCards) card3d.update(dt, this.clock);
       if (this.mode === 'menu') this.updateMenuDecor(dt);
+
+      // Las zonas solo existen mientras se puede jugar: fuera de 'playing' no
+      // hay cartas en la mano que arrastrar.
+      const zonesActive = this.mode === 'run' && this.engine.run.status === 'playing';
+      for (const zone of this.dropZones) {
+        if (!zonesActive) zone.setEnabled(false);
+        zone.update(dt, this.clock);
+      }
 
       this.particles.update(dt);
       this.rig.update(dt, this.clock);
@@ -928,6 +1206,16 @@ export class SceneManager {
     };
   }
 
+  /**
+   * Igual que `projectToScreen` pero con coordenadas sueltas.
+   *
+   * Sirve para apuntar un gesto a un punto del tablero (el centro de una zona,
+   * por ejemplo) sin tener que construir un Vector3 desde afuera.
+   */
+  projectPointToScreen(x: number, y: number, z: number): { x: number; y: number } {
+    return this.projectToScreen(new THREE.Vector3(x, y, z));
+  }
+
   // ==========================================================================
   // Resize
   // ==========================================================================
@@ -981,6 +1269,9 @@ export class SceneManager {
     this.scoringCards.length = 0;
 
     this.textures.clear();
+    for (const zone of this.dropZones) zone.dispose();
+    this.dropZones.length = 0;
+    this.backTexture = null;
     this.particles.dispose();
     for (const item of this.disposables) item.dispose();
     disposeSharedGeometry();

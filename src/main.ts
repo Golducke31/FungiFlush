@@ -18,6 +18,7 @@
 
 import {
   GameEngine,
+  MAX_PLAY_SIZE_DEFAULT,
   bus,
   detectCombos,
   type CardDefinition,
@@ -298,6 +299,37 @@ async function boot(): Promise<void> {
         hud.showTooltip(card, lastPointer.x, lastPointer.y, hint);
       },
       onScorePopup: (x, y, text, color) => hud?.popup(x, y, text, color),
+      /**
+       * El jugador arrastro una carta y la solto en una zona.
+       *
+       * El render solo sabe QUE zona es; el significado vive aca. Los tres
+       * caminos usan metodos que ya existian (o `discardCards`, que es el
+       * mismo camino que `discardSelected`): arrastrar no inventa reglas.
+       */
+      onCardDrop: (uid, zone) => {
+        const round = engine.round;
+        if (!round) return;
+        const isSelected = round.selected.includes(uid);
+
+        if (zone === 'play') {
+          // Ya estaba seleccionada: soltarla en la zona de juego no la saca.
+          // Un drop es una intencion, no un toggle.
+          if (isSelected) return;
+          if (!engine.toggleSelect(uid)) {
+            hud?.toast(t('action.selectionFull', { count: MAX_PLAY_SIZE_DEFAULT }), 'warn');
+          }
+          return;
+        }
+
+        if (zone === 'hand') {
+          if (isSelected) engine.toggleSelect(uid);
+          return;
+        }
+
+        if (zone === 'discard') {
+          if (!engine.discardCards([uid])) hud?.toast(t('action.noDiscards'), 'warn');
+        }
+      },
     },
   });
 

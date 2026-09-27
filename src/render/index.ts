@@ -1,13 +1,17 @@
 /** API publica de la capa de render. */
 export { SceneManager } from './SceneManager';
-export type { SceneCallbacks, SceneOptions } from './SceneManager';
+export type { SceneCallbacks, SceneOptions, HandCardState } from './SceneManager';
 export { ArtAssets, artKeyFor, artKeyForJoker } from './ArtAssets';
 export type { ArtKey } from './ArtAssets';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
+export type { CardHome, CardKind } from './Card3D';
 export { CardTextureCache, createCardCanvas, createCardBackCanvas, createTableCanvas } from './CardTexture';
 export type { CardTextureSpec } from './CardTexture';
 export { CameraRig } from './CameraRig';
-export { Interaction } from './Interaction';
+export { DropZone, rectContains, resolveDropZone } from './DropZone';
+export type { DropZoneHandle, DropZoneId, DropZoneOptions, ZoneRect } from './DropZone';
+export { Interaction, DRAG_PLANE_Y } from './Interaction';
+export type { InteractionCallbacks } from './Interaction';
 export { SporeField } from './Particles';
 export { TweenManager, Easing } from './Tween';
 export type { TweenHandle, TweenOptions, EaseName } from './Tween';

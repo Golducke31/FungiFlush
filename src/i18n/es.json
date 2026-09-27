@@ -40,6 +40,7 @@
     "skipBlind": "Saltar Ciego",
     "selectCards": "Seleccioná hasta {count} cartas",
     "selected": "{count} seleccionadas",
+    "selectionFull": "Ya tenés {count} cartas seleccionadas",
     "noDiscards": "Sin descartes",
     "noHands": "Sin manos",
     "cantAfford": "Dinero insuficiente",

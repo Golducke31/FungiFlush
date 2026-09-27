@@ -2,15 +2,18 @@
  * Card3D.ts — La carta en el mundo 3D.
  *
  * Una carta es un PlaneGeometry con textura procedural, mas dos quads
- * adicionales: un halo aditivo (shader) y un anillo de seleccion.
+ * adicionales: un halo aditivo (shader) y un anillo de seleccion. Detras va el
+ * DORSO, para que la carta se pueda girar.
  *
  * CLAVE DE ARQUITECTURA: el tween NO anima `group.position` directamente,
  * porque el hover tambien mueve la carta y se pisarian. En su lugar se anima
  * `home` (un objeto plano) y `update()` compone la transformacion final:
  *
  *     group.position = home + elevacion_por_hover
+ *     group.rotation = home + PI * flip
  *
- * Asi el vuelo de la carta y el efecto de hover conviven sin conflictos.
+ * Asi el vuelo de la carta, el efecto de hover y el giro conviven sin
+ * conflictos.
  */
 
 import * as THREE from 'three';
@@ -18,6 +21,7 @@ import type { CardInstance, JokerInstance, Rarity, StatusType } from '@engine/in
 import type { CardTextureCache } from './CardTexture';
 import { createFoilMaterial, createGlowMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
+import type { TweenHandle, TweenManager } from './Tween';
 
 export const CARD_WIDTH = 2.2;
 export const CARD_HEIGHT = 3.2;
@@ -26,6 +30,10 @@ export const CARD_HEIGHT = 3.2;
 const HOVER_LIFT = 0.9;
 /** Cuanto se eleva una carta seleccionada. */
 const SELECT_LIFT = 0.42;
+/** Cuanto crece la carta mientras se la arrastra. */
+const DRAG_SCALE = 1.08;
+/** Duracion del giro, en segundos. */
+const FLIP_DURATION = 0.34;
 
 const CARD_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
 const GLOW_GEO = new THREE.PlaneGeometry(CARD_WIDTH * 1.3, CARD_HEIGHT * 1.24);
@@ -38,6 +46,8 @@ export interface CardHome {
   rx: number;
   ry: number;
   rz: number;
+  /** 0 = boca arriba, 1 = boca abajo. */
+  flip: number;
 }
 
 export type CardKind = 'card' | 'joker';
@@ -51,7 +61,7 @@ export class Card3D {
   joker: JokerInstance | null = null;
 
   /** Objeto de tweening: la posicion "en reposo" de la carta. */
-  readonly home: CardHome = { x: 0, y: 0, z: 0, rx: -Math.PI / 2, ry: 0, rz: 0 };
+  readonly home: CardHome = { x: 0, y: 0, z: 0, rx: -Math.PI / 2, ry: 0, rz: 0, flip: 0 };
 
   hovering = false;
   selected = false;
@@ -59,9 +69,15 @@ export class Card3D {
   private lift = 0;
   private selectGlow = 0;
   private disposed = false;
+  /** Mientras se arrastra, el hover y la elevacion los maneja el arrastre. */
+  private dragging = false;
+  /** Tween del giro. Va aparte para poder cancelarlo sin tocar el vuelo. */
+  private flipHandle: TweenHandle | null = null;
 
   private readonly face: THREE.Mesh;
   private readonly faceMaterial: THREE.MeshStandardMaterial;
+  private readonly back: THREE.Mesh;
+  private readonly backMaterial: THREE.MeshStandardMaterial;
   private readonly glow: THREE.Mesh;
   private readonly glowMaterial: THREE.ShaderMaterial;
   private readonly ring: THREE.Mesh;
@@ -86,6 +102,23 @@ export class Card3D {
     this.face.userData['card3d'] = this;
     this.face.position.y = 0.001;
 
+    // --- Dorso ---
+    // Las dos caras son coplanares y miran para lados opuestos: la cara usa
+    // FrontSide y el dorso BackSide, asi que el culling del GPU decide cual se
+    // ve en cada momento y no hace falta tocar `.visible` por frame.
+    // El raycaster respeta `material.side`, asi que tambien acierta la misma.
+    this.backMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.62,
+      metalness: 0.24,
+      emissive: new THREE.Color(0x123040),
+      emissiveIntensity: 0.5,
+      side: THREE.BackSide,
+    });
+    this.back = new THREE.Mesh(CARD_GEO, this.backMaterial);
+    this.back.userData['card3d'] = this;
+    this.back.position.y = 0.001;
+
     this.glowMaterial = createGlowMaterial(element, 0.55, 9);
     this.glow = new THREE.Mesh(GLOW_GEO, this.glowMaterial);
     this.glow.position.y = -0.004;
@@ -108,6 +141,7 @@ export class Card3D {
     this.group.add(this.glow);
     this.group.add(this.ring);
     this.group.add(this.face);
+    this.group.add(this.back);
 
     // Las cartas se apoyan planas sobre la mesa.
     this.group.rotation.set(-Math.PI / 2, 0, 0);
@@ -199,6 +233,15 @@ export class Card3D {
     (this.ringMaterial.uniforms['uColor'] as { value: THREE.Color }).value.setHex(elementColor);
   }
 
+  /**
+   * Textura del dorso. La provee el SceneManager, que la genera una sola vez
+   * con `createCardBackCanvas()` y la comparte con el mazo y el descarte.
+   */
+  setBackTexture(texture: THREE.Texture): void {
+    this.backMaterial.map = texture;
+    this.backMaterial.needsUpdate = true;
+  }
+
   // -------------------------------------------------------------------------
   // Estado visual
   // -------------------------------------------------------------------------
@@ -209,6 +252,65 @@ export class Card3D {
 
   setSelected(value: boolean): void {
     this.selected = value;
+  }
+
+  /**
+   * Marca la carta como "en la mano del jugador" mientras se la arrastra.
+   *
+   * Mientras dura, el hover y la elevacion por seleccion se apagan: la carta
+   * ya esta levantada por el arrastre, y sumarle la elevacion de hover la
+   * haria saltar. La posicion y la inclinacion las pone el SceneManager en
+   * `home` (sin tween: perseguir el dedo con un tween se siente con lag).
+   */
+  setDragging(value: boolean): void {
+    this.dragging = value;
+    if (!value) return;
+    this.hovering = false;
+    this.lift = 0;
+  }
+
+  /** `true` = boca arriba. */
+  get faceUp(): boolean {
+    return this.home.flip < 0.5;
+  }
+
+  /** 0 = boca arriba, 1 = boca abajo (valor en vuelo, no el objetivo). */
+  get flip(): number {
+    return this.home.flip;
+  }
+
+  /** `true` si el dorso tiene textura. Sin esto la carta girada sale vacia. */
+  get hasBack(): boolean {
+    return this.backMaterial.map !== null;
+  }
+
+  /**
+   * Gira la carta.
+   *
+   * Sin `tweens` el cambio es instantaneo, que es lo correcto al repartir una
+   * carta que ya nace boca abajo. El handle del giro se guarda aparte para
+   * cancelar SOLO el giro: `tweens.cancelFor(home)` tambien mataria el vuelo
+   * de la carta a mitad de camino.
+   */
+  setFaceUp(
+    value: boolean,
+    options?: { animated?: boolean; tweens?: TweenManager; duration?: number },
+  ): void {
+    const target = value ? 0 : 1;
+    this.flipHandle?.cancel();
+    this.flipHandle = null;
+
+    const tweens = options?.tweens;
+    if (!(options?.animated ?? true) || !tweens) {
+      this.home.flip = target;
+      this.applyTransform();
+      return;
+    }
+
+    this.flipHandle = tweens.to(this.home, { flip: target }, {
+      duration: options?.duration ?? FLIP_DURATION,
+      ease: 'cubicInOut',
+    });
   }
 
   /**
@@ -233,8 +335,8 @@ export class Card3D {
   update(dt: number, time: number): void {
     if (this.disposed) return;
 
-    const targetLift = this.hovering ? 1 : this.selected ? 0.55 : 0;
-    const targetGlow = this.selected || this.hovering ? 1 : 0;
+    const targetLift = this.dragging ? 0 : this.hovering ? 1 : this.selected ? 0.55 : 0;
+    const targetGlow = this.dragging ? 1 : this.selected || this.hovering ? 1 : 0;
 
     // Interpolacion exponencial independiente del framerate.
     const k = 1 - Math.exp(-dt * 14);
@@ -244,6 +346,8 @@ export class Card3D {
     tickShader(this.glowMaterial, time);
     tickShader(this.ringMaterial, time);
     if (this.foilMaterial) tickShader(this.foilMaterial, time);
+    // El foil es un holograma sobre la CARA: boca abajo no tiene sentido.
+    if (this.foil) this.foil.visible = this.home.flip < 0.5;
 
     // Intensidad del halo: base + hover/seleccion + foil.
     const base = this.kind === 'joker' ? 0.42 : 0.3;
@@ -255,10 +359,17 @@ export class Card3D {
   }
 
   private applyTransform(): void {
-    const liftY = this.lift * (this.hovering ? HOVER_LIFT : SELECT_LIFT);
+    const liftY = this.dragging ? 0 : this.lift * (this.hovering ? HOVER_LIFT : SELECT_LIFT);
     this.group.position.set(this.home.x, this.home.y + liftY, this.home.z);
-    this.group.rotation.set(this.home.rx, this.home.ry, this.home.rz);
-    const scale = 1 + this.lift * 0.05;
+    // El giro entra por `rotation.y`: como la carta ya esta acostada sobre la
+    // mesa, girar sobre su eje largo la da vuelta de verdad (no la hace girar
+    // como una calesita).
+    this.group.rotation.set(
+      this.home.rx,
+      this.home.ry + Math.PI * this.home.flip,
+      this.home.rz,
+    );
+    const scale = (this.dragging ? DRAG_SCALE : 1) + this.lift * 0.05;
     this.group.scale.setScalar(scale);
   }
 
@@ -268,10 +379,18 @@ export class Card3D {
   }
 
   /**
-   * Mesh contra el que se hace raycasting.
-   * Solo la cara: el halo y el anillo son mas grandes que la carta, y si
-   * entraran al raycaster el hover parpadearia al pasar por el borde.
+   * Meshes contra los que se hace raycasting.
+   *
+   * Solo las dos caras: el halo y el anillo son mas grandes que la carta, y si
+   * entraran al raycaster el hover parpadearia al pasar por el borde. Como la
+   * cara es FrontSide y el dorso BackSide, el raycaster solo acierta el que se
+   * esta viendo (respeta `material.side`), asi que boca abajo la carta sigue
+   * siendo clickeable.
    */
+  get pickTargets(): THREE.Object3D[] {
+    return [this.face, this.back];
+  }
+
   get pickTarget(): THREE.Mesh {
     return this.face;
   }
@@ -286,7 +405,10 @@ export class Card3D {
 
   dispose(): void {
     this.disposed = true;
+    this.flipHandle?.cancel();
+    this.flipHandle = null;
     this.faceMaterial.dispose();
+    this.backMaterial.dispose();
     this.glowMaterial.dispose();
     this.ringMaterial.dispose();
     this.foilMaterial?.dispose();

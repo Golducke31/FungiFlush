@@ -1,23 +1,59 @@
 /**
  * Interaction.ts — Raton / tactil sobre las cartas (THREE.Raycaster).
  *
- * El raycaster corre contra una lista PLANANA de meshes (no contra la escena
+ * El raycaster corre contra una lista PLANA de meshes (no contra la escena
  * entera): con 40 cartas y particulas, intersectar el grafo completo cada
  * frame es tirar FPS a la basura.
  *
- * Se distingue hover de click con un umbral de movimiento: si el puntero se
- * movio menos de 6 px entre down y up, es un click (no un arrastre).
+ * DOS GESTOS, UN SOLO CAMINO
+ * --------------------------
+ *   - TAP   : el puntero se movio <= 6 px y solto en < 700 ms -> click.
+ *   - DRAG  : el puntero se movio > 10 px -> la carta sigue al dedo.
+ *
+ * Los dos umbrales estan separados A PROPOSITO (6 < 10): un tap nunca puede
+ * iniciar un arrastre, asi que el tap-to-select de movil queda intacto. Un
+ * movimiento de 7 px no es ni tap ni drag, igual que antes de esta fase.
+ *
+ * `passive: true` se mantiene en los listeners: el canvas ya declara
+ * `touch-action: none`, asi que no hace falta `preventDefault` para que el
+ * navegador no se lleve el gesto. Los gestos de la pagina no se rompen.
  */
 
 import * as THREE from 'three';
 import type { Card3D } from './Card3D';
+import { resolveDropZone, type DropZoneHandle } from './DropZone';
 
+/** Movimiento maximo (px) para considerar un toque como click. */
 const CLICK_SLOP_PX = 6;
+/** Movimiento (px) que dispara el arrastre. Mayor que el slop: ver arriba. */
+const DRAG_START_PX = 10;
+/** Duracion maxima (ms) de un tap. */
+const CLICK_MAX_MS = 700;
+/** Altura del plano imaginario sobre el que se proyecta el dedo al arrastrar. */
+export const DRAG_PLANE_Y = 0.95;
+
+const DRAG_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), -DRAG_PLANE_Y);
+const PLANE_HIT = new THREE.Vector3();
+
+export interface InteractionCallbacks {
+  onHover: (card: Card3D | null) => void;
+  onClick: (card: Card3D) => void;
+  onPointerMove?: (ndc: THREE.Vector2) => void;
+  /** Empieza el arrastre (ya se superaron los 10 px). */
+  onDragStart?: (card: Card3D) => void;
+  /** El dedo se movio: `point` esta sobre el plano de arrastre. */
+  onDrag?: (card: Card3D, point: THREE.Vector3, zone: DropZoneHandle | null) => void;
+  /** Se solto. `zone` es null si cayo fuera de toda zona. */
+  onDrop?: (card: Card3D, zone: DropZoneHandle | null, point: THREE.Vector3) => void;
+  /** El gesto se aborto (cancelacion del sistema, perdida de foco...). */
+  onDragCancel?: (card: Card3D) => void;
+}
 
 export class Interaction {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
   private targets: THREE.Object3D[] = [];
+  private dropZones: readonly DropZoneHandle[] = [];
 
   private downX = 0;
   private downY = 0;
@@ -25,17 +61,19 @@ export class Interaction {
   private pointerInside = false;
   private lastHoverUid: string | null = null;
 
+  /** Carta bajo el puntero al bajar: el candidato a arrastre. */
+  private candidate: Card3D | null = null;
+  private pointerId: number | null = null;
+  private dragActive = false;
+
   constructor(
     private readonly element: HTMLElement,
-    private readonly callbacks: {
-      onHover: (card: Card3D | null) => void;
-      onClick: (card: Card3D) => void;
-      onPointerMove?: (ndc: THREE.Vector2) => void;
-    },
+    private readonly callbacks: InteractionCallbacks,
   ) {
     element.addEventListener('pointermove', this.handleMove, { passive: true });
     element.addEventListener('pointerdown', this.handleDown, { passive: true });
     element.addEventListener('pointerup', this.handleUp, { passive: true });
+    element.addEventListener('pointercancel', this.handleCancel, { passive: true });
     element.addEventListener('pointerleave', this.handleLeave, { passive: true });
   }
 
@@ -43,10 +81,25 @@ export class Interaction {
     this.targets = targets;
   }
 
+  setDropZones(zones: readonly DropZoneHandle[]): void {
+    this.dropZones = zones;
+  }
+
+  /**
+   * Aborta el arrastre en curso. Lo usa el SceneManager cuando el motor saca
+   * la carta de la mano a mitad de gesto.
+   */
+  cancelDrag(): void {
+    const card = this.dragActive ? this.candidate : null;
+    this.endDrag();
+    if (card) this.callbacks.onDragCancel?.(card);
+  }
+
   dispose(): void {
     this.element.removeEventListener('pointermove', this.handleMove);
     this.element.removeEventListener('pointerdown', this.handleDown);
     this.element.removeEventListener('pointerup', this.handleUp);
+    this.element.removeEventListener('pointercancel', this.handleCancel);
     this.element.removeEventListener('pointerleave', this.handleLeave);
   }
 
@@ -56,6 +109,31 @@ export class Interaction {
     this.updatePointer(event);
     this.pointerInside = true;
     this.callbacks.onPointerMove?.(this.pointer.clone());
+
+    if (this.candidate && !this.dragActive) {
+      const dx = event.clientX - this.downX;
+      const dy = event.clientY - this.downY;
+      if (Math.hypot(dx, dy) > DRAG_START_PX) {
+        this.dragActive = true;
+        // Mientras se arrastra no hay hover: la carta ya esta "en la mano", y
+        // un halo de hover encima solo confundiria.
+        if (this.lastHoverUid !== null) {
+          this.lastHoverUid = null;
+          this.callbacks.onHover(null);
+        }
+        this.callbacks.onDragStart?.(this.candidate);
+      }
+    }
+
+    if (this.dragActive && this.candidate) {
+      const point = this.pointerOnPlane();
+      if (point) {
+        const zone = resolveDropZone(this.dropZones, point.x, point.z, this.candidate);
+        this.callbacks.onDrag?.(this.candidate, point, zone);
+      }
+      return;
+    }
+
     this.emitHover();
   };
 
@@ -64,20 +142,54 @@ export class Interaction {
     this.downX = event.clientX;
     this.downY = event.clientY;
     this.downTime = performance.now();
+    this.pointerId = event.pointerId;
+    this.dragActive = false;
+
+    // El candidato se elige al BAJAR: si el gesto termina en arrastre ya
+    // sabemos que carta se mueve. Si termina en tap, este pick se descarta y
+    // el `pick()` del pointerup manda.
+    this.candidate = this.pick();
+    if (!this.candidate) return;
+
+    // Captura del puntero: el arrastre sigue funcionando aunque el dedo se
+    // salga del canvas. Se toma solo cuando hay una carta debajo, para no
+    // secuestrar gestos sobre el resto de la pantalla.
+    try {
+      this.element.setPointerCapture(event.pointerId);
+    } catch {
+      /* algunos navegadores la rechazan si el puntero ya no esta activo */
+    }
   };
 
   private readonly handleUp = (event: PointerEvent): void => {
-    const dx = event.clientX - this.downX;
-    const dy = event.clientY - this.downY;
-    const moved = Math.hypot(dx, dy);
+    this.pointerInside = true;
+
+    if (this.dragActive && this.candidate) {
+      const card = this.candidate;
+      this.updatePointer(event);
+      const point = this.pointerOnPlane();
+      const zone = point ? resolveDropZone(this.dropZones, point.x, point.z, card) : null;
+      this.endDrag();
+      this.callbacks.onDrop?.(card, zone, point ?? card.worldPosition());
+      return;
+    }
+
+    const moved = Math.hypot(event.clientX - this.downX, event.clientY - this.downY);
     const elapsed = performance.now() - this.downTime;
+    this.endDrag();
 
     // Click = poco movimiento y rapido. Un arrastre no selecciona cartas.
-    if (moved > CLICK_SLOP_PX || elapsed > 700) return;
+    if (moved > CLICK_SLOP_PX || elapsed > CLICK_MAX_MS) return;
 
     this.updatePointer(event);
     const hit = this.pick();
     if (hit) this.callbacks.onClick(hit);
+  };
+
+  private readonly handleCancel = (): void => {
+    const card = this.dragActive ? this.candidate : null;
+    this.endDrag();
+    if (card) this.callbacks.onDragCancel?.(card);
   };
 
   private readonly handleLeave = (): void => {
@@ -89,6 +201,19 @@ export class Interaction {
   };
 
   // -------------------------------------------------------------------------
+
+  private endDrag(): void {
+    if (this.pointerId !== null) {
+      try {
+        this.element.releasePointerCapture(this.pointerId);
+      } catch {
+        /* ya liberada */
+      }
+    }
+    this.pointerId = null;
+    this.candidate = null;
+    this.dragActive = false;
+  }
 
   private updatePointer(event: PointerEvent): void {
     const rect = this.element.getBoundingClientRect();
@@ -108,6 +233,25 @@ export class Interaction {
     const first = hits[0];
     if (!first) return null;
     return (first.object.userData['card3d'] as Card3D | undefined) ?? null;
+  }
+
+  /**
+   * Proyecta el puntero sobre un plano horizontal.
+   *
+   * El arrastre NO usa la posicion de la carta bajo el dedo (que se va con la
+   * perspectiva): proyecta sobre un plano a altura fija y de ahi saca X/Z. Asi
+   * el desplazamiento del dedo y el de la carta son proporcionales.
+   */
+  pointerOnPlane(planeY = DRAG_PLANE_Y): THREE.Vector3 | null {
+    const cam = this.camera;
+    if (!cam) return null;
+    this.raycaster.setFromCamera(this.pointer, cam);
+
+    const plane =
+      planeY === DRAG_PLANE_Y ? DRAG_PLANE : new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
+
+    if (!this.raycaster.ray.intersectPlane(plane, PLANE_HIT)) return null;
+    return PLANE_HIT.clone();
   }
 
   private emitHover(): void {
