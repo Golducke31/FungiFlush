@@ -748,6 +748,36 @@ than that from the per-fragment lighting loop.
 
 ---
 
+## 🌀 One halo instead of three
+
+Each card used to carry **three additive quads**: a glow, a selection ring and (for legendary and
+mythic) a holographic foil. Worse, the ring redrew *the same geometry* scaled 1.14. That was not
+just two extra draw calls — it was additive **overdraw**, which is the real bottleneck on a phone.
+
+All three are distance functions over the same rectangle, so they now live in one fragment
+shader: the halo uses `exp(-max(sdf, 0))`, the ring uses `exp(-abs(sdf))` — which turns it into a
+band centred on the contour instead of an outward bloom, and reads much better as "selected" —
+and the foil is the same halo term with a hue that cycles with `uTime`.
+
+The three terms are summed with their own intensities and the colour is then **normalised by that
+sum**, so a selected legendary can show a rarity-coloured halo, an element-coloured ring and a
+rainbow foil at once without one swallowing the others.
+
+Two details that are easy to get wrong:
+
+- **The quad grew 1.14×** to hold the ring's contour, so `uInnerHalo` is divided by the same
+  factor. Change one without the other and the halo silently jumps size — there is a test for
+  exactly that relationship (`HALO_INNER_HALO * 1.14 === 0.82`).
+- **The foil is gated by uniform, not by `.visible`.** It used to be its own mesh that got hidden
+  when the card flipped; now that it shares the shader, `update()` writes `uFoilAmount = 0` for a
+  face-down card.
+
+Measured: **8 hand cards went from 45 to 37 draw calls** in the scene, and the ring's overdraw is
+gone with them. `tools/shots/v3-selection-low.png` (ring) and `v3-foil.png` (a legendary and a
+mythic side by side) are the visual checks.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |

@@ -28,6 +28,7 @@ import {
   resolveQuality,
 } from '../src/render/Quality.ts';
 import { createNightLut, gradeRgb } from '../src/render/Lut.ts';
+import { HALO_INNER_HALO, HALO_INNER_RING, createHaloMaterial } from '../src/render/Shaders.ts';
 
 // ---------------------------------------------------------------------------
 // Deteccion por dispositivo
@@ -242,4 +243,40 @@ test('la textura del LUT tiene el tamano y el orden de canales correctos', () =>
   assert.equal(data[3], 255, 'alpha opaco');
 
   texture.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// Halo unificado
+// ---------------------------------------------------------------------------
+
+test('el halo unificado conserva el tamaño aparente del original', () => {
+  // El quad crecio 1.14x para poder contener tambien el anillo, asi que
+  // `uInnerHalo` se divide por esa misma escala. Si alguien toca una sin la
+  // otra, el halo salta de tamaño y no hay test que lo note hasta que es
+  // evidente en pantalla.
+  assert.ok(Math.abs(HALO_INNER_HALO * 1.14 - 0.82) < 1e-9);
+  // El anillo ya vivia en un quad escalado 1.14: su valor no se toca.
+  assert.equal(HALO_INNER_RING, 0.62);
+  // El contorno del halo queda POR FUERA del anillo (era asi antes de fusionar).
+  assert.ok(HALO_INNER_HALO > HALO_INNER_RING);
+});
+
+test('el halo arranca con el anillo apagado y expone los tres terminos', () => {
+  const material = createHaloMaterial({ color: 0x5fd8e8, ringColor: 0x4fd18b, foil: 0.7 });
+  const uniforms = material.uniforms;
+
+  for (const name of ['uColor', 'uIntensity', 'uRingColor', 'uRingIntensity', 'uFoilAmount']) {
+    assert.ok(uniforms[name] !== undefined, `falta el uniform ${name}`);
+  }
+  assert.equal(uniforms['uRingIntensity']?.value, 0, 'el anillo arranca apagado');
+  assert.equal(uniforms['uFoilAmount']?.value, 0.7);
+  assert.ok((uniforms['uIntensity']?.value as number) > 0);
+
+  // Aditivo y sin escribir profundidad: es lo que lo mantiene barato y lo que
+  // evita que el halo tape a la carta.
+  assert.equal(material.blending, 2, 'AdditiveBlending');
+  assert.equal(material.depthWrite, false);
+  assert.equal(material.transparent, true);
+
+  material.dispose();
 });

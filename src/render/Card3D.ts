@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import type { CardInstance, JokerInstance, Rarity, StatusType } from '@engine/index';
 import type { CardTextureCache } from './CardTexture';
-import { createFoilMaterial, createGlowMaterial, tickShader } from './Shaders';
+import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
 import type { TweenHandle, TweenManager } from './Tween';
 
@@ -36,7 +36,19 @@ const DRAG_SCALE = 1.08;
 const FLIP_DURATION = 0.34;
 
 const CARD_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
-const GLOW_GEO = new THREE.PlaneGeometry(CARD_WIDTH * 1.3, CARD_HEIGHT * 1.24);
+
+/**
+ * Escala del quad del halo respecto de la carta.
+ *
+ * El quad tiene que contener el contorno MAS GRANDE de los tres (el anillo, que
+ * antes vivia en un mesh propio escalado 1.14), asi que el halo se compensa
+ * dividiendo su `uInner` por esta misma escala. Ver `HALO_INNER_HALO`.
+ */
+const HALO_SPREAD = 1.14;
+const HALO_GEO = new THREE.PlaneGeometry(
+  CARD_WIDTH * 1.3 * HALO_SPREAD,
+  CARD_HEIGHT * 1.24 * HALO_SPREAD,
+);
 
 /** Posicion/rotacion "en reposo": es lo unico que animan los tweens. */
 export interface CardHome {
@@ -78,12 +90,10 @@ export class Card3D {
   private readonly faceMaterial: THREE.MeshStandardMaterial;
   private readonly back: THREE.Mesh;
   private readonly backMaterial: THREE.MeshStandardMaterial;
-  private readonly glow: THREE.Mesh;
-  private readonly glowMaterial: THREE.ShaderMaterial;
-  private readonly ring: THREE.Mesh;
-  private readonly ringMaterial: THREE.ShaderMaterial;
-  private readonly foil: THREE.Mesh | null = null;
-  private readonly foilMaterial: THREE.ShaderMaterial | null = null;
+  private readonly halo: THREE.Mesh;
+  private readonly haloMaterial: THREE.ShaderMaterial;
+  /** Cuanto foil le corresponde por rareza. 0 = no lleva. */
+  private readonly foilAmount: number;
 
   private rarity: Rarity = 'common';
 
@@ -119,27 +129,23 @@ export class Card3D {
     this.back.userData['card3d'] = this;
     this.back.position.y = 0.001;
 
-    this.glowMaterial = createGlowMaterial(element, 0.55, 9);
-    this.glow = new THREE.Mesh(GLOW_GEO, this.glowMaterial);
-    this.glow.position.y = -0.004;
+    // --- Halo: halo + anillo + foil en UN solo mesh ---
+    //
+    // Los tres son funciones de distancia sobre el mismo rectangulo, asi que
+    // sumarlos en un fragment shader cuesta una fraccion de lo que costaban
+    // tres quads aditivos (el anillo volvia a dibujar la misma geometria).
+    this.foilAmount = rarity === 'mythic' ? 1.0 : rarity === 'legendary' ? 0.7 : 0;
+    this.haloMaterial = createHaloMaterial({
+      color: element,
+      ringColor: element,
+      intensity: 0.55,
+      falloff: 9,
+      foil: this.foilAmount,
+    });
+    this.halo = new THREE.Mesh(HALO_GEO, this.haloMaterial);
+    this.halo.position.y = -0.004;
 
-    this.ringMaterial = createGlowMaterial(0xffffff, 0, 6.5);
-    this.ringMaterial.uniforms['uInner'] = { value: new THREE.Vector2(0.62, 0.62) };
-    this.ring = new THREE.Mesh(GLOW_GEO, this.ringMaterial);
-    this.ring.position.y = -0.008;
-    this.ring.scale.setScalar(1.14);
-
-    // Legendarias y miticas llevan foil holografico.
-    if (rarity === 'legendary' || rarity === 'mythic') {
-      this.foilMaterial = createFoilMaterial(rarity === 'mythic' ? 1.0 : 0.7);
-      this.foil = new THREE.Mesh(GLOW_GEO, this.foilMaterial);
-      this.foil.position.y = -0.006;
-      this.foil.scale.setScalar(1.06);
-      this.group.add(this.foil);
-    }
-
-    this.group.add(this.glow);
-    this.group.add(this.ring);
+    this.group.add(this.halo);
     this.group.add(this.face);
     this.group.add(this.back);
 
@@ -227,10 +233,10 @@ export class Card3D {
 
     const elementColor = ELEMENT_COLOR[element as keyof typeof ELEMENT_COLOR] ?? 0x9aa5b1;
     const rarityColor = RARITY_COLOR[this.rarity];
-    (this.glowMaterial.uniforms['uColor'] as { value: THREE.Color }).value.setHex(
+    (this.haloMaterial.uniforms['uColor'] as { value: THREE.Color }).value.setHex(
       rarityColor ?? elementColor,
     );
-    (this.ringMaterial.uniforms['uColor'] as { value: THREE.Color }).value.setHex(elementColor);
+    (this.haloMaterial.uniforms['uRingColor'] as { value: THREE.Color }).value.setHex(elementColor);
   }
 
   /**
@@ -353,17 +359,19 @@ export class Card3D {
     this.lift += (targetLift - this.lift) * k;
     this.selectGlow += (targetGlow - this.selectGlow) * k;
 
-    tickShader(this.glowMaterial, time);
-    tickShader(this.ringMaterial, time);
-    if (this.foilMaterial) tickShader(this.foilMaterial, time);
-    // El foil es un holograma sobre la CARA: boca abajo no tiene sentido.
-    if (this.foil) this.foil.visible = this.home.flip < 0.5;
+    tickShader(this.haloMaterial, time);
 
     // Intensidad del halo: base + hover/seleccion + foil.
     const base = this.kind === 'joker' ? 0.42 : 0.3;
     const pulse = 0.55 + this.selectGlow * 1.5 + this.lift * 0.7;
-    (this.glowMaterial.uniforms['uIntensity'] as { value: number }).value = base + pulse * 0.55;
-    (this.ringMaterial.uniforms['uIntensity'] as { value: number }).value = this.selectGlow * 0.85;
+    (this.haloMaterial.uniforms['uIntensity'] as { value: number }).value = base + pulse * 0.55;
+    (this.haloMaterial.uniforms['uRingIntensity'] as { value: number }).value =
+      this.selectGlow * 0.85;
+    // El foil es un holograma sobre la CARA: boca abajo no tiene sentido. Ahora
+    // que vive en el mismo shader que el halo, se apaga por uniform en vez de
+    // por `.visible`.
+    (this.haloMaterial.uniforms['uFoilAmount'] as { value: number }).value =
+      this.home.flip < 0.5 ? this.foilAmount : 0;
 
     this.applyTransform();
   }
@@ -419,9 +427,7 @@ export class Card3D {
     this.flipHandle = null;
     this.faceMaterial.dispose();
     this.backMaterial.dispose();
-    this.glowMaterial.dispose();
-    this.ringMaterial.dispose();
-    this.foilMaterial?.dispose();
+    this.haloMaterial.dispose();
     this.group.clear();
   }
 }
@@ -429,5 +435,5 @@ export class Card3D {
 /** Libera la geometria compartida (solo al cerrar el juego). */
 export function disposeSharedGeometry(): void {
   CARD_GEO.dispose();
-  GLOW_GEO.dispose();
+  HALO_GEO.dispose();
 }

@@ -1,19 +1,34 @@
 /**
  * Shaders.ts — Materiales GLSL personalizados.
  *
- * Tres efectos:
- *   1. GlowMaterial  — borde bioluminiscente que late (hover, seleccion, legendarias).
- *   2. SporeMaterial — particulas de esporas (Points) que viajan de carta A a carta B.
- *   3. FoilMaterial  — borde holografico (foil) que se desplaza con el tiempo.
+ * Dos efectos, y los dos son de UNA sola pasada:
+ *   1. HaloMaterial — halo bioluminiscente + anillo de seleccion + foil
+ *      holografico, todo en el mismo quad y el mismo material.
+ *   2. SporeMaterial — particulas de esporas (Points) que viajan de carta A a
+ *      carta B.
+ *
+ * POR QUE EL HALO ES UNO Y NO TRES
+ * --------------------------------
+ * Antes cada carta tenia tres quads aditivos (halo, anillo y foil) y el anillo
+ * volvia a dibujar LA MISMA geometria escalada 1.14. Eso no eran solo dos draw
+ * calls mas: era sobrecarga aditiva (fill rate), que en un celular es el cuello
+ * de botella real. Los tres son funciones de distancia sobre el mismo
+ * rectangulo, asi que se suman en un solo fragment shader sin perder nada.
+ *
+ * Los tres materiales son `ShaderMaterial` crudos: NO incluyen los chunks de
+ * tone mapping ni de colorspace de three. En el camino con composer eso da
+ * igual (el `OutputPass` codifica todo el cuadro al final), pero en el tier
+ * `low` — que renderiza directo — escriben valores lineales en un framebuffer
+ * sRGB. Es una diferencia de brillo conocida entre tiers, no un bug.
  */
 
 import * as THREE from 'three';
 
 // ---------------------------------------------------------------------------
-// 1. Glow
+// 1. Halo (halo + anillo + foil en un solo pase)
 // ---------------------------------------------------------------------------
 
-export const GLOW_VERT = /* glsl */ `
+export const HALO_VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
     vUv = uv;
@@ -22,46 +37,105 @@ export const GLOW_VERT = /* glsl */ `
 `;
 
 /**
- * Halo rectangular: `uInner` es la mitad del tamaño de la carta dentro del
+ * Halo rectangular: `uInnerHalo` es la mitad del tamaño de la carta dentro del
  * quad (en espacio -1..1). El shader calcula una distancia con signo a esa
  * caja: negativa adentro, positiva afuera. De ahi salen el borde y el halo.
+ *
+ * El anillo usa la misma idea pero con `exp(-abs(sdf))` en vez de
+ * `exp(-max(sdf,0))`: eso lo convierte en una BANDA centrada en el contorno en
+ * lugar de un resplandor hacia afuera, que es lo que se lee como "seleccionada".
+ *
+ * Los tres terminos se suman con sus intensidades y despues se normaliza el
+ * color por la suma: asi el halo y el anillo pueden tener colores distintos sin
+ * que uno se coma al otro.
  */
-export const GLOW_FRAG = /* glsl */ `
+export const HALO_FRAG = /* glsl */ `
   uniform vec3  uColor;
   uniform float uIntensity;
+  uniform vec3  uRingColor;
+  uniform float uRingIntensity;
+  uniform float uFoilAmount;
   uniform float uTime;
-  uniform vec2  uInner;
+  uniform vec2  uInnerHalo;
+  uniform vec2  uInnerRing;
   uniform float uFalloff;
+  uniform float uRingFalloff;
   uniform float uPulse;
   varying vec2  vUv;
 
-  void main() {
-    vec2  p = (vUv - 0.5) * 2.0;
-    vec2  d = abs(p) - uInner;
-    float sdf = max(d.x, d.y);
+  vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+  }
 
-    float outside = max(sdf, 0.0);
-    float halo    = exp(-outside * uFalloff);
-    float inside  = smoothstep(0.0, -0.14, sdf);
-    float rim     = halo * (1.0 - inside * 0.9);
+  void main() {
+    vec2 p = (vUv - 0.5) * 2.0;
+
+    // --- Halo: borde que se desvanece hacia afuera ---
+    vec2  dHalo   = abs(p) - uInnerHalo;
+    float sdfHalo = max(dHalo.x, dHalo.y);
+    float outside = max(sdfHalo, 0.0);
+    float inside  = smoothstep(0.0, -0.14, sdfHalo);
+    float halo    = exp(-outside * uFalloff) * (1.0 - inside * 0.9);
+
+    // --- Anillo: banda centrada en un contorno mas chico ---
+    vec2  dRing   = abs(p) - uInnerRing;
+    float sdfRing = max(dRing.x, dRing.y);
+    float ring    = exp(-abs(sdfRing) * uRingFalloff);
 
     float pulse = 1.0 - uPulse * 0.5 + uPulse * 0.5 * sin(uTime * 2.6 + p.y * 3.4);
-    float a = rim * uIntensity * pulse;
 
-    gl_FragColor = vec4(uColor * a, a);
+    float aHalo = halo * uIntensity * pulse;
+    float aRing = ring * uRingIntensity;
+    float aFoil = halo * uFoilAmount;
+
+    vec3 color = uColor * aHalo + uRingColor * aRing;
+    if (uFoilAmount > 0.001) {
+      // El tono recorre el espectro segun la posicion y el tiempo.
+      float hue = fract(vUv.x * 0.6 + vUv.y * 0.35 + uTime * 0.12);
+      color += hsv2rgb(vec3(hue, 0.75, 1.0)) * aFoil;
+    }
+
+    float a = clamp(aHalo + aRing + aFoil, 0.0, 1.0);
+    // Se normaliza por la suma para conservar el color cuando hay dos terminos
+    // activos a la vez (una legendaria seleccionada, por ejemplo).
+    vec3 mixed = a > 0.001 ? color / a : color;
+
+    gl_FragColor = vec4(mixed * a, a);
   }
 `;
 
-export function createGlowMaterial(color: number, intensity = 1, falloff = 9): THREE.ShaderMaterial {
+/**
+ * `uInnerHalo` sale de dividir el valor historico (0.82) por la escala del quad
+ * del anillo (1.14): el quad crecio para poder contener los dos contornos, asi
+ * que el halo tiene que encogerse en la misma proporcion para verse igual.
+ */
+export const HALO_INNER_HALO = 0.82 / 1.14;
+/** El anillo ya vivia en un quad escalado 1.14, asi que su valor no cambia. */
+export const HALO_INNER_RING = 0.62;
+
+export function createHaloMaterial(options: {
+  color: number;
+  ringColor: number;
+  intensity?: number;
+  falloff?: number;
+  foil?: number;
+}): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    vertexShader: GLOW_VERT,
-    fragmentShader: GLOW_FRAG,
+    vertexShader: HALO_VERT,
+    fragmentShader: HALO_FRAG,
     uniforms: {
-      uColor: { value: new THREE.Color(color) },
-      uIntensity: { value: intensity },
+      uColor: { value: new THREE.Color(options.color) },
+      uIntensity: { value: options.intensity ?? 0.55 },
+      uRingColor: { value: new THREE.Color(options.ringColor) },
+      uRingIntensity: { value: 0 },
+      uFoilAmount: { value: options.foil ?? 0 },
       uTime: { value: 0 },
-      uInner: { value: new THREE.Vector2(0.82, 0.82) },
-      uFalloff: { value: falloff },
+      uInnerHalo: { value: new THREE.Vector2(HALO_INNER_HALO, HALO_INNER_HALO) },
+      uInnerRing: { value: new THREE.Vector2(HALO_INNER_RING, HALO_INNER_RING) },
+      uFalloff: { value: options.falloff ?? 9 },
+      uRingFalloff: { value: 6.5 },
       uPulse: { value: 0.35 },
     },
     transparent: true,
@@ -117,56 +191,6 @@ export function createSporeMaterial(): THREE.ShaderMaterial {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    toneMapped: false,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 3. Foil (borde holografico de las cartas legendarias / miticas)
-// ---------------------------------------------------------------------------
-
-export const FOIL_FRAG = /* glsl */ `
-  uniform float uTime;
-  uniform float uIntensity;
-  varying vec2  vUv;
-
-  vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-  }
-
-  void main() {
-    vec2  p = (vUv - 0.5) * 2.0;
-    vec2  d = abs(p) - 0.82;
-    float sdf = max(d.x, d.y);
-
-    float outside = max(sdf, 0.0);
-    float halo    = exp(-outside * 7.0);
-    float inside  = smoothstep(0.0, -0.14, sdf);
-    float rim     = halo * (1.0 - inside * 0.9);
-
-    // El tono recorre el espectro segun la posicion y el tiempo.
-    float hue = fract(vUv.x * 0.6 + vUv.y * 0.35 + uTime * 0.12);
-    vec3  col = hsv2rgb(vec3(hue, 0.75, 1.0));
-
-    float a = rim * uIntensity;
-    gl_FragColor = vec4(col * a, a);
-  }
-`;
-
-export function createFoilMaterial(intensity = 0.85): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    vertexShader: GLOW_VERT,
-    fragmentShader: FOIL_FRAG,
-    uniforms: {
-      uTime: { value: 0 },
-      uIntensity: { value: intensity },
-    },
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
     toneMapped: false,
   });
 }
