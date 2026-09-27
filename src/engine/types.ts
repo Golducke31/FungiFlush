@@ -375,6 +375,12 @@ export interface OfferOption {
   rarityWeights?: Partial<Record<Rarity, number>>;
   /** Restringe el sorteo a cartas/jokers con este tag. */
   tag?: string;
+  /**
+   * Excluye del sorteo lo que tenga este tag. Es lo que mantiene a las cartas
+   * evolucionadas fuera de la tienda y de los drafts: solo se obtienen
+   * evolucionando, nunca comprandolas.
+   */
+  excludeTag?: string;
   minAnte?: number;
   maxAnte?: number;
 }
@@ -398,6 +404,73 @@ export interface OfferTable {
   pick?: number;
   allowSkip?: boolean;
   allowDuplicates?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Mejoras (cultivo ilimitado)
+// ---------------------------------------------------------------------------
+//
+// El coste crece geometricamente, asi que "ilimitado" no significa gratis:
+// significa que nunca hay un techo duro que corte la fantasia de escalar una
+// carta. La curva vive en `upgrades.json`.
+
+export interface UpgradeTrack {
+  id: string;
+  /** Coste del nivel 1 -> 2. */
+  baseCost: number;
+  /** Multiplicador por nivel. 1.5 = +50% cada vez. */
+  growth: number;
+  /** 0 = sin techo. */
+  maxLevel: number;
+  substratePerLevel: number;
+  sporesPerLevel: number;
+  /**
+   * Si es true, ademas del valor plano se suma el nivel nuevo
+   * (una carta nivel 7 gana 3 + 7 = 10 de Substrate). Es lo que hace que
+   * mejorar temprano sea mas rentable que mejorar tarde.
+   */
+  levelScaling?: boolean;
+  /** Ajuste de coste por rareza. Default 1. */
+  rarityCostMultiplier?: Partial<Record<Rarity, number>>;
+  /** Solo se aplica a estas rarezas. Vacio = todas. */
+  rarities?: Rarity[];
+  /** Solo se aplica a cartas con alguno de estos tags. Vacio = todas. */
+  tags?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Cartas evolutivas
+// ---------------------------------------------------------------------------
+//
+// Una evolucion NO es un efecto: es una regla de progresion. Por eso vive en
+// su propio archivo (`evolutions.json`) y no dentro de la carta: una expansion
+// puede agregarle una evolucion a una carta base sin sobrescribir su
+// definicion.
+
+export type EvolutionRequirement =
+  | { type: 'level'; value: number }
+  | { type: 'plays'; value: number }
+  | { type: 'all'; conds: EvolutionRequirement[] }
+  | { type: 'any'; conds: EvolutionRequirement[] };
+
+export interface EvolutionRule {
+  id: string;
+  /** Id de la carta base. */
+  from: string;
+  /** Id de la carta evolucionada (debe existir en el registro). */
+  to: string;
+  require: EvolutionRequirement;
+  keep?: {
+    /** Conservar bonusSubstrate/bonusSpores. Default true. */
+    bonuses?: boolean;
+    /** Que pasa con el nivel. Default 'carry'. */
+    level?: 'carry' | 'reset' | 'minus';
+    /** Conservar los statuses negativos. Default true. */
+    statuses?: boolean;
+    /** Bonus extra al evolucionar. */
+    grantSubstrate?: number;
+    grantSpores?: number;
+  };
 }
 
 export interface RunSnapshot {

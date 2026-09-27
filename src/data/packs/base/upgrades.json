@@ -1,0 +1,18 @@
+[
+  {
+    "id": "default_upgrade",
+    "baseCost": 5,
+    "growth": 1.6,
+    "maxLevel": 0,
+    "substratePerLevel": 3,
+    "sporesPerLevel": 1,
+    "levelScaling": true,
+    "rarityCostMultiplier": {
+      "common": 1,
+      "uncommon": 1.25,
+      "rare": 1.5,
+      "legendary": 2,
+      "mythic": 2.5
+    }
+  }
+]

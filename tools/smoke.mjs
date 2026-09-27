@@ -322,6 +322,68 @@ console.log('\n--- Constructor de mazo (purgar) ---');
 console.log(JSON.stringify(deckBuilder, null, 2));
 await page.screenshot({ path: join(shotsDir, '09-deck.png') });
 
+// --- Cultivo: mejorar una carta y evolucionar otra ---
+const upgradeStep = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const engine = window.__fungiflush.engine;
+  engine.run.money = Math.max(engine.run.money, 300);
+  window.__fungiflush.hud.showDeckBuilder();
+  await wait(500);
+
+  const button = document.querySelector('.panel.is-deck [data-act="upgrade"]');
+  const uid = button?.dataset.uid ?? null;
+  const target = engine.run.deck.allCards.find((c) => c.uid === uid) ?? null;
+  const before = { level: target?.level ?? 0, money: engine.run.money };
+
+  button?.click();
+  await wait(700);
+
+  const after = engine.run.deck.allCards.find((c) => c.uid === uid) ?? null;
+  return {
+    uid,
+    levelBefore: before.level,
+    levelAfter: after?.level ?? 0,
+    moneySpent: before.money - engine.run.money,
+    statsUpgraded: engine.run.stats.cardsUpgraded,
+  };
+});
+console.log('\n--- Cultivo: mejorar ---');
+console.log(JSON.stringify(upgradeStep, null, 2));
+await page.screenshot({ path: join(shotsDir, '10-upgrade.png') });
+
+const evolveStep = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const engine = window.__fungiflush.engine;
+  const base = engine.run.deck.allCards.find((c) => c.def.id === 'spore_puffball');
+  if (!base) return { skipped: 'no hay spore_puffball en el mazo' };
+
+  // Se fuerza el nivel para no depender de la suerte del reparto.
+  base.level = 3;
+  window.__fungiflush.hud.showDeckBuilder(base.uid);
+  await wait(500);
+
+  const button = document.querySelector(
+    `.panel.is-deck [data-act="evolve"][data-uid="${base.uid}"]`,
+  );
+  const enabled = button ? !button.disabled : false;
+  button?.click();
+  await wait(700);
+
+  const after = engine.run.deck.allCards.find((c) => c.uid === base.uid);
+  return {
+    enabled,
+    defBefore: 'spore_puffball',
+    defAfter: after?.def.id ?? null,
+    uidPreserved: after?.uid === base.uid,
+    levelCarried: after?.level ?? 0,
+    evolvedFrom: after?.evolvedFrom ?? null,
+    statsEvolved: engine.run.stats.cardsEvolved,
+  };
+});
+console.log('\n--- Cultivo: evolucionar ---');
+console.log(JSON.stringify(evolveStep, null, 2));
+await page.screenshot({ path: join(shotsDir, '11-evolve.png') });
+
 await page.evaluate(() => document.querySelector('.panel.is-deck [data-act="close"]')?.click());
 await page.waitForTimeout(500);
 
@@ -339,7 +401,7 @@ const collectionOpened = await page.evaluate(async () => {
 });
 console.log('\n--- Coleccion ---');
 console.log(JSON.stringify(collectionOpened, null, 2));
-await page.screenshot({ path: join(shotsDir, '10-collection.png') });
+await page.screenshot({ path: join(shotsDir, '12-collection.png') });
 
 const collectionClosed = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -368,7 +430,7 @@ const langResult = await page.evaluate(async () => {
 });
 console.log('\n--- Cambio de idioma ---');
 console.log(JSON.stringify(langResult, null, 2));
-await page.screenshot({ path: join(shotsDir, '11-language.png') });
+await page.screenshot({ path: join(shotsDir, '13-language.png') });
 
 // --- Medir FPS durante 3 segundos ---
 const fps = await page.evaluate(
@@ -406,6 +468,16 @@ const ok =
   deckBuilder?.opened === true &&
   (deckBuilder?.cards ?? 0) > 0 &&
   deckBuilder?.purged === 1 &&
+  upgradeStep?.uid !== null &&
+  upgradeStep?.levelAfter === (upgradeStep?.levelBefore ?? 0) + 1 &&
+  (upgradeStep?.moneySpent ?? 0) > 0 &&
+  upgradeStep?.statsUpgraded >= 1 &&
+  evolveStep?.enabled === true &&
+  evolveStep?.defAfter === 'spore_giant_puffball' &&
+  evolveStep?.uidPreserved === true &&
+  evolveStep?.levelCarried === 3 &&
+  evolveStep?.evolvedFrom === 'spore_puffball' &&
+  evolveStep?.statsEvolved >= 1 &&
   collectionOpened?.panel === true &&
   (collectionOpened?.entries ?? 0) > 0 &&
   collectionOpened?.undiscovered > 0 &&

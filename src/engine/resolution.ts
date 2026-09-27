@@ -70,6 +70,15 @@ export class ResolutionContext {
   readonly destroyed: CardInstance[] = [];
   readonly createdIds: string[] = [];
   readonly statusRequests: Array<{ uid: string; status: string; value: number; turns: number }> = [];
+  /**
+   * Mejoras pedidas por efectos (LEVEL_UP_CARD).
+   *
+   * Es una MUTACION DIFERIDA, no un cambio inmediato. Antes esta accion mutaba
+   * la instancia en el acto, y como el HUD llama a `previewSelection()` (que
+   * corre en dryRun) en cada cambio de estado, una carta con LEVEL_UP_CARD se
+   * subia de nivel sola con solo pasar el mouse por encima.
+   */
+  readonly levelUps: Array<{ uid: string; levels: number; sourceId: string }> = [];
 
   constructor(init: ResolutionInit = {}) {
     this.scoredCards = init.scoredCards ?? [];
@@ -130,6 +139,21 @@ export class ResolutionContext {
       this.sporesFromEffects += value;
     }
     this.pushStep('SET_SPORES', value, sourceId, sourceNameKey, depth);
+  }
+
+  /**
+   * Registra un paso desde una accion que no es una suma de score
+   * (por ejemplo LEVEL_UP_CARD). El render lo usa para animar la secuencia.
+   */
+  recordStep(
+    action: ScoreStep['action'],
+    value: number,
+    sourceId: string,
+    sourceNameKey: string,
+    depth: number,
+    targetUid?: string,
+  ): void {
+    this.pushStep(action, value, sourceId, sourceNameKey, depth, targetUid);
   }
 
   private pushStep(

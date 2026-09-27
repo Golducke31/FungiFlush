@@ -134,8 +134,12 @@ export interface GameEventMap {
   'shop:purchase': { offer: ShopOffer; money: number };
   'shop:reroll': { offers: ShopOffer[]; money: number };
 
-  // --- Deckbuilding ---
+  // --- Deckbuilding y cultivo ---
   'deck:purged': { card: CardInstance; cost: number };
+  /** Una carta subio de nivel (por pago en el constructor de mazo o por efecto). */
+  'card:levelup': { card: CardInstance; cost: number; level: number };
+  /** Una carta evoluciono a otra especie conservando su uid. */
+  'card:evolved': { card: CardInstance; fromId: string; ruleId: string };
 
   // --- Varios ---
   'state:changed': { run: RunSnapshot; round: RoundSnapshot | null };

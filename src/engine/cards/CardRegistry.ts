@@ -14,10 +14,12 @@ import type {
   CardInstance,
   EffectDefinition,
   FamilyType,
+  EvolutionRule,
   JokerDefinition,
   JokerInstance,
   OfferTable,
   Rarity,
+  UpgradeTrack,
 } from '../types';
 import { TRIGGER_EVENTS, type TriggerEvent } from '../types';
 import { supportedActions } from '../triggers/actions';
@@ -46,6 +48,10 @@ export interface ContentBundle {
   anteTargets?: Record<number, number>;
   /** Tablas de oferta (tienda, recompensas, drafts). */
   offers?: OfferTable[];
+  /** Curvas de mejora de cartas. */
+  upgrades?: UpgradeTrack[];
+  /** Reglas de evolucion de cartas. */
+  evolutions?: EvolutionRule[];
 }
 
 export interface ValidationIssue {

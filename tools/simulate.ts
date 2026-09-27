@@ -142,6 +142,8 @@ interface RunResult {
   rewardsOffered: number;
   /** Cartas efectivamente tomadas en los drafts. */
   rewardsTaken: number;
+  /** Mejoras compradas en la tienda. */
+  upgradesBought: number;
   /** Problemas reales: la partida no pudo continuar. */
   errores: string[];
   /** Cortes de seguridad del Trigger Engine (no son fallos). */
@@ -156,6 +158,12 @@ function cardValue(card: CardInstance): number {
 /** A partir de este tamano de mazo el bot deja de tomar cartas en los drafts. */
 const DRAFT_DECK_LIMIT = 55;
 
+/**
+ * Dinero que el bot no gasta en mejoras. Sin reserva, volcaria TODO en una sola
+ * carta y la simulacion dejaria de parecerse a una partida real.
+ */
+const UPGRADE_RESERVE = 20;
+
 function simulateRun(seed: number, verbose: boolean): RunResult {
   const engine = new GameEngine({ seed, bundle: content });
   const errores: string[] = [];
@@ -163,6 +171,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   let discardsUsed = 0;
   let rewardsOffered = 0;
   let rewardsTaken = 0;
+  let upgradesBought = 0;
   engine.startRun(seed);
 
   const track = (label: string, res: ResolutionContext | null) => {
@@ -274,6 +283,24 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
           }
         }
       }
+      // Cultivo: con el dinero que sobra despues de comprar, el bot mejora su
+      // mejor carta. Es lo que haria un jugador, y ejercita el camino de
+      // mejoras (que no tiene techo) dentro de la simulacion.
+      if (engine.hasUpgrades) {
+        let guard = 0;
+        while (guard++ < 40 && engine.run.money > UPGRADE_RESERVE) {
+          const best = [...engine.run.deck.allCards].sort(
+            (a, b) =>
+              b.def.baseSubstrate + b.bonusSubstrate - (a.def.baseSubstrate + a.bonusSubstrate),
+          )[0];
+          if (!best) break;
+          const quote = engine.upgradeQuote(best.uid);
+          if (!quote || quote.atMaxLevel || quote.cost > engine.run.money - UPGRADE_RESERVE) break;
+          if (!engine.upgradeCard(best.uid)) break;
+          upgradesBought += 1;
+        }
+      }
+
       engine.leaveShop();
       continue;
     }
@@ -298,6 +325,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
     destroyed: engine.run.stats.cardsDestroyed,
     rewardsOffered,
     rewardsTaken,
+    upgradesBought,
     errores,
     overflows,
   };
@@ -550,6 +578,7 @@ console.log(`  Cartas destruidas     : ${avg((r) => r.destroyed).toFixed(2)} pro
 console.log(
   `  Drafts (ofertas)      : ${avg((r) => r.rewardsOffered).toFixed(1)} ofrecidas / ${avg((r) => r.rewardsTaken).toFixed(1)} tomadas`,
 );
+console.log(`  Mejoras compradas     : ${avg((r) => r.upgradesBought).toFixed(2)} promedio`);
 
 console.log(`\n  ${C.dim}Distribucion de ante alcanzado:${C.reset}`);
 for (let ante = 1; ante <= 8; ante++) {

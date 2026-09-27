@@ -5,12 +5,12 @@
     "groups": [
       {
         "count": 1,
-        "options": [{ "weight": 1, "kind": "card" }]
+        "options": [{ "weight": 1, "kind": "card", "excludeTag": "evolved" }]
       },
       {
         "count": 1,
         "options": [
-          { "weight": 1, "kind": "card" },
+          { "weight": 1, "kind": "card", "excludeTag": "evolved" },
           { "weight": 1, "kind": "joker" }
         ]
       },
@@ -30,6 +30,7 @@
           {
             "weight": 1,
             "kind": "card",
+            "excludeTag": "evolved",
             "rarityWeights": { "common": 60, "uncommon": 30, "rare": 10 }
           }
         ]

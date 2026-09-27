@@ -213,6 +213,7 @@ export class OfferService {
     if (ctx.cardFilter && !ctx.cardFilter(def)) return false;
     if (used.has(`card:${def.id}`)) return false;
     if (option.packId && !def.id.startsWith(`${option.packId}_`)) return false;
+    if (option.excludeTag && (def.tags ?? []).includes(option.excludeTag)) return false;
     return true;
   }
 }

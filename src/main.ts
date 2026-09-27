@@ -365,12 +365,36 @@ async function boot(): Promise<void> {
       onPurge: (uid) => {
         if (!engine.purgeCard(uid)) {
           hud?.toast(
-            engine.canPurge() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
+            engine.canEditDeck() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
             'warn',
           );
           return;
         }
         hud?.showDeckBuilder();
+      },
+      onUpgrade: (uid) => {
+        const card = engine.run.deck.allCards.find((c) => c.uid === uid);
+        if (!engine.upgradeCard(uid)) {
+          hud?.toast(
+            engine.canEditDeck() ? t('deck.cannotUpgrade') : t('deck.onlyBetweenBlinds'),
+            'warn',
+          );
+          return;
+        }
+        if (card) hud?.toast(t('deck.upgraded', { name: t(card.def.nameKey), level: card.level }), 'info');
+        hud?.showDeckBuilder(uid);
+      },
+      onEvolve: (uid) => {
+        const card = engine.run.deck.allCards.find((c) => c.uid === uid);
+        if (!engine.evolveCard(uid)) {
+          hud?.toast(
+            engine.canEditDeck() ? t('evolve.blocked') : t('deck.onlyBetweenBlinds'),
+            'warn',
+          );
+          return;
+        }
+        if (card) hud?.toast(t('evolve.done', { name: t(card.def.nameKey) }), 'info');
+        hud?.showDeckBuilder(uid);
       },
     },
   });

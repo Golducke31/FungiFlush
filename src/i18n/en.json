@@ -152,7 +152,9 @@
     "wideNet": "Wide net",
     "payout": "Payout",
     "synergy": "Synergy",
-    "sterile": "Sterile"
+    "sterile": "Sterile",
+    "sporeBloom": "Spore bloom",
+    "decayHarvest": "Harvest"
   },
   "blind": {
     "current": "Current blind",
@@ -373,6 +375,26 @@
     "destroying_angel": {
       "name": "Destroying Angel",
       "desc": "On play: x5 Spores, then destroy this card forever."
+    },
+    "spore_giant_puffball": {
+      "name": "Giant Puffball",
+      "desc": "A puffball swollen past its own skin. With another spore in hand: +2 Spores."
+    },
+    "mycelium_elder_web": {
+      "name": "Elder Webcap",
+      "desc": "An old web of threads that remembers every hand it scored."
+    },
+    "amanita_apex_toxica": {
+      "name": "Apex Amanita",
+      "desc": "The full dose. x3 Spores when played."
+    },
+    "crystal_grand_coral": {
+      "name": "Grand Coral",
+      "desc": "Faceted coral grown into a single lens. Refracts everything."
+    },
+    "decay_ancient_stump": {
+      "name": "Ancient Stump",
+      "desc": "Still rotting, still paying. +2 money at the start of every blind."
     }
   },
   "joker": {
@@ -468,7 +490,9 @@
     "saveIncompatible": "That save is from an older version and could not be loaded.",
     "contentChanged": "Content was updated; this run keeps going with the new balance.",
     "saveMigrated": "Your save was updated to the new format.",
-    "rewardUnavailable": "That reward is no longer available."
+    "rewardUnavailable": "That reward is no longer available.",
+    "upgradeUnavailable": "That card cannot be upgraded right now.",
+    "evolveUnavailable": "That card cannot evolve yet."
   },
   "menu": {
     "tagline": "A mycelial roguelite deckbuilder",
@@ -554,6 +578,23 @@
     "sortElement": "Element",
     "sortFamily": "Family",
     "sortRarity": "Rarity",
-    "sortLevel": "Level"
+    "sortLevel": "Level",
+    "upgrade": "Upgrade ({cost})",
+    "upgraded": "{name} reached level {level}",
+    "maxLevel": "Max level",
+    "cannotUpgrade": "Not enough money to upgrade",
+    "noUpgrades": "This deck cannot be upgraded",
+    "level": "Lv {level}",
+    "readyBadge": "Evolution ready"
+  },
+  "evolve": {
+    "title": "Evolution",
+    "button": "Evolve",
+    "ready": "Evolution ready",
+    "to": "Evolve into {name}",
+    "reqLevel": "Needs level {value}",
+    "reqPlays": "Needs {value} plays",
+    "done": "{name} evolved",
+    "blocked": "Not ready yet"
   }
 }

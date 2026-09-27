@@ -1,0 +1,49 @@
+[
+  {
+    "id": "evo_giant_puffball",
+    "from": "spore_puffball",
+    "to": "spore_giant_puffball",
+    "require": { "type": "level", "value": 3 },
+    "keep": { "bonuses": true, "level": "carry", "statuses": true }
+  },
+  {
+    "id": "evo_elder_web",
+    "from": "mycelium_webcap",
+    "to": "mycelium_elder_web",
+    "require": {
+      "type": "all",
+      "conds": [
+        { "type": "level", "value": 4 },
+        { "type": "plays", "value": 3 }
+      ]
+    },
+    "keep": { "bonuses": true, "level": "carry", "statuses": true }
+  },
+  {
+    "id": "evo_apex_toxica",
+    "from": "amanita_toxica",
+    "to": "amanita_apex_toxica",
+    "require": { "type": "level", "value": 3 },
+    "keep": { "bonuses": true, "level": "carry", "statuses": true }
+  },
+  {
+    "id": "evo_grand_coral",
+    "from": "crystal_coralfungus",
+    "to": "crystal_grand_coral",
+    "require": {
+      "type": "any",
+      "conds": [
+        { "type": "level", "value": 5 },
+        { "type": "plays", "value": 8 }
+      ]
+    },
+    "keep": { "bonuses": true, "level": "carry", "statuses": true }
+  },
+  {
+    "id": "evo_ancient_stump",
+    "from": "decay_rotwood",
+    "to": "decay_ancient_stump",
+    "require": { "type": "plays", "value": 4 },
+    "keep": { "bonuses": true, "level": "carry", "statuses": true, "grantSubstrate": 2 }
+  }
+]

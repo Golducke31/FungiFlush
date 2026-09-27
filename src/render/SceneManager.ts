@@ -367,8 +367,51 @@ export class SceneManager {
         if (target) this.queueFx(0, () => this.dissolve(target));
       }),
 
+      // --- Cultivo: mejora y evolucion ---
+      bus.on('card:levelup', ({ card }) => {
+        const target = this.handCards.get(card.uid);
+        if (target) this.queueFx(0, () => this.celebrateCard(target, 0xf2a63b, 26));
+      }),
+
+      bus.on('card:evolved', ({ card }) => {
+        // La carta pudo haber cambiado de definicion: hay que regenerar su
+        // textura (la cache incluye id + nivel, asi que sale una nueva).
+        const target = this.handCards.get(card.uid);
+        if (!target) return;
+        target.setCard(card, this.textures, this.lang(), this.artForCard(card));
+        this.queueFx(0, () => this.celebrateCard(target, 0xa78bfa, 60));
+      }),
+
       bus.on('i18n:changed', () => this.rebuildTextures()),
     );
+  }
+
+  /**
+   * Destello + estallido de esporas sobre una carta.
+   *
+   * El destello se anima con un objeto plano y no con la propiedad del
+   * material: asi el tween no pelea con `update()`, que reescribe el brillo
+   * del halo en cada frame.
+   */
+  private celebrateCard(card3d: Card3D, color: number, particles: number): void {
+    const flash = { value: 0 };
+    this.tweens.to(flash, { value: 1 }, {
+      duration: 0.18,
+      ease: 'quadOut',
+      onUpdate: () => card3d.setFlash(flash.value),
+      onComplete: () => {
+        const fade = { value: 1 };
+        this.tweens.to(fade, { value: 0 }, {
+          duration: 0.5,
+          ease: 'cubicOut',
+          onUpdate: () => card3d.setFlash(fade.value),
+        });
+      },
+    });
+
+    const origin = card3d.worldPosition();
+    this.particles.burst(origin, particles, { color, speed: 4.2, spread: 0.55, size: 0.1, life: 0.8 });
+    this.rig.addShake(0.08);
   }
 
   // ==========================================================================

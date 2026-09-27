@@ -22,6 +22,8 @@ import { ResolutionContext } from './resolution';
 import { CardRegistry, type ContentBundle } from './cards/CardRegistry';
 import { Deck } from './cards/Deck';
 import { OfferService } from './offers/OfferService';
+import { UpgradeService, type UpgradeQuote } from './upgrades/UpgradeService';
+import { EvolutionService, type EvolutionOption } from './evolution/EvolutionService';
 import { ScoreCalculator, breakdownOf } from './scoring/ScoreCalculator';
 import { TriggerEngine } from './triggers/TriggerEngine';
 import { applyAction } from './triggers/actions';
@@ -80,6 +82,8 @@ export class GameEngine {
   private readonly triggers: TriggerEngine;
   private readonly scorer: ScoreCalculator;
   private readonly offers: OfferService;
+  private readonly upgrades: UpgradeService;
+  private readonly evolutions: EvolutionService;
 
   private readonly contentFilter?: (def: CardDefinition) => boolean;
   private readonly jokerFilter?: (def: JokerDefinition) => boolean;
@@ -99,6 +103,8 @@ export class GameEngine {
     this.triggers = new TriggerEngine(this.registry, this.rng);
     this.scorer = new ScoreCalculator(this.triggers, this.registry, this.rng);
     this.offers = new OfferService(this.registry, opts.bundle.offers ?? []);
+    this.upgrades = new UpgradeService(opts.bundle.upgrades ?? []);
+    this.evolutions = new EvolutionService(opts.bundle.evolutions ?? [], this.registry);
     this.contentFilter = opts.contentFilter;
     this.jokerFilter = opts.jokerFilter;
     this.contentHash = opts.contentHash ?? null;
@@ -275,6 +281,8 @@ export class GameEngine {
 
     // --- Las cartas jugadas van al descarte ---
     for (const card of scored) {
+      // Contador de uso: alimenta las evoluciones por cantidad de jugadas.
+      card.plays = (card.plays ?? 0) + 1;
       round.hand = round.hand.filter((c) => c.uid !== card.uid);
       this.run.deck.discard(card);
     }
@@ -414,9 +422,94 @@ export class GameEngine {
     return ECONOMY.purgeCost;
   }
 
-  /** Purga solo entre blinds o en la tienda: nunca en medio de una mano. */
-  canPurge(): boolean {
+  /**
+   * Editar el mazo solo entre blinds o en la tienda, nunca en medio de una
+   * mano: sacar o mejorar una carta que el jugador ya tiene en la mano (y que
+   * quizas ya selecciono) seria un cambio de reglas a mitad de jugada.
+   */
+  canEditDeck(): boolean {
     return this.run.status === 'blind_select' || this.run.status === 'shop';
+  }
+
+  /** Compat: la purga es una de las operaciones de edicion de mazo. */
+  canPurge(): boolean {
+    return this.canEditDeck();
+  }
+
+  // ==========================================================================
+  // Cultivo: mejoras ilimitadas y evoluciones
+  // ==========================================================================
+
+  /** Cotizacion de la proxima mejora. Pura: la UI puede pedirla en cada render. */
+  upgradeQuote(uid: string): UpgradeQuote | null {
+    const card = this.run.deck.allCards.find((c) => c.uid === uid);
+    if (!card) return null;
+    return this.upgrades.quote(card, 1);
+  }
+
+  get hasUpgrades(): boolean {
+    return this.upgrades.hasTracks;
+  }
+
+  /**
+   * Mejora una carta pagando su coste. El coste crece geometricamente, pero no
+   * hay techo (salvo que el track declare `maxLevel`).
+   */
+  upgradeCard(uid: string): boolean {
+    if (!this.canEditDeck()) return false;
+
+    const card = this.run.deck.allCards.find((c) => c.uid === uid);
+    if (!card) return false;
+
+    const quote = this.upgrades.quote(card, 1);
+    if (!quote || quote.atMaxLevel) return false;
+    if (this.run.money < quote.cost) return false;
+
+    this.upgrades.apply(card, 1);
+    this.run.stats.cardsUpgraded += 1;
+    this.setMoney(-quote.cost);
+
+    bus.emit('card:levelup', { card, cost: quote.cost, level: card.level });
+    this.emitState();
+    return true;
+  }
+
+  /** Evoluciones posibles de una carta, cumplidas o no (para mostrar el requisito). */
+  evolutionOptions(uid: string): EvolutionOption[] {
+    const card = this.run.deck.allCards.find((c) => c.uid === uid);
+    if (!card) return [];
+    return this.evolutions.optionsFor(card);
+  }
+
+  /** Cartas del mazo con una evolucion lista para hacerse. */
+  evolutionReady(): CardInstance[] {
+    return this.evolutions.readyAmong(this.run.deck.allCards);
+  }
+
+  get hasEvolutions(): boolean {
+    return this.evolutions.hasRules;
+  }
+
+  /**
+   * Evoluciona una carta: cambia su especie conservando el uid, el nivel (segun
+   * `keep`) y los bonus. Es irreversible dentro de una run.
+   */
+  evolveCard(uid: string): boolean {
+    if (!this.canEditDeck()) return false;
+
+    const card = this.run.deck.allCards.find((c) => c.uid === uid);
+    if (!card) return false;
+
+    const option = this.evolutions.availableFor(card);
+    if (!option) return false;
+
+    const previousId = this.evolutions.apply(card, option.rule);
+    if (!previousId) return false;
+
+    this.run.stats.cardsEvolved += 1;
+    bus.emit('card:evolved', { card, fromId: previousId, ruleId: option.rule.id });
+    this.emitState();
+    return true;
   }
 
   /**
@@ -552,6 +645,18 @@ export class GameEngine {
     }
     if (res.jokerSlotsDelta !== 0) {
       this.run.jokerSlots = Math.max(1, this.run.jokerSlots + res.jokerSlotsDelta);
+    }
+
+    // Mejoras pedidas por efectos (LEVEL_UP_CARD): se aplican ACA, cuando la
+    // cadena ya termino, y NUNCA en un dryRun. Ese es el bug que tenia la
+    // version anterior: mutaba la carta durante el preview del HUD, asi que
+    // pasar el mouse por encima de una carta con ese efecto la mejoraba.
+    for (const request of res.levelUps) {
+      const card = this.findCardEverywhere(request.uid);
+      if (!card) continue;
+      this.upgrades.apply(card, request.levels);
+      this.run.stats.cardsUpgraded += 1;
+      bus.emit('card:levelup', { card, cost: 0, level: card.level });
     }
 
     // Efectos "once" consumidos.
@@ -857,6 +962,19 @@ export class GameEngine {
   /** Busca una carta en mano por uid. */
   findCard(uid: string): CardInstance | undefined {
     return this.round?.hand.find((c) => c.uid === uid);
+  }
+
+  /**
+   * Busca una carta en la mano o en el mazo.
+   *
+   * Hace falta porque una mejora pedida por un efecto puede apuntar a una carta
+   * que ya salio de la mano (o que todavia no entro), y perderla silenciosamente
+   * seria un efecto que no hace nada.
+   */
+  findCardEverywhere(uid: string): CardInstance | undefined {
+    return (
+      this.round?.hand.find((c) => c.uid === uid) ?? this.run.deck.allCards.find((c) => c.uid === uid)
+    );
   }
 
   // ==========================================================================

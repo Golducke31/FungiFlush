@@ -18,7 +18,7 @@ import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
-import { buildDeckBuilderPanel } from './DeckBuilderScreen';
+import { buildDeckBuilderPanel, type DeckCardInfo } from './DeckBuilderScreen';
 import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
 
 export interface HudCallbacks {
@@ -44,6 +44,8 @@ export interface HudCallbacks {
   /** `null` = saltar el draft. */
   onPickReward: (offerId: string | null) => void;
   onPurge: (uid: string) => void;
+  onUpgrade: (uid: string) => void;
+  onEvolve: (uid: string) => void;
   onOpenDeck: () => void;
 }
 
@@ -519,18 +521,46 @@ export class HUD {
     );
   }
 
-  /** Mazo de la run: ver, ordenar y purgar. */
-  showDeckBuilder(): void {
+  /**
+   * Mazo de la run: ver, ordenar, mejorar, evolucionar y purgar.
+   *
+   * El HUD resuelve aca el coste de mejora y la evolucion disponible de cada
+   * carta, para que el panel sea una funcion pura de los datos.
+   */
+  showDeckBuilder(highlightUid?: string): void {
+    const cards = this.engine.run.deck.allCards;
+
+    const info: Record<string, DeckCardInfo> = {};
+    for (const card of cards) {
+      const quote = this.engine.upgradeQuote(card.uid);
+      const options = this.engine.evolutionOptions(card.uid);
+      const ready = options.find((option) => option.met) ?? null;
+      const first = options[0] ?? null;
+
+      info[card.uid] = {
+        upgradeCost: quote && !quote.atMaxLevel ? quote.cost : null,
+        atMaxLevel: quote?.atMaxLevel ?? false,
+        // Se muestra siempre el destino (aunque falte el requisito): enterarse
+        // de que existe una evolucion es lo que empuja a cultivarla.
+        evolveLabel: first ? t('evolve.to', { name: t(first.target.nameKey) }) : null,
+        evolveReady: ready !== null,
+      };
+    }
+
     this.showPanel(
       buildDeckBuilderPanel(
         {
-          cards: this.engine.run.deck.allCards,
+          cards,
           money: this.engine.run.money,
           purgeCost: this.engine.purgeCost,
-          canPurge: this.engine.canPurge(),
+          canEdit: this.engine.canEditDeck(),
+          info,
+          ...(highlightUid ? { highlightUid } : {}),
         },
         {
           onPurge: (uid) => this.callbacks.onPurge(uid),
+          onUpgrade: (uid) => this.callbacks.onUpgrade(uid),
+          onEvolve: (uid) => this.callbacks.onEvolve(uid),
           onClose: () => {
             this.lastStatus = null;
             this.render();

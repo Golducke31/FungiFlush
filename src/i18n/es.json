@@ -152,7 +152,9 @@
     "wideNet": "Red amplia",
     "payout": "Pago",
     "synergy": "Sinergia",
-    "sterile": "Esterilidad"
+    "sterile": "Esterilidad",
+    "sporeBloom": "Floración de esporas",
+    "decayHarvest": "Cosecha"
   },
   "blind": {
     "current": "Ciego actual",
@@ -373,6 +375,26 @@
     "destroying_angel": {
       "name": "Ángel Destructor",
       "desc": "Al jugar: x5 Esporas y destruye esta carta para siempre."
+    },
+    "spore_giant_puffball": {
+      "name": "Bejín Gigante",
+      "desc": "Un bejín que se hinchó más allá de su propia piel. Con otro hongo de esporas en mano: +2 Esporas."
+    },
+    "mycelium_elder_web": {
+      "name": "Seta Anciana",
+      "desc": "Una red vieja de filamentos que recuerda cada mano que puntuó."
+    },
+    "amanita_apex_toxica": {
+      "name": "Amanita Suprema",
+      "desc": "La dosis completa. x3 Esporas al jugarla."
+    },
+    "crystal_grand_coral": {
+      "name": "Coral Mayor",
+      "desc": "Coral facetado que creció hasta ser una sola lente. Refracta todo."
+    },
+    "decay_ancient_stump": {
+      "name": "Tocón Ancestral",
+      "desc": "Sigue pudriéndose, sigue pagando. +2 de dinero al empezar cada ciego."
     }
   },
   "joker": {
@@ -468,7 +490,9 @@
     "saveIncompatible": "Ese guardado es de una versión anterior y no se pudo cargar.",
     "contentChanged": "El contenido se actualizó; esta partida sigue con el balance nuevo.",
     "saveMigrated": "Tu partida se actualizó al nuevo formato.",
-    "rewardUnavailable": "Esa recompensa ya no está disponible."
+    "rewardUnavailable": "Esa recompensa ya no está disponible.",
+    "upgradeUnavailable": "Esa carta no se puede mejorar ahora.",
+    "evolveUnavailable": "Esa carta todavía no puede evolucionar."
   },
   "menu": {
     "tagline": "Un roguelite de mazo micelial",
@@ -554,6 +578,23 @@
     "sortElement": "Elemento",
     "sortFamily": "Familia",
     "sortRarity": "Rareza",
-    "sortLevel": "Nivel"
+    "sortLevel": "Nivel",
+    "upgrade": "Mejorar ({cost})",
+    "upgraded": "{name} llegó al nivel {level}",
+    "maxLevel": "Nivel máximo",
+    "cannotUpgrade": "No te alcanza el dinero para mejorar",
+    "noUpgrades": "Este mazo no se puede mejorar",
+    "level": "Nv {level}",
+    "readyBadge": "Evolución lista"
+  },
+  "evolve": {
+    "title": "Evolución",
+    "button": "Evolucionar",
+    "ready": "Evolución lista",
+    "to": "Evoluciona a {name}",
+    "reqLevel": "Necesita nivel {value}",
+    "reqPlays": "Necesita {value} jugadas",
+    "done": "{name} evolucionó",
+    "blocked": "Todavía no está lista"
   }
 }

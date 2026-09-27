@@ -1,12 +1,15 @@
 /**
  * DeckBuilderScreen.ts — Ver y editar el mazo de la run.
  *
- * Fase 2 cubre lo minimo que hace que un deckbuilder sea un deckbuilder:
- * VER el mazo entero y PODER SACAR cartas. Las mejoras ilimitadas llegan en la
- * Fase 3 y reutilizan este mismo panel.
+ * Tres operaciones, en orden de frecuencia:
+ *   1. **Mejorar** — sube el nivel de una carta pagando una curva geometrica.
+ *      Sin techo: "ilimitado" significa que no hay un muro, no que sea gratis.
+ *   2. **Evolucionar** — convierte una carta en otra especie cuando cumple su
+ *      requisito (nivel o cantidad de jugadas). Irreversible en la run.
+ *   3. **Purgar** — elimina una carta para siempre.
  *
- * El panel no toca el motor: pide purgas por callback. Ordenar y filtrar es
- * estado local de la vista, no del juego.
+ * El panel es una funcion pura de los datos que recibe: no toca el motor ni
+ * conoce el registro. Ordenar y filtrar es estado local de la vista.
  */
 
 import type { CardInstance, Rarity } from '@engine/index';
@@ -17,14 +20,31 @@ export type DeckSort = 'element' | 'family' | 'rarity' | 'level';
 
 export interface DeckBuilderCallbacks {
   onPurge: (uid: string) => void;
+  onUpgrade: (uid: string) => void;
+  onEvolve: (uid: string) => void;
   onClose: () => void;
+}
+
+/** Lo que la vista necesita saber de cada carta, ya resuelto por el HUD. */
+export interface DeckCardInfo {
+  /** null = no se puede mejorar (sin tracks o al maximo). */
+  upgradeCost: number | null;
+  atMaxLevel: boolean;
+  /** Texto del boton de evolucion, o null si no hay ninguna. */
+  evolveLabel: string | null;
+  /** La evolucion se puede hacer ya (se resalta). */
+  evolveReady: boolean;
 }
 
 export interface DeckBuilderState {
   cards: CardInstance[];
   money: number;
   purgeCost: number;
-  canPurge: boolean;
+  canEdit: boolean;
+  /** uid -> info de mejora/evolucion. */
+  info: Record<string, DeckCardInfo>;
+  /** Carta a resaltar tras una accion (feedback visual). */
+  highlightUid?: string;
 }
 
 const RARITY_RANK: Record<Rarity, number> = {
@@ -87,8 +107,10 @@ export function buildDeckBuilderPanel(
     }
 
     for (const card of cards) {
+      const info = state.info[card.uid];
       const cell = document.createElement('div');
-      cell.className = 'deck-card';
+      cell.className = `deck-card${card.uid === state.highlightUid ? ' is-flash' : ''}`;
+      cell.dataset['uid'] = card.uid;
 
       const name = document.createElement('div');
       name.className = 'deck-card-name';
@@ -112,11 +134,52 @@ export function buildDeckBuilderPanel(
       rarity.textContent = t(`rarity.${card.def.rarity}`);
       stats.append(substrate, spores, rarity);
 
-      if (card.level > 1) {
-        const level = document.createElement('div');
-        level.className = 'deck-card-level';
-        level.textContent = `Lv ${card.level}`;
-        cell.appendChild(level);
+      cell.append(name, meta, stats);
+
+      // --- Nivel (y contador de jugadas si la carta tiene una evolucion) ---
+      const level = document.createElement('div');
+      level.className = 'deck-card-level';
+      level.textContent = t('deck.level', { level: card.level });
+      cell.appendChild(level);
+
+      const hasEvolution = info?.evolveLabel !== null && info?.evolveLabel !== undefined;
+      if (hasEvolution) {
+        const plays = document.createElement('div');
+        plays.className = 'deck-card-plays';
+        plays.textContent = `${card.plays ?? 0}×`;
+        plays.title = t('evolve.title');
+        cell.appendChild(plays);
+      }
+
+      // --- Acciones ---
+      const actions = document.createElement('div');
+      actions.className = 'deck-card-actions';
+
+      if (info && info.upgradeCost !== null) {
+        const upgrade = document.createElement('button');
+        upgrade.className = 'btn is-small';
+        upgrade.textContent = t('deck.upgrade', { cost: info.upgradeCost });
+        upgrade.dataset['act'] = 'upgrade';
+        upgrade.dataset['uid'] = card.uid;
+        upgrade.disabled = !state.canEdit || state.money < info.upgradeCost;
+        upgrade.addEventListener('click', () => callbacks.onUpgrade(card.uid));
+        actions.appendChild(upgrade);
+      } else if (info?.atMaxLevel) {
+        const maxed = document.createElement('span');
+        maxed.className = 'deck-card-maxed';
+        maxed.textContent = t('deck.maxLevel');
+        actions.appendChild(maxed);
+      }
+
+      if (hasEvolution) {
+        const evolve = document.createElement('button');
+        evolve.className = `btn is-small${info.evolveReady ? ' is-evolve' : ' is-ghost'}`;
+        evolve.textContent = info.evolveLabel ?? t('evolve.button');
+        evolve.dataset['act'] = 'evolve';
+        evolve.dataset['uid'] = card.uid;
+        evolve.disabled = !state.canEdit || !info.evolveReady;
+        evolve.addEventListener('click', () => callbacks.onEvolve(card.uid));
+        actions.appendChild(evolve);
       }
 
       const purge = document.createElement('button');
@@ -124,10 +187,11 @@ export function buildDeckBuilderPanel(
       purge.textContent = t('deck.purge', { cost: state.purgeCost });
       purge.dataset['act'] = 'purge';
       purge.dataset['uid'] = card.uid;
-      purge.disabled = !state.canPurge || state.money < state.purgeCost;
+      purge.disabled = !state.canEdit || state.money < state.purgeCost;
       purge.addEventListener('click', () => callbacks.onPurge(card.uid));
+      actions.appendChild(purge);
 
-      cell.append(name, meta, stats, purge);
+      cell.appendChild(actions);
       grid.appendChild(cell);
     }
   };

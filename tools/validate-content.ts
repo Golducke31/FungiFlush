@@ -28,6 +28,8 @@ function main(): void {
   console.log(`blinds     ${stats.blinds}`);
   console.log(`antes      ${stats.antes}`);
   console.log(`ofertas    ${stats.offers}`);
+  console.log(`mejoras    ${stats.upgrades}`);
+  console.log(`evoluciones ${stats.evolutions}`);
   console.log(`hash       ${registry.contentHash()}`);
 
   if (registry.skipped.length > 0) {

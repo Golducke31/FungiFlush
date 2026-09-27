@@ -1,0 +1,92 @@
+[
+  {
+    "id": "spore_giant_puffball",
+    "nameKey": "card.spore_giant_puffball.name",
+    "descKey": "card.spore_giant_puffball.desc",
+    "element": "spore",
+    "family": "agaricaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 9,
+    "baseSpores": 2,
+    "cost": 6,
+    "tags": ["evolved"],
+    "art": { "hue": 58, "hue2": 30, "pattern": "radial", "silhouette": "cluster", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "giant_release",
+        "trigger": "ON_PLAY",
+        "conditions": [{ "type": "element_in_hand", "value": "spore" }],
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.sporeBloom"
+      }
+    ]
+  },
+  {
+    "id": "mycelium_elder_web",
+    "nameKey": "card.mycelium_elder_web.name",
+    "descKey": "card.mycelium_elder_web.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "rare",
+    "baseSubstrate": 11,
+    "baseSpores": 2,
+    "cost": 8,
+    "tags": ["evolved"],
+    "art": { "hue": 258, "hue2": 232, "pattern": "fibrous", "silhouette": "mold", "glow": 0.75 }
+  },
+  {
+    "id": "amanita_apex_toxica",
+    "nameKey": "card.amanita_apex_toxica.name",
+    "descKey": "card.amanita_apex_toxica.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 10,
+    "baseSpores": 2,
+    "cost": 7,
+    "tags": ["evolved"],
+    "art": { "hue": 348, "hue2": 12, "pattern": "blotch", "silhouette": "cap", "glow": 0.8 },
+    "effects": [
+      {
+        "id": "apex_toxin",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 3 }],
+        "labelKey": "effect.poisonBurst"
+      }
+    ]
+  },
+  {
+    "id": "crystal_grand_coral",
+    "nameKey": "card.crystal_grand_coral.name",
+    "descKey": "card.crystal_grand_coral.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "rare",
+    "baseSubstrate": 2,
+    "baseSpores": 6,
+    "cost": 9,
+    "tags": ["evolved"],
+    "art": { "hue": 186, "hue2": 200, "pattern": "crystal", "silhouette": "coral", "glow": 0.85 }
+  },
+  {
+    "id": "decay_ancient_stump",
+    "nameKey": "card.decay_ancient_stump.name",
+    "descKey": "card.decay_ancient_stump.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 13,
+    "baseSpores": 2,
+    "cost": 7,
+    "tags": ["evolved"],
+    "art": { "hue": 18, "hue2": 8, "pattern": "rings", "silhouette": "bracket", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "stump_harvest",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "GAIN_MONEY", "value": 2 }],
+        "labelKey": "effect.decayHarvest"
+      }
+    ]
+  }
+]

@@ -8,7 +8,9 @@
 import type {
   BlindDefinition,
   CardDefinition,
+  EvolutionRule,
   JokerDefinition,
+  UpgradeTrack,
 } from '@engine/index';
 
 import type { AnteRow, LoadedPack, OfferTable, RawPack } from './types';
@@ -52,5 +54,11 @@ export function parsePack(pack: RawPack): LoadedPack {
   const antes: AnteRow[] = [];
   for (const path of contents.antes ?? []) antes.push(...read<AnteRow>(pack, path));
 
-  return { ...pack, cards, jokers, mutations, blinds, offers, antes };
+  const upgrades: UpgradeTrack[] = [];
+  for (const path of contents.upgrades ?? []) upgrades.push(...read<UpgradeTrack>(pack, path));
+
+  const evolutions: EvolutionRule[] = [];
+  for (const path of contents.evolutions ?? []) evolutions.push(...read<EvolutionRule>(pack, path));
+
+  return { ...pack, cards, jokers, mutations, blinds, offers, antes, upgrades, evolutions };
 }

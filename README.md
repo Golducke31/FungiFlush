@@ -33,6 +33,9 @@ to game events through a deterministic **Trigger Engine**.
 - **Deck builder & collection**: sort the run deck, purge cards permanently, and browse
   every specimen — including the ones you haven't discovered (silhouettes) and the ones
   locked behind a DLC (greyed out, with the pack name).
+- **Unlimited upgrades**: level any card for an escalating cost with **no hard ceiling**,
+  and **evolving cards** that transform into another species when they hit a level or a
+  play count — keeping their uid, level and bonuses.
 - **Versioned saves with a migration chain** (`SAVE_VERSION = 2`), plus a permanent
   **profile** (collection, settings, entitlements, stats) that survives updates.
 - **Entitlements + PackGate**: DLC gating as a pure predicate injected into the engine.
@@ -117,6 +120,8 @@ src/
 │   ├── resolution.ts       # ResolutionContext accumulator (dry-run + sims)
 │   ├── cards/              # CardRegistry, Deck
 │   ├── offers/OfferService # Shop / reward-draft rolling from data tables
+│   ├── upgrades/           # Unlimited card levelling (pure cost curve)
+│   ├── evolution/          # Card transformation rules
 │   ├── scoring/            # ScoreCalculator, combos
 │   ├── state/              # RunState, RoundState
 │   └── triggers/           # TriggerEngine, actions, conditions, source
@@ -140,7 +145,9 @@ src/
 │   ├── cards/01_starters.json  02_specimens.json  03_apex.json
 │   ├── jokers.json  mutations.json  blinds.json
 │   ├── antes.json          # score target per Ante
-│   └── offers.json         # shop/reward offer tables
+│   ├── offers.json         # shop/reward offer tables
+│   ├── upgrades.json       # upgrade cost curve
+│   └── evolutions.json     # card transformation rules
 │
 ├── i18n/                   # ES/EN dictionaries + coverage validator
 ├── render/                 # THREE.js VIEW LAYER (observes the engine)
@@ -299,6 +306,63 @@ nothing about the registry or entitlements. Three states per entry:
 
 ---
 
+## 🌱 Cultivation: unlimited upgrades & evolving cards
+
+### Unlimited upgrades
+
+"Unlimited" cannot mean "free and uncapped" — that breaks the game in three Blinds. It
+means **there is no hard wall** that kills the fantasy of scaling one card, while the cost
+curve keeps the decision real:
+
+```
+coste = ceil(baseCost × rarezaMult × growth^(nivel-1))
+```
+
+`upgrades.json` ships `baseCost: 5`, `growth: 1.6`: a common card costs 5, 8, 13, 20, 33,
+52… and a rare one 50% more. Each level grants `substratePerLevel + nextLevel` (so
+levelling early is worth more than levelling late) and `sporesPerLevel`.
+
+**The bug this replaced.** `LEVEL_UP_CARD` used to mutate the card *inside the handler*.
+The HUD calls `previewSelection()` — which runs the whole scoring pipeline in `dryRun` —
+on **every** `state:changed`, so any card with that effect would have levelled itself up
+just from the mouse hovering over it. Now the action pushes a request into
+`ResolutionContext.levelUps` and `GameEngine.applyDeltas` applies it only when the chain
+settles **and** `!dryRun`. There is a regression test for exactly this
+(`tests/cultivation.test.ts`).
+
+### Evolving cards
+
+An evolution is a **progression rule**, not an effect, so it lives in `evolutions.json`
+keyed by `from` — which means an expansion can give an evolution to a base-game card
+without overwriting its definition or tripping the pack merge's "first one wins" rule.
+
+```json
+{
+  "id": "evo_elder_web",
+  "from": "mycelium_webcap",
+  "to": "mycelium_elder_web",
+  "require": { "type": "all", "conds": [{ "type": "level", "value": 4 }, { "type": "plays", "value": 3 }] },
+  "keep": { "bonuses": true, "level": "carry", "statuses": true }
+}
+```
+
+Requirements compose (`all` / `any`) over `level` and `plays`. **The evolved card keeps its
+uid** — that is not cosmetic: the uid is what selection, the renderer's card map and
+`deck.remove(uid)` all key on. Changing it would disconnect the card from everything.
+
+Evolved forms carry `tags: ["evolved"]` and the offer tables declare
+`"excludeTag": "evolved"`: they are **only** obtainable by evolving, never by buying.
+`ContentRegistry.validate()` warns if an `evolved` card has no evolution pointing at it
+(dead content).
+
+### Where it happens
+
+All three deck operations (upgrade / evolve / purge) are gated by `canEditDeck()` —
+between Blinds or in the Shop, never mid-hand: changing a card the player is already
+holding (and may have selected) would be a rules change mid-play.
+
+---
+
 ## 🔥 The Trigger Engine & infinite-loop protection
 
 *"How do I stop the trigger engine from entering an infinite cascade when a card re-fires
@@ -375,23 +439,36 @@ Toggle live with the language button in the HUD or the menu (or `toggleLanguage(
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), upgrade cost curve and caps, evolution requirements and `keep` rules, the `LEVEL_UP_CARD` dry-run regression, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
 | `npm run validate` | Content gate: validates every pack's JSON, content i18n coverage, **and scans `src/**` for `t('...')` keys missing from a dictionary**. Exits 1 on error. |
 | `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
 | `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
-| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → **reward draft** → shop → **deck purge** → **collection** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
+| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → **reward draft** → shop → **deck purge** → **upgrade** → **evolve** → **collection** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 31/31**, **`npm run validate` 0 errors / 0 warnings**,
-**`npm run sim` 100 games, 21% win rate, average ante 5.92, 0 hangs / 0 overflow, depth 2**,
+Latest runs: **`npm test` 48/48**, **`npm run validate` 0 errors / 0 warnings**
+(35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions),
+**`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.73 MB of JS, no sourcemaps**.
+**`npm run build:release` 0.75 MB of JS, no sourcemaps**.
 
-> **Balance note (reward drafts).** Adding the draft moved the bot's win rate from 27% to
-> 21% *while the average ante reached stayed flat (5.95 → 5.92)*. Isolating the two
-> changes: with the new shop code but **no** draft the bot wins 17%; with the draft it wins
-> 21%. So the draft is a net **+4 points**, and the rest of the movement is the shop's RNG
-> stream changing (the old offer ids consumed extra RNG draws). The game is not harder —
-> the tail of the ante-8 distribution is just noisier than the average.
+> **Balance notes.** The bot plays greedily: it drafts the best card, buys jokers first, and
+> spends leftover money (above a 20-coin reserve) on upgrading its strongest card.
+>
+> | Version | Win rate | Avg. ante |
+> | --- | --- | --- |
+> | v1.0 (baseline) | 27% | 5.95 |
+> | v1.1 shop refactor, no draft | 17% | 5.47 |
+> | v1.1 + reward drafts | 21% | 5.92 |
+> | v1.2 + unlimited upgrades | **29%** | **6.31** |
+>
+> Two lessons worth keeping:
+> 1. **Judge balance by the average ante, not the win rate.** Changing the shop's RNG
+>    consumption moved the win rate by 10 points while the average ante barely budged —
+>    the win rate is the tail of the distribution and is noisy at 100 runs.
+> 2. The upgrade curve was originally `baseCost: 4, growth: 1.5` and gave 31% / ante 6.45.
+>    It is now `5 / 1.6`, which costs about 2 points of win rate. If we want v1.0's
+>    difficulty back, the next levers are raising the Ante targets ~10% (`antes.json`,
+>    no code) or `baseCost` to 6.
 
 CI (`.github/workflows/ci.yml`) runs typecheck → tests → content validation → 500-run
 balance regression → release build → bundle-size budget. The WebGL smoke test is manual
@@ -436,8 +513,8 @@ paid for.
 | **0** | Scalable foundations: content packs, profile, save migrations, CI, tests | ✅ done |
 | **1** | Start screen, settings, about, audio hooks | ✅ done |
 | **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | ✅ done |
-| **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | next |
-| **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | planned |
+| **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | ✅ done |
+| **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | next |
 | **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | planned |
 | **6** | Battle pass + store + Google Play Billing bridge | planned |
 | **7** | Real audio on top of `AudioBus` | deferred by design |

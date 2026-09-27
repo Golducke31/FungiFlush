@@ -1038,6 +1038,65 @@ body {
   color: var(--violet);
 }
 
+.deck-card-plays {
+  position: absolute;
+  top: 22px;
+  right: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--dim);
+}
+
+.deck-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.deck-card-actions .btn {
+  flex: 1 1 auto;
+  padding: 6px 8px;
+  font-size: 10.5px;
+  min-height: 30px;
+}
+
+.deck-card-maxed {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--money);
+  align-self: center;
+}
+
+/* La mejora es la accion principal; la evolucion, cuando esta lista, es el
+   momento culminante y tiene que gritar. */
+.btn.is-evolve {
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.42), rgba(167, 139, 250, 0.16));
+  border-color: rgba(167, 139, 250, 0.75);
+  color: var(--text);
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.3);
+}
+
+/* Flash de confirmacion tras mejorar/evolucionar: el jugador tiene que ver
+   QUE carta cambio, no solo leer un toast. */
+.deck-card.is-flash {
+  animation: deck-flash 1.1s ease-out;
+}
+
+@keyframes deck-flash {
+  0% {
+    border-color: var(--violet);
+    box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.6);
+    transform: scale(1.03);
+  }
+  60% {
+    box-shadow: 0 0 0 8px rgba(167, 139, 250, 0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .collection-card {
   display: flex;
   align-items: center;
@@ -1230,5 +1289,31 @@ body {
   }
   .settings-field {
     padding: 7px 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Constructor de mazo en pantallas bajas
+   Con tres acciones por carta (mejorar / evolucionar / purgar) las celdas son
+   mas altas, asi que en landscape de celular hay que apretarlas para que
+   entren filas utiles y el panel no empuje los botones fuera de la pantalla.
+   Va al final del archivo a proposito: necesita ganarle a las reglas
+   generales de .deck-grid y .btn.
+   -------------------------------------------------------------------------- */
+@media (max-height: 560px) {
+  .deck-grid {
+    max-height: min(38vh, 250px);
+  }
+  .deck-card {
+    padding: 7px 8px;
+    gap: 3px;
+  }
+  .deck-card-actions .btn {
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 9.5px;
+  }
+  .deck-card-name {
+    font-size: 11.5px;
   }
 }

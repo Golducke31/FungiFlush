@@ -20,8 +20,10 @@
 import type {
   BlindDefinition,
   CardDefinition,
+  EvolutionRule,
   JokerDefinition,
   OfferTable,
+  UpgradeTrack,
 } from '@engine/index';
 
 // Los tipos de tabla de oferta viven en el MOTOR (`src/engine/types.ts`)
@@ -114,6 +116,8 @@ export interface LoadedPack extends RawPack {
   blinds: BlindDefinition[];
   offers: OfferTable[];
   antes: AnteRow[];
+  upgrades: UpgradeTrack[];
+  evolutions: EvolutionRule[];
 }
 
 // ---------------------------------------------------------------------------

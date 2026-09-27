@@ -39,10 +39,28 @@ antes de commitear: es el chequeo que evita que un botón nuevo salga en pantall
 Un pack sin tabla `reward` degrada al flujo viejo (`playing -> shop`).
 
 ## Balance de referencia (bot voraz, 100 partidas)
-27% victorias / ante 5.95 (v1.0) · 21% / 5.92 (v1.1 con drafts).
-Al tocar el orden de consumo del RNG de la tienda, la tasa de victorias se mueve ±10 puntos
-mientras el ante promedio casi no cambia: **mirar el ante promedio para juzgar balance**, no la
-tasa de victorias (es la cola de la distribución y es ruidosa).
+| Versión | Victorias | Ante promedio |
+| --- | --- | --- |
+| v1.0 (baseline) | 27% | 5.95 |
+| v1.1 refactor de tienda, sin draft | 17% | 5.47 |
+| v1.1 + drafts | 21% | 5.92 |
+| v1.2 + mejoras ilimitadas | 29% | 6.31 |
+
+**Mirar el ante promedio para juzgar balance**, no la tasa de victorias: al cambiar el consumo
+del RNG de la tienda la tasa se movió 10 puntos mientras el ante promedio casi no cambió (es la
+cola de la distribución y con 100 partidas es ruidosa).
+Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `antes.json`, o
+`baseCost` de `upgrades.json` de 5 a 6.
+
+## Trampas del motor (ya resueltas, no reintroducir)
+- **Ningún handler de acción puede mutar el estado global.** El HUD llama a `previewSelection()`
+  (pipeline completo en `dryRun`) en cada `state:changed`; mutar ahí hace que el simple hover
+  cambie la partida. `LEVEL_UP_CARD` lo hacía; ahora acumula en `ResolutionContext.levelUps` y
+  `applyDeltas` lo aplica solo si `!dryRun`.
+- Toda edición del mazo (mejorar / evolucionar / purgar) pasa por `canEditDeck()`: solo entre
+  blinds o en la tienda, nunca en medio de una mano.
+- Una evolución **conserva el uid**: es la identidad de la carta para la selección, el mapa del
+  render y `deck.remove(uid)`.
 
 ## Modelo de negocio (decidido)
 App de pago único en Google Play + expansiones de contenido + pases de batalla como

@@ -20,7 +20,9 @@ import {
   type BlindDefinition,
   type CardDefinition,
   type ContentBundle,
+  type EvolutionRule,
   type JokerDefinition,
+  type UpgradeTrack,
 } from '@engine/index';
 
 import {
@@ -75,6 +77,8 @@ export class ContentRegistry {
   private readonly antes = new Map<number, number>();
   private readonly anteOwner = new Map<number, string>();
   private readonly offers: OfferTable[] = [];
+  private readonly upgrades: UpgradeTrack[] = [];
+  private readonly evolutions: EvolutionRule[] = [];
 
   private readonly appVersion: string;
 
@@ -105,6 +109,8 @@ export class ContentRegistry {
     this.antes.clear();
     this.anteOwner.clear();
     this.offers.length = 0;
+    this.upgrades.length = 0;
+    this.evolutions.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
 
@@ -135,6 +141,8 @@ export class ContentRegistry {
       for (const def of pack.blinds) this.insert('blind', this.blinds, def.id, def, id, pack.manifest);
       for (const row of pack.antes) this.insertAnte(row, id, pack.manifest);
       this.offers.push(...pack.offers);
+      this.upgrades.push(...pack.upgrades);
+      this.evolutions.push(...pack.evolutions);
     }
   }
 
@@ -209,6 +217,8 @@ export class ContentRegistry {
       blinds: blinds.map(stripPack) as BlindDefinition[],
       ...(this.antes.size > 0 ? { anteTargets: Object.fromEntries(this.antes) } : {}),
       ...(this.offers.length > 0 ? { offers: [...this.offers] } : {}),
+      ...(this.upgrades.length > 0 ? { upgrades: [...this.upgrades] } : {}),
+      ...(this.evolutions.length > 0 ? { evolutions: [...this.evolutions] } : {}),
     };
   }
 
@@ -337,6 +347,55 @@ export class ContentRegistry {
       }
     }
 
+    // --- Mejoras ---
+    for (const track of this.upgrades) {
+      if (!(track.baseCost > 0)) {
+        issues.push({ level: 'error', pack: this.ownerOf(track.id), where: `upgrade:${track.id}`, message: 'baseCost debe ser > 0' });
+      }
+      if (!(track.growth >= 1)) {
+        issues.push({ level: 'error', pack: this.ownerOf(track.id), where: `upgrade:${track.id}`, message: 'growth debe ser >= 1' });
+      }
+      if (track.maxLevel < 0) {
+        issues.push({ level: 'error', pack: this.ownerOf(track.id), where: `upgrade:${track.id}`, message: 'maxLevel no puede ser negativo (0 = sin techo)' });
+      }
+    }
+
+    // --- Evoluciones ---
+    const evolvedTargets = new Set<string>();
+    const evolutionIds = new Set<string>();
+    for (const rule of this.evolutions) {
+      const where = `evolution:${rule.id}`;
+      if (evolutionIds.has(rule.id)) {
+        issues.push({ level: 'error', pack: this.ownerOf(rule.from), where, message: 'id de evolucion duplicado' });
+      }
+      evolutionIds.add(rule.id);
+
+      if (!this.cards.has(rule.from)) {
+        issues.push({ level: 'error', pack: this.ownerOf(rule.id), where, message: `"from" apunta a una carta inexistente: ${rule.from}` });
+      }
+      if (!this.cards.has(rule.to)) {
+        issues.push({ level: 'error', pack: this.ownerOf(rule.id), where, message: `"to" apunta a una carta inexistente: ${rule.to}` });
+      } else {
+        evolvedTargets.add(rule.to);
+      }
+      if (rule.from === rule.to) {
+        issues.push({ level: 'error', pack: this.ownerOf(rule.id), where, message: 'una carta no puede evolucionar a si misma' });
+      }
+    }
+
+    // Una carta marcada como evolucionada a la que NADIE puede evolucionar es
+    // contenido muerto: ocupa lugar en la coleccion y no se puede obtener.
+    for (const card of this.cards.values()) {
+      if (!(card.tags ?? []).includes('evolved')) continue;
+      if (evolvedTargets.has(card.id)) continue;
+      issues.push({
+        level: 'warning',
+        pack: card.__pack,
+        where: `card:${card.id}`,
+        message: 'tiene el tag "evolved" pero ninguna evolucion apunta a ella',
+      });
+    }
+
     // --- Validacion semantica del motor, etiquetada por pack ---
     const registry = new CardRegistry();
     registry.load(this.toBundle());
@@ -427,7 +486,16 @@ export class ContentRegistry {
 
   // -------------------------------------------------------------------------
 
-  stats(): { packs: number; cards: number; jokers: number; blinds: number; antes: number; offers: number } {
+  stats(): {
+    packs: number;
+    cards: number;
+    jokers: number;
+    blinds: number;
+    antes: number;
+    offers: number;
+    upgrades: number;
+    evolutions: number;
+  } {
     return {
       packs: this.packs.length,
       cards: this.cards.size,
@@ -435,6 +503,8 @@ export class ContentRegistry {
       blinds: this.blinds.size,
       antes: this.antes.size,
       offers: this.offers.length,
+      upgrades: this.upgrades.length,
+      evolutions: this.evolutions.length,
     };
   }
 }

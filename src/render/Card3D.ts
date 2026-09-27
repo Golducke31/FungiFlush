@@ -211,6 +211,14 @@ export class Card3D {
     this.selected = value;
   }
 
+  /**
+   * Brillo puntual (0..1) para celebrar una mejora o una evolucion.
+   * Lo maneja el SceneManager con un tween; `update()` no lo pisa.
+   */
+  setFlash(amount: number): void {
+    this.faceMaterial.emissiveIntensity = 0.32 + Math.max(0, amount) * 1.6;
+  }
+
   /** Fuerza el estado visual al instante (al repartir, para evitar saltos). */
   snapToHome(): void {
     this.lift = this.selected ? 1 : 0;

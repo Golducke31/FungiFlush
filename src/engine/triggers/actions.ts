@@ -115,15 +115,19 @@ const HANDLERS: HandlerMap = {
     }
   },
 
+  /**
+   * LEVEL_UP_CARD: pide la mejora, no la aplica.
+   *
+   * El efecto se acumula en la resolucion y `GameEngine.applyDeltas` lo aplica
+   * cuando la cadena termina, y solo si NO es un dryRun. Es lo que permite
+   * previsualizar el score de una mano sin mejorar cartas de verdad.
+   */
   LEVEL_UP_CARD: (a, env) => {
     const target = env.target ?? env.source.card;
     if (!target) return;
     const levels = Math.max(1, Math.floor(a.value));
-    for (let i = 0; i < levels; i++) {
-      target.level += 1;
-      target.bonusSubstrate += 3 + target.level;
-      target.bonusSpores += 1;
-    }
+    env.res.levelUps.push({ uid: target.uid, levels, sourceId: env.source.uid });
+    env.res.recordStep('LEVEL_UP_CARD', levels, env.source.uid, env.source.nameKey, env.depth, target.uid);
   },
 
   CREATE_CARD: (a, env) => {
