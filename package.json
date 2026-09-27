@@ -17,7 +17,8 @@
     "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
     "sim:board": "tsx tools/boardSim.ts",
     "smoke": "node tools/smoke.mjs",
-    "art": "python tools/optimize_art.py",
+    "art": "python tools/optimize_art.py && node tools/genArtIndex.mjs",
+    "art:index": "node tools/genArtIndex.mjs",
     "icons": "python tools/make_icons.py",
     "tauri": "tauri"
   },

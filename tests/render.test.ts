@@ -21,6 +21,7 @@ import { test } from 'node:test';
 import * as THREE from 'three';
 
 import { SporeField } from '../src/render/Particles.ts';
+import { ArtAssets, artFileFor, artKeysFor } from '../src/render/ArtAssets.ts';
 import {
   FRAME_BUDGET_MS,
   FrameMonitor,
@@ -338,4 +339,96 @@ test('bajar el limite de particulas no reasigna memoria', () => {
   assert.equal(field.activeCount, 15, '5 de ambiente + 10 transitorias, sin pasar el limite');
 
   field.dispose();
+});
+
+// ---------------------------------------------------------------------------
+// Arte: cadena de respaldo
+// ---------------------------------------------------------------------------
+
+const ELEMENTS = ['neutral', 'poison', 'spore', 'decay', 'symbiosis', 'crystal', 'mycelium', 'parasite'] as const;
+const RARITIES = ['common', 'uncommon', 'rare', 'legendary', 'mythic'] as const;
+
+test('las 40 claves de elemento x rareza resuelven a su archivo', () => {
+  for (const element of ELEMENTS) {
+    for (const rarity of RARITIES) {
+      const key = `card_${element}_${rarity}` as const;
+      assert.equal(artFileFor(key), `art_card_${element}_${rarity}.webp`);
+    }
+  }
+  // Los 11 del catalogo viejo siguen existiendo como respaldo.
+  for (const file of [
+    'art_poison',
+    'art_spore',
+    'art_decay',
+    'art_symbiosis',
+    'art_crystal',
+    'art_mycelium',
+    'art_parasite',
+    'art_legendary',
+    'art_mythic',
+    'art_cardback',
+    'art_table',
+  ]) {
+    assert.equal(artFileFor(file as never), `${file}.webp`);
+  }
+});
+
+test('la cadena de respaldo va de lo especifico a lo generico', () => {
+  assert.deepEqual(artKeysFor('crystal', 'rare'), [
+    'card_crystal_rare',
+    'card_crystal_common',
+    'art_crystal',
+  ]);
+
+  // Legendaria y mitica conservan su arte viejo propio, en su lugar de la cadena.
+  assert.deepEqual(artKeysFor('crystal', 'legendary'), [
+    'card_crystal_legendary',
+    'card_crystal_common',
+    'art_legendary',
+    'art_crystal',
+  ]);
+  assert.deepEqual(artKeysFor('crystal', 'mythic'), [
+    'card_crystal_mythic',
+    'card_crystal_common',
+    'art_mythic',
+    'art_crystal',
+  ]);
+});
+
+test('la cadena no repite archivos (para `common` el primero y el segundo coinciden)', () => {
+  for (const element of ELEMENTS) {
+    for (const rarity of RARITIES) {
+      const keys = artKeysFor(element, rarity);
+      assert.equal(new Set(keys).size, keys.length, `${element}/${rarity} tiene claves repetidas`);
+    }
+  }
+});
+
+test('`neutral` (los jokers) cae a micelio en el catalogo viejo', () => {
+  const keys = artKeysFor('neutral', 'uncommon');
+  assert.deepEqual(keys, ['card_neutral_uncommon', 'card_neutral_common', 'art_mycelium']);
+  // No existe `art_neutral`: si la cadena lo pidiera, seria un 404 por arranque.
+  assert.ok(!keys.includes('art_neutral' as never));
+});
+
+test('getFirst devuelve el primer eslabon disponible y undefined si no hay ninguno', () => {
+  const assets = new ArtAssets();
+  const fake = (name: string): HTMLImageElement => ({ name } as unknown as HTMLImageElement);
+  const nameOf = (image: HTMLImageElement | undefined): string | undefined =>
+    (image as unknown as { name?: string } | undefined)?.name;
+  const keys = artKeysFor('poison', 'rare');
+
+  assert.equal(assets.getFirst(keys), undefined, 'sin nada cargado no hay imagen');
+
+  // Solo esta el del catalogo viejo: es el que tiene que salir.
+  assets.set('art_poison', fake('viejo'));
+  assert.equal(nameOf(assets.getFirst(keys)), 'viejo');
+
+  // Aparece el nuevo del elemento: gana el mas especifico.
+  assets.set('card_poison_common', fake('base'));
+  assert.equal(nameOf(assets.getFirst(keys)), 'base');
+
+  // Y con el especifico, gana ese.
+  assets.set('card_poison_rare', fake('raro'));
+  assert.equal(nameOf(assets.getFirst(keys)), 'raro');
 });

@@ -381,12 +381,29 @@ function drawPattern(ctx: CanvasRenderingContext2D, spec: CardTextureSpec, x: nu
   ctx.restore();
 }
 
+/** Como se asienta la ilustracion dentro de la carta. */
+interface ArtLayout {
+  /** Radio del clip. Tiene que coincidir con el marco de la carta en full-bleed. */
+  radius: number;
+  /** Hasta donde llega el fundido superior, como fraccion de la altura. */
+  topFade: number;
+  /** Donde arranca el fundido inferior, como fraccion de la altura. */
+  bottomStart: number;
+  /** Marco interno de la ventana de arte. Se omite en full-bleed. */
+  innerFrame: boolean;
+}
+
 /**
- * Pega una ilustracion real dentro de la ventana de arte.
+ * Pega una ilustracion real dentro del area de arte.
  *
  * El trabajo fino esta en los degradados: sin ellos, la imagen se lee como un
  * rectangulo pegado encima de la carta. Con el fundido inferior hacia el color
  * del cuerpo y la vineta lateral, la ilustracion parece parte de la carta.
+ *
+ * Las fracciones de los degradados son parametros porque el AREA cambia: en
+ * full-bleed el arte ocupa toda la carta (744 px) y los textos siguen en sus
+ * posiciones absolutas, asi que el fundido tiene que ser mas corto o se come al
+ * sujeto.
  */
 function drawArtImage(
   ctx: CanvasRenderingContext2D,
@@ -396,36 +413,37 @@ function drawArtImage(
   w: number,
   h: number,
   spec: CardTextureSpec,
+  layout: ArtLayout,
 ): void {
   const elementColor = ELEMENT_COLOR[spec.element];
 
   ctx.save();
-  roundRect(ctx, x, y, w, h, 18);
+  roundRect(ctx, x, y, w, h, layout.radius);
   ctx.clip();
 
-  // Encaje tipo "cover": llena la ventana sin deformar la imagen.
+  // Encaje tipo "cover": llena el area sin deformar la imagen.
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
   const dw = img.naturalWidth * scale;
   const dh = img.naturalHeight * scale;
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 
-  // Tinte del elemento: unifica las 9 ilustraciones en una sola paleta.
+  // Tinte del elemento: unifica las ilustraciones en una sola paleta.
   ctx.fillStyle = hexToRgba(elementColor, 0.14);
   ctx.fillRect(x, y, w, h);
 
   // Fundido inferior hacia el cuerpo de la carta.
-  const bottom = ctx.createLinearGradient(0, y + h * 0.5, 0, y + h);
+  const bottom = ctx.createLinearGradient(0, y + h * layout.bottomStart, 0, y + h);
   bottom.addColorStop(0, 'rgba(13, 19, 27, 0)');
   bottom.addColorStop(1, 'rgba(13, 19, 27, 1)');
   ctx.fillStyle = bottom;
-  ctx.fillRect(x, y + h * 0.45, w, h * 0.55);
+  ctx.fillRect(x, y + h * (layout.bottomStart - 0.05), w, h * (1 - layout.bottomStart + 0.05));
 
   // Fundido superior, para que el nombre respire.
-  const top = ctx.createLinearGradient(0, y, 0, y + h * 0.3);
+  const top = ctx.createLinearGradient(0, y, 0, y + h * layout.topFade);
   top.addColorStop(0, 'rgba(13, 19, 27, 0.96)');
   top.addColorStop(1, 'rgba(13, 19, 27, 0)');
   ctx.fillStyle = top;
-  ctx.fillRect(x, y, w, h * 0.3);
+  ctx.fillRect(x, y, w, h * layout.topFade);
 
   // Vineta lateral.
   const side = ctx.createLinearGradient(x, 0, x + w, 0);
@@ -438,11 +456,14 @@ function drawArtImage(
 
   ctx.restore();
 
-  // Marco interno de la ventana de arte.
-  ctx.strokeStyle = hexToRgba(elementColor, 0.5);
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, x, y, w, h, 18);
-  ctx.stroke();
+  // Marco interno de la ventana de arte. En full-bleed NO va: quedaria pegado
+  // al borde, encima del marco de la carta.
+  if (layout.innerFrame) {
+    ctx.strokeStyle = hexToRgba(elementColor, 0.5);
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, x, y, w, h, layout.radius);
+    ctx.stroke();
+  }
 }
 
 function drawChip(
@@ -511,22 +532,33 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   roundRect(ctx, 0, 0, W, H, 30);
   ctx.fill();
 
-  // --- 3. Ventana de arte: ilustracion real o silueta procedural ---
-  const artX = pad;
-  const artY = 148;
-  const artW = W - pad * 2;
-  const artH = 348;
+  // --- 3. Area de arte: ilustracion real o silueta procedural ---
+  //
+  // FULL-BLEED. El arte del catalogo nuevo es 512x744, la MISMA relacion que el
+  // canvas de la carta, asi que entra exacto y sin recorte. La ventana interior
+  // de 1.4:1 que habia antes recortaria el 51% de la altura de un arte 2:3 y se
+  // comeria al sujeto.
+  //
+  // El radio del clip tiene que coincidir con el del marco de la carta, y el
+  // marco interno se omite (quedaria pegado al borde, encima del otro).
+  const layout: ArtLayout = {
+    radius: 30,
+    topFade: 0.18,
+    bottomStart: 0.62,
+    innerFrame: false,
+  };
 
   if (art && art.naturalWidth > 0) {
-    drawArtImage(ctx, art, artX, artY, artW, artH, spec);
+    drawArtImage(ctx, art, 0, 0, W, H, spec, layout);
   } else {
-    // Fallback sin assets: patron + silueta dibujada por codigo.
-    drawPattern(ctx, spec, artX, artY, artW, artH);
+    // Respaldo sin assets: patron + silueta dibujada por codigo, en la misma
+    // area que el arte real para que una carta sin imagen no cambie de forma.
+    drawPattern(ctx, spec, 0, 0, W, H);
     drawSilhouette(spec, {
       ctx,
       cx: W / 2,
-      cy: artY + artH / 2,
-      s: spec.kind === 'card' ? 88 : 96,
+      cy: H * 0.4,
+      s: spec.kind === 'card' ? 118 : 128,
       hue: spec.art.hue,
       hue2: spec.art.hue2 ?? spec.art.hue + 20,
       glow: spec.art.glow ?? 0.4,

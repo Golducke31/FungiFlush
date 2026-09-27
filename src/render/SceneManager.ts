@@ -23,7 +23,7 @@ import {
   type ScoreStep,
 } from '@engine/index';
 
-import { ArtAssets, artKeyFor, artKeyForJoker } from './ArtAssets';
+import { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
 import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import {
   CardTextureCache,
@@ -415,12 +415,23 @@ export class SceneManager {
     this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
 
     // --- Tapete ---
-    const tableTexture = new THREE.CanvasTexture(createTableCanvas(1024));
+    //
+    // Si el pack trae `art_table.webp` se usa ESA textura; el canvas procedural
+    // queda como respaldo. Hasta ahora el archivo se cargaba y se tiraba a la
+    // basura: 103 kB descargados para dibujar un tapete generado por codigo.
+    const tableArt = this.assets.get(TABLE_KEY);
+    const tableTexture = tableArt
+      ? new THREE.Texture(tableArt)
+      : new THREE.CanvasTexture(createTableCanvas(1024));
     tableTexture.colorSpace = THREE.SRGBColorSpace;
     tableTexture.wrapS = THREE.RepeatWrapping;
     tableTexture.wrapT = THREE.RepeatWrapping;
-    tableTexture.repeat.set(2, 2);
+    // El tapete mide 90x64 unidades y una carta 2.2 de ancho: con repeat 2 el
+    // texel queda gigante y la textura se lee como manchas. 6 la deja a una
+    // escala en la que se ve el detalle sin repetirse de forma evidente.
+    tableTexture.repeat.set(6, 6);
     tableTexture.anisotropy = 4;
+    tableTexture.needsUpdate = true;
 
     const tableGeometry = new THREE.PlaneGeometry(90, 64);
     const tableMaterial = new THREE.MeshStandardMaterial({
@@ -457,7 +468,9 @@ export class SceneManager {
     // --- Dorso (una sola textura para todo el juego) ---
     // La comparten el mazo, el descarte y el dorso de cada carta: dibujarla una
     // vez por carta seria subir decenas de canvas identicos a la GPU.
-    this.backTexture = new THREE.CanvasTexture(createCardBackCanvas(this.assets.get('cardback')));
+    this.backTexture = new THREE.CanvasTexture(
+      createCardBackCanvas(this.assets.get(CARD_BACK_KEY)),
+    );
     this.backTexture.colorSpace = THREE.SRGBColorSpace;
     this.disposables.push(this.backTexture);
 
@@ -920,7 +933,10 @@ export class SceneManager {
   }
 
   private artForCard(card: CardInstance): HTMLImageElement | undefined {
-    return this.assets.get(artKeyFor(card.def.element, card.def.rarity));
+    // Cadena de respaldo: arte nuevo por elemento x rareza, despues el del
+    // elemento en su version base, despues los 11 archivos viejos, y si no hay
+    // ninguno la textura cae al dibujo procedural.
+    return this.assets.getFirst(artKeysFor(card.def.element, card.def.rarity));
   }
 
   private artForJoker(joker: JokerInstance): HTMLImageElement | undefined {
@@ -930,11 +946,11 @@ export class SceneManager {
     for (const effect of effects) {
       for (const cond of effect.conditions ?? []) {
         if (cond.type === 'element_is') {
-          return this.assets.get(artKeyForJoker(cond.value, joker.def.rarity));
+          return this.assets.getFirst(artKeysForJoker(cond.value, joker.def.rarity));
         }
       }
     }
-    return this.assets.get(artKeyForJoker('neutral', joker.def.rarity));
+    return this.assets.getFirst(artKeysForJoker('neutral', joker.def.rarity));
   }
 
   private lang(): string {

@@ -1,8 +1,8 @@
 /** API publica de la capa de render. */
 export { SceneManager } from './SceneManager';
 export type { SceneCallbacks, SceneOptions, HandCardState } from './SceneManager';
-export { ArtAssets, artKeyFor, artKeyForJoker } from './ArtAssets';
-export type { ArtKey } from './ArtAssets';
+export { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
+export type { ArtKey, CardArtKey, LegacyArtKey } from './ArtAssets';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
 export type { CardHome, CardKind } from './Card3D';
 export { CardTextureCache, createCardCanvas, createCardBackCanvas, createTableCanvas } from './CardTexture';

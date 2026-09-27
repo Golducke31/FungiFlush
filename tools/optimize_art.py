@@ -1,12 +1,26 @@
 """
 optimize_art.py — Prepara el arte generado para el juego.
 
-Convierte las PNG de 1024px a WebP reducido. Motivo concreto: el juego corre
-en landscape en celular. Una PNG de 1.9 MB por carta son ~40 MB de RAM solo
-en texturas de GPU, suficiente para que el WebView se quede sin memoria a
-mitad de partida. WebP a 512px anda en ~40 KB y se ve igual en pantalla.
+Convierte las PNG grandes a WebP reducido. Motivo concreto: el juego corre en
+landscape en celular. Una PNG de 1.9 MB por carta son ~40 MB de RAM solo en
+texturas de GPU, suficiente para que el WebView se quede sin memoria a mitad de
+partida. WebP a 512px anda en ~40 KB y se ve igual en pantalla.
+
+LAS FUENTES VAN EN `art-source/`, NO EN `public/art/`
+------------------------------------------------------
+Antes este script globaba `public/art/*.png`, pero los PNG de origen viven en
+`art-source/` (que esta en .gitignore, ~21 MB). El desajuste hacia que
+`npm run art` no encontrara nada. Ahora lee de `art-source/` y escribe en
+`public/art/`, que es lo unico que se versiona.
+
+TAMANOS POR PREFIJO
+-------------------
+`art_card_<elemento>_<rareza>` y `art_cardback` son 2:3 (la MISMA proporcion que
+el canvas de la carta, para que entren a sangre sin recorte); el tapete es
+cuadrado y grande; el resto 512x512.
 
 Uso: python tools/optimize_art.py
+     npm run art          (esto + regenerar el indice)
 """
 
 from __future__ import annotations
@@ -17,16 +31,32 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
+SOURCE = ROOT / "art-source"
 ART = ROOT / "public" / "art"
 QUALITY = 84
 
-# nombre -> (ancho, alto). Las cartas de arte son cuadradas; el dorso es
-# vertical (misma proporcion que la carta) y el tapete es grande.
+# Las cartas (nuevas y el dorso) comparten la proporcion del canvas: 512x744.
+CARD_TARGET = (512, 744)
+
+# nombre exacto -> (ancho, alto). Lo que no este aca se resuelve por prefijo.
 TARGETS: dict[str, tuple[int, int]] = {
-    "art_cardback": (384, 560),
+    "art_cardback": CARD_TARGET,
     "art_table": (768, 768),
+    # Los 7 elementos del catalogo viejo y las dos rarezas altas son cuadrados.
+    "art_legendary": (512, 512),
+    "art_mythic": (512, 512),
 }
 DEFAULT_TARGET = (512, 512)
+
+
+def target_for(stem: str) -> tuple[int, int]:
+    """Tamano de salida: primero por nombre exacto, despues por prefijo."""
+    if stem in TARGETS:
+        return TARGETS[stem]
+    # `art_card_<elemento>_<rareza>` son 2:3, como la carta.
+    if stem.startswith("art_card_"):
+        return CARD_TARGET
+    return DEFAULT_TARGET
 
 
 def optimize(src: Path, out: Path, size: tuple[int, int]) -> tuple[int, int]:
@@ -39,9 +69,13 @@ def optimize(src: Path, out: Path, size: tuple[int, int]) -> tuple[int, int]:
 
 
 def main() -> int:
-    sources = sorted(p for p in ART.glob("art_*.png"))
+    if not SOURCE.is_dir():
+        print(f"No existe {SOURCE.relative_to(ROOT)}/ con los PNG de origen.")
+        return 1
+
+    sources = sorted(p for p in SOURCE.glob("*.png"))
     if not sources:
-        print("No hay PNG 'art_*.png' en public/art")
+        print(f"No hay PNG en {SOURCE.relative_to(ROOT)}/")
         return 1
 
     total_before = 0
@@ -50,7 +84,7 @@ def main() -> int:
     print("-" * 70)
 
     for src in sources:
-        size = TARGETS.get(src.stem, DEFAULT_TARGET)
+        size = target_for(src.stem)
         out = ART / f"{src.stem}.webp"
         before, after = optimize(src, out, size)
         total_before += before
@@ -65,10 +99,11 @@ def main() -> int:
         f"({100 * total_after / total_before:.1f}%)"
     )
 
-    # Hoja de contacto para revisar el set completo de un vistazo.
+    # Hoja de contacto para revisar el set completo de un vistazo. Con 40+
+    # archivos, 4 columnas obligan a una imagen altisima: se escalonan solas.
     files = sorted(ART.glob("art_*.webp"))
     if files:
-        cols = 4
+        cols = 8 if len(files) > 24 else 4
         rows = (len(files) + cols - 1) // cols
         cell = 240
         sheet = Image.new("RGB", (cols * cell, rows * (cell + 20)), (10, 14, 20))
