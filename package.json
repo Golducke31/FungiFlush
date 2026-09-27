@@ -1,0 +1,35 @@
+{
+  "name": "fungiflush",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "FungiFlush - roguelite deckbuilder de hongos. Motor logico puro + renderizado Three.js + contenedor Tauri.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "sim": "tsx tools/simulate.ts",
+    "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
+    "smoke": "node tools/smoke.mjs",
+    "art": "python tools/optimize_art.py",
+    "icons": "python tools/make_icons.py",
+    "tauri": "tauri"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.0",
+    "@tauri-apps/plugin-fs": "^2.6.0",
+    "i18next": "^26.4.2",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "@types/three": "^0.186.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}

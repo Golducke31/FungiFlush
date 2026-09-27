@@ -1,0 +1,149 @@
+[
+  { "id": "blind_a1_small", "nameKey": "blind.blind_a1_small.name", "descKey": "blind.blind_a1_small.desc", "ante": 1, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a1_big", "nameKey": "blind.blind_a1_big.name", "descKey": "blind.blind_a1_big.desc", "ante": 1, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a1_boss",
+    "nameKey": "blind.blind_a1_boss.name",
+    "descKey": "blind.blind_a1_boss.desc",
+    "ante": 1,
+    "scoreMultiplier": 2.0,
+    "reward": 5,
+    "effects": [
+      {
+        "id": "a1_boss_sterile",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "spore_lock", "value": 1, "turns": 1 }]
+      }
+    ]
+  },
+
+  { "id": "blind_a2_small", "nameKey": "blind.blind_a2_small.name", "descKey": "blind.blind_a2_small.desc", "ante": 2, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a2_big", "nameKey": "blind.blind_a2_big.name", "descKey": "blind.blind_a2_big.desc", "ante": 2, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a2_boss",
+    "nameKey": "blind.blind_a2_boss.name",
+    "descKey": "blind.blind_a2_boss.desc",
+    "ante": 2,
+    "scoreMultiplier": 2.0,
+    "reward": 6,
+    "effects": [
+      {
+        "id": "a2_boss_decay",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": 1 }]
+      }
+    ]
+  },
+
+  { "id": "blind_a3_small", "nameKey": "blind.blind_a3_small.name", "descKey": "blind.blind_a3_small.desc", "ante": 3, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a3_big", "nameKey": "blind.blind_a3_big.name", "descKey": "blind.blind_a3_big.desc", "ante": 3, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a3_boss",
+    "nameKey": "blind.blind_a3_boss.name",
+    "descKey": "blind.blind_a3_boss.desc",
+    "ante": 3,
+    "scoreMultiplier": 2.0,
+    "reward": 7,
+    "effects": [
+      {
+        "id": "a3_boss_tax",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": -30 }]
+      }
+    ]
+  },
+
+  { "id": "blind_a4_small", "nameKey": "blind.blind_a4_small.name", "descKey": "blind.blind_a4_small.desc", "ante": 4, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a4_big", "nameKey": "blind.blind_a4_big.name", "descKey": "blind.blind_a4_big.desc", "ante": 4, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a4_boss",
+    "nameKey": "blind.blind_a4_boss.name",
+    "descKey": "blind.blind_a4_boss.desc",
+    "ante": 4,
+    "scoreMultiplier": 2.0,
+    "reward": 8,
+    "effects": [
+      {
+        "id": "a4_boss_squeeze",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "ADD_HANDS", "value": -1 }],
+        "once": "per_round"
+      }
+    ]
+  },
+
+  { "id": "blind_a5_small", "nameKey": "blind.blind_a5_small.name", "descKey": "blind.blind_a5_small.desc", "ante": 5, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a5_big", "nameKey": "blind.blind_a5_big.name", "descKey": "blind.blind_a5_big.desc", "ante": 5, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a5_boss",
+    "nameKey": "blind.blind_a5_boss.name",
+    "descKey": "blind.blind_a5_boss.desc",
+    "ante": 5,
+    "scoreMultiplier": 2.0,
+    "reward": 9,
+    "effects": [
+      {
+        "id": "a5_boss_dilute",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.5 }]
+      }
+    ]
+  },
+
+  { "id": "blind_a6_small", "nameKey": "blind.blind_a6_small.name", "descKey": "blind.blind_a6_small.desc", "ante": 6, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a6_big", "nameKey": "blind.blind_a6_big.name", "descKey": "blind.blind_a6_big.desc", "ante": 6, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a6_boss",
+    "nameKey": "blind.blind_a6_boss.name",
+    "descKey": "blind.blind_a6_boss.desc",
+    "ante": 6,
+    "scoreMultiplier": 2.0,
+    "reward": 10,
+    "effects": [
+      {
+        "id": "a6_boss_barren",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "ADD_DISCARDS", "value": -1 }],
+        "once": "per_round"
+      }
+    ]
+  },
+
+  { "id": "blind_a7_small", "nameKey": "blind.blind_a7_small.name", "descKey": "blind.blind_a7_small.desc", "ante": 7, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a7_big", "nameKey": "blind.blind_a7_big.name", "descKey": "blind.blind_a7_big.desc", "ante": 7, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a7_boss",
+    "nameKey": "blind.blind_a7_boss.name",
+    "descKey": "blind.blind_a7_boss.desc",
+    "ante": 7,
+    "scoreMultiplier": 2.0,
+    "reward": 11,
+    "effects": [
+      {
+        "id": "a7_boss_ash",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": -15 }]
+      }
+    ]
+  },
+
+  { "id": "blind_a8_small", "nameKey": "blind.blind_a8_small.name", "descKey": "blind.blind_a8_small.desc", "ante": 8, "scoreMultiplier": 1.0, "reward": 3 },
+  { "id": "blind_a8_big", "nameKey": "blind.blind_a8_big.name", "descKey": "blind.blind_a8_big.desc", "ante": 8, "scoreMultiplier": 1.5, "reward": 4 },
+  {
+    "id": "blind_a8_boss",
+    "nameKey": "blind.blind_a8_boss.name",
+    "descKey": "blind.blind_a8_boss.desc",
+    "ante": 8,
+    "scoreMultiplier": 2.0,
+    "reward": 12,
+    "effects": [
+      {
+        "id": "a8_boss_god",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.4 }]
+      }
+    ]
+  }
+]

@@ -1,0 +1,31 @@
+[package]
+name = "fungiflush"
+version = "0.1.0"
+description = "FungiFlush - roguelite deckbuilder micelial"
+authors = ["Emanuel"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# El nombre del lib debe ser unico y valido como identificador Rust.
+name = "fungiflush_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# Guardado de partida en disco (Fase 5 del plan).
+tauri-plugin-fs = "2"
+tauri-plugin-store = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+# El ejecutable final pesa menos y arranca mas rapido.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      viewport-fit=cover: imprescindible en celulares con notch. Sin esto, las
+      safe-area-inset-* del CSS valen 0 y el HUD queda debajo de la barra.
+      user-scalable=no + maximum-scale: el juego no debe hacer zoom con pinza.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+
+    <title>FungiFlush</title>
+    <meta name="description" content="Roguelite deckbuilder micelial. Substrate por Spores." />
+    <meta name="theme-color" content="#080b10" />
+
+    <!-- Modo standalone en movil: se abre a pantalla completa, sin barra. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+
+    <link rel="stylesheet" href="/src/ui/styles.css" />
+  </head>
+  <body>
+    <!-- Capa 3D: Three.js renderiza aca -->
+    <canvas id="fungiflush-canvas"></canvas>
+
+    <!-- Capa de UI: HTML/CSS puro, nunca dibujado por Three.js -->
+    <div id="ui-root"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,313 @@
+[
+  {
+    "id": "amanita_toxica",
+    "nameKey": "card.amanita_toxica.name",
+    "descKey": "card.amanita_toxica.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "common",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 5,
+    "art": { "hue": 355, "hue2": 20, "pattern": "blotch", "silhouette": "cap", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "toxica_burst",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2.5 }],
+        "labelKey": "effect.poisonBurst"
+      }
+    ]
+  },
+  {
+    "id": "amanita_pantherina",
+    "nameKey": "card.amanita_pantherina.name",
+    "descKey": "card.amanita_pantherina.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 7,
+    "baseSpores": 1,
+    "cost": 6,
+    "art": { "hue": 30, "hue2": 0, "pattern": "blotch", "silhouette": "cap", "glow": 0.45 },
+    "effects": [
+      {
+        "id": "pantherina_aura",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "element_is", "value": "poison" }],
+        "actions": [{ "type": "ADD_SPORES", "value": 3 }],
+        "labelKey": "effect.poisonAura"
+      }
+    ]
+  },
+  {
+    "id": "psilocybe_azurea",
+    "nameKey": "card.psilocybe_azurea.name",
+    "descKey": "card.psilocybe_azurea.desc",
+    "element": "parasite",
+    "family": "psilocybaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 1,
+    "cost": 6,
+    "art": { "hue": 215, "hue2": 265, "pattern": "blotch", "silhouette": "cap", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "azurea_echo",
+        "trigger": "ON_PLAY",
+        "target": "previous_scored",
+        "actions": [{ "type": "RETRIGGER", "value": 1 }],
+        "labelKey": "effect.echo"
+      }
+    ]
+  },
+  {
+    "id": "psilocybe_cyanescens",
+    "nameKey": "card.psilocybe_cyanescens.name",
+    "descKey": "card.psilocybe_cyanescens.desc",
+    "element": "parasite",
+    "family": "psilocybaceae",
+    "rarity": "rare",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 7,
+    "art": { "hue": 230, "hue2": 280, "pattern": "blotch", "silhouette": "cluster", "glow": 0.65 },
+    "effects": [
+      {
+        "id": "cyanescens_swarm",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_element_count_gte", "element": "parasite", "value": 3 }],
+        "actions": [{ "type": "ADD_SPORES", "value": 6 }],
+        "labelKey": "effect.swarm"
+      }
+    ]
+  },
+  {
+    "id": "cordyceps_mind",
+    "nameKey": "card.cordyceps_mind.name",
+    "descKey": "card.cordyceps_mind.desc",
+    "element": "parasite",
+    "family": "psilocybaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 2,
+    "baseSpores": 1,
+    "cost": 5,
+    "art": { "hue": 25, "hue2": 45, "pattern": "fibrous", "silhouette": "coral", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "cordyceps_hijack",
+        "trigger": "ON_CARD_PLAYED",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "dormant", "value": 1, "turns": 1 }],
+        "labelKey": "effect.hijack"
+      }
+    ]
+  },
+  {
+    "id": "ergot_rye",
+    "nameKey": "card.ergot_rye.name",
+    "descKey": "card.ergot_rye.desc",
+    "element": "parasite",
+    "family": "psilocybaceae",
+    "rarity": "rare",
+    "baseSubstrate": 8,
+    "baseSpores": 1,
+    "cost": 7,
+    "art": { "hue": 285, "hue2": 320, "pattern": "blotch", "silhouette": "mold", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "ergot_burn",
+        "trigger": "ON_PLAY",
+        "actions": [
+          { "type": "MULTIPLY_SPORES", "value": 3 },
+          { "type": "DESTROY_SELF" }
+        ],
+        "labelKey": "effect.selfBurn"
+      }
+    ]
+  },
+  {
+    "id": "morel_prize",
+    "nameKey": "card.morel_prize.name",
+    "descKey": "card.morel_prize.desc",
+    "element": "symbiosis",
+    "family": "boletaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 6,
+    "baseSpores": 2,
+    "cost": 6,
+    "art": { "hue": 35, "hue2": 15, "pattern": "rings", "silhouette": "cap", "glow": 0.3 },
+    "effects": [
+      {
+        "id": "morel_harvest",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "GAIN_MONEY", "value": 2 }],
+        "labelKey": "effect.harvest"
+      }
+    ]
+  },
+  {
+    "id": "chanterelle_gold",
+    "nameKey": "card.chanterelle_gold.name",
+    "descKey": "card.chanterelle_gold.desc",
+    "element": "symbiosis",
+    "family": "boletaceae",
+    "rarity": "rare",
+    "baseSubstrate": 5,
+    "baseSpores": 2,
+    "cost": 7,
+    "art": { "hue": 48, "hue2": 28, "pattern": "radial", "silhouette": "coral", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "chanterelle_bounty",
+        "trigger": "ON_ROUND_WIN",
+        "actions": [{ "type": "GAIN_MONEY", "value": 5 }],
+        "labelKey": "effect.bounty"
+      }
+    ]
+  },
+  {
+    "id": "lion_mane",
+    "nameKey": "card.lion_mane.name",
+    "descKey": "card.lion_mane.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 3,
+    "cost": 6,
+    "art": { "hue": 165, "hue2": 200, "pattern": "fibrous", "silhouette": "coral", "glow": 0.8 },
+    "effects": [
+      {
+        "id": "lion_mane_patience",
+        "trigger": "ON_CARD_HELD",
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.patience"
+      }
+    ]
+  },
+  {
+    "id": "turkey_tail",
+    "nameKey": "card.turkey_tail.name",
+    "descKey": "card.turkey_tail.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 5,
+    "art": { "hue": 40, "hue2": 10, "pattern": "rings", "silhouette": "bracket", "glow": 0.25 },
+    "effects": [
+      {
+        "id": "turkey_tail_recycle",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "DRAW_CARDS", "value": 1 }],
+        "labelKey": "effect.recycle"
+      }
+    ]
+  },
+  {
+    "id": "reishi_elixir",
+    "nameKey": "card.reishi_elixir.name",
+    "descKey": "card.reishi_elixir.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "rare",
+    "baseSubstrate": 2,
+    "baseSpores": 4,
+    "cost": 8,
+    "art": { "hue": 15, "hue2": 340, "pattern": "rings", "silhouette": "cap", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "reishi_vitality",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "ADD_HANDS", "value": 1 }],
+        "once": "per_round",
+        "labelKey": "effect.vitality"
+      }
+    ]
+  },
+  {
+    "id": "shiitake_hearty",
+    "nameKey": "card.shiitake_hearty.name",
+    "descKey": "card.shiitake_hearty.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "common",
+    "baseSubstrate": 6,
+    "baseSpores": 1,
+    "cost": 5,
+    "art": { "hue": 20, "hue2": 5, "pattern": "blotch", "silhouette": "cap", "glow": 0.25 },
+    "effects": [
+      {
+        "id": "shiitake_bulk",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 8 }],
+        "labelKey": "effect.bulk"
+      }
+    ]
+  },
+  {
+    "id": "oyster_cluster",
+    "nameKey": "card.oyster_cluster.name",
+    "descKey": "card.oyster_cluster.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 6,
+    "art": { "hue": 200, "hue2": 240, "pattern": "radial", "silhouette": "cluster", "glow": 0.3 },
+    "effects": [
+      {
+        "id": "oyster_colony",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "family_is", "value": "tricholomataceae" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 3 }],
+        "labelKey": "effect.colony"
+      }
+    ]
+  },
+  {
+    "id": "fly_agaric_ring",
+    "nameKey": "card.fly_agaric_ring.name",
+    "descKey": "card.fly_agaric_ring.desc",
+    "element": "spore",
+    "family": "agaricaceae",
+    "rarity": "rare",
+    "baseSubstrate": 5,
+    "baseSpores": 2,
+    "cost": 7,
+    "art": { "hue": 8, "hue2": 350, "pattern": "blotch", "silhouette": "cap", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "agaric_ring",
+        "trigger": "ON_PLAY",
+        "conditions": [{ "type": "scored_element_count_gte", "element": "spore", "value": 3 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2 }],
+        "labelKey": "effect.ringBloom"
+      }
+    ]
+  },
+  {
+    "id": "ghost_fungus",
+    "nameKey": "card.ghost_fungus.name",
+    "descKey": "card.ghost_fungus.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "rare",
+    "baseSubstrate": 1,
+    "baseSpores": 5,
+    "cost": 8,
+    "art": { "hue": 190, "hue2": 220, "pattern": "crystal", "silhouette": "cap", "glow": 0.9 },
+    "effects": [
+      {
+        "id": "ghost_opening",
+        "trigger": "ON_PLAY",
+        "conditions": [{ "type": "is_first_card_of_round" }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2 }],
+        "labelKey": "effect.firstLight"
+      }
+    ]
+  }
+]

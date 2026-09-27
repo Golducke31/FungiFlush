@@ -1,0 +1,111 @@
+[
+  {
+    "id": "death_cap",
+    "nameKey": "card.death_cap.name",
+    "descKey": "card.death_cap.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "legendary",
+    "baseSubstrate": 10,
+    "baseSpores": 1,
+    "cost": 10,
+    "art": { "hue": 120, "hue2": 150, "pattern": "blotch", "silhouette": "cap", "glow": 0.85 },
+    "effects": [
+      {
+        "id": "deathcap_veil",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 4 }],
+        "once": "per_round",
+        "labelKey": "effect.veil"
+      }
+    ]
+  },
+  {
+    "id": "mycena_lucifer",
+    "nameKey": "card.mycena_lucifer.name",
+    "descKey": "card.mycena_lucifer.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "legendary",
+    "baseSubstrate": 2,
+    "baseSpores": 2,
+    "cost": 10,
+    "art": { "hue": 155, "hue2": 185, "pattern": "crystal", "silhouette": "cluster", "glow": 1 },
+    "effects": [
+      {
+        "id": "lucifer_refraction",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "element_is", "value": "crystal" }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.5 }],
+        "labelKey": "effect.refraction"
+      }
+    ]
+  },
+  {
+    "id": "armillaria_honey",
+    "nameKey": "card.armillaria_honey.name",
+    "descKey": "card.armillaria_honey.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "legendary",
+    "baseSubstrate": 7,
+    "baseSpores": 1,
+    "cost": 10,
+    "art": { "hue": 45, "hue2": 25, "pattern": "fibrous", "silhouette": "cluster", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "armillaria_network",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          { "type": "scored_family_count_gte", "family": "tricholomataceae", "value": 5 }
+        ],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 3 }],
+        "labelKey": "effect.network"
+      }
+    ]
+  },
+  {
+    "id": "old_man_of_woods",
+    "nameKey": "card.old_man_of_woods.name",
+    "descKey": "card.old_man_of_woods.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "legendary",
+    "baseSubstrate": 9,
+    "baseSpores": 1,
+    "cost": 10,
+    "art": { "hue": 25, "hue2": 5, "pattern": "rings", "silhouette": "bracket", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "oldman_overgrowth",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "overgrowth", "value": 3, "turns": 2 }],
+        "labelKey": "effect.overgrowth"
+      }
+    ]
+  },
+  {
+    "id": "destroying_angel",
+    "nameKey": "card.destroying_angel.name",
+    "descKey": "card.destroying_angel.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "mythic",
+    "baseSubstrate": 12,
+    "baseSpores": 1,
+    "cost": 12,
+    "art": { "hue": 300, "hue2": 340, "pattern": "blotch", "silhouette": "cap", "glow": 1 },
+    "effects": [
+      {
+        "id": "angel_annihilation",
+        "trigger": "ON_PLAY",
+        "actions": [
+          { "type": "MULTIPLY_SPORES", "value": 5 },
+          { "type": "DESTROY_SELF" }
+        ],
+        "labelKey": "effect.annihilation"
+      }
+    ]
+  }
+]

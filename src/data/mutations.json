@@ -1,0 +1,104 @@
+[
+  {
+    "id": "mutation_extra_hand",
+    "nameKey": "mutation.mutation_extra_hand.name",
+    "descKey": "mutation.mutation_extra_hand.desc",
+    "rarity": "uncommon",
+    "cost": 6,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 150, "hue2": 180, "pattern": "radial", "silhouette": "cap", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "mut_hand",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "ADD_HANDS", "value": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "mutation_extra_discard",
+    "nameKey": "mutation.mutation_extra_discard.name",
+    "descKey": "mutation.mutation_extra_discard.desc",
+    "rarity": "common",
+    "cost": 4,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 30, "hue2": 10, "pattern": "rings", "silhouette": "bracket", "glow": 0.3 },
+    "effects": [
+      {
+        "id": "mut_discard",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "ADD_DISCARDS", "value": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "mutation_hand_size",
+    "nameKey": "mutation.mutation_hand_size.name",
+    "descKey": "mutation.mutation_hand_size.desc",
+    "rarity": "rare",
+    "cost": 8,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 265, "hue2": 300, "pattern": "fibrous", "silhouette": "mold", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "mut_size",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "ADD_HAND_SIZE", "value": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "mutation_joker_slot",
+    "nameKey": "mutation.mutation_joker_slot.name",
+    "descKey": "mutation.mutation_joker_slot.desc",
+    "rarity": "rare",
+    "cost": 9,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 200, "hue2": 230, "pattern": "crystal", "silhouette": "coral", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "mut_slot",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "ADD_JOKER_SLOTS", "value": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "mutation_graft",
+    "nameKey": "mutation.mutation_graft.name",
+    "descKey": "mutation.mutation_graft.desc",
+    "rarity": "uncommon",
+    "cost": 7,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 350, "hue2": 20, "pattern": "blotch", "silhouette": "cap", "glow": 0.65 },
+    "effects": [
+      {
+        "id": "mut_graft",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "CREATE_CARD", "cardId": "amanita_toxica" }]
+      }
+    ]
+  },
+  {
+    "id": "mutation_spore_bank",
+    "nameKey": "mutation.mutation_spore_bank.name",
+    "descKey": "mutation.mutation_spore_bank.desc",
+    "rarity": "common",
+    "cost": 3,
+    "sellValue": 0,
+    "tags": ["mutation"],
+    "art": { "hue": 55, "hue2": 40, "pattern": "radial", "silhouette": "cluster", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "mut_bank",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [{ "type": "GAIN_MONEY", "value": 10 }]
+      }
+    ]
+  }
+]

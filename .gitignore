@@ -1,0 +1,33 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# PNG originales de 1024px. Los assets que se shipean son los .webp de
+# public/art (704 KB). Los fuentes quedan aca para reprocesar con
+# `python tools/optimize_art.py` sin volver a gastar creditos de generacion.
+art-source/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
