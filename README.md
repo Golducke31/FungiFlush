@@ -11,6 +11,9 @@ to game events through a deterministic **Trigger Engine**.
 > testable in the console **without any rendering**. Three.js and the DOM HUD are
 > separate observer layers that *watch* the engine. If the render is pretty but the
 > engine is a mess, the game does not work.
+>
+> **Second principle (scalability):** content ships in **packs**, saves **migrate**,
+> and nothing that ships today may invalidate what a paying player already has.
 
 ---
 
@@ -19,12 +22,22 @@ to game events through a deterministic **Trigger Engine**.
 - **Pure logic engine** in `src/engine/**` — zero Three.js imports, runs in Node, console, or tests.
 - **Deterministic, seeded RNG** (`mulberry32`) → reproducible runs, saves, and 100k+ simulations.
 - **Event-driven Trigger Engine** with hard anti-infinite-loop brakes (see below).
-- **Data-driven content**: cards, Jokers, mutations and Blinds are plain JSON, auto-discovered at build time. Add 100+ cards by writing text — no code changes.
+- **Content packs** (`src/data/packs/*`): cards, Jokers, mutations and Blinds are plain
+  JSON declared by a `pack.json` manifest. Expansions and seasons are *more packs*, not
+  more code — and they can also arrive at runtime over HTTP.
+- **Start screen** with New Run / Continue / Collection / Expansions / Season Pass /
+  Settings / Language / About, over a live idle 3D scene.
+- **Versioned saves with a migration chain** (`SAVE_VERSION = 2`), plus a permanent
+  **profile** (collection, settings, entitlements, stats) that survives updates.
+- **Entitlements + PackGate**: DLC gating as a pure predicate injected into the engine.
+  Locked content never appears in rolls, but stays visible in the Collection as a
+  sales surface.
 - **Bilingual from day 1** (ES / EN) via i18next, with a pure coverage validator — no hardcoded strings.
 - **Three.js rendering** with procedural card art (canvas fallback) + real WebP assets, custom GLSL glow/foil/spore shaders, and a GPU particle spore field.
 - **Landscape-first, mobile-ready**: DPR capped, no MSAA on mobile, safe-area aware, touch handled.
-- **Tauri desktop container** for a native Windows/macOS/Linux build.
-- **Dual-backend saves** (Tauri fs plugin in the app, `localStorage` in the browser).
+- **Audio hooks already wired** (`src/audio/AudioBus.ts`) — a no-op today, so adding real
+  sound later touches zero engine code.
+- **Tauri container** (desktop + the same codebase for **Android**).
 
 ---
 
@@ -33,18 +46,25 @@ to game events through a deterministic **Trigger Engine**.
 ```bash
 npm install          # install deps (Node >= 20)
 npm run dev          # Vite dev server (opens the game in the browser)
-npm run build        # typecheck + production build into dist/
+
 npm run typecheck    # tsc --noEmit
+npm test             # pack merge / gating / save migrations / entitlements
+npm run validate     # validates every pack's JSON (content gate for CI)
 npm run sim          # console engine harness: validation + balance sim (no GPU)
+npm run sim:balance  # 500-run quiet balance pass (CI regression)
 npm run smoke        # headless WebGL smoke test (Playwright-core, mobile landscape)
+
+npm run build        # typecheck + production build (with sourcemaps, for debugging)
+npm run build:release# production build WITHOUT sourcemaps (this is what ships)
+npm run packs        # regenerate public/packs/index.json (remote pack index)
+
 npm run tauri dev    # run the game inside the Tauri desktop shell
 npm run tauri build  # package the native desktop app
 ```
 
-> **Note:** `npm run tauri build` requires the Rust toolchain (`cargo`). It was not
-> executed in the CI/dev environment used to author this project; the Tauri config
-> and Rust shim are in place and ready, but you must build the binary on a machine
-> with Rust installed.
+> **Note:** `npm run tauri build` requires the Rust toolchain (`cargo`), which is not
+> present in the authoring environment. The Tauri config and Rust shim are complete;
+> build the binary on a machine with Rust installed. See **Android** below.
 
 ---
 
@@ -59,13 +79,14 @@ You pick a Blind, play poker-style hands of fungal cards, and must beat the Blin
 | **Substrate** | The base score. Cards add to it (`+N` or `×N`). |
 | **Spores** | The multiplier applied to Substrate at the end of a hand. |
 | **Element** | One of 8 biological elements (`neutral`, `poison`, `spore`, `decay`, `symbiosis`, `crystal`, `mycelium`, `parasite`) driving synergies. |
-| **Family** | One of 7 taxonomic families (`agaricaceae`, `amanitaceae`, `boletaceae`, `polyporaceae`, `psilocybaceae`, `clavariaceae`, `tricholomataceae`) — the "suit" used for combos. |
+| **Family** | One of 7 taxonomic families — the "suit" used for combos. |
 | **Rarity** | `common` · `uncommon` · `rare` · `legendary` · `mythic`. |
-| **Status** | Negative states: `dormant` (won't fire), `decay` (−Substrate per trigger), `spore_lock` (locks multipliers), `overgrowth` (+Spores per card played). |
+| **Status** | Negative states: `dormant`, `decay`, `spore_lock`, `overgrowth`. |
 
 After each Blind you enter the **Shop**: buy cards / Jokers / mutations, reroll, or sell.
-Economy is centralized in `src/engine/constants.ts` (`ECONOMY`, `RUN_DEFAULTS`,
-`ANTE_BASE_TARGET`).
+Economy defaults live in `src/engine/constants.ts`; the **Ante target table now lives in
+content** (`src/data/packs/base/antes.json`), so an expansion can add Antes without a
+code change.
 
 ### Combos (`src/engine/scoring/combos.ts`)
 Element tiers (2–5 same-element cards), family tiers (3–5 same-family), and a diversity
@@ -79,43 +100,46 @@ bonus. Combos are detected during the scoring pipeline and feed the trigger chai
 src/
 ├── engine/                 # PURE LOGIC. No Three.js, no DOM. Runs in Node.
 │   ├── types.ts            # Core type system (taxonomy, events, actions, conditions)
-│   ├── constants.ts        # All balance numbers in one place
+│   ├── constants.ts        # Balance numbers (fallbacks; content overrides)
 │   ├── rng.ts              # mulberry32 deterministic seeded RNG
-│   ├── events.ts           # Typed event bus (Emitter<M>) — the engine's only output
-│   ├── GameEngine.ts       # Orchestrator: runs, blinds, play/discard, shop, save
+│   ├── events.ts           # Typed event bus — the engine's only output
+│   ├── GameEngine.ts       # Orchestrator: menu, runs, blinds, play/discard, shop, save
 │   ├── resolution.ts       # ResolutionContext accumulator (dry-run + sims)
 │   ├── cards/              # CardRegistry, Deck
 │   ├── scoring/            # ScoreCalculator, combos
 │   ├── state/              # RunState, RoundState
 │   └── triggers/           # TriggerEngine, actions, conditions, source
 │
-├── data/                   # CONTENT (JSON, auto-discovered)
-│   ├── cards/01_starters.json   (10 starter cards)
-│   ├── cards/02_specimens.json  (15 specimens w/ effects)
-│   ├── cards/03_apex.json       (5 legendary/mythic)
-│   ├── jokers.json              (15 jokers)
-│   ├── mutations.json           (6 mutations, no slot)
-│   ├── blinds.json              (24 blinds, 8 antes × 3)
-│   └── index.ts                 # Vite import.meta.glob loader
+├── content/                # NUEVO — packs, manifests, deterministic merge
+│   ├── types.ts            # PackManifest, OfferTable, AnteRow, version compare
+│   ├── ContentRegistry.ts  # merge + collisions + contentHash + validation
+│   ├── parse.ts            # RawPack -> LoadedPack (shared with the Node harness)
+│   ├── packSource.ts       # BundledPackSource (glob) + HttpPackSource (DLC)
+│   └── bootstrap.ts        # the single entry point that builds the content
+│
+├── meta/                   # NUEVO — OUTSIDE the engine
+│   ├── ProfileState.ts     # Permanent profile: settings, collection, passes, stats
+│   ├── EntitlementStore.ts # What the player owns (pure, JSON-serializable)
+│   └── PackGate.ts         # Entitlements -> content filters
+│
+├── audio/AudioBus.ts       # NUEVO — no-op today, hooks already attached
+│
+├── data/packs/base/        # CONTENT (declared by pack.json)
+│   ├── pack.json           # manifest: id, version, contents, gating
+│   ├── cards/01_starters.json  02_specimens.json  03_apex.json
+│   ├── jokers.json  mutations.json  blinds.json
+│   ├── antes.json          # score target per Ante
+│   └── offers.json         # shop/reward offer tables
 │
 ├── i18n/                   # ES/EN dictionaries + coverage validator
-│   ├── en.json  es.json
-│   ├── index.ts            # i18next init ({ } interpolation), t/tName/tDesc/toggleLanguage
-│   └── coverage.ts         # validateDictionaryCoverage() — pure
-│
 ├── render/                 # THREE.js VIEW LAYER (observes the engine)
-│   ├── SceneManager.ts     # builds the world, subscribes to the bus
-│   ├── Card3D.ts  CardTexture.ts  ArtAssets.ts
-│   ├── Particles.ts        # single THREE.Points spore field (circular buffer)
-│   ├── Shaders.ts          # GLSL glow / foil / spore materials
-│   ├── CameraRig.ts        # parametric fit() biased toward the hand (mobile)
-│   ├── Interaction.ts      # raycaster pointer (touch tap vs drag slop)
-│   └── Tween.ts            # from-scratch tween manager (no GSAP)
-│
+│   ├── SceneManager.ts     # builds the world, subscribes to the bus, menu/run modes
+│   ├── Card3D.ts  CardTexture.ts  ArtAssets.ts  palette.ts
+│   ├── Particles.ts  Shaders.ts  CameraRig.ts  Interaction.ts  Tween.ts
 ├── ui/                     # DOM HUD (observes the engine)
-│   ├── HUD.ts  styles.css  # top bar, jokers column, counters, overlays, tooltips
-│
-├── persistence/            # SaveGame (Tauri fs / localStorage dual backend)
+│   ├── HUD.ts  styles.css
+│   ├── MenuScreen.ts  SettingsScreen.ts  AboutScreen.ts
+├── persistence/            # NUEVO — Storage + RunStore + ProfileStore + migrations
 └── main.ts                 # Controller: boot, wire engine↔render↔ui, autosave
 ```
 
@@ -126,78 +150,146 @@ src/
 - All UI-facing strings go through `t()` / `tName()` / `tDesc()` — there are **no**
   hardcoded user-facing strings anywhere in the codebase.
 
-### Adding content (no code)
-Drop a new JSON file in `src/data/cards/` (or edit an existing one). The build loader
-uses `import.meta.glob` (browser) and an `fs` reader (Node harness) to discover
-content automatically. A `CardDefinition` looks like:
+### Boot sequence (what happens on load)
+
+```
+bootstrapContent()      → discover packs (bundled + remote) and merge them
+initI18n(packDicts)     → base dictionaries + pack dictionaries
+Storage.init()          → Tauri fs or localStorage
+ProfileStore.load()     → permanent profile (never null; migrates if needed)
+PackGate(entitlements)  → content filters for the engine
+GameEngine(bundle)      → registry + filters + content hash
+attachAudioHooks()      → no-op audio, already listening
+SceneManager + HUD      → view layers
+engine.enterMenu()      → START SCREEN (no auto-run anymore)
+RunStore.load()         → enables "Continue" if a run was in progress
+```
+
+---
+
+## 📦 Content packs (the scalability foundation)
+
+A pack is a folder with a `pack.json` manifest:
 
 ```json
 {
-  "id": "amanita_toxica",
-  "nameKey": "card.amanita_toxica.name",
-  "descKey": "card.amanita_toxica.desc",
-  "element": "poison",
-  "family": "amanitaceae",
-  "rarity": "rare",
-  "baseSubstrate": 30,
-  "baseSpores": 2,
-  "cost": 6,
-  "art": { "hue": 8, "pattern": "blotch", "glow": 0.6, "silhouette": "cap" },
-  "effects": [
-    {
-      "id": "tox_burst",
-      "trigger": "ON_PLAY",
-      "conditions": [{ "type": "element_in_hand", "value": "spore" }],
-      "actions": [{ "type": "ADD_SUBSTRATE", "value": 40 }],
-      "target": "self"
-    }
-  ]
+  "id": "base",
+  "version": 1,
+  "kind": "base",
+  "priority": 0,
+  "titleKey": "pack.base.title",
+  "requires": { "appMin": "1.0.0" },
+  "gating": { "entitlement": "pack.base", "lockedVisibility": "visible" },
+  "contents": {
+    "cards": ["cards/01_starters.json", "cards/02_specimens.json", "cards/03_apex.json"],
+    "jokers": ["jokers.json"],
+    "mutations": ["mutations.json"],
+    "blinds": ["blinds.json"],
+    "offers": ["offers.json"],
+    "antes": ["antes.json"]
+  }
 }
 ```
 
-`CardRegistry.validate()` enforces the rules (snake_case ids, valid triggers/actions,
-`CREATE_CARD` references must resolve, ≥3 blinds per ante, i18n key coverage) at boot.
+**Merge rules (`ContentRegistry`)**
+1. Packs that don't satisfy `requires` (app version, other packs) are **skipped**, not fatal.
+2. Order: `base` → `expansion` → `season`, then `priority` desc, then `id` asc. Never the filesystem order.
+3. On an id collision **the first one wins**, unless the newcomer has `allowOverride: true`
+   *and* a higher `version`. Every collision is reported in `collisions`.
+4. `contentHash()` is stored in the save so a rebalance can be detected **without
+   invalidating the run**.
+
+**Adding a content pack** (zero code changes):
+1. Create `public/packs/<id>/pack.json` + its JSON files.
+2. `npm run packs` (regenerates `public/packs/index.json`).
+3. Grant the entitlement `pack.<id>`.
+
+The bundled source uses `import.meta.glob` (build time, offline, works inside the AAB);
+the remote source uses `fetch`, which also works under Tauri's `asset://` protocol.
+
+**Entitlements (`PackGate`)** turn ownership into engine filters:
+
+| Result | Effect |
+| --- | --- |
+| `allowed` | Enters rolls, shop, drafts and collection. |
+| `locked` | Never rolled, but listed **greyed out with the pack name** in the Collection/Store — a DLC nobody sees doesn't sell. |
+| `hidden` | Not even listed (`lockedVisibility: "hidden"`). |
+
+When offline and unsure, the gate degrades to **owned**: in a paid game, the correct
+error is to give away content, never to charge twice.
+
+---
+
+## 🏠 Start screen
+
+`GameStatus` already had a `'menu'` value that nothing ever set; now it does.
+
+- `main.ts` calls `engine.enterMenu()` instead of `startRun()`.
+- `HUD.renderOverlay()` has a `case 'menu'` that renders `MenuScreen.buildMenuPanel()`.
+- `SceneManager.setMode('menu')` hides deck/discard/jokers, keeps the table, lights and
+  spore field, and drifts 6 decorative cards along the back of the table.
+  Those cards are chosen with `Math.random` **on purpose** — using the seeded engine RNG
+  would make the menu change the next run.
+- The menu overlay is dimmed less than a gameplay overlay, so the idle scene reads through.
+- Landscape-first two-column layout (`hero | actions`), stacking in portrait, safe-area
+  aware, with `.is-disabled` on "Continue" so the reason can still be shown as a tooltip.
+- Buttons carry `data-act` attributes so the smoke test can select them without depending
+  on the translated label.
 
 ---
 
 ## 🔥 The Trigger Engine & infinite-loop protection
 
-This was a core concern: *"how do I stop the trigger engine from entering an infinite
-cascade when a card re-fires itself?"* The engine resolves chains of reactions through
-**four independent brakes** plus a **structural** guard:
+*"How do I stop the trigger engine from entering an infinite cascade when a card re-fires
+itself?"* — four independent brakes plus a **structural** guard:
 
-1. **Depth limit** — `MAX_TRIGGER_DEPTH = 12`. A chain cannot nest deeper than 12
-   levels; the engine clamps and emits `trigger:overflow`.
-2. **Per-resolution budget** — `MAX_TRIGGERS_PER_RESOLUTION = 600`. The total number
-   of triggers fired while scoring a single hand is capped; excess is dropped and logged.
-3. **`once` consumption** — effects can declare `once: 'per_round' | 'per_run'`. After
-   firing, they are disabled for the scope, so a retrigger can't replay them forever.
-4. **Per-event emit cap** — `MAX_EMITS_PER_EVENT = 64` throttles any single event type.
+1. **Depth limit** — `MAX_TRIGGER_DEPTH = 12`; the engine clamps and emits `trigger:overflow`.
+2. **Per-resolution budget** — `MAX_TRIGGERS_PER_RESOLUTION = 600`.
+3. **`once` consumption** — effects can declare `once: 'per_round' | 'per_run'`.
+4. **Per-event emit cap** — `MAX_EMITS_PER_EVENT = 64`.
 
 **Structural guard against self-retcon loops:** effect `target` supports
-`previous_scored` / `next_scored` (the card immediately before/after in the played
-order). These **can never point at the triggering card itself**, which makes a direct
-self-retrigger cascade impossible by construction. The adversarial stress test in the
-sim harness feeds a malicious self-looping card and verifies it resolves in bounded time.
+`previous_scored` / `next_scored`, which **can never point at the triggering card
+itself** — a direct self-retrigger cascade is impossible by construction.
 
-The `ResolutionContext` is an **accumulator**: effects write to it, and only after the
-whole chain settles is the result applied to real state. This enables both the live
-**dry-run preview** (`→ total = substrate × spores` in the HUD) and headless
-**100k+ simulations** for balance.
+`ResolutionContext` is an **accumulator**: effects write to it, and only after the whole
+chain settles is the result applied to real state. That enables both the live **dry-run
+preview** (`→ total = substrate × spores` in the HUD) and headless **100k+ simulations**.
 
 Verified in the sim harness (100 full playthroughs): **0 hangs, 0 overflow cuts,
 deterministic, max observed depth 2.**
 
 ---
 
+## 💾 Persistence & migrations
+
+Two separate saves, because they have completely different risk profiles:
+
+| | `fungiflush.run` | `fungiflush.profile` |
+| --- | --- | --- |
+| Content | The run in progress | Collection, settings, entitlements, passes, stats |
+| Lifetime | Deleted when the run ends | Permanent |
+| On failure | Quarantined (`*.corrupt` copy) and ignored | Falls back to defaults, **never null** |
+| Version | `SAVE_VERSION = 2` | `PROFILE_SAVE_VERSION = 1` |
+
+`src/persistence/migrations.ts` is a table of **pure functions** (`v1 → v2 → …`) covered
+by tests with fixtures. Adding a field means adding a migration; `npm test` fails if the
+chain has a hole.
+
+What v2 added: per-card `plays` (for usage-based evolutions), evolution lineage,
+`cardsUpgraded` / `cardsEvolved` stats, `contentHash` and `packIds`.
+
+---
+
 ## 🌐 Internationalization
 
-- `src/i18n/en.json` and `src/i18n/es.json` hold every user-facing string.
+- `src/i18n/en.json` and `es.json` hold every user-facing string (base pack dictionary).
+- Content packs can ship their own dictionary slice (`manifest.i18n`), merged at boot.
 - i18next configured with single-brace interpolation (`{cost}`) to match the content JSON.
-- `validateDictionaryCoverage()` runs in the sim harness and fails the build if a
-  content key is missing in either language.
+- `validateDictionaryCoverage()` + `ContentRegistry.validate()` run in `npm run validate`
+  and fail on missing keys.
 
-Toggle live with the language button in the HUD (or `toggleLanguage()` in code).
+Toggle live with the language button in the HUD or the menu (or `toggleLanguage()`).
 
 ---
 
@@ -206,25 +298,14 @@ Toggle live with the language button in the HUD (or `toggleLanguage()` in code).
 - `SceneManager` lays out the hand with a spread that adapts to aspect ratio, biased
   toward the hand so cards stay above the bottom HUD on phones held **horizontally**.
 - `CameraRig.fit(aspect, bounds, biasZ)` frames the table parametrically.
-- Device pixel ratio is capped at **1.75 on mobile** and MSAA is disabled on mobile to
-  protect the frame budget; `viewport-fit=cover` + safe-area env vars keep content off
-  notches. Hover is disabled on touch (tap = select, drag = nothing / slop 6px).
+- Device pixel ratio is capped at **1.75 on mobile** and MSAA is disabled on mobile;
+  `viewport-fit=cover` + safe-area env vars keep content off notches.
 - Card art is generated procedurally on a `<canvas>` (instant, no assets) and upgraded
   to real WebP files from `public/art/` when present. Source PNGs live in `art-source/`
-  (gitignored; ~20 MB) so they can be re-optimized without re-spending generation credits.
-
----
-
-## 💾 Persistence
-
-`SaveGame` detects the runtime via `window.__TAURI_INTERNALS__` (not user-agent) and
-chooses the backend:
-
-- **Tauri app** → `@tauri-apps/plugin-fs` writes to app-data.
-- **Browser** → `localStorage`.
-
-Autosave fires on every `state:changed` event (debounced). `GameEngine.serialize()` /
-`restore()` define the `SAVE_VERSION = 1` format.
+  (gitignored) so they can be re-optimized without re-spending generation credits.
+- **Frames are always presented**, even in the menu. Skipping frames (an early `return`
+  inside the rAF) leaves the canvas unpainted and breaks external captures of the WebView
+  (Play screenshots, headless tests).
 
 ---
 
@@ -233,26 +314,67 @@ Autosave fires on every `state:changed` event (debounced). `GameEngine.serialize
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm run sim` | Console harness: content + i18n coverage validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report (win rate, ante distribution, trigger telemetry). |
-| `npm run sim:balance` | 500-run quiet balance pass. |
-| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots, plays blind-select → play → shop → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm run validate` | Content gate: validates every pack's JSON and i18n coverage. Exits 1 on error. |
+| `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
+| `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
+| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → shop → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest `npm run sim` run: **100 games, 27% win rate, 0 hangs / 0 overflow**, max trigger
-depth 2. Latest `npm run smoke`: **✓ SMOKE TEST OK**, 0 errors / 0 warnings / 0 exceptions.
+Latest runs: **`npm test` 20/20**, **`npm run validate` 0 errors / 0 warnings**,
+**`npm run sim` 100 games, 27% win rate, 0 hangs / 0 overflow, depth 2**,
+**`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
+**`npm run build:release` 0.71 MB of JS, no sourcemaps**.
+
+CI (`.github/workflows/ci.yml`) runs typecheck → tests → content validation → 500-run
+balance regression → release build → bundle-size budget. The WebGL smoke test is manual
+(it needs a Chromium binary with SwiftShader, resolved by absolute path).
 
 ---
 
-## 📦 Project status & known limitations
+## 🤖 Android & Google Play (planned)
 
-- ✅ Pure engine, full content set (30 cards, 15 jokers, 6 mutations, 24 blinds), i18n,
-  Three.js view layer, HUD, saves, sim + smoke harnesses, Tauri scaffolding.
-- ⏸️ **Audio** — deferred by design ("sin audio por ahora"). A Web Audio synthesis layer
-  can be added later without touching the engine.
-- ⚠️ **Tauri native build** — `npm run tauri build` needs the Rust toolchain, which was
-  not present in the authoring environment. The Rust shim (`src-tauri/`) and config are
-  complete; build it on a Rust-enabled machine.
-- 🎨 **Art** — 11 generated WebP assets ship in `public/art/` (~704 KB). Originals are
-  in `art-source/` for re-processing.
+The same codebase packages to Android through Tauri 2. What is **not** in place yet:
+
+```bash
+npm i -D @tauri-apps/cli@^2     # NOT installed
+rustup target add aarch64-linux-android armv7-linux-androideabi \
+                 i686-linux-android x86_64-linux-android
+# Android SDK (platform 36) + NDK, ANDROID_HOME / NDK_HOME / JAVA_HOME
+npx tauri android init          # generates src-tauri/gen/android (gitignored)
+npx tauri android build --aab
+```
+
+- `Cargo.toml` already declares `crate-type = ["staticlib", "cdylib", "rlib"]` and
+  `lib.rs` has `#[cfg_attr(mobile, tauri::mobile_entry_point)]` — it was written mobile-first.
+- Still missing: `tauri.android.conf.json`, `bundle.android` (minSdk 24 / targetSdk 36),
+  Android mipmaps + adaptive icons, a Play 512 icon and a 1024×500 feature graphic,
+  keystore + Play App Signing, and `.github/workflows/android.yml`.
+- Signing material is already gitignored (`*.jks`, `*.keystore`, `keystore.properties`,
+  `*.aab`, `*.apk`).
+- Play requirements as of September 2026: **target API 36 (Android 16)** for new apps and
+  updates, **16 KB page size** support, Play Billing for all IAP, Data Safety form,
+  content rating and a privacy policy.
+
+**Monetization model:** paid app (one-time) + expansions and season passes as Google Play
+managed products. Expansions are *always new content* — never content the player already
+paid for.
+
+---
+
+## 🗺️ Roadmap
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| **0** | Scalable foundations: content packs, profile, save migrations, CI, tests | ✅ done |
+| **1** | Start screen, settings, about, audio hooks | ✅ done |
+| **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | next |
+| **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | planned |
+| **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | planned |
+| **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | planned |
+| **6** | Battle pass + store + Google Play Billing bridge | planned |
+| **7** | Real audio on top of `AudioBus` | deferred by design |
+| **8** | Android packaging, Play listing, release pipeline | planned |
+| **9** | Online multiplayer (`RemoteInputProvider` over the same pure reducer) | future |
 
 ---
 

@@ -284,6 +284,10 @@ export interface CardInstance {
   bonusSpores: number;
   level: number;
   statuses: StatusInstance[];
+  /** Veces que se jugo. Alimenta las evoluciones por uso (Fase 3). */
+  plays?: number;
+  /** Id del especimen del que evoluciono (linaje, para la Coleccion). */
+  evolvedFrom?: string | null;
 }
 
 export interface JokerInstance {

@@ -113,6 +113,12 @@ export class SceneManager {
   private discardMesh: THREE.Group | null = null;
   private readonly disposables: Array<THREE.Material | THREE.Texture | THREE.BufferGeometry> = [];
 
+  /** 'menu' = escena idle de la pantalla de inicio; 'run' = partida. */
+  private mode: 'menu' | 'run' = 'run';
+  private readonly menuCards: Card3D[] = [];
+  private menuBaseZ: number[] = [];
+  private reduceMotion = false;
+
   constructor(options: SceneOptions) {
     this.engine = options.engine;
     this.assets = options.assets;
@@ -229,6 +235,87 @@ export class SceneManager {
       group.add(layer);
     }
     return group;
+  }
+
+  // ==========================================================================
+  // Modos: pantalla de inicio vs partida
+  // ==========================================================================
+
+  /**
+   * En 'menu' se apagan mazo, descarte y jokers, quedan la mesa, las luces y
+   * las particulas, y aparecen unas cartas decorativas a la deriva.
+   *
+   * OJO con el RNG: las cartas decorativas se eligen con `Math.random`, NO con
+   * el RNG del motor. Si consumieran el RNG sembrado, el menu cambiaria la
+   * partida siguiente y se romperia la reproducibilidad.
+   */
+  setMode(mode: 'menu' | 'run', options?: { reduceMotion?: boolean }): void {
+    this.reduceMotion = options?.reduceMotion ?? this.reduceMotion;
+    if (this.mode === mode) return;
+    this.mode = mode;
+
+    const inMenu = mode === 'menu';
+    if (this.deckMesh) this.deckMesh.visible = !inMenu;
+    if (this.discardMesh) this.discardMesh.visible = !inMenu;
+    // Las esporas ambientales se quedan en los dos modos: son un solo
+    // THREE.Points y son lo que hace que el menu no se vea como una foto.
+    this.particles.setAmbientEnabled(true);
+
+    if (inMenu) this.buildMenuDecor();
+    else this.clearMenuDecor();
+  }
+
+  private buildMenuDecor(): void {
+    if (this.reduceMotion || this.menuCards.length > 0) return;
+
+    const pool = this.engine.registry.allCards();
+    if (pool.length === 0) return;
+
+    const count = Math.min(6, pool.length);
+    for (let i = 0; i < count; i++) {
+      const def = pool[Math.floor(Math.random() * pool.length)];
+      if (!def) continue;
+      const card = this.engine.registry.instantiateFrom(def);
+      const card3d = this.createCard3D(card);
+
+      // Se colocan AL FONDO de la mesa (Z muy negativo): es la banda alta de la
+      // pantalla, la unica que el panel del menu deja libre. En el centro
+      // quedarian tapadas por el propio panel.
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const x = -11 + t * 22;
+      const z = -7.5 + Math.sin(i * 1.7) * 1.8;
+
+      card3d.home.x = x;
+      card3d.home.y = 0.34;
+      card3d.home.z = z;
+      card3d.home.rx = -Math.PI / 2;
+      card3d.home.rz = (Math.random() - 0.5) * 0.3;
+      card3d.snapToHome();
+
+      this.menuCards.push(card3d);
+      this.menuBaseZ.push(z);
+    }
+  }
+
+  private clearMenuDecor(): void {
+    for (const card3d of this.menuCards) {
+      this.tweens.cancelFor(card3d.home);
+      card3d.dispose();
+      this.scene.remove(card3d.group);
+    }
+    this.menuCards.length = 0;
+    this.menuBaseZ.length = 0;
+  }
+
+  /** Deriva lenta de las cartas del menu. Se anima en el loop, sin tweens. */
+  private updateMenuDecor(dt: number): void {
+    this.menuCards.forEach((card3d, i) => {
+      const t = this.clock * 0.28 + i * 1.31;
+      card3d.home.y = 0.32 + Math.sin(t) * 0.16;
+      card3d.home.z = (this.menuBaseZ[i] ?? 0) + Math.cos(t * 0.72) * 0.45;
+      card3d.home.rz = Math.sin(t * 0.5) * 0.14;
+      card3d.update(dt, this.clock);
+    });
   }
 
   // ==========================================================================
@@ -709,9 +796,18 @@ export class SceneManager {
       for (const card3d of this.handCards.values()) card3d.update(dt, this.clock);
       for (const card3d of this.jokerCards.values()) card3d.update(dt, this.clock);
       for (const card3d of this.scoringCards) card3d.update(dt, this.clock);
+      if (this.mode === 'menu') this.updateMenuDecor(dt);
 
       this.particles.update(dt);
       this.rig.update(dt, this.clock);
+
+      // Se renderiza SIEMPRE, tambien en el menu.
+      //
+      // Ojo: saltarse frames enteros (un `return` temprano dentro del rAF)
+      // deja el canvas sin presentar y rompe cualquier captura externa del
+      // WebView (por ejemplo, la captura de pantalla de Play o un test
+      // headless). El ahorro de bateria del menu viene por otro lado: 6
+      // cartas decorativas, sin MSAA, DPR acotado y cero logica de juego.
       this.renderer.render(this.scene, this.rig.camera);
     };
 

@@ -24,11 +24,14 @@
     "paths": {
       "@engine/*": ["./src/engine/*"],
       "@data/*": ["./src/data/*"],
+      "@content/*": ["./src/content/*"],
+      "@meta/*": ["./src/meta/*"],
       "@render/*": ["./src/render/*"],
       "@ui/*": ["./src/ui/*"],
       "@i18n/*": ["./src/i18n/*"],
-      "@persistence/*": ["./src/persistence/*"]
+      "@persistence/*": ["./src/persistence/*"],
+      "@audio/*": ["./src/audio/*"]
     }
   },
-  "include": ["src", "tools", "vite.config.ts"]
+  "include": ["src", "tools", "tests", "vite.config.ts"]
 }

@@ -1,0 +1,21 @@
+{
+  "id": "base",
+  "version": 1,
+  "kind": "base",
+  "priority": 0,
+  "titleKey": "pack.base.title",
+  "requires": { "appMin": "1.0.0" },
+  "gating": { "entitlement": "pack.base", "lockedVisibility": "visible" },
+  "contents": {
+    "cards": [
+      "cards/01_starters.json",
+      "cards/02_specimens.json",
+      "cards/03_apex.json"
+    ],
+    "jokers": ["jokers.json"],
+    "mutations": ["mutations.json"],
+    "blinds": ["blinds.json"],
+    "offers": ["offers.json"],
+    "antes": ["antes.json"]
+  }
+}

@@ -27,6 +27,26 @@ const resources = {
   es: { translation: es },
 } as const;
 
+type ResourceBundle = Record<string, { translation: Record<string, unknown> }>;
+
+/**
+ * Mezcla los diccionarios de los packs sobre el base.
+ * Los packs son aditivos: una expansion agrega claves, nunca pisa las del
+ * juego base (y si lo hiciera, `ContentRegistry.validate` lo reporta).
+ */
+function buildResources(extra?: Record<string, Record<string, unknown>>): ResourceBundle {
+  if (!extra) return resources as unknown as ResourceBundle;
+  const out: ResourceBundle = {
+    en: { translation: { ...en } },
+    es: { translation: { ...es } },
+  };
+  for (const [lang, slice] of Object.entries(extra)) {
+    const current = out[lang] ?? { translation: {} };
+    out[lang] = { translation: { ...current.translation, ...slice } };
+  }
+  return out;
+}
+
 function detectLang(): Lang {
   try {
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
@@ -40,12 +60,12 @@ function detectLang(): Lang {
 
 let initialized = false;
 
-export async function initI18n(lang?: Lang): Promise<void> {
+export async function initI18n(lang?: Lang, packDictionaries?: Record<string, Record<string, unknown>>): Promise<void> {
   if (initialized) return;
   await i18next.init({
     lng: lang ?? detectLang(),
     fallbackLng: 'en',
-    resources,
+    resources: buildResources(packDictionaries),
     // Los diccionarios usan interpolacion de una sola llave ({cost}), no la
     // doble de i18next ({{cost}}). Es mas legible para quien traduce.
     interpolation: { escapeValue: false, prefix: '{', suffix: '}' },

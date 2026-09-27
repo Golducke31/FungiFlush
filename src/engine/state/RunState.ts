@@ -46,6 +46,10 @@ export interface RunState {
     bestHand: number;
     blindsCleared: number;
     cardsDestroyed: number;
+    /** Mejoras aplicadas (Fase 3: cultivo ilimitado). */
+    cardsUpgraded: number;
+    /** Cartas que evolucionaron a otra especie. */
+    cardsEvolved: number;
   };
 }
 
@@ -69,6 +73,8 @@ export function createRunState(seed: number, deck: Deck): RunState {
       bestHand: 0,
       blindsCleared: 0,
       cardsDestroyed: 0,
+      cardsUpgraded: 0,
+      cardsEvolved: 0,
     },
   };
 }

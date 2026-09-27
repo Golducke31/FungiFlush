@@ -1,0 +1,15 @@
+[
+  {
+    "id": "shop_default",
+    "phase": "shop",
+    "slots": [
+      { "weight": 100, "kind": "card" },
+      { "weight": 50, "kind": "card" },
+      { "weight": 50, "kind": "joker" },
+      { "weight": 100, "kind": "mutation" }
+    ],
+    "slotsMin": 2,
+    "slotsMax": 3,
+    "allowDuplicates": false
+  }
+]

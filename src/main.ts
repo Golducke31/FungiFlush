@@ -1,31 +1,43 @@
 /**
  * main.ts — Controlador de la aplicacion.
  *
- * Es el unico lugar donde se conocen las tres capas a la vez. Su trabajo es
+ * Es el unico lugar donde se conocen las capas a la vez. Su trabajo es
  * cablearlas y nada mas:
  *
- *     GameEngine  <-- estado y reglas
- *     SceneManager <-- lee el bus, dibuja
- *     HUD          <-- lee el bus, muestra texto, emite intenciones
+ *     ContentRegistry  <-- packs de contenido (base + expansiones)
+ *     GameEngine       <-- estado y reglas
+ *     SceneManager     <-- lee el bus, dibuja
+ *     HUD              <-- lee el bus, muestra texto, emite intenciones
  *
  * El controlador traduce "intencion del jugador" a "metodo del motor".
  * No tiene logica de juego ni de dibujo.
+ *
+ * CAMBIO IMPORTANTE: el juego ya NO arranca una run apenas carga. Arranca en
+ * el menu (`engine.enterMenu()`), que es la pantalla de inicio.
  */
 
-import { GameEngine, bus, detectCombos } from '@engine/index';
-import { contentBundle } from '@data/index';
-import { currentLanguage, initI18n, t, toggleLanguage, validateDictionaryCoverage } from '@i18n/index';
-import { SaveGame } from '@persistence/SaveGame';
+import { GameEngine, bus, detectCombos, type RunSaveData } from '@engine/index';
+import { bootstrapContent } from '@content/bootstrap';
+import { currentLanguage, initI18n, setLanguage, t, toggleLanguage, validateDictionaryCoverage } from '@i18n/index';
+import { ProfileStore } from '@persistence/ProfileStore';
+import { RunStore } from '@persistence/RunStore';
+import { Storage } from '@persistence/Storage';
+import { EntitlementStore } from '@meta/EntitlementStore';
+import { PackGate } from '@meta/PackGate';
 import { ArtAssets, SceneManager } from '@render/index';
 import { HUD } from '@ui/HUD';
+import { attachAudioHooks } from '@audio/AudioBus';
 import en from '@i18n/en.json';
 import es from '@i18n/es.json';
+
+/** Version de la app. La comparan los packs (`requires.appMin`). */
+const APP_VERSION = '1.0.0';
 
 // ---------------------------------------------------------------------------
 // Pantalla de carga
 // ---------------------------------------------------------------------------
 
-function buildLoader(): { element: HTMLElement; setProgress: (r: number) => void; hide: () => void } {
+function buildLoader(): { setProgress: (r: number) => void; hide: () => void } {
   const element = document.createElement('div');
   element.className = 'loader';
 
@@ -47,7 +59,6 @@ function buildLoader(): { element: HTMLElement; setProgress: (r: number) => void
   document.body.appendChild(element);
 
   return {
-    element,
     setProgress: (ratio) => {
       fill.style.width = `${Math.round(ratio * 100)}%`;
     },
@@ -82,49 +93,78 @@ function buildRotateNotice(): void {
 // ---------------------------------------------------------------------------
 
 async function boot(): Promise<void> {
-  const loader = buildLoader();
+  // --- Contenido (packs) ---
+  // Va ANTES del i18n porque los packs pueden aportar su propio diccionario.
+  const content = await bootstrapContent({ appVersion: APP_VERSION, dictionaries: { en, es } });
+  await initI18n(undefined, content.packDictionaries);
 
-  await initI18n();
+  const loader = buildLoader();
   document.documentElement.lang = currentLanguage();
   buildRotateNotice();
+
+  // --- Persistencia (perfil permanente + run) ---
+  const storage = new Storage();
+  const saveBackend = await storage.init();
+  const profileStore = new ProfileStore(storage);
+  const runStore = new RunStore(storage);
+  const profile = await profileStore.load();
+
+  // El idioma guardado en el perfil gana sobre el detectado.
+  if (profile.settings.lang !== currentLanguage()) await setLanguage(profile.settings.lang);
+  document.documentElement.lang = currentLanguage();
 
   // --- Assets ---
   const assets = new ArtAssets();
   await assets.loadAll((ratio) => loader.setProgress(ratio * 0.85));
+
+  // --- Acceso por DLC ---
+  const entitlements = EntitlementStore.from(profile.entitlements);
+  const gate = new PackGate(entitlements, content.registry);
 
   // --- Motor ---
   const params = new URLSearchParams(location.search);
   const seedParam = params.get('seed');
   const seed = seedParam ? Number(seedParam) || undefined : undefined;
 
-  const engine = new GameEngine({ bundle: contentBundle, ...(seed !== undefined ? { seed } : {}) });
-
-  // --- Persistencia ---
-  const saveGame = new SaveGame();
-  const saveBackend = await saveGame.init();
-  let savedRun = await saveGame.load();
-
-  // Autoguardado: el guardado se escribe 1.5 s despues del ultimo cambio de
-  // estado, asi que una mano entera produce UNA escritura, no doscientas.
-  bus.on('state:changed', ({ run }) => {
-    if (run.status === 'game_over' || run.status === 'victory') {
-      // Una run terminada no se continua: se borra el guardado.
-      saveGame.cancelAutosave();
-      void saveGame.clear();
-      return;
-    }
-    saveGame.autosave(() => engine.serialize());
+  const engine = new GameEngine({
+    bundle: content.registry.toBundle(gate),
+    contentFilter: gate.cardFilter(),
+    jokerFilter: gate.jokerFilter(),
+    contentHash: content.registry.contentHash(),
+    packIds: content.loadedIds,
+    ...(seed !== undefined ? { seed } : {}),
   });
 
-  // Validacion de contenido en desarrollo: mejor un warning en consola que un
-  // combo silenciosamente roto en produccion.
-  if (import.meta.env.DEV) {
-    const issues = engine.registry.validate();
-    const errors = issues.filter((i) => i.level === 'error');
-    if (errors.length > 0) {
-      console.error(`[FungiFlush] ${errors.length} errores de contenido:`, errors);
+  // --- Audio (no-op, con los ganchos ya conectados) ---
+  attachAudioHooks();
+
+  // --- Autoguardado ---
+  // Se escribe 1.5 s despues del ultimo cambio de estado, asi que una mano
+  // entera produce UNA escritura, no doscientas. El menu no se guarda nunca.
+  let savedRun: RunSaveData | null = null;
+
+  bus.on('state:changed', ({ run }) => {
+    if (run.status === 'menu') {
+      runStore.cancelAutosave();
+      return;
     }
-    const missing = validateDictionaryCoverage(contentBundle, { en, es });
+    if (run.status === 'game_over' || run.status === 'victory') {
+      // Una run terminada no se continua: se borra el guardado.
+      runStore.cancelAutosave();
+      void runStore.clear();
+      return;
+    }
+    runStore.autosave(() => engine.serialize());
+  });
+
+  // --- Validacion de contenido en desarrollo ---
+  if (import.meta.env.DEV) {
+    const errors = content.issues.filter((i) => i.level === 'error');
+    if (errors.length > 0) console.error(`[FungiFlush] ${errors.length} errores de contenido:`, errors);
+    for (const skipped of content.skipped) {
+      console.warn(`[FungiFlush] pack omitido: ${skipped.id} (${skipped.reason})`);
+    }
+    const missing = validateDictionaryCoverage(content.registry.toBundle(), { en, es });
     if (missing.length > 0) {
       console.warn(`[FungiFlush] ${missing.length} claves i18n faltantes:`, missing.slice(0, 10));
     }
@@ -135,7 +175,6 @@ async function boot(): Promise<void> {
   const uiRoot = document.getElementById('ui-root');
   if (!canvas || !uiRoot) throw new Error('Faltan #fungiflush-canvas o #ui-root en el DOM.');
 
-  // El puntero se sigue aca para que el tooltip sepa donde dibujarse.
   const lastPointer = { x: 0, y: 0 };
   window.addEventListener(
     'pointermove',
@@ -146,8 +185,6 @@ async function boot(): Promise<void> {
     { passive: true },
   );
 
-  // Se declara antes del render porque los callbacks de la escena lo usan.
-  // (Se asigna mas abajo, pero ningun callback corre antes de eso.)
   let hud: HUD | null = null;
 
   const scene = new SceneManager({
@@ -184,6 +221,12 @@ async function boot(): Promise<void> {
   hud = new HUD({
     engine,
     root: uiRoot,
+    appInfo: {
+      version: APP_VERSION,
+      contentHash: content.registry.contentHash(),
+      packs: content.loadedIds,
+      skipped: content.skipped,
+    },
     callbacks: {
       onPlay: () => engine.playHand(),
       onDiscard: () => engine.discardSelected(),
@@ -200,14 +243,16 @@ async function boot(): Promise<void> {
       onRestart: () => {
         savedRun = null;
         hud?.setContinueAvailable(null);
-        void saveGame.clear();
+        void runStore.clear();
         engine.startRun();
+        scene.setMode('run');
       },
       onContinueRun: () => {
         if (!savedRun) return;
         if (engine.restore(savedRun)) {
           savedRun = null;
           hud?.setContinueAvailable(null);
+          scene.setMode('run');
         } else {
           hud?.toast(t('log.saveIncompatible'), 'warn');
         }
@@ -217,19 +262,33 @@ async function boot(): Promise<void> {
           document.documentElement.lang = currentLanguage();
         });
       },
+      // --- Pantalla de inicio ---
+      onStartRun: () => {
+        void runStore.clear();
+        engine.startRun(seed);
+        scene.setMode('run');
+      },
+      onOpenCollection: () => hud?.toast(t('collection.comingSoon'), 'info'),
+      onOpenExpansions: () => hud?.toast(t('store.comingSoon'), 'info'),
+      onOpenPass: () => hud?.toast(t('pass.comingSoon'), 'info'),
+      onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
+      onOpenAbout: () => hud?.showAbout(),
     },
   });
 
-  // Si hay una partida guardada, se ofrece continuarla en la pantalla de ciegos.
-  if (savedRun) {
-    hud.setContinueAvailable(`${t('hud.ante')} ${savedRun.ante} · ${t('ui.seed')} ${savedRun.seed}`);
-  }
+  hud.bindSettingsPatch((patch) => {
+    profileStore.patch((p) => {
+      Object.assign(p.settings, patch);
+    });
+    scene.setMode(engine.run?.status === 'menu' ? 'menu' : 'run', {
+      reduceMotion: profileStore.current.settings.reduceMotion,
+    });
+  });
 
   // --- Resize / orientacion ---
   let resizeTimer = 0;
   const handleResize = () => {
     window.clearTimeout(resizeTimer);
-    // Debounce: en movil, la barra de direcciones dispara resize en cada scroll.
     resizeTimer = window.setTimeout(() => scene.resize(), 90);
   };
   window.addEventListener('resize', handleResize);
@@ -262,23 +321,31 @@ async function boot(): Promise<void> {
     }, 250);
   }
 
-  // --- Arrancar ---
+  // --- Arrancar en el MENU ---
   scene.start();
-  engine.startRun(seed);
+  engine.enterMenu();
+  scene.setMode('menu', { reduceMotion: profile.settings.reduceMotion });
+
+  savedRun = await runStore.load();
+  if (savedRun) {
+    hud.setContinueAvailable(`${t('hud.ante')} ${savedRun.ante} · ${t('ui.seed')} ${savedRun.seed}`);
+  }
+
   loader.setProgress(1);
   loader.hide();
 
   if (import.meta.env.DEV) {
     console.info(
-      `%cFungiFlush%c listo. Guardado: ${saveBackend}. F3 = stats. ?seed=N para reproducir una partida.`,
+      `%cFungiFlush%c listo. Packs: ${content.loadedIds.join(', ')}. Guardado: ${saveBackend}. F3 = stats.`,
       'color:#4fd18b;font-weight:bold',
       'color:#93a4b5',
     );
   }
 
-  // El bus se expone solo en desarrollo para depurar combos desde la consola.
   if (import.meta.env.DEV) {
-    Object.assign(window as unknown as Record<string, unknown>, { __fungiflush: { engine, scene, hud, bus } });
+    Object.assign(window as unknown as Record<string, unknown>, {
+      __fungiflush: { engine, scene, hud, bus, content, profileStore, runStore },
+    });
   }
 }
 

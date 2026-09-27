@@ -33,7 +33,9 @@ import {
 } from './state/RunState';
 import type {
   BlindDefinition,
+  CardDefinition,
   CardInstance,
+  JokerDefinition,
   JokerInstance,
   RoundSnapshot,
   RunSnapshot,
@@ -58,6 +60,16 @@ export interface GameEngineOptions {
   seed?: number;
   /** Carga contenido ya parseado (JSON importado en el browser o leido con fs). */
   bundle: ContentBundle;
+  /**
+   * Filtro de cartas por DLC (lo produce `PackGate`). El motor no sabe que
+   * existen los packs: solo aplica un predicado.
+   */
+  contentFilter?: (def: CardDefinition) => boolean;
+  jokerFilter?: (def: JokerDefinition) => boolean;
+  /** Hash del contenido, para detectar rebalanceos entre versiones. */
+  contentHash?: string | null;
+  /** Packs activos al arrancar la run. */
+  packIds?: string[];
 }
 
 export class GameEngine {
@@ -67,6 +79,11 @@ export class GameEngine {
   private readonly triggers: TriggerEngine;
   private readonly scorer: ScoreCalculator;
 
+  private readonly contentFilter?: (def: CardDefinition) => boolean;
+  private readonly jokerFilter?: (def: JokerDefinition) => boolean;
+  private readonly contentHash: string | null;
+  private readonly packIds: string[];
+
   run!: RunState;
   round: RoundState | null = null;
 
@@ -75,6 +92,26 @@ export class GameEngine {
     this.registry.load(opts.bundle);
     this.triggers = new TriggerEngine(this.registry, this.rng);
     this.scorer = new ScoreCalculator(this.triggers, this.registry, this.rng);
+    this.contentFilter = opts.contentFilter;
+    this.jokerFilter = opts.jokerFilter;
+    this.contentHash = opts.contentHash ?? null;
+    this.packIds = opts.packIds ?? ['base'];
+  }
+
+  // ==========================================================================
+  // Menu (pantalla de inicio)
+  // ==========================================================================
+
+  /**
+   * Estado idle previo a una run. `run` queda no-nulo para que el render y el
+   * HUD no necesiten chequeos extra, y `status` pasa a 'menu'.
+   */
+  enterMenu(): void {
+    const deck = new Deck(this.rng);
+    this.run = createRunState(this.rng.getSeed(), deck);
+    this.run.status = 'menu';
+    this.round = null;
+    this.emitState();
   }
 
   // ==========================================================================
@@ -99,9 +136,14 @@ export class GameEngine {
     return this.registry.blindsForAnte(this.run.ante);
   }
 
-  /** Objetivo de score que tendria un blind, sin elegirlo todavia. */
+  /**
+   * Objetivo de score que tendria un blind, sin elegirlo todavia.
+   * La tabla de antes la define el contenido (pack `base`); si no hay tabla
+   * cae en la constante, que existe solo como red de seguridad.
+   */
   targetFor(blind: BlindDefinition): number {
-    return Math.round((ANTE_BASE_TARGET[this.run.ante] ?? 300) * blind.scoreMultiplier);
+    const base = this.registry.anteTarget(this.run.ante) ?? ANTE_BASE_TARGET[this.run.ante] ?? 300;
+    return Math.round(base * blind.scoreMultiplier);
   }
 
   /**
@@ -349,7 +391,8 @@ export class GameEngine {
     } else {
       this.run.ante += 1;
       this.run.blindIndex = 0;
-      if (this.run.ante > 8) {
+      // El tope lo define el contenido: una expansion puede agregar antes.
+      if (this.run.ante > this.registry.maxAnte()) {
         this.run.status = 'victory';
         bus.emit('game:over', { reason: 'victory', ante: this.run.ante });
         this.emitState();
@@ -590,7 +633,7 @@ export class GameEngine {
     let counter = 0;
     const makeId = () => `offer_${this.run.ante}_${this.run.blindIndex}_${counter++}_${this.rng.int(1000, 9999)}`;
 
-    const card = this.registry.rollRandomCard(this.rng);
+    const card = this.registry.rollRandomCard(this.rng, this.contentFilter);
     if (card) {
       offers.push({
         id: makeId(),
@@ -604,7 +647,9 @@ export class GameEngine {
       });
     }
 
-    const second = this.rng.chance(0.5) ? this.registry.rollRandomCard(this.rng) : undefined;
+    const second = this.rng.chance(0.5)
+      ? this.registry.rollRandomCard(this.rng, this.contentFilter)
+      : undefined;
     if (second) {
       offers.push({
         id: makeId(),
@@ -618,7 +663,7 @@ export class GameEngine {
       });
     } else {
       const joker = this.registry.rollRandomJoker(this.rng);
-      if (joker) {
+      if (joker && (!this.jokerFilter || this.jokerFilter(joker))) {
         offers.push({
           id: makeId(),
           kind: 'joker',
@@ -764,6 +809,9 @@ export class GameEngine {
       deck: cards,
       stats: { ...this.run.stats },
       consumedEffects: [...this.run.consumedEffects],
+      // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
+      contentHash: this.contentHash,
+      packIds: [...this.packIds],
     };
   }
 
@@ -793,8 +841,16 @@ export class GameEngine {
     this.run.baseHandSize = data.baseHandSize;
     this.run.baseHands = data.baseHands;
     this.run.baseDiscards = data.baseDiscards;
-    this.run.stats = { ...data.stats };
+    // Se mezcla sobre el estado por defecto: si un campo nuevo falta en un
+    // guardado migrado, la run sigue siendo jugable.
+    this.run.stats = { ...this.run.stats, ...data.stats };
     this.run.consumedEffects = new Set(data.consumedEffects ?? []);
+
+    // El contenido cambio desde que se guardo: se avisa, pero NO se invalida.
+    // Un rebalanceo no deberia borrarle la partida a nadie.
+    if (data.contentHash && this.contentHash && data.contentHash !== this.contentHash) {
+      bus.emit('log', { level: 'warn', key: 'log.contentChanged', params: {} });
+    }
 
     this.run.jokers = [];
     for (const id of data.jokers) {
@@ -810,8 +866,14 @@ export class GameEngine {
   }
 }
 
-/** Version del formato de guardado. Subir al cambiar la estructura. */
-export const SAVE_VERSION = 1;
+/**
+ * Version del formato de guardado. Subir al cambiar la estructura.
+ *
+ * v1 -> v2: contador de jugadas por carta (evoluciones), linaje de evolucion,
+ * estadisticas de mejora/evolucion, hash de contenido y packs activos.
+ * La migracion vive en `src/persistence/migrations.ts` y es una funcion pura.
+ */
+export const SAVE_VERSION = 2;
 
 export interface SerializedCard {
   id: string;
@@ -819,6 +881,10 @@ export interface SerializedCard {
   bonusSpores: number;
   level: number;
   statuses: Array<{ type: string; value: number; turnsLeft: number }>;
+  /** Veces que se jugo (para evoluciones por uso). */
+  plays?: number;
+  /** Id de la carta de la que evoluciono, si evoluciono. */
+  evolvedFrom?: string | null;
 }
 
 export interface RunSaveData {
@@ -839,8 +905,14 @@ export interface RunSaveData {
     bestHand: number;
     blindsCleared: number;
     cardsDestroyed: number;
+    cardsUpgraded: number;
+    cardsEvolved: number;
   };
   consumedEffects: string[];
+  /** Hash del contenido con el que se jugo (null = desconocido, ej. save v1). */
+  contentHash: string | null;
+  /** Packs activos cuando empezo la run. */
+  packIds: string[];
 }
 
 function serializeCard(card: CardInstance): SerializedCard {
@@ -850,6 +922,8 @@ function serializeCard(card: CardInstance): SerializedCard {
     bonusSpores: card.bonusSpores,
     level: card.level,
     statuses: card.statuses.map((s) => ({ type: s.type, value: s.value, turnsLeft: s.turnsLeft })),
+    plays: card.plays,
+    ...(card.evolvedFrom ? { evolvedFrom: card.evolvedFrom } : { evolvedFrom: null }),
   };
 }
 
@@ -858,6 +932,8 @@ function deserializeCard(saved: SerializedCard, registry: CardRegistry): CardIns
   card.bonusSubstrate = saved.bonusSubstrate ?? 0;
   card.bonusSpores = saved.bonusSpores ?? 0;
   card.level = saved.level ?? 1;
+  card.plays = saved.plays ?? 0;
+  card.evolvedFrom = saved.evolvedFrom ?? null;
   card.statuses = (saved.statuses ?? []).map((s) => ({
     type: s.type as CardInstance['statuses'][number]['type'],
     value: s.value,

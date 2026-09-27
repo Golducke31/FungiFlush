@@ -12,6 +12,18 @@ art-source/
 src-tauri/target/
 src-tauri/gen/
 
+# --- Android / Google Play: NUNCA al repo ---
+# Una keystore filtrada permite publicar actualizaciones en nombre del
+# desarrollador. Google Play App Signing permite (y recomienda) rotarla, pero
+# el dano previo ya esta hecho.
+*.jks
+*.keystore
+keystore.properties
+*.aab
+*.apk
+src-tauri/gen/android/keystore.properties
+src-tauri/gen/android/app/*.jks
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
@@ -21,6 +33,9 @@ src-tauri/gen/
 *.njsproj
 *.sln
 *.sw?
+
+# Artefactos del smoke test (capturas de pantalla)
+tools/shots/
 
 # Logs
 npm-debug.log*

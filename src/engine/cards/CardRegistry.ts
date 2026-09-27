@@ -37,6 +37,12 @@ export interface ContentBundle {
   cards: CardDefinition[];
   jokers: JokerDefinition[];
   blinds: BlindDefinition[];
+  /**
+   * Objetivo base de puntaje por ante. Lo provee el contenido (tabla `antes`
+   * del pack); si falta, el motor cae en `ANTE_BASE_TARGET` de constants.ts.
+   * Hacerlo data-driven es lo que permite que una expansion agregue antes.
+   */
+  anteTargets?: Record<number, number>;
 }
 
 export interface ValidationIssue {
@@ -54,6 +60,7 @@ export class CardRegistry {
   private readonly cards = new Map<string, CardDefinition>();
   private readonly jokers = new Map<string, JokerDefinition>();
   private readonly blinds = new Map<string, BlindDefinition>();
+  private anteTargets: Record<number, number> | null = null;
 
   private uidCounter = 0;
 
@@ -61,6 +68,29 @@ export class CardRegistry {
     for (const card of bundle.cards) this.cards.set(card.id, card);
     for (const joker of bundle.jokers) this.jokers.set(joker.id, joker);
     for (const blind of bundle.blinds) this.blinds.set(blind.id, blind);
+    this.anteTargets = bundle.anteTargets ?? null;
+  }
+
+  /**
+   * Objetivo base de un ante, o `undefined` si el contenido no lo define.
+   * Extrapola del ultimo ante conocido (x2.4 por ante) para que una expansion
+   * pueda agregar antess sin declararlos todos.
+   */
+  anteTarget(ante: number): number | undefined {
+    if (!this.anteTargets) return undefined;
+    const exact = this.anteTargets[ante];
+    if (exact !== undefined) return exact;
+    const keys = Object.keys(this.anteTargets).map(Number).sort((a, b) => a - b);
+    const last = keys[keys.length - 1];
+    if (last === undefined || ante < last) return undefined;
+    return Math.round((this.anteTargets[last] ?? 0) * Math.pow(2.4, ante - last));
+  }
+
+  /** Ante mas alto declarado por el contenido (8 si no hay tabla). */
+  maxAnte(): number {
+    if (!this.anteTargets) return 8;
+    const keys = Object.keys(this.anteTargets).map(Number);
+    return keys.length > 0 ? Math.max(...keys) : 8;
   }
 
   // --- Acceso a definiciones -------------------------------------------------
@@ -286,7 +316,10 @@ export class CardRegistry {
       antes.add(blind.ante);
     }
 
-    for (let ante = 1; ante <= 8; ante++) {
+    // El tope lo define el contenido, no un 8 hardcodeado: una expansion
+    // puede agregar antes y el validador los cubre solo.
+    const maxAnte = this.maxAnte();
+    for (let ante = 1; ante <= maxAnte; ante++) {
       const forAnte = this.blindsForAnte(ante);
       if (forAnte.length < 3) {
         issues.push({

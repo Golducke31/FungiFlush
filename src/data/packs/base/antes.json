@@ -1,0 +1,10 @@
+[
+  { "ante": 1, "baseTarget": 300 },
+  { "ante": 2, "baseTarget": 800 },
+  { "ante": 3, "baseTarget": 2000 },
+  { "ante": 4, "baseTarget": 5200 },
+  { "ante": 5, "baseTarget": 13000 },
+  { "ante": 6, "baseTarget": 32000 },
+  { "ante": 7, "baseTarget": 78000 },
+  { "ante": 8, "baseTarget": 190000 }
+]

@@ -129,8 +129,8 @@ console.log(`Juego inicializado: ${ready ? 'SI' : 'NO'}`);
 // Dejar correr unos frames para que el render se estabilice.
 await page.waitForTimeout(2500);
 
-// --- Estado inicial ---
-const initial = await page.evaluate(() => {
+// --- Estado inicial: PANTALLA DE INICIO ---
+const menuState = await page.evaluate(() => {
   const ff = window.__fungiflush;
   if (!ff) return null;
   const stats = ff.scene.stats();
@@ -138,10 +138,15 @@ const initial = await page.evaluate(() => {
   const gl = canvas?.getContext('webgl2') || canvas?.getContext('webgl');
   return {
     status: ff.engine.run.status,
+    menuVisible: Boolean(document.querySelector('.panel.is-menu')),
+    menuActions: [...document.querySelectorAll('.panel.is-menu [data-act]')].map((b) => b.dataset.act),
+    hudHidden: document.getElementById('ui-root')?.classList.contains('in-menu') ?? false,
+    continueEnabled: !document
+      .querySelector('.panel.is-menu [data-act="continue"]')
+      ?.classList.contains('is-disabled'),
     ante: ff.engine.run.ante,
     money: ff.engine.run.money,
     deckSize: ff.engine.run.deck.totalSize,
-    handSize: ff.engine.round?.hand.length ?? 0,
     jokers: ff.engine.run.jokers.length,
     stats,
     canvas: canvas ? `${canvas.width}x${canvas.height}` : 'sin canvas',
@@ -150,10 +155,50 @@ const initial = await page.evaluate(() => {
   };
 });
 
-console.log('\n--- Estado inicial ---');
-console.log(JSON.stringify(initial, null, 2));
+console.log('\n--- Pantalla de inicio ---');
+console.log(JSON.stringify(menuState, null, 2));
 
-await page.screenshot({ path: join(shotsDir, '01-blind-select.png') });
+await page.screenshot({ path: join(shotsDir, '01-menu.png') });
+
+// --- Ajustes: abrir, capturar y volver (ejercita el panel y el perfil) ---
+const settingsOpened = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.panel.is-menu [data-act="settings"]')?.click();
+  await wait(400);
+  return {
+    opened: Boolean(document.querySelector('.panel.is-settings')),
+    fields: document.querySelectorAll('.panel.is-settings .settings-field').length,
+  };
+});
+await page.screenshot({ path: join(shotsDir, '02-settings.png') });
+
+const settingsRoundTrip = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.panel.is-settings [data-act="close"]')?.click();
+  await wait(400);
+  return { backToMenu: Boolean(document.querySelector('.panel.is-menu')) };
+});
+console.log('\n--- Ajustes (abrir / cerrar) ---');
+console.log(JSON.stringify({ ...settingsOpened, ...settingsRoundTrip }, null, 2));
+
+// --- Nueva partida desde el MENU (camino real del jugador) ---
+await page.evaluate(() => {
+  document.querySelector('.panel.is-menu [data-act="new"]')?.click();
+});
+await page.waitForTimeout(1600);
+
+const afterStart = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    status: ff.engine.run.status,
+    blindSelectVisible: Boolean(document.querySelector('.blind-grid')),
+    hudHidden: document.getElementById('ui-root')?.classList.contains('in-menu') ?? false,
+    deckSize: ff.engine.run.deck.totalSize,
+  };
+});
+console.log('\n--- Tras "Nueva partida" ---');
+console.log(JSON.stringify(afterStart, null, 2));
+await page.screenshot({ path: join(shotsDir, '03-blind-select.png') });
 
 // --- Elegir ciego ---
 await page.evaluate(() => {
@@ -162,7 +207,7 @@ await page.evaluate(() => {
   ff.engine.chooseBlind(blinds[1]?.id);
 });
 await page.waitForTimeout(1400);
-await page.screenshot({ path: join(shotsDir, '02-playing.png') });
+await page.screenshot({ path: join(shotsDir, '04-playing.png') });
 
 const afterBlind = await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -185,7 +230,7 @@ await page.evaluate(() => {
   for (const card of hand.slice(0, 3)) ff.engine.toggleSelect(card.uid);
 });
 await page.waitForTimeout(700);
-await page.screenshot({ path: join(shotsDir, '03-selection.png') });
+await page.screenshot({ path: join(shotsDir, '05-selection.png') });
 
 const preview = await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -198,7 +243,7 @@ console.log(JSON.stringify(preview, null, 2));
 await page.evaluate(() => window.__fungiflush.engine.playHand());
 // La secuencia de puntuacion anima ~2 s; esperamos a que termine.
 await page.waitForTimeout(3200);
-await page.screenshot({ path: join(shotsDir, '04-after-play.png') });
+await page.screenshot({ path: join(shotsDir, '06-after-play.png') });
 
 const afterPlay = await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -227,7 +272,7 @@ await page.evaluate(() => {
   ff.engine.playHand();
 });
 await page.waitForTimeout(3000);
-await page.screenshot({ path: join(shotsDir, '05-shop.png') });
+await page.screenshot({ path: join(shotsDir, '07-shop.png') });
 
 const afterWin = await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -253,7 +298,7 @@ const langResult = await page.evaluate(async () => {
 });
 console.log('\n--- Cambio de idioma ---');
 console.log(JSON.stringify(langResult, null, 2));
-await page.screenshot({ path: join(shotsDir, '06-language.png') });
+await page.screenshot({ path: join(shotsDir, '08-language.png') });
 
 // --- Medir FPS durante 3 segundos ---
 const fps = await page.evaluate(
@@ -283,7 +328,17 @@ for (const warning of consoleWarnings.slice(0, 5)) console.log(`  ! ${warning}`)
 
 const ok =
   ready &&
-  initial?.webgl === 'contexto activo' &&
+  menuState?.status === 'menu' &&
+  menuState?.menuVisible === true &&
+  menuState?.hudHidden === true &&
+  menuState?.continueEnabled === false &&
+  settingsOpened?.opened === true &&
+  settingsOpened?.fields === 5 &&
+  settingsRoundTrip?.backToMenu === true &&
+  afterStart?.status === 'blind_select' &&
+  afterStart?.blindSelectVisible === true &&
+  afterStart?.hudHidden === false &&
+  menuState?.webgl === 'contexto activo' &&
   (afterBlind?.sceneHand ?? 0) > 0 &&
   (afterBlind?.hand ?? 0) > 0 &&
   afterPlay?.score > 0 &&

@@ -13,6 +13,10 @@
 import { bus, type CardInstance, type GameEngine, type RunSnapshot, type ShopOffer } from '@engine/index';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import type { ProfileSettings } from '@meta/ProfileState';
+import { buildMenuPanel } from './MenuScreen';
+import { buildSettingsPanel } from './SettingsScreen';
+import { buildAboutPanel } from './AboutScreen';
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -26,6 +30,21 @@ export interface HudCallbacks {
   onRestart: () => void;
   onToggleLanguage: () => void;
   onContinueRun: () => void;
+  // --- Pantalla de inicio ---
+  onStartRun: () => void;
+  onOpenCollection: () => void;
+  onOpenExpansions: () => void;
+  onOpenPass: () => void;
+  onOpenSettings: () => void;
+  onOpenAbout: () => void;
+}
+
+/** Datos de build que muestra el menu / acerca de. */
+export interface HudAppInfo {
+  version: string;
+  contentHash: string | null;
+  packs: string[];
+  skipped?: Array<{ id: string; reason: string }>;
 }
 
 /** Formatea numeros grandes como en los juegos de puntuacion. */
@@ -42,6 +61,7 @@ export class HUD {
   private readonly engine: GameEngine;
   private readonly callbacks: HudCallbacks;
   private readonly root: HTMLElement;
+  private readonly appInfo: HudAppInfo;
 
   // Referencias cacheadas: buscar en el DOM cada frame es gratis hasta que
   // deja de serlo. Con 60 FPS y 20 nodos, importa.
@@ -65,10 +85,16 @@ export class HUD {
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
 
-  constructor(options: { engine: GameEngine; root: HTMLElement; callbacks: HudCallbacks }) {
+  constructor(options: {
+    engine: GameEngine;
+    root: HTMLElement;
+    callbacks: HudCallbacks;
+    appInfo?: HudAppInfo;
+  }) {
     this.engine = options.engine;
     this.root = options.root;
     this.callbacks = options.callbacks;
+    this.appInfo = options.appInfo ?? { version: '0.0.0', contentHash: null, packs: [] };
     this.build();
     this.subscribe();
     this.render();
@@ -206,6 +232,10 @@ export class HUD {
     const run = this.engine.run;
     if (!run) return;
     const round = this.engine.round;
+
+    // En el menu no tiene sentido mostrar anted, dinero ni contadores: se
+    // apaga el cromo del HUD y queda solo el overlay de la pantalla de inicio.
+    this.root.classList.toggle('in-menu', run.status === 'menu');
 
     this.elAnte.textContent = String(run.ante);
     this.elMoney.textContent = formatNumber(run.money);
@@ -354,6 +384,9 @@ export class HUD {
     this.lastStatus = status;
 
     switch (status) {
+      case 'menu':
+        this.showMenu();
+        break;
       case 'blind_select':
         this.showBlindSelect();
         break;
@@ -391,6 +424,66 @@ export class HUD {
     this.continueLabel = label;
     this.lastStatus = null;
     this.render();
+  }
+
+  // ==========================================================================
+  // Pantalla de inicio
+  // ==========================================================================
+
+  /** Muestra un panel propio (ajustes, acerca de, coleccion...). */
+  showPanel(content: HTMLElement): void {
+    this.openOverlay(content);
+  }
+
+  showMenu(): void {
+    const panel = buildMenuPanel(
+      {
+        version: this.appInfo.version,
+        continueLabel: this.continueLabel,
+      },
+      {
+        onStartRun: () => this.callbacks.onStartRun(),
+        onContinueRun: () => this.callbacks.onContinueRun(),
+        onOpenCollection: () => this.callbacks.onOpenCollection(),
+        onOpenExpansions: () => this.callbacks.onOpenExpansions(),
+        onOpenPass: () => this.callbacks.onOpenPass(),
+        onOpenSettings: () => this.callbacks.onOpenSettings(),
+        onOpenAbout: () => this.callbacks.onOpenAbout(),
+        onToggleLanguage: () => this.callbacks.onToggleLanguage(),
+      },
+    );
+    this.openOverlay(panel);
+  }
+
+  showSettings(settings: ProfileSettings): void {
+    this.showPanel(
+      buildSettingsPanel(settings, {
+        onPatch: (patch) => this.settingsPatch?.(patch),
+        onToggleLanguage: () => this.callbacks.onToggleLanguage(),
+        onClose: () => this.showMenu(),
+      }),
+    );
+  }
+
+  showAbout(): void {
+    this.showPanel(
+      buildAboutPanel(
+        {
+          version: this.appInfo.version,
+          contentHash: this.appInfo.contentHash,
+          packs: this.appInfo.packs,
+          ...(this.appInfo.skipped ? { skipped: this.appInfo.skipped } : {}),
+        },
+        () => this.showMenu(),
+      ),
+    );
+  }
+
+  /** Inyectado por el controlador: es quien escribe en el perfil. */
+  private settingsPatch: ((patch: Partial<ProfileSettings>) => void) | null = null;
+
+  bindSettingsPatch(fn: (patch: Partial<ProfileSettings>) => void): void {
+    this.settingsPatch = fn;
   }
 
   private showBlindSelect(): void {

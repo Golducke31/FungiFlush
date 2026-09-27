@@ -1,0 +1,67 @@
+# CI de FungiFlush.
+#
+# Orden pensado para fallar RAPIDO y barato:
+#   1. tipos    -> segundos
+#   2. tests    -> segundos (packs, migraciones, entitlements)
+#   3. contenido-> valida los JSON de los packs (gate de contenido)
+#   4. balance  -> 500 partidas headless (regresion de balance)
+#   5. build    -> produce el bundle y avisa si crecio demasiado
+#
+# El smoke test de WebGL NO corre aca: necesita Chromium con SwiftShader y
+# rutas absolutas al binario del entorno de desarrollo. Se corre a mano con
+# `npm run smoke` antes de un release.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Tests (packs, migraciones, entitlements)
+        run: npm test
+
+      - name: Validar contenido de los packs
+        run: npm run validate
+
+      - name: Regresion de balance (500 partidas headless)
+        run: npm run sim:balance
+
+      - name: Build de produccion
+        run: npm run build:release
+
+      - name: Presupuesto de tamano del bundle
+        run: |
+          node -e "
+            const { readdirSync, statSync } = require('node:fs');
+            const dir = 'dist/assets';
+            const js = readdirSync(dir).filter((f) => f.endsWith('.js'));
+            let total = 0;
+            for (const f of js) total += statSync(dir + '/' + f).size;
+            const mb = total / 1024 / 1024;
+            console.log('JS total: ' + mb.toFixed(2) + ' MB');
+            // 1.6 MB deja aire para crecer sin sorpresas; el juego hoy pesa ~0.75 MB.
+            if (mb > 1.6) { console.error('PRESUPUESTO EXCEDIDO'); process.exit(1); }
+            const maps = readdirSync(dir).filter((f) => f.endsWith('.map'));
+            if (maps.length > 0) { console.error('sourcemaps en release: ' + maps.length); process.exit(1); }
+          "
