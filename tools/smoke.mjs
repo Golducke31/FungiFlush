@@ -840,10 +840,16 @@ await page.screenshot({ path: join(shotsDir, '18-postfx-high.png') });
 
 const fxPlaying = await page.evaluate(() => {
   const ff = window.__fungiflush;
+  const stats = ff.scene.stats();
+  const round = ff.engine.round;
   return {
     status: ff.engine.run.status,
-    hand: ff.engine.round?.hand.length ?? 0,
-    drawCalls: ff.scene.stats().drawCalls,
+    hand: round?.hand.length ?? 0,
+    jokers: ff.engine.run.jokers.length,
+    drawCalls: stats.drawCalls,
+    // La sombra de contacto es UN draw call para todas las cartas, pero el
+    // conteo de instancias tiene que seguir a las cartas vivas.
+    shadows: stats.shadows,
   };
 });
 console.log('\n--- Post-procesamiento: en partida ---');
@@ -955,6 +961,7 @@ const ok =
   postFx?.drawCallsTotal > postFx?.drawCalls &&
   fxPlaying?.status === 'playing' &&
   (fxPlaying?.hand ?? 0) > 0 &&
+  fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0) &&
   afterStart?.status === 'blind_select' &&
   afterStart?.blindSelectVisible === true &&
   afterStart?.hudHidden === false &&

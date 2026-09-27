@@ -25,7 +25,12 @@ import {
 
 import { ArtAssets, artKeyFor, artKeyForJoker } from './ArtAssets';
 import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
-import { CardTextureCache, createCardBackCanvas, createTableCanvas } from './CardTexture';
+import {
+  CardTextureCache,
+  createCardBackCanvas,
+  createShadowCanvas,
+  createTableCanvas,
+} from './CardTexture';
 import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
@@ -95,6 +100,14 @@ const ZONE_COLOR: Record<'play' | 'discard' | 'hand', number> = {
   discard: 0xe05c8a,
   hand: 0x5fd8e8,
 };
+
+// --- Sombra de contacto ---
+/** Cuantas sombras entran en el pool (mano 12 + jokers 5 + jugadas 5). */
+const SHADOW_MAX = 64;
+/** Altura de la sombra: sobre la mesa, debajo de todo lo demas. */
+const SHADOW_Y = 0.004;
+/** La sombra es un poco mas grande que la carta, si no se ve como un borde. */
+const SHADOW_SPREAD = 1.04;
 
 /** Mitad de la profundidad de una carta (para calcular el encuadre). */
 const CARD_HALF_DEPTH = CARD_HEIGHT / 2;
@@ -221,6 +234,9 @@ export class SceneManager {
   private perf: { samples: number[]; target: number } | null = null;
   /** Cadena de post-procesamiento. Null en `low`, que renderiza directo. */
   private postFx: PostFx | null = null;
+  /** Sombras de contacto: un solo mesh instanciado para todas las cartas. */
+  private shadowMesh: THREE.InstancedMesh | null = null;
+  private readonly shadowDummy = new THREE.Object3D();
 
   constructor(options: SceneOptions) {
     this.engine = options.engine;
@@ -295,6 +311,7 @@ export class SceneManager {
     this.frameMonitor = tier === 'low' ? null : new FrameMonitor(tier);
     this.syncAmbient();
     this.syncPostFx();
+    if (this.shadowMesh) this.shadowMesh.visible = TIER_CONFIG[tier].contactShadows;
 
     if (resizeNow) this.resize();
   }
@@ -415,15 +432,21 @@ export class SceneManager {
     this.scene.add(table);
     this.disposables.push(tableTexture, tableGeometry, tableMaterial);
 
-    // --- Luces (3 nada mas: cada luz extra es un pase de sombreado) ---
-    const ambient = new THREE.AmbientLight(0x4a6a86, 1.1);
-    const key = new THREE.DirectionalLight(0xcfe6ff, 1.5);
+    // --- Luces ---
+    //
+    // DOS luces, no cuatro. Cada luz dinamica extra es una vuelta mas del bucle
+    // de iluminacion en CADA fragmento iluminado (cartas, mesa, pilas), y en un
+    // celular eso es fill rate puro.
+    //
+    // Las dos `PointLight` que habia (rim cian + relleno violeta) se fueron: su
+    // trabajo lo hacen el halo de cada carta, que ya tiene color propio, y el
+    // charco de luz horneado en el canvas de la mesa. La `HemisphereLight` toma
+    // el lugar del ambient Y ademas da un gradiente direccional (cielo cian,
+    // suelo casi negro) que el ambient plano no daba.
+    const sky = new THREE.HemisphereLight(0x5b8ba8, 0x080c12, 1.05);
+    const key = new THREE.DirectionalLight(0xcfe6ff, 1.7);
     key.position.set(-6, 18, 12);
-    const rim = new THREE.PointLight(0x5fd8e8, 60, 60, 2);
-    rim.position.set(0, 9, -8);
-    const fill = new THREE.PointLight(0xa78bfa, 40, 50, 2);
-    fill.position.set(0, 6, 14);
-    this.scene.add(ambient, key, rim, fill);
+    this.scene.add(sky, key);
 
     // --- Particulas ---
     this.scene.add(this.particles.points);
@@ -439,6 +462,80 @@ export class SceneManager {
     this.deckMesh = this.buildPile(DECK_X, DECK_Z, 7);
     this.discardMesh = this.buildPile(DISCARD_X, DISCARD_Z, 4);
     this.scene.add(this.deckMesh, this.discardMesh);
+
+    this.buildShadows();
+  }
+
+  /**
+   * Sombras de contacto: UN `InstancedMesh` para todas las cartas.
+   *
+   * Se construye siempre y se prende o apaga por tier: es un mesh, una textura
+   * y una geometria, y crearlo bajo demanda obligaria a reconstruir la escena
+   * cada vez que alguien cambia la calidad.
+   */
+  private buildShadows(): void {
+    const texture = new THREE.CanvasTexture(createShadowCanvas());
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      // El color lo pone el material y el degradado va en el ALPHA de la
+      // textura: por eso el material es negro y la textura no tiene color.
+      color: 0x000000,
+      transparent: true,
+      depthWrite: false,
+    });
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const mesh = new THREE.InstancedMesh(geometry, material, SHADOW_MAX);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    // Antes que el resto de lo transparente: la sombra va sobre la mesa.
+    mesh.renderOrder = -1;
+    mesh.count = 0;
+    mesh.visible = false;
+
+    this.scene.add(mesh);
+    this.disposables.push(texture, material, geometry);
+    this.shadowMesh = mesh;
+  }
+
+  /**
+   * Reposiciona las sombras debajo de cada carta viva.
+   *
+   * La sombra se apoya en la MESA (`SHADOW_Y`), no donde esta la carta: si
+   * siguiera su altura, al levantar una carta la sombra subiria con ella y el
+   * efecto se perderia. Tampoco hereda el giro (`home.flip`) ni la inclinacion
+   * del arrastre: una sombra siempre esta acostada.
+   */
+  private updateShadows(): void {
+    const mesh = this.shadowMesh;
+    if (!mesh || !mesh.visible) return;
+
+    let count = 0;
+    this.forEachCard((card) => {
+      if (count >= SHADOW_MAX) return;
+      // Se encoge al despegarse de la mesa: es la unica pista de profundidad
+      // que tiene una carta acostada.
+      const scale = 1 - card.liftAmount * 0.3;
+      this.shadowDummy.position.set(card.home.x, SHADOW_Y, card.home.z);
+      this.shadowDummy.rotation.set(-Math.PI / 2, 0, card.home.rz);
+      this.shadowDummy.scale.set(
+        CARD_WIDTH * SHADOW_SPREAD * scale,
+        CARD_HEIGHT * SHADOW_SPREAD * scale,
+        1,
+      );
+      this.shadowDummy.updateMatrix();
+      mesh.setMatrixAt(count, this.shadowDummy.matrix);
+      count += 1;
+    });
+
+    mesh.count = count;
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Recorre todas las cartas vivas sin asignar nada por frame. */
+  private forEachCard(visit: (card: Card3D) => void): void {
+    for (const card of this.handCards.values()) visit(card);
+    for (const card of this.jokerCards.values()) visit(card);
+    for (const card of this.scoringCards) visit(card);
   }
 
   /** Pila de cartas (mazo o descarte): N planos apilados con el dorso. */
@@ -1291,6 +1388,7 @@ export class SceneManager {
         zone.update(dt, this.clock);
       }
 
+      this.updateShadows();
       this.particles.update(dt);
       this.rig.update(dt, this.clock);
 
@@ -1512,6 +1610,9 @@ export class SceneManager {
       gpuTextures: info.memory.textures,
       // p95 de la ventana del monitor. 0 en `low`, que no tiene monitor.
       frameP95: Math.round(this.frameMonitor?.p95 ?? 0),
+      // Cuantas sombras de contacto se estan dibujando. Es UNA sola llamada de
+      // dibujo para todas, pero el conteo tiene que seguir a las cartas vivas.
+      shadows: this.shadowMesh?.visible ? this.shadowMesh.count : 0,
     };
   }
 }

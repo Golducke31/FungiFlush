@@ -285,6 +285,16 @@ export class Card3D {
   }
 
   /**
+   * Cuanto esta levantada la carta, 0..1 (hover, seleccion o arrastre).
+   *
+   * Lo lee la sombra de contacto para encogerse cuando la carta se despega de
+   * la mesa: es la unica pista de profundidad que tiene una carta acostada.
+   */
+  get liftAmount(): number {
+    return this.dragging ? 1 : this.lift;
+  }
+
+  /**
    * Gira la carta.
    *
    * Sin `tweens` el cambio es instantaneo, que es lo correcto al repartir una

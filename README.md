@@ -713,6 +713,41 @@ for eyeballing the difference.
 
 ---
 
+## 💡 Lighting: two lights and painted shadows
+
+**Four lights became two.** Every extra dynamic light is another trip through the lighting loop
+in *every* lit fragment — cards, table, both piles — and on a phone that is pure fill rate. The
+two `PointLight`s (a cyan rim and a violet fill) are gone; their job is done by each card's halo,
+which already carries its own colour, and by the light pool baked into the table canvas. In their
+place is a `HemisphereLight` (cyan sky, near-black ground) plus one `DirectionalLight` key. The
+hemisphere does the ambient's job *and* adds a directional gradient a flat ambient cannot.
+
+Intensity is the knob: the first attempt (1.7) lit the table so much the scene lost its dark
+mood. 1.05 with a duller sky keeps the hyphae readable without washing out the black.
+
+**Shadows are painted, not computed.** Cards lie flat and coplanar with the table, so a shadow
+map from above produces a null, aliased shadow in exchange for a full depth pass plus shadow
+sampling in every lit fragment. Instead, one `InstancedMesh` with a soft radial-alpha texture
+draws **every contact shadow in a single draw call** (`shadows` in `stats()` is the instance
+count, and the smoke asserts it tracks the live cards).
+
+Two details that matter:
+
+- The shadow sits at **table height**, taken from `home.x/z` — never from the card's `y`. If it
+  followed the card, lifting one would lift its shadow and the effect would vanish.
+- It does **not** inherit `home.flip` or the drag tilt: a shadow is always lying down. It does
+  inherit `home.rz` so it turns with a fanned-out hand.
+- It **shrinks** as the card lifts (hover, selection, drag). That is the only depth cue a flat
+  card has. It does not fade: `InstancedMesh` has no per-instance opacity without a custom
+  shader, and shrinking already reads as "it came off the table".
+
+Net cost: the shadows add **+1 draw call for all cards**, and dropping two lights removes more
+than that from the per-fragment lighting loop.
+
+`tools/shots/v2-shadows.png` shows the result: cards grounded, table still dark.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |

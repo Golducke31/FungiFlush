@@ -677,6 +677,43 @@ export class CardTextureCache {
 }
 
 /**
+ * Sombra de contacto de una carta.
+ *
+ * Es un cuadrado con un degradado radial de ALPHA (el color lo pone el
+ * material, que es negro): al escalarlo con la proporcion de la carta queda una
+ * sombra eliptica. Se usa una sola textura para todas las sombras del juego.
+ *
+ * Por que una sombra pintada y no un shadow map: las cartas estan acostadas y
+ * coplanares con la mesa, asi que una luz desde arriba produce una sombra nula
+ * a cambio de un pase de profundidad completo y muestreo en cada fragmento
+ * iluminado. Esto cuesta un draw call para TODAS las cartas.
+ */
+export function createShadowCanvas(size = 256): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    size * 0.06,
+    size / 2,
+    size / 2,
+    size * 0.5,
+  );
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+  gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.42)');
+  gradient.addColorStop(0.78, 'rgba(0, 0, 0, 0.14)');
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  return canvas;
+}
+
+/**
  * Dorso de carta. Se genera una sola vez y se reutiliza en el mazo y en el
  * descarte. Si no hay imagen, cae a un dorso procedural.
  */
