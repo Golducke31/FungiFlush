@@ -784,6 +784,93 @@ const fps = await page.evaluate(
 );
 console.log(`\nFPS medidos (SwiftShader, sin GPU real): ${fps}`);
 
+// ===========================================================================
+// Post-procesamiento (V1) — carga aparte, con el tier alto forzado
+// ===========================================================================
+// Va al FINAL y no comparte ninguna asercion de tiempo con el resto: con el
+// composer encima, bajo render por software los FPS caen y las esperas de las
+// otras pruebas (que asumen los ~12 FPS del baseline) dejarian de ser validas.
+// Aca solo se afirma que el camino ARRANCA y que el reparto de draw calls es el
+// esperado. Que se vea bien se juzga mirando la captura, no con un assert.
+
+await page.goto(`${URL_TO_TEST.replace(/\?.*$/, '')}?quality=high`, {
+  waitUntil: 'load',
+  timeout: 45000,
+});
+const fxReady = await page
+  .waitForFunction(() => Boolean(window.__fungiflush?.scene), { timeout: 30000 })
+  .then(() => true)
+  .catch(() => false);
+// Con composer hay que dejar asentar el primer frame: los render targets se
+// crean en el constructor y el primer resize los dimensiona.
+await page.waitForTimeout(5000);
+
+const postFx = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const quality = ff.quality();
+  const stats = ff.scene.stats();
+  const canvas = document.getElementById('fungiflush-canvas');
+  return {
+    tier: quality.tier,
+    reason: quality.reason,
+    composer: quality.composer,
+    bloom: quality.bloom,
+    gradeMix: quality.gradeMix,
+    drawCalls: stats.drawCalls,
+    drawCallsTotal: stats.drawCallsTotal,
+    programs: stats.programs,
+    gpuTextures: stats.gpuTextures,
+    canvas: canvas ? `${canvas.width}x${canvas.height}` : 'sin canvas',
+  };
+});
+console.log('\n--- Post-procesamiento (tier alto) ---');
+console.log(JSON.stringify(postFx, null, 2));
+await page.screenshot({ path: join(shotsDir, '18a-postfx-menu.png') });
+
+// Entrar a una partida: el bloom se juzga sobre las cartas y sus halos, no
+// sobre el panel del menu (que tapa media escena con un fondo casi opaco).
+await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+await page.waitForTimeout(2000);
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  ff.engine.chooseBlind(ff.engine.availableBlinds()[1]?.id);
+});
+await page.waitForTimeout(5000);
+await page.screenshot({ path: join(shotsDir, '18-postfx-high.png') });
+
+const fxPlaying = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    status: ff.engine.run.status,
+    hand: ff.engine.round?.hand.length ?? 0,
+    drawCalls: ff.scene.stats().drawCalls,
+  };
+});
+console.log('\n--- Post-procesamiento: en partida ---');
+console.log(JSON.stringify(fxPlaying, null, 2));
+
+// FPS con el composer, para tener el COCIENTE contra el baseline. Bajo render
+// por software el valor absoluto no significa nada; la relacion si.
+const fpsHigh = await page.evaluate(
+  () =>
+    new Promise((resolve) => {
+      let frames = 0;
+      const start = performance.now();
+      const tick = () => {
+        frames += 1;
+        if (performance.now() - start < 3000) requestAnimationFrame(tick);
+        else resolve(Math.round((frames / (performance.now() - start)) * 1000));
+      };
+      requestAnimationFrame(tick);
+    }),
+);
+console.log(`FPS con post-procesamiento: ${fpsHigh} (baseline sin el: ${fps})`);
+// OJO con este numero: SwiftShader no tiene GPU, asi que los pases de pantalla
+// completa se ejecutan en CPU y el cociente sale enorme. En una GPU real tres
+// pases a resolucion completa son ruido. Sirve para detectar que algo se
+// disparo, NO como estimacion del costo en un celular.
+console.log(`Costo relativo del composer (solo informativo, render por software): ${(fps / Math.max(1, fpsHigh)).toFixed(2)}x`);
+
 // --- Reporte ---
 console.log('\n================ REPORTE ================');
 const realErrors = consoleErrors.filter((e) => !e.includes('favicon'));
@@ -858,6 +945,16 @@ const ok =
   boardFinished?.rematch === true &&
   boardClosed?.backToMenu === true &&
   boardClosed?.boardGone === true &&
+  // --- Post-procesamiento (V1) ---
+  fxReady === true &&
+  postFx?.tier === 'high' &&
+  postFx?.composer === true &&
+  postFx?.bloom === true &&
+  postFx?.gradeMix === 1 &&
+  postFx?.drawCalls > 0 &&
+  postFx?.drawCallsTotal > postFx?.drawCalls &&
+  fxPlaying?.status === 'playing' &&
+  (fxPlaying?.hand ?? 0) > 0 &&
   afterStart?.status === 'blind_select' &&
   afterStart?.blindSelectVisible === true &&
   afterStart?.hudHidden === false &&

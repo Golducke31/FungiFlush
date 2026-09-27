@@ -27,6 +27,7 @@ import {
   nextTierDown,
   resolveQuality,
 } from '../src/render/Quality.ts';
+import { createNightLut, gradeRgb } from '../src/render/Lut.ts';
 
 // ---------------------------------------------------------------------------
 // Deteccion por dispositivo
@@ -171,4 +172,74 @@ test('el p95 no se deja arrastrar por un frame lento', () => {
   monitor.sample(0.4);
   // 89 frames de 8 ms y uno de 400: el p95 sigue siendo 8.
   assert.equal(Math.round(monitor.p95), 8);
+});
+
+// ---------------------------------------------------------------------------
+// Grade de color (LUT procedural)
+// ---------------------------------------------------------------------------
+
+const OUT = [0, 0, 0];
+
+function grade(r: number, g: number, b: number): [number, number, number] {
+  gradeRgb(r, g, b, OUT);
+  return [OUT[0] ?? 0, OUT[1] ?? 0, OUT[2] ?? 0];
+}
+
+test('el grade deja el blanco y el negro en su lugar', () => {
+  const white = grade(1, 1, 1);
+  assert.ok(white[0] > 0.98 && white[1] > 0.98 && white[2] > 0.98, 'el blanco no puede apagarse');
+
+  const black = grade(0, 0, 0);
+  // Las sombras se tinen de teal, pero MUY poco: levantar el negro arruina el
+  // fondo oscuro, que es media estetica del juego.
+  assert.ok(black[0] < 0.02, 'el rojo no se levanta en el negro');
+  assert.ok(black[2] > black[1] && black[1] > black[0], 'el tinte de sombras va hacia el azul-verde');
+  assert.ok(black[2] < 0.08, `el negro se levanto demasiado: ${black[2].toFixed(3)}`);
+});
+
+test('el grade sube el contraste y no invierte nada', () => {
+  const dark = grade(0.25, 0.25, 0.25);
+  const mid = grade(0.5, 0.5, 0.5);
+  const light = grade(0.75, 0.75, 0.75);
+
+  assert.ok(dark[0] < 0.25, 'por debajo del medio se oscurece');
+  assert.ok(light[0] > 0.75, 'por encima del medio se aclara');
+  assert.ok(mid[0] > 0.49 && mid[0] < 0.52, 'el medio casi no se mueve');
+
+  // Monotonia: si esto se rompe aparecen bandas y colores invertidos.
+  let previous = -1;
+  for (let i = 0; i <= 32; i++) {
+    const value = grade(i / 32, i / 32, i / 32)[0];
+    assert.ok(value >= previous - 1e-6, `el grade no es monotono en ${i / 32}`);
+    previous = value;
+  }
+});
+
+test('el grade siempre devuelve valores validos para la textura', () => {
+  for (let i = 0; i <= 16; i++) {
+    const value = i / 16;
+    const out = grade(value, 1 - value, value * 0.5);
+    for (const channel of out) {
+      assert.ok(channel >= 0 && channel <= 1, `canal fuera de rango: ${channel}`);
+      assert.ok(Number.isFinite(channel), 'canal no finito');
+    }
+  }
+});
+
+test('la textura del LUT tiene el tamano y el orden de canales correctos', () => {
+  const texture = createNightLut(4);
+  assert.equal(texture.image.width, 4);
+  assert.equal(texture.image.height, 4);
+  assert.equal(texture.image.depth, 4);
+
+  const data = texture.image.data as Uint8Array;
+  assert.equal(data.length, 4 * 4 * 4 * 4, 'RGBA por entrada');
+
+  // El primer texel es el negro (r=g=b=0) y el ultimo el blanco. Si los bucles
+  // de llenado estuvieran cruzados, el ultimo texel no seria blanco.
+  const last = data.length - 4;
+  assert.ok((data[last] ?? 0) > 250 && (data[last + 1] ?? 0) > 250 && (data[last + 2] ?? 0) > 250);
+  assert.equal(data[3], 255, 'alpha opaco');
+
+  texture.dispose();
 });

@@ -30,6 +30,7 @@ import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
+import { PostFx } from './PostFx';
 import {
   FrameMonitor,
   TIER_CONFIG,
@@ -218,6 +219,8 @@ export class SceneManager {
   private frameMonitor: FrameMonitor | null = null;
   /** Medicion opcional (`?perf=1`). Null si no se pidio. */
   private perf: { samples: number[]; target: number } | null = null;
+  /** Cadena de post-procesamiento. Null en `low`, que renderiza directo. */
+  private postFx: PostFx | null = null;
 
   constructor(options: SceneOptions) {
     this.engine = options.engine;
@@ -291,6 +294,7 @@ export class SceneManager {
     // En `low` no hay a donde bajar: el monitor no se crea.
     this.frameMonitor = tier === 'low' ? null : new FrameMonitor(tier);
     this.syncAmbient();
+    this.syncPostFx();
 
     if (resizeNow) this.resize();
   }
@@ -298,6 +302,44 @@ export class SceneManager {
   /** Las esporas de fondo son decorativas: se apagan con `reduceMotion`. */
   private syncAmbient(): void {
     this.particles.setAmbientEnabled(!this.reduceMotion && TIER_CONFIG[this.tier].ambientSpores > 0);
+  }
+
+  /**
+   * Crea o destruye la cadena de post-procesamiento segun el tier.
+   *
+   * Se RECONSTRUYE entera en cada cambio en vez de reconfigurarse: cambiar de
+   * `medium` a `high` cambia la cantidad de iteraciones del blur, la fuerza y
+   * la mezcla del grade, y tocar los pases en caliente es mas facil de romper
+   * que de arreglar. Cambiar de tier es un evento raro (un ajuste o una
+   * degradacion automatica), asi que el costo no importa.
+   *
+   * Al bajar a `low` se destruye en vez de dejarla apagada: son cinco render
+   * targets, dos de ellos a resolucion completa, y no tiene sentido reservar
+   * esa memoria para un camino que no la usa.
+   */
+  private syncPostFx(): void {
+    if (this.postFx) {
+      this.postFx.dispose();
+      this.postFx = null;
+    }
+
+    const config = TIER_CONFIG[this.tier];
+    if (!config.composer) return;
+
+    const canvas = this.renderer.domElement;
+    this.postFx = new PostFx({
+      renderer: this.renderer,
+      scene: this.scene,
+      camera: this.rig.camera,
+      width: canvas.clientWidth || window.innerWidth,
+      height: canvas.clientHeight || window.innerHeight,
+      bloom: config.bloom,
+      bloomStrength: config.bloomStrength,
+      bloomThreshold: config.bloomThreshold,
+      bloomIterations: config.bloomIterations,
+      gradeMix: config.gradeMix,
+      samples: config.samples,
+    });
   }
 
   /** Estado de calidad actual. Lo consume el panel de debug (F3) y el smoke. */
@@ -1260,10 +1302,11 @@ export class SceneManager {
       // headless). El ahorro de bateria del menu viene por otro lado: 6
       // cartas decorativas, sin MSAA, DPR acotado y cero logica de juego.
       //
-      // `info` se resetea a mano porque `autoReset` esta apagado: cuando entre
-      // el composer, cada pase hace su propio `render()` y el conteo se pisaria.
+      // `info` se resetea a mano porque `autoReset` esta apagado: el composer
+      // hace un `render()` por pase y el conteo se pisaria.
       this.renderer.info.reset();
-      this.renderer.render(this.scene, this.rig.camera);
+      if (this.postFx) this.postFx.render();
+      else this.renderer.render(this.scene, this.rig.camera);
 
       this.sampleFrame(rawDt);
     };
@@ -1389,8 +1432,12 @@ export class SceneManager {
     // DPR limitado por el nivel de calidad: en celular, 3x de DPR mata el
     // framerate sin verse mejor. El tope de `low` es el mismo de siempre.
     const maxDpr = TIER_CONFIG[this.tier].maxDpr;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
+    const dpr = Math.min(window.devicePixelRatio, maxDpr);
+    this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
+    // El composer no hereda el tamano del renderer: hay que avisarle con las
+    // dimensiones LOGICAS y el DPR por separado (ver PostFx.setSize).
+    this.postFx?.setSize(width, height, dpr);
 
     this.rig.resize(aspect);
 
@@ -1432,6 +1479,8 @@ export class SceneManager {
     this.textures.clear();
     for (const zone of this.dropZones) zone.dispose();
     this.dropZones.length = 0;
+    this.postFx?.dispose();
+    this.postFx = null;
     this.backTexture = null;
     this.particles.dispose();
     for (const item of this.disposables) item.dispose();
@@ -1449,7 +1498,11 @@ export class SceneManager {
       particles: this.particles.activeCount,
       tweens: this.tweens.activeCount,
       textures: this.textures.size,
-      drawCalls: info.render.calls,
+      // Con composer, `info.render.calls` acumula TODOS los pases (los quads de
+      // pantalla completa incluidos). El numero comparable entre tiers es el de
+      // la escena, que lo toma el SnapshotPass.
+      drawCalls: this.postFx ? this.postFx.drawCalls : info.render.calls,
+      drawCallsTotal: info.render.calls,
       triangles: info.render.triangles,
       // Memoria de GPU: es lo que delata una fuga de materiales o de texturas
       // (cada carta crea 4-5 materiales propios, asi que esto tiene que subir y

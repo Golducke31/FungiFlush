@@ -661,6 +661,58 @@ four places but never defined, so it was silently falling back — exists in `:r
 
 ---
 
+## ✨ Post-processing: selective bloom + colour grade
+
+```
+RenderPass (HDR)  →  Bright  →  BlurH  →  BlurV  →  Composite  →  OutputPass  →  LUTPass
+```
+
+**A hand-written bloom, not `UnrealBloomPass`.** The stock pass runs 5 mip levels with two
+blur passes each — about 13 passes at half resolution or better. On a desktop GPU that is
+free; on a mid-range phone it is the difference between 60 and 25 FPS. Here it is four passes
+and three of them run at **quarter resolution**, which is where the real saving is: a separable
+blur's bandwidth scales with pixels, and the result is added back blurred, so the lost detail
+is invisible.
+
+**The bloom cannot eat the dark table.** The threshold is luminance-based (0.70) and the bloom
+is computed on the HDR buffer *before* tone mapping. In linear space the table sits at
+~0.005–0.08 and a mushroom's cyan at ~0.7–0.8, so the background is physically out of reach.
+The "bloom swallowed everything" failure mode only shows up below a threshold of 0.3.
+
+**Tone mapping lives in `OutputPass`.** The three materials in `Shaders.ts` are raw
+`ShaderMaterial`s that never included the tone-mapping or colour-space shader chunks — they
+were writing linear values into an sRGB framebuffer, which is why the glow always looked
+darker than its hex suggested. With the composer, `OutputPass` applies ACES + exposure + sRGB
+**once**, at the end, and the whole frame is encoded correctly. The `toneMapped: false` flags on
+those materials become inert; they are left in place because they are now harmless.
+
+**The colour grade is procedural, not a baked LUT.** `src/render/Lut.ts` builds a 16³
+`Data3DTexture` from a pure function: a soft S-curve, a deliberate teal lift in the shadows, a
+whisper of warmth in the highlights, +8% saturation. A baked `.cube` is the professional route
+but it adds a binary asset, a loader and an external tool to the iteration loop, and the result
+is identical — 4096 entries the shader samples with linear filtering. Swapping in a hand-authored
+LUT later means replacing one function.
+
+The grade runs **after** `OutputPass`, so it is authored in display space: the numbers read as
+"what you see on screen", which is how anyone tuning it will think. It also lifted the table
+from near-black to a dark teal — a real change in mood, on purpose, and the first thing to
+touch if it turns out to be too much (`SHADOW_TINT` in `Lut.ts`).
+
+### What the composer costs, and what that number means
+
+The smoke test measures FPS with and without the composer and prints the ratio. **Under
+SwiftShader that ratio is meaningless**: there is no GPU, so the full-screen passes run on the
+CPU and the number comes out 5–11×. On real hardware three full-screen passes over ~1 M pixels
+is noise. It is reported to catch a regression — "this used to be 3 passes and now it is 12" —
+and explicitly *not* as an estimate of the cost on a phone. The only honest check is a real
+device, and the frame monitor is what protects that case: if `medium` cannot hold 28 ms, the
+game drops itself to `low` and tells the player.
+
+`tools/shots/cmp-low.png` and `cmp-high.png` are the same frame with and without the composer,
+for eyeballing the difference.
+
+---
+
 ## 🧪 Testing & simulation
 
 | Command | What it does |
@@ -673,12 +725,12 @@ four places but never defined, so it was silently falling back — exists in `:r
 | `npm run sim:board` | **10,000 random duels** checking no mutation (deep-frozen state), determinism (double play + command-log replay), termination, and that the depth net never fires. `--runs N`, `--hand N` for tuning. |
 | `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → **New Run (real click)** → blind select → **tap-to-select (real tap)** → **drag to play / discard / hand** → **flip a card and flip it back** → play (**real click**) → reward draft → shop → deck purge → upgrade → evolve → collection → **Mycelial Duel (curtain, a real placement, hidden-hand check, finish, close)** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 102/102**, **`npm run validate` 0 errors / 0 warnings**
+Latest runs: **`npm test` 106/106**, **`npm run validate` 0 errors / 0 warnings**
 (35 cards, 24 blinds, 2 offer tables, 1 upgrade track, 5 evolutions, 35 board entries),
 **`npm run sim` 100 games, 29% win rate, average ante 6.31, 0 hangs / 0 overflow, depth 2**,
 **`npm run sim:board` 10,000 duels, 0 mutation / 0 replay drift / 0 truncation, 10.7% draws**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.81 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
+**`npm run build:release` 0.79 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
 loads only when a duel starts).
 
 > **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under
