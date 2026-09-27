@@ -208,6 +208,7 @@ export class ContentRegistry {
       jokers: jokers.map(stripPack) as JokerDefinition[],
       blinds: blinds.map(stripPack) as BlindDefinition[],
       ...(this.antes.size > 0 ? { anteTargets: Object.fromEntries(this.antes) } : {}),
+      ...(this.offers.length > 0 ? { offers: [...this.offers] } : {}),
     };
   }
 

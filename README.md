@@ -27,6 +27,12 @@ to game events through a deterministic **Trigger Engine**.
   more code — and they can also arrive at runtime over HTTP.
 - **Start screen** with New Run / Continue / Collection / Expansions / Season Pass /
   Settings / Language / About, over a live idle 3D scene.
+- **Reward drafts**: clearing a Blind offers 3 cards to pick 1 from (skippable), before
+  the Shop. The flow is `playing → reward → shop → blind_select`, and it is driven by a
+  data table, not by code.
+- **Deck builder & collection**: sort the run deck, purge cards permanently, and browse
+  every specimen — including the ones you haven't discovered (silhouettes) and the ones
+  locked behind a DLC (greyed out, with the pack name).
 - **Versioned saves with a migration chain** (`SAVE_VERSION = 2`), plus a permanent
   **profile** (collection, settings, entitlements, stats) that survives updates.
 - **Entitlements + PackGate**: DLC gating as a pure predicate injected into the engine.
@@ -48,8 +54,8 @@ npm install          # install deps (Node >= 20)
 npm run dev          # Vite dev server (opens the game in the browser)
 
 npm run typecheck    # tsc --noEmit
-npm test             # pack merge / gating / save migrations / entitlements
-npm run validate     # validates every pack's JSON (content gate for CI)
+npm test             # packs / offers / gating / save migrations / entitlements
+npm run validate     # content gate: pack JSON + i18n keys used in code (CI)
 npm run sim          # console engine harness: validation + balance sim (no GPU)
 npm run sim:balance  # 500-run quiet balance pass (CI regression)
 npm run smoke        # headless WebGL smoke test (Playwright-core, mobile landscape)
@@ -83,9 +89,13 @@ You pick a Blind, play poker-style hands of fungal cards, and must beat the Blin
 | **Rarity** | `common` · `uncommon` · `rare` · `legendary` · `mythic`. |
 | **Status** | Negative states: `dormant`, `decay`, `spore_lock`, `overgrowth`. |
 
-After each Blind you enter the **Shop**: buy cards / Jokers / mutations, reroll, or sell.
-Economy defaults live in `src/engine/constants.ts`; the **Ante target table now lives in
-content** (`src/data/packs/base/antes.json`), so an expansion can add Antes without a
+After each Blind you get a **reward draft** (pick 1 of 3, or skip) and then enter the
+**Shop**: buy cards / Jokers / mutations, reroll, or sell. Between Blinds you can open the
+**Deck builder** to see your whole deck and purge cards for money.
+
+Economy defaults live in `src/engine/constants.ts`; the **Ante target table lives in
+content** (`src/data/packs/base/antes.json`) and so do the **offer tables**
+(`offers.json`), so an expansion can add Antes or change shop/reward balance without a
 code change.
 
 ### Combos (`src/engine/scoring/combos.ts`)
@@ -106,6 +116,7 @@ src/
 │   ├── GameEngine.ts       # Orchestrator: menu, runs, blinds, play/discard, shop, save
 │   ├── resolution.ts       # ResolutionContext accumulator (dry-run + sims)
 │   ├── cards/              # CardRegistry, Deck
+│   ├── offers/OfferService # Shop / reward-draft rolling from data tables
 │   ├── scoring/            # ScoreCalculator, combos
 │   ├── state/              # RunState, RoundState
 │   └── triggers/           # TriggerEngine, actions, conditions, source
@@ -139,6 +150,7 @@ src/
 ├── ui/                     # DOM HUD (observes the engine)
 │   ├── HUD.ts  styles.css
 │   ├── MenuScreen.ts  SettingsScreen.ts  AboutScreen.ts
+│   ├── RewardPanel.ts  DeckBuilderScreen.ts  CollectionScreen.ts
 ├── persistence/            # NUEVO — Storage + RunStore + ProfileStore + migrations
 └── main.ts                 # Controller: boot, wire engine↔render↔ui, autosave
 ```
@@ -238,6 +250,55 @@ error is to give away content, never to charge twice.
 
 ---
 
+## 🎁 Reward drafts, deck building & collection
+
+**Offer tables** (`src/data/packs/base/offers.json`) replaced the hardcoded shop. A table
+declares ordered `groups`; each group rolls `chance`, produces `count` offers, and picks
+one of its `options` by weight:
+
+```json
+{
+  "id": "blind_reward_draft",
+  "phase": "reward",
+  "groups": [
+    { "count": 3, "options": [
+      { "weight": 1, "kind": "card", "rarityWeights": { "common": 60, "uncommon": 30, "rare": 10 } }
+    ]}
+  ],
+  "pick": 1,
+  "allowSkip": true
+}
+```
+
+Three things this buys:
+
+1. **Balance is content.** Rarity weights, ante gates (`minAnte`), and how many cards a
+   draft offers are JSON, not TypeScript.
+2. **Deterministic ids.** `offer_<table>_<ante>_<blind>_<sequence>_<index>` — reproducible
+   from the seed, and unique across rerolls (the old ids were RNG-derived and could
+   collide).
+3. **Graceful absence.** A pack that declares no `reward` table simply has no draft: the
+   flow falls back to `playing → shop`.
+
+**Deck builder** (`src/ui/DeckBuilderScreen.ts`): sorts by element / family / rarity /
+level, and purges cards permanently for `ECONOMY.purgeCost`. Purging removes the card from
+the deck *and* from the hand — leaving it in hand would create a ghost the renderer still
+draws but the deck no longer owns. Purging is only allowed between Blinds or in the Shop.
+
+**Collection** (`src/ui/CollectionScreen.ts`) takes pre-resolved entries, so it knows
+nothing about the registry or entitlements. Three states per entry:
+
+| State | Shown as |
+| --- | --- |
+| Discovered | Name, colored by rarity |
+| Undiscovered | "Undiscovered" + dim swatch — a concrete goal |
+| Locked (DLC) | Greyed, with the pack name; tapping opens the store |
+
+`seenCardIds` is written to the profile on `card:drawn` / `card:created` (debounced by
+`ProfileStore`, so drawing 8 cards is not 8 disk writes).
+
+---
+
 ## 🔥 The Trigger Engine & infinite-loop protection
 
 *"How do I stop the trigger engine from entering an infinite cascade when a card re-fires
@@ -314,16 +375,23 @@ Toggle live with the language button in the HUD or the menu (or `toggleLanguage(
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` — full type safety, exhaustiveness checks on the action/condition/event maps. |
-| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, save migrations v1→v2, profile fallbacks, entitlement round-trip. |
-| `npm run validate` | Content gate: validates every pack's JSON and i18n coverage. Exits 1 on error. |
+| `npm test` | `node --test` via tsx: pack merge order, collisions, `allowOverride`, app-version skips, stable pools, content hash, gating, ante extrapolation, offer rolling (determinism, unique ids, rarity weights, ante gates), save migrations v1→v2, profile fallbacks, entitlement round-trip. |
+| `npm run validate` | Content gate: validates every pack's JSON, content i18n coverage, **and scans `src/**` for `t('...')` keys missing from a dictionary**. Exits 1 on error. |
 | `npm run sim` | Console harness: content + i18n validation, adversarial self-loop stress test, and **100 full AI playthroughs** with a balance report. |
 | `npm run sim:balance` | 500-run quiet balance pass (used as a CI regression). |
-| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → shop → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
+| `npm run smoke` | Headless WebGL smoke test (Playwright-core, mobile-landscape viewport): boots → menu → settings → New Run → blind select → play → **reward draft** → shop → **deck purge** → **collection** → language toggle, asserts 0 console errors. Screenshots land in `tools/shots/`. |
 
-Latest runs: **`npm test` 20/20**, **`npm run validate` 0 errors / 0 warnings**,
-**`npm run sim` 100 games, 27% win rate, 0 hangs / 0 overflow, depth 2**,
+Latest runs: **`npm test` 31/31**, **`npm run validate` 0 errors / 0 warnings**,
+**`npm run sim` 100 games, 21% win rate, average ante 5.92, 0 hangs / 0 overflow, depth 2**,
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
-**`npm run build:release` 0.71 MB of JS, no sourcemaps**.
+**`npm run build:release` 0.73 MB of JS, no sourcemaps**.
+
+> **Balance note (reward drafts).** Adding the draft moved the bot's win rate from 27% to
+> 21% *while the average ante reached stayed flat (5.95 → 5.92)*. Isolating the two
+> changes: with the new shop code but **no** draft the bot wins 17%; with the draft it wins
+> 21%. So the draft is a net **+4 points**, and the rest of the movement is the shop's RNG
+> stream changing (the old offer ids consumed extra RNG draws). The game is not harder —
+> the tail of the ante-8 distribution is just noisier than the average.
 
 CI (`.github/workflows/ci.yml`) runs typecheck → tests → content validation → 500-run
 balance regression → release build → bundle-size budget. The WebGL smoke test is manual
@@ -367,8 +435,8 @@ paid for.
 | --- | --- | --- |
 | **0** | Scalable foundations: content packs, profile, save migrations, CI, tests | ✅ done |
 | **1** | Start screen, settings, about, audio hooks | ✅ done |
-| **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | next |
-| **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | planned |
+| **2** | Reward drafts (`OfferService` + `offers.json`), deck builder, collection | ✅ done |
+| **3** | Unlimited upgrades (`LEVEL_UP_CARD` through `ResolutionContext`) + evolving cards | next |
 | **4** | Card flipping (`Card3D` back face + `home.flip`) and drag & drop (`Interaction` drop zones) | planned |
 | **5** | Tetra Master board mode: `src/engine/board/**` + `board.json` (hot-seat first) | planned |
 | **6** | Battle pass + store + Google Play Billing bridge | planned |

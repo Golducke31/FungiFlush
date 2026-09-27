@@ -138,6 +138,10 @@ interface RunResult {
   jokers: number;
   deckSize: number;
   destroyed: number;
+  /** Cartas ofrecidas en drafts de recompensa. */
+  rewardsOffered: number;
+  /** Cartas efectivamente tomadas en los drafts. */
+  rewardsTaken: number;
   /** Problemas reales: la partida no pudo continuar. */
   errores: string[];
   /** Cortes de seguridad del Trigger Engine (no son fallos). */
@@ -149,11 +153,16 @@ function cardValue(card: CardInstance): number {
   return card.def.baseSubstrate + card.def.baseSpores * 3;
 }
 
+/** A partir de este tamano de mazo el bot deja de tomar cartas en los drafts. */
+const DRAFT_DECK_LIMIT = 55;
+
 function simulateRun(seed: number, verbose: boolean): RunResult {
   const engine = new GameEngine({ seed, bundle: content });
   const errores: string[] = [];
   let overflows = 0;
   let discardsUsed = 0;
+  let rewardsOffered = 0;
+  let rewardsTaken = 0;
   engine.startRun(seed);
 
   const track = (label: string, res: ResolutionContext | null) => {
@@ -222,6 +231,31 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
       continue;
     }
 
+    if (status === 'reward') {
+      // Politica del draft: tomar la mejor carta, salvo que el mazo ya este
+      // demasiado grande. Diluir un mazo cuesta mas de lo que suma una carta
+      // mediocre, asi que a partir de cierto tamano el bot prefiere saltar.
+      const offers = engine.rewardOffers().filter((o) => !o.sold);
+      const deckSize = engine.run.deck.totalSize;
+
+      let best: { id: string; value: number } | null = null;
+      for (const offer of offers) {
+        const def = engine.registry.tryGetCard(offer.refId);
+        if (!def) continue;
+        const value = def.baseSubstrate + def.baseSpores * 3;
+        if (!best || value > best.value) best = { id: offer.id, value };
+      }
+
+      rewardsOffered += offers.length;
+      if (best && deckSize < DRAFT_DECK_LIMIT) {
+        if (engine.chooseReward(best.id)) rewardsTaken += 1;
+        else errores.push('chooseReward fallo con una oferta valida');
+      } else if (!engine.chooseReward(null)) {
+        errores.push('chooseReward(skip) fallo');
+      }
+      continue;
+    }
+
     if (status === 'shop') {
       // Compra voraz: prioriza jokers (que escalan) y luego lo mas barato.
       let bought = true;
@@ -262,6 +296,8 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
     jokers: engine.run.jokers.length,
     deckSize: engine.run.deck.totalSize,
     destroyed: engine.run.stats.cardsDestroyed,
+    rewardsOffered,
+    rewardsTaken,
     errores,
     overflows,
   };
@@ -511,6 +547,9 @@ console.log(`  Mejor mano promedio   : ${avg((r) => r.bestHand).toFixed(0)}`);
 console.log(`  Mejor mano absoluta   : ${max((r) => r.bestHand)}`);
 console.log(`  Jokers finales        : ${avg((r) => r.jokers).toFixed(2)} promedio`);
 console.log(`  Cartas destruidas     : ${avg((r) => r.destroyed).toFixed(2)} promedio`);
+console.log(
+  `  Drafts (ofertas)      : ${avg((r) => r.rewardsOffered).toFixed(1)} ofrecidas / ${avg((r) => r.rewardsTaken).toFixed(1)} tomadas`,
+);
 
 console.log(`\n  ${C.dim}Distribucion de ante alcanzado:${C.reset}`);
 for (let ante = 1; ante <= 8; ante++) {

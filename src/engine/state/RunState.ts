@@ -13,6 +13,8 @@ export type GameStatus =
   | 'blind_select'
   | 'playing'
   | 'scoring'
+  /** Draft de recompensa al ganar un blind, antes de la tienda. */
+  | 'reward'
   | 'shop'
   | 'game_over'
   | 'victory';

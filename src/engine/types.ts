@@ -339,6 +339,65 @@ export interface ShopOffer {
   cost: number;
   art: ArtSpec;
   sold: boolean;
+  /** Rareza del contenido ofertado. La UI la usa para el color sin tener que
+   *  resolver la definicion de nuevo. */
+  rarity?: Rarity;
+  /** Pack que aporta este contenido (para mostrar el origen / DLC). */
+  packId?: string;
+  /** Contenido de un DLC que el jugador no tiene: se muestra, no se compra. */
+  locked?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Tablas de oferta (tienda, recompensas, drafts)
+// ---------------------------------------------------------------------------
+//
+// Antes, la tienda estaba HARDCODEADA en GameEngine.rollOffers(): una carta
+// fija + 50% segunda carta o joker + una mutacion. Eso bloqueaba cualquier
+// sistema de recompensas y obligaba a tocar el motor para cada cambio de
+// balance. Ahora el balance de la tienda y de los drafts es contenido.
+
+export type OfferPhase = 'shop' | 'reward' | 'draft' | 'booster';
+
+export type OfferKind = 'card' | 'joker' | 'mutation' | 'voucher' | 'money';
+
+/** Una alternativa dentro de un grupo: se elige por peso. */
+export interface OfferOption {
+  weight: number;
+  kind: OfferKind;
+  /** Id fijo (vouchers). Si falta, se sortea del pool del tipo. */
+  refId?: string;
+  /** Restringe el sorteo a un pack concreto. */
+  packId?: string;
+  /** Solo `kind: 'money'`. */
+  amount?: number;
+  /** Pesos por rareza. Pisa los pesos globales del registro. */
+  rarityWeights?: Partial<Record<Rarity, number>>;
+  /** Restringe el sorteo a cartas/jokers con este tag. */
+  tag?: string;
+  minAnte?: number;
+  maxAnte?: number;
+}
+
+/**
+ * Un grupo produce `count` ofertas. `chance` (default 1) permite que un grupo
+ * aparezca solo a veces. Los grupos se evaluan EN ORDEN: el consumo del RNG es
+ * determinista, asi que una partida guardada sigue siendo reproducible.
+ */
+export interface OfferGroup {
+  count: number;
+  chance?: number;
+  options: OfferOption[];
+}
+
+export interface OfferTable {
+  id: string;
+  phase: OfferPhase;
+  groups: OfferGroup[];
+  /** Cuantas ofertas puede tomar el jugador (drafts). Default: todas. */
+  pick?: number;
+  allowSkip?: boolean;
+  allowDuplicates?: boolean;
 }
 
 export interface RunSnapshot {
@@ -352,7 +411,15 @@ export interface RunSnapshot {
   hands: number;
   discards: number;
   round: number;
-  status: 'menu' | 'blind_select' | 'playing' | 'scoring' | 'shop' | 'game_over' | 'victory';
+  status:
+    | 'menu'
+    | 'blind_select'
+    | 'playing'
+    | 'scoring'
+    | 'reward'
+    | 'shop'
+    | 'game_over'
+    | 'victory';
 }
 
 // ---------------------------------------------------------------------------

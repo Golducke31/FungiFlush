@@ -9,11 +9,16 @@
  */
 
 import { buildRegistry, loadDictionaries } from './loadContent.node.ts';
+import { validateI18nKeys } from './scanI18n.ts';
 
 function main(): void {
   const registry = buildRegistry();
   const dictionaries = loadDictionaries();
   const issues = registry.validate({ dictionaries });
+
+  // Claves i18n escritas en el CODIGO (no en el contenido). Es el chequeo que
+  // evita que un boton nuevo salga en pantalla como "deck.sortElement".
+  const i18nProblems = validateI18nKeys();
 
   const stats = registry.stats();
   console.log('── Contenido ──────────────────────────────');
@@ -43,8 +48,14 @@ function main(): void {
     for (const issue of errors.slice(0, 40)) {
       console.error(`  ✗ [${issue.pack}] ${issue.where}: ${issue.message}`);
     }
-    process.exit(1);
   }
+
+  if (i18nProblems.length > 0) {
+    console.error(`\n✗ ${i18nProblems.length} clave(s) i18n usadas en el codigo y sin traducir:`);
+    for (const problem of i18nProblems.slice(0, 40)) console.error(`  ✗ ${problem}`);
+  }
+
+  if (errors.length > 0 || i18nProblems.length > 0) process.exit(1);
 
   console.log(`\n✓ Contenido valido (${warnings.length} advertencias).`);
 }

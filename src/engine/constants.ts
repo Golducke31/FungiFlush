@@ -54,6 +54,8 @@ export const RUN_DEFAULTS = {
 
 /** Economia. */
 export const ECONOMY = {
+  /** Coste de eliminar una carta del mazo en el constructor de mazo. */
+  purgeCost: 4,
   /** Monedas por mano sobrante al superar el blind. */
   moneyPerUnusedHand: 1,
   /** Monedas base por superar un blind. */

@@ -21,6 +21,7 @@ import { RNG } from './rng';
 import { ResolutionContext } from './resolution';
 import { CardRegistry, type ContentBundle } from './cards/CardRegistry';
 import { Deck } from './cards/Deck';
+import { OfferService } from './offers/OfferService';
 import { ScoreCalculator, breakdownOf } from './scoring/ScoreCalculator';
 import { TriggerEngine } from './triggers/TriggerEngine';
 import { applyAction } from './triggers/actions';
@@ -78,6 +79,7 @@ export class GameEngine {
 
   private readonly triggers: TriggerEngine;
   private readonly scorer: ScoreCalculator;
+  private readonly offers: OfferService;
 
   private readonly contentFilter?: (def: CardDefinition) => boolean;
   private readonly jokerFilter?: (def: JokerDefinition) => boolean;
@@ -87,11 +89,16 @@ export class GameEngine {
   run!: RunState;
   round: RoundState | null = null;
 
+  /** Draft de recompensa pendiente (se sortea al ganar el blind). */
+  private reward: { offers: ShopOffer[]; pick: number; allowSkip: boolean } | null = null;
+  private rewardPicked = 0;
+
   constructor(opts: GameEngineOptions) {
     this.rng = new RNG(opts.seed ?? Date.now());
     this.registry.load(opts.bundle);
     this.triggers = new TriggerEngine(this.registry, this.rng);
     this.scorer = new ScoreCalculator(this.triggers, this.registry, this.rng);
+    this.offers = new OfferService(this.registry, opts.bundle.offers ?? []);
     this.contentFilter = opts.contentFilter;
     this.jokerFilter = opts.jokerFilter;
     this.contentHash = opts.contentHash ?? null;
@@ -318,7 +325,7 @@ export class GameEngine {
 
   enterShop(): void {
     this.run.status = 'shop';
-    const offers = this.rollOffers();
+    const offers = this.rollOffers(0);
     this.run.shop = { offers, rerolls: 0 };
 
     this.dispatchGlobal('ON_SHOP_ENTER');
@@ -334,8 +341,104 @@ export class GameEngine {
 
     this.setMoney(-cost);
     shop.rerolls += 1;
-    shop.offers = this.rollOffers();
+    // La secuencia entra en el id de la oferta: asi un reroll no puede
+    // producir ids repetidos (que romperian buyOffer).
+    shop.offers = this.rollOffers(shop.rerolls);
     bus.emit('shop:reroll', { offers: shop.offers, money: this.run.money });
+    this.emitState();
+    return true;
+  }
+
+  // ==========================================================================
+  // Recompensa (draft de cartas al ganar un blind)
+  // ==========================================================================
+
+  /** Ofertas del draft pendiente. Vacio si no hay recompensa esperando. */
+  rewardOffers(): ShopOffer[] {
+    return this.reward?.offers ?? [];
+  }
+
+  get rewardPick(): number {
+    return this.reward?.pick ?? 1;
+  }
+
+  get rewardAllowSkip(): boolean {
+    return this.reward?.allowSkip ?? true;
+  }
+
+  /**
+   * Elige una carta del draft. `null` = saltar (si `allowSkip`).
+   * Al resolver la ultima eleccion, entra a la tienda: el flujo es
+   * `playing -> reward -> shop -> blind_select`.
+   */
+  chooseReward(offerId: string | null): boolean {
+    const reward = this.reward;
+    if (!reward || this.run.status !== 'reward') return false;
+
+    if (offerId === null) {
+      if (!reward.allowSkip) return false;
+      bus.emit('reward:pick', { offer: null });
+      this.finishReward();
+      return true;
+    }
+
+    const offer = reward.offers.find((o) => o.id === offerId);
+    if (!offer || offer.sold) return false;
+
+    const card = this.registry.instantiate(offer.refId);
+    this.run.deck.insert(card, 'random');
+    offer.sold = true;
+    this.rewardPicked += 1;
+
+    bus.emit('reward:pick', { offer, card });
+    bus.emit('card:created', { card });
+
+    if (this.rewardPicked >= reward.pick) this.finishReward();
+    else this.emitState();
+    return true;
+  }
+
+  private finishReward(): void {
+    this.reward = null;
+    this.rewardPicked = 0;
+    bus.emit('reward:exit', {});
+    this.enterShop();
+  }
+
+  // ==========================================================================
+  // Deckbuilding
+  // ==========================================================================
+
+  /** Coste de purgar (eliminar) una carta del mazo. */
+  get purgeCost(): number {
+    return ECONOMY.purgeCost;
+  }
+
+  /** Purga solo entre blinds o en la tienda: nunca en medio de una mano. */
+  canPurge(): boolean {
+    return this.run.status === 'blind_select' || this.run.status === 'shop';
+  }
+
+  /**
+   * Elimina una carta del mazo de forma permanente.
+   *
+   * Se descuenta del mazo Y de la mano: si la carta estaba en la mano (por
+   * ejemplo al purgar desde la tienda, donde la mano sigue viva), dejarla ahi
+   * seria un fantasma que el render dibujaria pero el mazo ya no conoce.
+   */
+  purgeCard(uid: string): boolean {
+    if (!this.canPurge()) return false;
+    if (this.run.money < ECONOMY.purgeCost) return false;
+
+    const card = this.run.deck.allCards.find((c) => c.uid === uid);
+    if (!card) return false;
+
+    this.run.deck.remove(uid);
+    if (this.round) this.round.hand = this.round.hand.filter((c) => c.uid !== uid);
+    if (this.round) this.round.selected = this.round.selected.filter((id) => id !== uid);
+
+    this.setMoney(-ECONOMY.purgeCost);
+    bus.emit('deck:purged', { card, cost: ECONOMY.purgeCost });
     this.emitState();
     return true;
   }
@@ -504,6 +607,29 @@ export class GameEngine {
       });
 
       this.dispatchGlobal('ON_ROUND_WIN');
+
+      // El draft de recompensa va ANTES de la tienda. Si el contenido no
+      // declara una tabla de fase 'reward', el flujo es el de siempre:
+      // un pack que no la declara no cambia el juego.
+      const rewardOffers = this.offers.rollPhase('reward', this.rollContext(0));
+      if (rewardOffers.length > 0) {
+        const table = this.offers.tablesFor('reward')[0];
+        this.reward = {
+          offers: rewardOffers,
+          pick: table?.pick ?? 1,
+          allowSkip: table?.allowSkip ?? true,
+        };
+        this.rewardPicked = 0;
+        this.run.status = 'reward';
+        bus.emit('reward:enter', {
+          offers: rewardOffers,
+          pick: this.reward.pick,
+          allowSkip: this.reward.allowSkip,
+        });
+        this.emitState();
+        return;
+      }
+
       this.enterShop();
       return;
     }
@@ -628,70 +754,23 @@ export class GameEngine {
     }
   }
 
-  private rollOffers(): ShopOffer[] {
-    const offers: ShopOffer[] = [];
-    let counter = 0;
-    const makeId = () => `offer_${this.run.ante}_${this.run.blindIndex}_${counter++}_${this.rng.int(1000, 9999)}`;
+  /**
+   * Sorteo de la tienda. El balance vive en `offers.json` (pack `base`): aca
+   * solo se le pasa el contexto. Antes esto era un bloque hardcodeado.
+   */
+  private rollOffers(sequence: number): ShopOffer[] {
+    return this.offers.rollPhase('shop', this.rollContext(sequence));
+  }
 
-    const card = this.registry.rollRandomCard(this.rng, this.contentFilter);
-    if (card) {
-      offers.push({
-        id: makeId(),
-        kind: 'card',
-        refId: card.id,
-        nameKey: card.nameKey,
-        descKey: card.descKey,
-        cost: card.cost,
-        art: card.art,
-        sold: false,
-      });
-    }
-
-    const second = this.rng.chance(0.5)
-      ? this.registry.rollRandomCard(this.rng, this.contentFilter)
-      : undefined;
-    if (second) {
-      offers.push({
-        id: makeId(),
-        kind: 'card',
-        refId: second.id,
-        nameKey: second.nameKey,
-        descKey: second.descKey,
-        cost: second.cost,
-        art: second.art,
-        sold: false,
-      });
-    } else {
-      const joker = this.registry.rollRandomJoker(this.rng);
-      if (joker && (!this.jokerFilter || this.jokerFilter(joker))) {
-        offers.push({
-          id: makeId(),
-          kind: 'joker',
-          refId: joker.id,
-          nameKey: joker.nameKey,
-          descKey: joker.descKey,
-          cost: joker.cost,
-          art: joker.art,
-          sold: false,
-        });
-      }
-    }
-
-    const mutation = this.registry.rollRandomMutation(this.rng);
-    if (mutation) {
-      offers.push({
-        id: makeId(),
-        kind: 'mutation',
-        refId: mutation.id,
-        nameKey: mutation.nameKey,
-        descKey: mutation.descKey,
-        cost: mutation.cost,
-        art: mutation.art,
-        sold: false,
-      });
-    }
-
-    return offers;
+  private rollContext(sequence: number) {
+    return {
+      rng: this.rng,
+      ante: this.run.ante,
+      blindIndex: this.run.blindIndex,
+      sequence,
+      ...(this.contentFilter ? { cardFilter: this.contentFilter } : {}),
+      ...(this.jokerFilter ? { jokerFilter: this.jokerFilter } : {}),
+    };
   }
 
   private decayStatuses(): void {

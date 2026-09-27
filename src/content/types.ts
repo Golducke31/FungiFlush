@@ -21,8 +21,13 @@ import type {
   BlindDefinition,
   CardDefinition,
   JokerDefinition,
-  Rarity,
+  OfferTable,
 } from '@engine/index';
+
+// Los tipos de tabla de oferta viven en el MOTOR (`src/engine/types.ts`)
+// porque son parte del contrato de datos que el motor consume. Aca solo se
+// re-exportan para que el resto de la capa de contenido los tenga a mano.
+export type { OfferTable, OfferGroup, OfferOption, OfferKind, OfferPhase } from '@engine/index';
 
 // ---------------------------------------------------------------------------
 // Manifiesto
@@ -93,34 +98,6 @@ export interface PackManifest {
 export interface AnteRow {
   ante: number;
   baseTarget: number;
-}
-
-/** Un slot de una tabla de ofertas (tienda / recompensa / draft). */
-export interface OfferSlot {
-  weight: number;
-  kind: 'card' | 'joker' | 'mutation' | 'voucher' | 'pack' | 'money';
-  refId?: string;
-  packId?: string;
-  amount?: number;
-  rarityWeights?: Partial<Record<Rarity, number>>;
-  tag?: string;
-  count?: number;
-  minAnte?: number;
-  maxAnte?: number;
-}
-
-export type OfferPhase = 'shop' | 'reward' | 'draft' | 'booster';
-
-export interface OfferTable {
-  id: string;
-  phase: OfferPhase;
-  slots: OfferSlot[];
-  slotsMin: number;
-  slotsMax: number;
-  /** Cuantas ofertas puede tomar el jugador (draft). */
-  pick?: number;
-  allowSkip?: boolean;
-  allowDuplicates?: boolean;
 }
 
 export interface RawPack {

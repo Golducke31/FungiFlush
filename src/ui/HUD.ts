@@ -17,6 +17,9 @@ import type { ProfileSettings } from '@meta/ProfileState';
 import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
+import { buildRewardPanel } from './RewardPanel';
+import { buildDeckBuilderPanel } from './DeckBuilderScreen';
+import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -37,6 +40,11 @@ export interface HudCallbacks {
   onOpenPass: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
+  // --- Fase 2: recompensa y deckbuilding ---
+  /** `null` = saltar el draft. */
+  onPickReward: (offerId: string | null) => void;
+  onPurge: (uid: string) => void;
+  onOpenDeck: () => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -390,6 +398,9 @@ export class HUD {
       case 'blind_select':
         this.showBlindSelect();
         break;
+      case 'reward':
+        this.showReward();
+        break;
       case 'shop':
         this.showShop(this.engine.run.shop?.offers ?? []);
         break;
@@ -486,10 +497,75 @@ export class HUD {
     this.settingsPatch = fn;
   }
 
+  // ==========================================================================
+  // Fase 2: recompensa, deckbuilding y coleccion
+  // ==========================================================================
+
+  /** Draft de recompensa al ganar un blind. */
+  showReward(): void {
+    this.showPanel(
+      buildRewardPanel(
+        {
+          offers: this.engine.rewardOffers(),
+          pick: this.engine.rewardPick,
+          allowSkip: this.engine.rewardAllowSkip,
+          taken: this.engine.rewardOffers().filter((o) => o.sold).length,
+        },
+        {
+          onPick: (offerId) => this.callbacks.onPickReward(offerId),
+          onSkip: () => this.callbacks.onPickReward(null),
+        },
+      ),
+    );
+  }
+
+  /** Mazo de la run: ver, ordenar y purgar. */
+  showDeckBuilder(): void {
+    this.showPanel(
+      buildDeckBuilderPanel(
+        {
+          cards: this.engine.run.deck.allCards,
+          money: this.engine.run.money,
+          purgeCost: this.engine.purgeCost,
+          canPurge: this.engine.canPurge(),
+        },
+        {
+          onPurge: (uid) => this.callbacks.onPurge(uid),
+          onClose: () => {
+            this.lastStatus = null;
+            this.render();
+          },
+        },
+      ),
+    );
+  }
+
+  /** Coleccion: la provee el controlador (necesita el registro y el gate). */
+  private collectionProvider: (() => CollectionEntry[]) | null = null;
+
+  bindCollectionProvider(fn: () => CollectionEntry[]): void {
+    this.collectionProvider = fn;
+  }
+
+  showCollection(): void {
+    const entries = this.collectionProvider?.() ?? [];
+    this.showPanel(
+      buildCollectionPanel(entries, {
+        // Se puede abrir la coleccion desde el menu o desde una run en curso:
+        // al cerrar se vuelve al overlay que corresponda al estado actual.
+        onClose: () => {
+          this.lastStatus = null;
+          this.render();
+        },
+        onOpenStore: () => this.callbacks.onOpenExpansions(),
+      }),
+    );
+  }
+
   private showBlindSelect(): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
-    panel.className = 'panel';
+    panel.className = 'panel is-blind-select';
 
     const title = document.createElement('h2');
     title.className = 'panel-title';
@@ -536,6 +612,12 @@ export class HUD {
       actions.appendChild(resume);
     }
 
+    const deck = document.createElement('button');
+    deck.className = 'btn';
+    deck.textContent = `${t('deck.open')} (${run.deck.totalSize})`;
+    deck.dataset['act'] = 'deck';
+    deck.addEventListener('click', () => this.callbacks.onOpenDeck());
+
     const newRun = document.createElement('button');
     newRun.className = 'btn is-ghost';
     newRun.textContent = t('ui.newRun');
@@ -546,7 +628,7 @@ export class HUD {
     langBtn.textContent = t('ui.language');
     langBtn.addEventListener('click', () => this.callbacks.onToggleLanguage());
 
-    actions.append(newRun, langBtn);
+    actions.append(deck, newRun, langBtn);
 
     panel.append(title, subtitle, grid, actions);
     this.openOverlay(panel);
@@ -556,7 +638,7 @@ export class HUD {
     if (this.engine.run.status !== 'shop') return;
 
     const panel = document.createElement('div');
-    panel.className = 'panel';
+    panel.className = 'panel is-shop';
 
     const title = document.createElement('h2');
     title.className = 'panel-title';
@@ -624,6 +706,12 @@ export class HUD {
     sellInfo.style.margin = '0';
     sellInfo.textContent = t('action.sell');
 
+    const deck = document.createElement('button');
+    deck.className = 'btn';
+    deck.textContent = `${t('deck.open')} (${this.engine.run.deck.totalSize})`;
+    deck.dataset['act'] = 'deck';
+    deck.addEventListener('click', () => this.callbacks.onOpenDeck());
+
     const reroll = document.createElement('button');
     reroll.className = 'btn';
     const cost = 5 + (this.engine.run.shop?.rerolls ?? 0);
@@ -636,7 +724,7 @@ export class HUD {
     leave.textContent = t('action.leaveShop');
     leave.addEventListener('click', () => this.callbacks.onLeaveShop());
 
-    actions.append(sellInfo, reroll, leave);
+    actions.append(sellInfo, deck, reroll, leave);
     panel.append(title, subtitle, grid, actions);
     this.openOverlay(panel);
   }
@@ -644,7 +732,7 @@ export class HUD {
   private showGameOver(reason: 'loss' | 'victory'): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
-    panel.className = 'panel';
+    panel.className = `panel is-gameover is-${reason}`;
 
     const title = document.createElement('h2');
     title.className = 'panel-title';

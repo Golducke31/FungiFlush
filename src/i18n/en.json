@@ -51,7 +51,9 @@
     "scoring": "Scoring...",
     "shop": "The Mycelium Market",
     "game_over": "Your colony has died",
-    "victory": "The mycelium has taken the world"
+    "victory": "The mycelium has taken the world",
+    "menu": "Main menu",
+    "reward": "Reward"
   },
   "result": {
     "blindCleared": "Blind cleared!",
@@ -465,7 +467,8 @@
     "triggerOverflow": "Trigger chain cut short ({count} times). First: {first}",
     "saveIncompatible": "That save is from an older version and could not be loaded.",
     "contentChanged": "Content was updated; this run keeps going with the new balance.",
-    "saveMigrated": "Your save was updated to the new format."
+    "saveMigrated": "Your save was updated to the new format.",
+    "rewardUnavailable": "That reward is no longer available."
   },
   "menu": {
     "tagline": "A mycelial roguelite deckbuilder",
@@ -495,7 +498,11 @@
     "title": "Collection",
     "locked": "Locked — {pack}",
     "seen": "{seen} of {total} discovered",
-    "comingSoon": "Coming in a future update"
+    "comingSoon": "Coming in a future update",
+    "unknown": "Undiscovered",
+    "cards": "Specimens",
+    "jokers": "Jokers",
+    "all": "All"
   },
   "store": {
     "title": "Expansions",
@@ -526,5 +533,27 @@
     "base": {
       "title": "Base game"
     }
+  },
+  "reward": {
+    "title": "Reward",
+    "subtitle": "Choose one specimen to add to your deck",
+    "pick": "Take",
+    "taken": "Taken",
+    "skip": "Skip",
+    "skipHint": "You keep your deck lean"
+  },
+  "deck": {
+    "title": "Deck",
+    "open": "Deck",
+    "purge": "Purge ({cost})",
+    "purged": "{name} was purged",
+    "cannotAfford": "Not enough money to purge",
+    "onlyBetweenBlinds": "You can only edit the deck between blinds",
+    "size": "{count} cards",
+    "empty": "Your deck is empty",
+    "sortElement": "Element",
+    "sortFamily": "Family",
+    "sortRarity": "Rarity",
+    "sortLevel": "Level"
   }
 }

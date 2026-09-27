@@ -923,6 +923,165 @@ body {
   accent-color: var(--spores);
 }
 
+/* --------------------------------------------------------------------------
+   Recompensa (draft), constructor de mazo y coleccion
+   -------------------------------------------------------------------------- */
+
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.reward-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.025);
+  transition: border-color 0.15s, transform 0.12s;
+}
+
+.reward-card:hover:not(.is-sold) {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.reward-card.is-sold {
+  opacity: 0.4;
+}
+
+.reward-element {
+  width: 26px;
+  height: 4px;
+  border-radius: 99px;
+  opacity: 0.85;
+}
+
+.reward-name {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.reward-desc {
+  font-size: 12px;
+  color: #b6c6d6;
+  line-height: 1.4;
+  flex: 1;
+}
+
+/* El grid scrollea por dentro: con 40+ cartas el panel no puede crecer sin
+   techo o se come los botones de abajo. */
+.deck-toolbar {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.deck-toolbar .btn.is-current {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: rgba(95, 216, 232, 0.12);
+}
+
+.deck-grid,
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  /* El grid scrollea por dentro: con 40+ cartas, dejar que el panel crezca
+     empuja los botones de accion fuera de la pantalla. */
+  max-height: min(42vh, 300px);
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 16px;
+}
+
+.deck-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.deck-card-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.deck-card-meta {
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.deck-card-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.deck-card-level {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--violet);
+}
+
+.collection-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.collection-card.is-locked {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.collection-card.is-clickable {
+  cursor: pointer;
+}
+
+.collection-card.is-unknown {
+  opacity: 0.55;
+}
+
+.collection-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.collection-name {
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+
+.collection-lock {
+  flex-basis: 100%;
+  font-size: 10px;
+  color: var(--dim);
+}
+
 /* En retrato (o casi cuadrado) el menu se apila: mejor scrollear que recortar. */
 @media (orientation: portrait), (max-aspect-ratio: 1/1) {
   .panel.is-menu {

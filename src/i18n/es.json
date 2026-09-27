@@ -51,7 +51,9 @@
     "scoring": "Puntuando...",
     "shop": "El Mercado del Micelio",
     "game_over": "Tu colonia murió",
-    "victory": "El micelio se apoderó del mundo"
+    "victory": "El micelio se apoderó del mundo",
+    "menu": "Menú principal",
+    "reward": "Recompensa"
   },
   "result": {
     "blindCleared": "¡Ciego superado!",
@@ -465,7 +467,8 @@
     "triggerOverflow": "Cadena de disparos cortada ({count} veces). Primera: {first}",
     "saveIncompatible": "Ese guardado es de una versión anterior y no se pudo cargar.",
     "contentChanged": "El contenido se actualizó; esta partida sigue con el balance nuevo.",
-    "saveMigrated": "Tu partida se actualizó al nuevo formato."
+    "saveMigrated": "Tu partida se actualizó al nuevo formato.",
+    "rewardUnavailable": "Esa recompensa ya no está disponible."
   },
   "menu": {
     "tagline": "Un roguelite de mazo micelial",
@@ -495,7 +498,11 @@
     "title": "Colección",
     "locked": "Bloqueado — {pack}",
     "seen": "{seen} de {total} descubiertos",
-    "comingSoon": "Disponible en una próxima actualización"
+    "comingSoon": "Disponible en una próxima actualización",
+    "unknown": "Sin descubrir",
+    "cards": "Especímenes",
+    "jokers": "Jokers",
+    "all": "Todas"
   },
   "store": {
     "title": "Expansiones",
@@ -526,5 +533,27 @@
     "base": {
       "title": "Juego base"
     }
+  },
+  "reward": {
+    "title": "Recompensa",
+    "subtitle": "Elegí un espécimen para sumar a tu mazo",
+    "pick": "Tomar",
+    "taken": "Tomada",
+    "skip": "Saltar",
+    "skipHint": "Mantenés el mazo liviano"
+  },
+  "deck": {
+    "title": "Mazo",
+    "open": "Mazo",
+    "purge": "Purgar ({cost})",
+    "purged": "{name} fue purgada",
+    "cannotAfford": "No te alcanza el dinero para purgar",
+    "onlyBetweenBlinds": "Solo podés editar el mazo entre blinds",
+    "size": "{count} cartas",
+    "empty": "Tu mazo está vacío",
+    "sortElement": "Elemento",
+    "sortFamily": "Familia",
+    "sortRarity": "Rareza",
+    "sortLevel": "Nivel"
   }
 }

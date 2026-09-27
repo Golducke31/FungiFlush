@@ -1,0 +1,164 @@
+/**
+ * DeckBuilderScreen.ts — Ver y editar el mazo de la run.
+ *
+ * Fase 2 cubre lo minimo que hace que un deckbuilder sea un deckbuilder:
+ * VER el mazo entero y PODER SACAR cartas. Las mejoras ilimitadas llegan en la
+ * Fase 3 y reutilizan este mismo panel.
+ *
+ * El panel no toca el motor: pide purgas por callback. Ordenar y filtrar es
+ * estado local de la vista, no del juego.
+ */
+
+import type { CardInstance, Rarity } from '@engine/index';
+import { t } from '@i18n/index';
+import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+
+export type DeckSort = 'element' | 'family' | 'rarity' | 'level';
+
+export interface DeckBuilderCallbacks {
+  onPurge: (uid: string) => void;
+  onClose: () => void;
+}
+
+export interface DeckBuilderState {
+  cards: CardInstance[];
+  money: number;
+  purgeCost: number;
+  canPurge: boolean;
+}
+
+const RARITY_RANK: Record<Rarity, number> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  legendary: 3,
+  mythic: 4,
+};
+
+function sortCards(cards: CardInstance[], mode: DeckSort): CardInstance[] {
+  const copy = [...cards];
+  copy.sort((a, b) => {
+    switch (mode) {
+      case 'element':
+        return a.def.element.localeCompare(b.def.element) || a.def.id.localeCompare(b.def.id);
+      case 'family':
+        return a.def.family.localeCompare(b.def.family) || a.def.id.localeCompare(b.def.id);
+      case 'rarity':
+        return RARITY_RANK[b.def.rarity] - RARITY_RANK[a.def.rarity] || a.def.id.localeCompare(b.def.id);
+      case 'level':
+        return b.level - a.level || a.def.id.localeCompare(b.def.id);
+    }
+  });
+  return copy;
+}
+
+export function buildDeckBuilderPanel(
+  state: DeckBuilderState,
+  callbacks: DeckBuilderCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-deck';
+
+  const title = document.createElement('h2');
+  title.className = 'panel-title';
+  title.textContent = t('deck.title');
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'panel-subtitle';
+  subtitle.textContent = `${t('deck.size', { count: state.cards.length })} · ${t('hud.money')} ${state.money}`;
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'deck-toolbar';
+
+  const grid = document.createElement('div');
+  grid.className = 'deck-grid';
+
+  let sort: DeckSort = 'element';
+
+  const render = () => {
+    grid.innerHTML = '';
+    const cards = sortCards(state.cards, sort);
+    if (cards.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'offer-desc';
+      empty.textContent = t('deck.empty');
+      grid.appendChild(empty);
+      return;
+    }
+
+    for (const card of cards) {
+      const cell = document.createElement('div');
+      cell.className = 'deck-card';
+
+      const name = document.createElement('div');
+      name.className = 'deck-card-name';
+      name.textContent = t(card.def.nameKey);
+      name.style.color = hexToCss(ELEMENT_COLOR[card.def.element] ?? ELEMENT_COLOR.neutral);
+
+      const meta = document.createElement('div');
+      meta.className = 'deck-card-meta';
+      meta.textContent = `${t(`element.${card.def.element}`)} · ${t(`family.${card.def.family}`)}`;
+
+      const stats = document.createElement('div');
+      stats.className = 'deck-card-stats';
+      const substrate = document.createElement('span');
+      substrate.style.color = hexToCss(0xf2a63b);
+      substrate.textContent = String(card.def.baseSubstrate + card.bonusSubstrate);
+      const spores = document.createElement('span');
+      spores.style.color = hexToCss(0x4fd18b);
+      spores.textContent = `x${card.def.baseSpores + card.bonusSpores}`;
+      const rarity = document.createElement('span');
+      rarity.style.color = hexToCss(RARITY_COLOR[card.def.rarity]);
+      rarity.textContent = t(`rarity.${card.def.rarity}`);
+      stats.append(substrate, spores, rarity);
+
+      if (card.level > 1) {
+        const level = document.createElement('div');
+        level.className = 'deck-card-level';
+        level.textContent = `Lv ${card.level}`;
+        cell.appendChild(level);
+      }
+
+      const purge = document.createElement('button');
+      purge.className = 'btn is-ghost is-small';
+      purge.textContent = t('deck.purge', { cost: state.purgeCost });
+      purge.dataset['act'] = 'purge';
+      purge.dataset['uid'] = card.uid;
+      purge.disabled = !state.canPurge || state.money < state.purgeCost;
+      purge.addEventListener('click', () => callbacks.onPurge(card.uid));
+
+      cell.append(name, meta, stats, purge);
+      grid.appendChild(cell);
+    }
+  };
+
+  const sorts: DeckSort[] = ['element', 'family', 'rarity', 'level'];
+  for (const mode of sorts) {
+    const button = document.createElement('button');
+    button.className = `btn is-ghost is-small${mode === sort ? ' is-current' : ''}`;
+    button.textContent = t(`deck.sort${mode.charAt(0).toUpperCase()}${mode.slice(1)}`);
+    button.dataset['act'] = `sort-${mode}`;
+    button.addEventListener('click', () => {
+      sort = mode;
+      for (const sibling of toolbar.querySelectorAll('button')) {
+        sibling.classList.toggle('is-current', sibling === button);
+      }
+      render();
+    });
+    toolbar.appendChild(button);
+  }
+
+  render();
+
+  const actions = document.createElement('div');
+  actions.className = 'panel-actions';
+  const close = document.createElement('button');
+  close.className = 'btn is-play';
+  close.textContent = t('ui.close');
+  close.dataset['act'] = 'close';
+  close.addEventListener('click', () => callbacks.onClose());
+  actions.appendChild(close);
+
+  panel.append(title, subtitle, toolbar, grid, actions);
+  return panel;
+}

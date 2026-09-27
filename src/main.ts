@@ -16,7 +16,14 @@
  * el menu (`engine.enterMenu()`), que es la pantalla de inicio.
  */
 
-import { GameEngine, bus, detectCombos, type RunSaveData } from '@engine/index';
+import {
+  GameEngine,
+  bus,
+  detectCombos,
+  type CardDefinition,
+  type JokerDefinition,
+  type RunSaveData,
+} from '@engine/index';
 import { bootstrapContent } from '@content/bootstrap';
 import { currentLanguage, initI18n, setLanguage, t, toggleLanguage, validateDictionaryCoverage } from '@i18n/index';
 import { ProfileStore } from '@persistence/ProfileStore';
@@ -26,6 +33,7 @@ import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
 import { ArtAssets, SceneManager } from '@render/index';
 import { HUD } from '@ui/HUD';
+import type { CollectionEntry, CollectionState } from '@ui/CollectionScreen';
 import { attachAudioHooks } from '@audio/AudioBus';
 import en from '@i18n/en.json';
 import es from '@i18n/es.json';
@@ -157,6 +165,82 @@ async function boot(): Promise<void> {
     runStore.autosave(() => engine.serialize());
   });
 
+  // --- Coleccion: descubrimiento de cartas ---
+  // Se marca una carta como "vista" la primera vez que aparece en una mano o
+  // que se crea. El perfil debouncea la escritura, asi que esto no golpea el
+  // disco una vez por carta dibujada.
+  const seen = new Set(profile.collection.seenCardIds);
+  const markSeen = (cardId: string): void => {
+    if (seen.has(cardId)) return;
+    seen.add(cardId);
+    profileStore.patch((p) => {
+      if (!p.collection.seenCardIds.includes(cardId)) p.collection.seenCardIds.push(cardId);
+    });
+  };
+  bus.on('card:drawn', ({ card }) => markSeen(card.def.id));
+  bus.on('card:created', ({ card }) => markSeen(card.def.id));
+
+  // --- Estadisticas de perfil ---
+  bus.on('game:over', ({ reason, ante }) => {
+    profileStore.patch((p) => {
+      p.stats.runs += 1;
+      if (reason === 'victory') p.stats.wins += 1;
+      p.stats.bestAnte = Math.max(p.stats.bestAnte, ante);
+    });
+  });
+
+  /**
+   * Entradas de la coleccion: TODO el contenido del registro (incluido el de
+   * DLC sin comprar, que se muestra bloqueado) con su estado y si el jugador
+   * ya lo descubrio.
+   */
+  const buildCollection = (): CollectionEntry[] => {
+    const stateOf = (id: string): CollectionState => {
+      const state = gate.contentState(id);
+      return state === 'allowed' ? 'owned' : state;
+    };
+    const packTitleOf = (id: string): string | undefined => {
+      const packId = content.registry.packOf(id);
+      return packId ? content.registry.manifestOf(packId)?.titleKey : undefined;
+    };
+
+    const entries: CollectionEntry[] = [];
+    for (const card of content.registry.poolOf('card') as CardDefinition[]) {
+      entries.push({
+        id: card.id,
+        nameKey: card.nameKey,
+        element: card.element,
+        rarity: card.rarity,
+        kind: 'card',
+        state: stateOf(card.id),
+        seen: seen.has(card.id),
+        ...(packTitleOf(card.id) ? { packTitleKey: packTitleOf(card.id) } : {}),
+      });
+    }
+    for (const joker of content.registry.poolOf('joker') as JokerDefinition[]) {
+      entries.push({
+        id: joker.id,
+        nameKey: joker.nameKey,
+        element: 'neutral',
+        rarity: joker.rarity,
+        kind: 'joker',
+        state: stateOf(joker.id),
+        seen: seen.has(joker.id),
+        ...(packTitleOf(joker.id) ? { packTitleKey: packTitleOf(joker.id) } : {}),
+      });
+    }
+
+    // Orden estable: primero los descubiertos, despues por rareza.
+    const rank: Record<string, number> = { common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4 };
+    entries.sort(
+      (a, b) =>
+        Number(b.seen) - Number(a.seen) ||
+        (rank[b.rarity] ?? 0) - (rank[a.rarity] ?? 0) ||
+        a.id.localeCompare(b.id),
+    );
+    return entries;
+  };
+
   // --- Validacion de contenido en desarrollo ---
   if (import.meta.env.DEV) {
     const errors = content.issues.filter((i) => i.level === 'error');
@@ -268,13 +352,34 @@ async function boot(): Promise<void> {
         engine.startRun(seed);
         scene.setMode('run');
       },
-      onOpenCollection: () => hud?.toast(t('collection.comingSoon'), 'info'),
+      onOpenCollection: () => hud?.showCollection(),
       onOpenExpansions: () => hud?.toast(t('store.comingSoon'), 'info'),
       onOpenPass: () => hud?.toast(t('pass.comingSoon'), 'info'),
       onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
       onOpenAbout: () => hud?.showAbout(),
+      // --- Fase 2 ---
+      onPickReward: (offerId) => {
+        if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
+      },
+      onOpenDeck: () => hud?.showDeckBuilder(),
+      onPurge: (uid) => {
+        if (!engine.purgeCard(uid)) {
+          hud?.toast(
+            engine.canPurge() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
+            'warn',
+          );
+          return;
+        }
+        hud?.showDeckBuilder();
+      },
     },
   });
+
+  hud.bindCollectionProvider(buildCollection);
+
+  // La purga y la recompensa avisan por toast: son acciones irreversibles y el
+  // jugador merece una confirmacion visible, no solo un cambio silencioso.
+  bus.on('deck:purged', ({ card }) => hud?.toast(t('deck.purged', { name: t(card.def.nameKey) }), 'info'));
 
   hud.bindSettingsPatch((patch) => {
     profileStore.patch((p) => {

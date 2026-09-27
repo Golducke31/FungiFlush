@@ -2,14 +2,40 @@
   {
     "id": "shop_default",
     "phase": "shop",
-    "slots": [
-      { "weight": 100, "kind": "card" },
-      { "weight": 50, "kind": "card" },
-      { "weight": 50, "kind": "joker" },
-      { "weight": 100, "kind": "mutation" }
+    "groups": [
+      {
+        "count": 1,
+        "options": [{ "weight": 1, "kind": "card" }]
+      },
+      {
+        "count": 1,
+        "options": [
+          { "weight": 1, "kind": "card" },
+          { "weight": 1, "kind": "joker" }
+        ]
+      },
+      {
+        "count": 1,
+        "options": [{ "weight": 1, "kind": "mutation" }]
+      }
+    ]
+  },
+  {
+    "id": "blind_reward_draft",
+    "phase": "reward",
+    "groups": [
+      {
+        "count": 3,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "card",
+            "rarityWeights": { "common": 60, "uncommon": 30, "rare": 10 }
+          }
+        ]
+      }
     ],
-    "slotsMin": 2,
-    "slotsMax": 3,
-    "allowDuplicates": false
+    "pick": 1,
+    "allowSkip": true
   }
 ]

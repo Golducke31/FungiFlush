@@ -123,11 +123,19 @@ export interface GameEventMap {
   'joker:triggered': { joker: JokerInstance };
   'money:changed': { money: number; delta: number };
 
+  // --- Recompensa (draft de cartas al ganar un blind) ---
+  'reward:enter': { offers: ShopOffer[]; pick: number; allowSkip: boolean };
+  'reward:pick': { offer: ShopOffer | null; card?: CardInstance };
+  'reward:exit': Record<string, never>;
+
   // --- Tienda ---
   'shop:enter': { offers: ShopOffer[]; money: number };
   'shop:exit': Record<string, never>;
   'shop:purchase': { offer: ShopOffer; money: number };
   'shop:reroll': { offers: ShopOffer[]; money: number };
+
+  // --- Deckbuilding ---
+  'deck:purged': { card: CardInstance; cost: number };
 
   // --- Varios ---
   'state:changed': { run: RunSnapshot; round: RoundSnapshot | null };

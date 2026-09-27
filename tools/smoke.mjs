@@ -259,7 +259,7 @@ const afterPlay = await page.evaluate(() => {
 console.log('\n--- Tras jugar una mano ---');
 console.log(JSON.stringify(afterPlay, null, 2));
 
-// --- Forzar la victoria del blind para ver la tienda ---
+// --- Forzar la victoria del blind: ahora el flujo es reward -> shop ---
 await page.evaluate(() => {
   const ff = window.__fungiflush;
   const round = ff.engine.round;
@@ -272,18 +272,88 @@ await page.evaluate(() => {
   ff.engine.playHand();
 });
 await page.waitForTimeout(3000);
-await page.screenshot({ path: join(shotsDir, '07-shop.png') });
+
+// OJO: el estado se lee ANTES de clickear. `chooseReward` resuelve el draft y
+// entra a la tienda en el mismo tick, asi que leer despues devolveria "shop".
+const reward = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    status: ff.engine.run.status,
+    panel: Boolean(document.querySelector('.panel.is-reward')),
+    offers: ff.engine.rewardOffers().map((o) => `${o.kind}:${o.refId}`),
+    deckBefore: ff.engine.run.deck.totalSize,
+  };
+});
+console.log('\n--- Recompensa (draft) ---');
+console.log(JSON.stringify(reward, null, 2));
+await page.screenshot({ path: join(shotsDir, '07-reward.png') });
+
+// Se toma la primera carta desde la UI, no desde el motor: es el camino real.
+await page.evaluate(() => document.querySelector('.panel.is-reward [data-act="pick"]')?.click());
+await page.waitForTimeout(1200);
 
 const afterWin = await page.evaluate(() => {
   const ff = window.__fungiflush;
   return {
     status: ff.engine.run.status,
     money: ff.engine.run.money,
+    deckAfter: ff.engine.run.deck.totalSize,
     offers: ff.engine.run.shop?.offers.map((o) => `${o.kind}:${o.refId}@${o.cost}`) ?? [],
   };
 });
-console.log('\n--- Tras ganar el blind (tienda) ---');
+console.log('\n--- Tras tomar la recompensa (tienda) ---');
 console.log(JSON.stringify(afterWin, null, 2));
+await page.screenshot({ path: join(shotsDir, '08-shop.png') });
+
+// --- Constructor de mazo: abrir, purgar y cerrar ---
+const deckBuilder = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.panel.is-shop [data-act="deck"]')?.click();
+  await wait(500);
+  const opened = Boolean(document.querySelector('.panel.is-deck'));
+  const cards = document.querySelectorAll('.panel.is-deck .deck-card').length;
+  const before = window.__fungiflush.engine.run.deck.totalSize;
+  document.querySelector('.panel.is-deck [data-act="purge"]')?.click();
+  await wait(500);
+  const after = window.__fungiflush.engine.run.deck.totalSize;
+  return { opened, cards, before, after, purged: before - after };
+});
+console.log('\n--- Constructor de mazo (purgar) ---');
+console.log(JSON.stringify(deckBuilder, null, 2));
+await page.screenshot({ path: join(shotsDir, '09-deck.png') });
+
+await page.evaluate(() => document.querySelector('.panel.is-deck [data-act="close"]')?.click());
+await page.waitForTimeout(500);
+
+// --- Coleccion: abrir (desde una run en curso), capturar y volver ---
+const collectionOpened = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  window.__fungiflush.hud.showCollection();
+  await wait(600);
+  return {
+    panel: Boolean(document.querySelector('.panel.is-collection')),
+    entries: document.querySelectorAll('.panel.is-collection .collection-card').length,
+    locked: document.querySelectorAll('.panel.is-collection .collection-card.is-locked').length,
+    undiscovered: document.querySelectorAll('.panel.is-collection .collection-card.is-unknown').length,
+  };
+});
+console.log('\n--- Coleccion ---');
+console.log(JSON.stringify(collectionOpened, null, 2));
+await page.screenshot({ path: join(shotsDir, '10-collection.png') });
+
+const collectionClosed = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.panel.is-collection [data-act="close"]')?.click();
+  await wait(500);
+  // Cerrar la coleccion debe devolver al overlay del estado actual (tienda),
+  // no al menu.
+  return {
+    backToShop: Boolean(document.querySelector('.panel.is-shop')),
+    status: window.__fungiflush.engine.run.status,
+  };
+});
+console.log('\n--- Coleccion (cerrar) ---');
+console.log(JSON.stringify(collectionClosed, null, 2));
 
 // --- Cambio de idioma en caliente ---
 const langResult = await page.evaluate(async () => {
@@ -298,7 +368,7 @@ const langResult = await page.evaluate(async () => {
 });
 console.log('\n--- Cambio de idioma ---');
 console.log(JSON.stringify(langResult, null, 2));
-await page.screenshot({ path: join(shotsDir, '08-language.png') });
+await page.screenshot({ path: join(shotsDir, '11-language.png') });
 
 // --- Medir FPS durante 3 segundos ---
 const fps = await page.evaluate(
@@ -328,6 +398,18 @@ for (const warning of consoleWarnings.slice(0, 5)) console.log(`  ! ${warning}`)
 
 const ok =
   ready &&
+  reward?.status === 'reward' &&
+  reward?.panel === true &&
+  reward?.offers.length === 3 &&
+  afterWin?.status === 'shop' &&
+  (afterWin?.deckAfter ?? 0) === (reward?.deckBefore ?? 0) + 1 &&
+  deckBuilder?.opened === true &&
+  (deckBuilder?.cards ?? 0) > 0 &&
+  deckBuilder?.purged === 1 &&
+  collectionOpened?.panel === true &&
+  (collectionOpened?.entries ?? 0) > 0 &&
+  collectionOpened?.undiscovered > 0 &&
+  collectionClosed?.backToShop === true &&
   menuState?.status === 'menu' &&
   menuState?.menuVisible === true &&
   menuState?.hudHidden === true &&

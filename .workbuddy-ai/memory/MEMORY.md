@@ -30,6 +30,19 @@ Repo: `https://github.com/Golducke31/FungiFlush` (rama `main`). Workspace: `C:\U
 ## Comandos
 `npm run dev | typecheck | test | validate | sim | sim:balance | smoke | build | build:release | packs | tauri`
 Tests: `node --import tsx --test "tests/*.test.ts"` (el directorio suelto falla con ERR_UNSUPPORTED_DIR_IMPORT).
+`npm run validate` es el gate de contenido: valida los JSON de los packs, la cobertura i18n del
+contenido **y** las claves `t('...')` escritas en el código (tools/scanI18n.ts). Correrlo siempre
+antes de commitear: es el chequeo que evita que un botón nuevo salga en pantalla como `deck.foo`.
+
+## Flujo de juego (v1.1)
+`menu -> blind_select -> playing -> reward (draft de 3, pick 1, skippable) -> shop -> blind_select ...`
+Un pack sin tabla `reward` degrada al flujo viejo (`playing -> shop`).
+
+## Balance de referencia (bot voraz, 100 partidas)
+27% victorias / ante 5.95 (v1.0) · 21% / 5.92 (v1.1 con drafts).
+Al tocar el orden de consumo del RNG de la tienda, la tasa de victorias se mueve ±10 puntos
+mientras el ante promedio casi no cambia: **mirar el ante promedio para juzgar balance**, no la
+tasa de victorias (es la cola de la distribución y es ruidosa).
 
 ## Modelo de negocio (decidido)
 App de pago único en Google Play + expansiones de contenido + pases de batalla como

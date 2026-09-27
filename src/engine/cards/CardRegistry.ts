@@ -16,6 +16,7 @@ import type {
   FamilyType,
   JokerDefinition,
   JokerInstance,
+  OfferTable,
   Rarity,
 } from '../types';
 import { TRIGGER_EVENTS, type TriggerEvent } from '../types';
@@ -43,6 +44,8 @@ export interface ContentBundle {
    * Hacerlo data-driven es lo que permite que una expansion agregue antes.
    */
   anteTargets?: Record<number, number>;
+  /** Tablas de oferta (tienda, recompensas, drafts). */
+  offers?: OfferTable[];
 }
 
 export interface ValidationIssue {
@@ -180,25 +183,38 @@ export class CardRegistry {
     return rng.shuffle(deck);
   }
 
-  /** Elige una carta aleatoria ponderada por rareza (para tienda / recompensas). */
-  rollRandomCard(rng: RNG, filter?: (c: CardDefinition) => boolean): CardDefinition | undefined {
-    const pool = this.allCards().filter((c) => !filter || filter(c));
-    return rng.weighted(
-      pool,
-      pool.map((c) => RARITY_WEIGHT[c.rarity]),
+  /**
+   * Elige una carta aleatoria ponderada por rareza (para tienda / recompensas).
+   *
+   * `rarityWeights` permite que una tabla de oferta cambie el balance de un
+   * draft concreto (por ejemplo, un draft de recompensa con mas raras) sin
+   * tocar los pesos globales del juego.
+   */
+  rollRandomCard(
+    rng: RNG,
+    filter?: (c: CardDefinition) => boolean,
+    rarityWeights?: Partial<Record<Rarity, number>>,
+    tag?: string,
+  ): CardDefinition | undefined {
+    const pool = this.allCards().filter(
+      (c) => (!filter || filter(c)) && (!tag || (c.tags ?? []).includes(tag)),
     );
+    const weights = pool.map((c) => rarityWeights?.[c.rarity] ?? RARITY_WEIGHT[c.rarity]);
+    return rng.weighted(pool, weights);
   }
 
-  rollRandomJoker(rng: RNG): JokerDefinition | undefined {
-    const pool = this.allJokers();
-    return rng.weighted(
-      pool,
-      pool.map((c) => RARITY_WEIGHT[c.rarity]),
-    );
+  rollRandomJoker(
+    rng: RNG,
+    filter?: (j: JokerDefinition) => boolean,
+    rarityWeights?: Partial<Record<Rarity, number>>,
+  ): JokerDefinition | undefined {
+    const pool = this.allJokers().filter((j) => !filter || filter(j));
+    const weights = pool.map((j) => rarityWeights?.[j.rarity] ?? RARITY_WEIGHT[j.rarity]);
+    return rng.weighted(pool, weights);
   }
 
-  rollRandomMutation(rng: RNG): JokerDefinition | undefined {
-    const pool = this.allMutations();
+  rollRandomMutation(rng: RNG, filter?: (j: JokerDefinition) => boolean): JokerDefinition | undefined {
+    const pool = this.allMutations().filter((j) => !filter || filter(j));
     return rng.weighted(
       pool,
       pool.map((c) => RARITY_WEIGHT[c.rarity]),
