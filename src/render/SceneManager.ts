@@ -78,6 +78,12 @@ const DISCARD_Z = 1.0;
 const PLAY_Y = 0.18;
 const PLAY_Z = -0.6;
 const PLAY_SCALE = 0.86;
+/**
+ * Separacion entre cartas jugadas. Es MAS chica que el halo a proposito: las
+ * cartas jugadas tienen que leerse como UNA mano, no como cinco cartas sueltas.
+ * (En la fila de jokers es al reves, ahi si tienen que leerse separadas.)
+ */
+const PLAY_SPACING = 2.05;
 
 // --- Arrastre ---
 /** Altura a la que flota la carta mientras se la arrastra. */
@@ -1175,29 +1181,44 @@ export class SceneManager {
     card3d.setSelected(false);
     card3d.group.scale.setScalar(PLAY_SCALE);
 
-    const index = this.scoringCards.length - 1;
-    const spacing = 2.05;
+    // Se re-acomoda TODA la fila, no solo la carta que llega.
+    //
+    // Antes cada carta se ubicaba con el ancho de la fila EN ESE MOMENTO, pero
+    // las anteriores se quedaban donde estaban: la primera caia en x=0, la
+    // segunda en -1.02, la tercera en -2.05... o sea que la fila crecia hacia
+    // la IZQUIERDA y terminaba descentrada. Re-acomodando todas, la fila queda
+    // centrada y las que ya estaban se corren solas al entrar una nueva, que
+    // ademas se lee mucho mejor: la mano se "acomoda" en el centro.
+    const spacing = PLAY_SPACING;
     const total = spacing * Math.max(0, this.scoringCards.length - 1);
-    const x = -total / 2 + index * spacing;
 
-    this.tweens.to(
-      card3d.home,
-      { x, y: PLAY_Y, z: PLAY_Z, rx: -Math.PI / 2, ry: 0, rz: 0 },
-      {
-        duration: 0.42,
-        ease: 'backOut',
-        onComplete: () => {
-          this.particles.burst(card3d.worldPosition(), 14, {
-            color: card3d.elementColor,
-            speed: 1.9,
-            upward: 1.6,
-            size: 0.07,
-            life: 0.85,
-          });
-          this.rig.addShake(0.035);
+    this.scoringCards.forEach((card, index) => {
+      const x = -total / 2 + index * spacing;
+      this.tweens.to(
+        card.home,
+        { x, y: PLAY_Y, z: PLAY_Z, rx: -Math.PI / 2, ry: 0, rz: 0 },
+        {
+          duration: 0.42,
+          ease: 'backOut',
+          // El golpe de aterrizaje es solo para la que LLEGA: las que se corren
+          // no tocan la mesa, se deslizan.
+          ...(card === card3d
+            ? {
+                onComplete: () => {
+                  this.particles.burst(card3d.worldPosition(), 14, {
+                    color: card3d.elementColor,
+                    speed: 1.9,
+                    upward: 1.6,
+                    size: 0.07,
+                    life: 0.85,
+                  });
+                  this.rig.addShake(0.035);
+                },
+              }
+            : {}),
         },
-      },
-    );
+      );
+    });
   }
 
   private flyToDiscard(uid: string): void {
