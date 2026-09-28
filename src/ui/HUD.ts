@@ -10,7 +10,15 @@
  * ("el jugador quiere jugar la mano"). Quien decide es el controlador.
  */
 
-import { bus, type CardInstance, type GameEngine, type RunSnapshot, type ShopOffer } from '@engine/index';
+import {
+  bus,
+  type CardDefinition,
+  type CardInstance,
+  type GameEngine,
+  type JokerDefinition,
+  type RunSnapshot,
+  type ShopOffer,
+} from '@engine/index';
 import type { BoardView } from '@engine/board';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
@@ -76,6 +84,10 @@ export class HUD {
   private readonly engine: GameEngine;
   private readonly callbacks: HudCallbacks;
   private readonly root: HTMLElement;
+  /** Ilustracion real de una carta. Ver la nota del constructor. */
+  private readonly cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
+  /** Ilustracion real de un joker. Ver la nota del constructor. */
+  private readonly jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
   private readonly appInfo: HudAppInfo;
 
   // Referencias cacheadas: buscar en el DOM cada frame es gratis hasta que
@@ -109,10 +121,20 @@ export class HUD {
     root: HTMLElement;
     callbacks: HudCallbacks;
     appInfo?: HudAppInfo;
+    /**
+     * Ilustracion real de una carta. La inyecta el render, que es quien tiene
+     * los WebP cargados. Sin esto las miniaturas caen al dibujo procedural y la
+     * misma carta se ve distinta en la mano que en el mazo.
+     */
+    cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
+    /** Igual que `cardArt`, para jokers. */
+    jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
   }) {
     this.engine = options.engine;
     this.root = options.root;
     this.callbacks = options.callbacks;
+    this.cardArt = options.cardArt;
+    this.jokerArt = options.jokerArt;
     this.appInfo = options.appInfo ?? { version: '0.0.0', contentHash: null, packs: [] };
     this.build();
     this.subscribe();
@@ -675,6 +697,7 @@ export class HUD {
           canEdit: this.engine.canEditDeck(),
           info,
           ...(highlightUid ? { highlightUid } : {}),
+          ...(this.cardArt ? { cardArt: this.cardArt } : {}),
         },
         {
           onPurge: (uid) => this.callbacks.onPurge(uid),
@@ -814,7 +837,7 @@ export class HUD {
       card.className = `offer${offer.sold ? ' is-sold' : ''}`;
 
       // Miniatura de la carta: misma cara procedural que la carta real.
-      const artUrl = offerArtUrl(offer, this.engine);
+      const artUrl = offerArtUrl(offer, this.engine, this.cardArt, this.jokerArt);
       if (artUrl) {
         const art = document.createElement('img');
         art.className = 'offer-art';
@@ -1077,17 +1100,28 @@ function rarityOfOffer(engine: GameEngine, offer: ShopOffer): keyof typeof RARIT
 }
 
 /**
- * Miniatura de la carta en la tienda: render del MISMO canvas procedural que
- * usa el 3D (`createCardCanvas` con el `ArtSpec` de la carta/joker). Asi el
- * jugador ve "cual esta mejorando" antes de pagar. Voucher no tiene carta, asi
- * que devuelve `null`.
+ * Cara de la carta en la tienda: `createCardCanvas` con el `ArtSpec` de la
+ * carta, MAS la ilustracion real si el render la tiene. Con la imagen, el
+ * canvas sale igual que la carta en la mano; sin ella cae a la silueta
+ * procedural. Voucher no tiene carta, asi que devuelve `null`.
  */
-function offerArtUrl(offer: ShopOffer, engine: GameEngine): string | null {
+function offerArtUrl(
+  offer: ShopOffer,
+  engine: GameEngine,
+  cardArt?: (def: CardDefinition) => HTMLImageElement | undefined,
+  jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined,
+): string | null {
   let spec: CardTextureSpec | null = null;
+  // Ilustracion real, si la hay. `createCardCanvas` la usa como fondo a sangre
+  // y dibuja encima el nombre y los chips: o sea, la cara REAL de la carta.
+  // Sin esto la tienda dibujaba una silueta procedural, distinta de la que el
+  // jugador tiene en la mano.
+  let realArt: HTMLImageElement | undefined;
   try {
     if (offer.kind === 'card') {
       const def = engine.registry.tryGetCard(offer.refId);
       if (!def) return null;
+      realArt = cardArt?.(def);
       spec = {
         kind: 'card',
         name: t(offer.nameKey),
@@ -1102,6 +1136,7 @@ function offerArtUrl(offer: ShopOffer, engine: GameEngine): string | null {
     } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
       const def = engine.registry.tryGetJoker(offer.refId);
       if (!def) return null;
+      realArt = jokerArt?.(def);
       spec = {
         kind: offer.kind === 'mutation' ? 'mutation' : 'joker',
         name: t(offer.nameKey),
@@ -1118,7 +1153,7 @@ function offerArtUrl(offer: ShopOffer, engine: GameEngine): string | null {
   }
   if (!spec) return null;
   try {
-    const canvas = createCardCanvas(spec);
+    const canvas = createCardCanvas(spec, realArt);
     try {
       return canvas.toDataURL('image/webp', 0.85);
     } catch {

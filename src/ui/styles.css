@@ -808,7 +808,12 @@ body {
   position: fixed;
   inset: 0;
   display: none;
-  align-items: center;
+  /* `flex-start` y NO `center`. Con `align-items: center` y contenido mas alto
+     que la pantalla, el navegador centra el panel empujando su parte de arriba
+     FUERA del area scrolleable: el titulo se corta y no hay forma de llegar a
+     el. El centrado lo hace el `margin: auto` del panel, que si sabe ceder
+     cuando no hay espacio (ver la nota en `.panel`). */
+  align-items: flex-start;
   justify-content: center;
   background: rgba(4, 7, 11, 0.86);
   backdrop-filter: blur(7px);
@@ -895,6 +900,10 @@ body {
    salen de los tokens --frame-*, muestreados de los marcos del menu. */
 .panel {
   width: min(920px, 100%);
+  /* Centra el panel en el overlay cuando entra, y NO lo recorta cuando no:
+     un `margin: auto` se resuelve a 0 si no hay espacio libre, a diferencia de
+     `align-items: center`. Ver la nota de `.overlay`. */
+  margin: auto;
   background:
     /* Musgo: filo luminoso en el borde de arriba. En un panel alto es una
        franja fina, no la banda ancha que lleva una pieza chica. */
@@ -1619,6 +1628,21 @@ body {
   margin-bottom: 16px;
 }
 
+/* El mazo se separa de la regla compartida en dos cosas, y solo en dos.
+   Sus celdas llevan la ilustracion COMPLETA (2:3), o sea que son mucho mas
+   altas que las filas de la coleccion: sin columnas mas angostas entrarian
+   menos por fila, y sin mas alto el grid cortaria la celda al medio.
+
+   La cuenta, con el viewport de 844x390 que usa el smoke: la celda mide
+   ancho x 1.453 (el alto de un arte 2:3) + ~114px de texto. A 124px de columna
+   eso da ~294px de celda, asi que el grid necesita ~300px para que entre
+   entera. Si el grid queda mas bajo, el texto cae debajo del borde y la celda
+   se ve como una imagen suelta sin nombre ni boton. */
+.deck-grid {
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  max-height: min(62vh, 520px);
+}
+
 .deck-card {
   position: relative;
   display: flex;
@@ -1631,15 +1655,21 @@ body {
   box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
-/* Banner con la ilustracion arriba de la celda del mazo. Mismo origen que
-   `.offer-art`: `createCardCanvas` con el ArtSpec de la carta. */
+/* La ilustracion ENTERA, no una tira recortada.
+   La caja tiene la MISMA proporcion que la carta (512x744) y la imagen entra
+   con `contain`, asi que no hay recorte ni barras: se ve completa. Antes era
+   `height: 62px` + `object-fit: cover`, que de un canvas 2:3 mostraba solo la
+   franja del medio. */
 .deck-card-art {
   width: 100%;
-  height: 62px;
-  object-fit: cover;
-  border-radius: 6px;
+  aspect-ratio: 512 / 744;
+  object-fit: contain;
+  border-radius: 7px;
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
+  /* Fondo propio: si algun dia entra una imagen con otra proporcion, el
+     relleno se lee como intencional y no como un hueco. */
+  background: rgba(0, 0, 0, 0.34);
 }
 
 .deck-card-name {
@@ -2015,7 +2045,18 @@ body {
    -------------------------------------------------------------------------- */
 @media (max-height: 560px) {
   .deck-grid {
-    max-height: min(38vh, 250px);
+    /* Columnas mas angostas que en pantalla normal: la celda lleva la
+       ilustracion 2:3, asi que su alto lo manda el ANCHO. Sin achicar el ancho
+       la celda no entra en el alto disponible y el grid la corta al medio. */
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    max-height: min(64vh, 300px);
+  }
+  /* En un celular en landscape no hay alto para la ilustracion entera MAS el
+     texto. Se achica la ilustracion antes que recortarla: `max-height` con
+     `contain` la deja completa y centrada, con franjas a los costados que el
+     fondo propio hace leer como ventana. */
+  .deck-card-art {
+    max-height: 118px;
   }
   .deck-card {
     padding: 7px 8px;

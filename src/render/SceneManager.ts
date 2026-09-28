@@ -18,8 +18,11 @@ import * as THREE from 'three';
 import {
   bus,
   type CardInstance,
+  type ElementType,
   type GameEngine,
+  type JokerDefinition,
   type JokerInstance,
+  type Rarity,
   type ScoreStep,
 } from '@engine/index';
 
@@ -1044,26 +1047,43 @@ export class SceneManager {
     return card3d;
   }
 
-  private artForCard(card: CardInstance): HTMLImageElement | undefined {
-    // Cadena de respaldo: arte PROPIO de la carta, despues el del par
-    // (elemento x rareza), despues el del elemento en su version base, despues
-    // los 11 archivos viejos, y si no hay ninguno la textura cae al dibujo
-    // procedural.
-    return this.assets.getFirst(artKeysFor(card.def.element, card.def.rarity, card.def.id));
+  /**
+   * Ilustracion REAL de una carta: el WebP del catalogo, o el respaldo que
+   * corresponda segun la cadena.
+   *
+   * Es PUBLICO porque la UI tambien la necesita. La miniatura del mazo y de la
+   * tienda tienen que mostrar la MISMA imagen que la carta en la mano; si la UI
+   * se dibuja su propia silueta procedural, el jugador ve dos ilustraciones
+   * distintas para la misma carta. La UI no conoce los assets, asi que se los
+   * presta el render, que es quien los tiene cargados.
+   */
+  cardArt(def: { id: string; element: ElementType; rarity: Rarity }): HTMLImageElement | undefined {
+    return this.assets.getFirst(artKeysFor(def.element, def.rarity, def.id));
   }
 
-  private artForJoker(joker: JokerInstance): HTMLImageElement | undefined {
+  private artForCard(card: CardInstance): HTMLImageElement | undefined {
+    return this.cardArt(card.def);
+  }
+
+  /**
+   * Ilustracion real de un joker. Publico por la misma razon que `cardArt`: la
+   * tienda tiene que mostrar la misma imagen que la carta en la mano.
+   */
+  jokerArt(def: JokerDefinition): HTMLImageElement | undefined {
     // El elemento del joker se deduce de su primer efecto con condicion de
     // elemento; si no tiene, cae al arquetipo de micelio.
-    const effects = joker.def.effects;
-    for (const effect of effects) {
+    for (const effect of def.effects) {
       for (const cond of effect.conditions ?? []) {
         if (cond.type === 'element_is') {
-          return this.assets.getFirst(artKeysForJoker(cond.value, joker.def.rarity));
+          return this.assets.getFirst(artKeysForJoker(cond.value, def.rarity));
         }
       }
     }
-    return this.assets.getFirst(artKeysForJoker('neutral', joker.def.rarity));
+    return this.assets.getFirst(artKeysForJoker('neutral', def.rarity));
+  }
+
+  private artForJoker(joker: JokerInstance): HTMLImageElement | undefined {
+    return this.jokerArt(joker.def);
   }
 
   private lang(): string {

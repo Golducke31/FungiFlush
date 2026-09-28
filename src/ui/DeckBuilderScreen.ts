@@ -12,7 +12,7 @@
  * conoce el registro. Ordenar y filtrar es estado local de la vista.
  */
 
-import type { CardInstance, Rarity } from '@engine/index';
+import type { CardDefinition, CardInstance, Rarity } from '@engine/index';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import { createCardCanvas, type CardTextureSpec } from '@render/index';
@@ -46,6 +46,15 @@ export interface DeckBuilderState {
   info: Record<string, DeckCardInfo>;
   /** Carta a resaltar tras una accion (feedback visual). */
   highlightUid?: string;
+  /**
+   * Ilustracion REAL de una carta (el WebP del catalogo). La provee el render,
+   * que es quien tiene los assets cargados: la UI no los conoce.
+   *
+   * Si falta, la celda cae al canvas procedural. Preferimos una silueta
+   * distinta a ninguna miniatura, pero la silueta NO es la ilustracion: por eso
+   * el camino normal es este.
+   */
+  cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
 }
 
 const RARITY_RANK: Record<Rarity, number> = {
@@ -113,31 +122,38 @@ export function buildDeckBuilderPanel(
       cell.className = `deck-card${card.uid === state.highlightUid ? ' is-flash' : ''}`;
       cell.dataset['uid'] = card.uid;
 
-      // Banner con la ilustracion de la carta. Mismo `createCardCanvas` que la
-      // tienda y el render 3D: el jugador ve cual esta mejorando.
+      // Ilustracion de la carta. Lo normal es el WebP REAL: la misma imagen que
+      // el jugador ve en la mano. Antes esto dibujaba la silueta procedural, o
+      // sea que la MISMA carta tenia dos ilustraciones distintas segun donde la
+      // miraras. El canvas procedural queda solo como respaldo.
       try {
-        const spec: CardTextureSpec = {
-          kind: 'card',
-          name: t(card.def.nameKey),
-          desc: t(card.def.descKey),
-          element: card.def.element,
-          family: card.def.family,
-          rarity: card.def.rarity,
-          art: card.def.art,
-          substrate: card.def.baseSubstrate + card.bonusSubstrate,
-          spores: card.def.baseSpores + card.bonusSpores,
-          level: card.level,
-        };
         const art = document.createElement('img');
         art.className = 'deck-card-art';
-        const canvas = createCardCanvas(spec);
-        let url: string;
-        try {
-          url = canvas.toDataURL('image/webp', 0.85);
-        } catch {
-          url = canvas.toDataURL('image/png');
+
+        const image = state.cardArt?.(card.def);
+        if (image) {
+          art.src = image.src;
+        } else {
+          const spec: CardTextureSpec = {
+            kind: 'card',
+            name: t(card.def.nameKey),
+            desc: t(card.def.descKey),
+            element: card.def.element,
+            family: card.def.family,
+            rarity: card.def.rarity,
+            art: card.def.art,
+            substrate: card.def.baseSubstrate + card.bonusSubstrate,
+            spores: card.def.baseSpores + card.bonusSpores,
+            level: card.level,
+          };
+          const canvas = createCardCanvas(spec);
+          try {
+            art.src = canvas.toDataURL('image/webp', 0.85);
+          } catch {
+            art.src = canvas.toDataURL('image/png');
+          }
         }
-        art.src = url;
+
         art.alt = t(card.def.nameKey);
         art.loading = 'lazy';
         cell.appendChild(art);

@@ -403,6 +403,10 @@ async function boot(): Promise<void> {
   hud = new HUD({
     engine,
     root: uiRoot,
+    // La UI no conoce los assets: se los presta el render. Asi la miniatura del
+    // mazo es el MISMO WebP que la carta en la mano.
+    cardArt: (def) => scene.cardArt(def),
+    jokerArt: (def) => scene.jokerArt(def),
     appInfo: {
       version: APP_VERSION,
       contentHash: content.registry.contentHash(),
