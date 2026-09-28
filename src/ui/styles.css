@@ -865,6 +865,54 @@ body {
   color: #ffd98a;
 }
 
+/* --------------------------------------------------------------------------
+   Efectos con sprite (veneno / estallido)
+   --------------------------------------------------------------------------
+   Hojas horizontales recorridas con `steps()` para que salteen de frame en vez
+   de interpolar. La cantidad de pasos tiene que coincidir con los frames de la
+   hoja: son 24 para el veneno y 9 para el estallido, a 15 FPS (la cadencia del
+   pack). Ver public/fx/LICENSE.txt por la procedencia y la atribucion. */
+.fx-sprite {
+  position: absolute;
+  pointer-events: none;
+  /* La hoja se escala al alto del elemento y se corre de a un frame. */
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  transform: translate(-50%, -50%);
+}
+
+.fx-poison {
+  width: 108px;
+  height: 108px;
+  background-image: url('/fx/fx_poison.webp');
+  animation: fx-poison 1.6s steps(24) forwards;
+}
+
+.fx-burst {
+  width: 288px;
+  height: 162px;
+  background-image: url('/fx/fx_burst.webp');
+  animation: fx-burst 0.6s steps(9) forwards;
+}
+
+@keyframes fx-poison {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -2304px;
+  }
+}
+
+@keyframes fx-burst {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -2304px;
+  }
+}
+
 .score-popup {
   position: absolute;
   font-size: 21px;

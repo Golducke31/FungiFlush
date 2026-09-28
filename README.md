@@ -942,7 +942,7 @@ They are **not** deleted on purpose: that's batch L6 in the plan, and it only ha
 
 ### Third-party
 
-Two external sets are used. Both are licensed for commercial use and both are
+Three external sets are used. All are licensed for commercial use and all are
 **vendored into the repo** — nothing is fetched at runtime, because the game has
 to ship offline.
 
@@ -950,6 +950,22 @@ to ship offline.
 | --- | --- | --- |
 | [Polyfork](https://polyfork.dev) — 3 ground tiles + 4 mushrooms | The in-game Arena diorama (`src/render/Arena.ts`), merged into 2 draw calls. Vendored as `src/render/polyfork/*.ts`. | Commercial use in games and apps allowed, modify freely, **no attribution required**; do not resell or redistribute the files as assets. Full text and the one local patch in [`src/render/polyfork/LICENSE.md`](./src/render/polyfork/LICENSE.md). |
 | [16X16 Pixel Mushroom Pack](https://ssugmi.itch.io) by ssugmi | The `Fungis` currency icon — one 16×16 sprite, shown at 18–22 px next to the money value. | Commercial use allowed, modifications allowed, **reselling or redistributing the pack prohibited**. Only the single sprite is committed, never the sheet. See [`public/ui/LICENSE.txt`](./public/ui/LICENSE.txt). |
+| [Super Pixel Effects Gigapack](https://untiedgames.com) (Free Version) — Will Tice / unTied Games | The scoring effects: `public/fx/fx_poison.webp` (damage / negative steps) and `fx_burst.webp` (combos and order bonuses). Played at 15 FPS via CSS `steps()`. | Commercial use allowed, bundling with the game allowed, **attribution required**. Redistributing the pack as an asset store is not permitted. Full text and the adaptation notes in [`public/fx/LICENSE.txt`](./public/fx/LICENSE.txt). |
+
+### Credits
+
+As required by the licences above, FungiFlush credits:
+
+- **Super Pixel Effects Gigapack — Will Tice / unTied Games** (scoring effects)
+- **16X16 Pixel Mushroom Pack — ssugmi** (Fungis currency icon)
+
+### On the pixel art vs. illustrated art mismatch
+
+The effect pack is **16-bit pixel art** and the rest of the game is painted illustration. Dropping
+the sprites in as-is left them looking pasted on next to the cards. They go through a deliberate
+adaptation: a **2× Lanczos upscale** (not NEAREST — that is what softens the pixel stair into a
+brush stroke) plus a **blurred halo composited underneath**, so an effect carries the same kind of
+light as a card halo. If you swap in a different pack, it needs the same treatment.
 
 Note the asymmetry: Polyfork is imported as **code** (the modules are the asset), so they live
 under `src/`; the mushroom pack is a **raster**, so only the one cropped sprite lives under

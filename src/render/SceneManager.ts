@@ -160,6 +160,11 @@ export interface SceneCallbacks {
      * mismo "esta carta sumo 4" que "cumpliste Supercolonia".
      */
     isBonus: boolean;
+    /** El paso RESTA: el HUD lo grafica como daño (veneno), no como ganancia. */
+    negative: boolean;
+    /** Posicion en pantalla de la carta que origina el paso, para los efectos. */
+    x: number;
+    y: number;
   }) => void;
   /**
    * El jugador solto una carta sobre una zona. El render sabe QUE zona es; el
@@ -1294,8 +1299,9 @@ export class SceneManager {
       const text =
         step.action === 'MULTIPLY_SPORES' ? `x${step.value}` : `${sign}${Math.round(step.value)}`;
 
+      const screen = this.projectToScreen(origin.position);
+
       if (this.callbacks.onScorePopup) {
-        const screen = this.projectToScreen(origin.position);
         this.callbacks.onScorePopup(screen.x, screen.y, text, color);
       }
 
@@ -1307,6 +1313,9 @@ export class SceneManager {
         color,
         sourceKey: step.sourceNameKey,
         isBonus: step.sourceId.startsWith('combo:') || step.sourceId.startsWith('order:'),
+        negative: step.value < 0,
+        x: screen.x,
+        y: screen.y,
       });
     });
   }

@@ -1,0 +1,42 @@
+Efectos de FungiFlush
+=====================
+
+`fx_poison.webp` y `fx_burst.webp` son hojas de sprites derivadas de
+
+    Super Pixel Effects Gigapack (Free Version)
+    Will Tice / unTied Games
+
+Licencia del pack (resumen del texto en su `license.txt`):
+
+1. Se puede distribuir el contenido del pack **como parte de un juego o
+   aplicacion**. Empaquetarlo con el juego esta permitido expresamente.
+   Lo que NO se puede es re-subirlo a una tienda de assets.
+2. Si se usa en un producto, **hay que dar atribucion** en los creditos o donde
+   corresponda, por ejemplo:
+       "Super Pixel Effects Gigapack - Will Tice / unTied Games"
+3. Uso comercial y no comercial: ambos permitidos.
+4. No se puede empaquetar con una herramienta/engine de creacion de juegos.
+
+Texto completo: http://untiedgames.com/files/license.txt
+
+LA ADAPTACION QUE SE LE HIZO
+----------------------------
+El pack es pixel art de 16 bits y el resto de FungiFlush es ilustracion pintada
+con aerografo. Usar los sprites tal cual dejaba los efectos en 16 bits contra
+cartas ilustradas, y se veian pegados. Se les aplico:
+
+- **Upscale 2x con Lanczos**, no con NEAREST. Es lo que suaviza el escalon del
+  pixel y lo acerca al trazo del resto del juego.
+- **Halo**: una copia desenfocada (GaussianBlur) compuesta DEBAJO de cada frame,
+  para que el efecto tenga el mismo tipo de luz que los halos de las cartas.
+
+Se reproducen a 15 FPS (66.7 ms por frame), que es la cadencia para la que estan
+pensados en el pack. Eso da 1.6 s para el veneno (24 frames) y 0.6 s para el
+estallido (9 frames).
+
+Archivos:
+  fx_poison.webp   24 frames de 96x96  -> hoja 2304x96
+  fx_burst.webp     9 frames de 256x144 -> hoja 2304x144
+
+Las fuentes originales NO estan en el repo: viven en la carpeta del pack en el
+escritorio y no se versionan.

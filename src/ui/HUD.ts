@@ -1148,6 +1148,9 @@ export class HUD {
     color: number;
     sourceKey: string;
     isBonus: boolean;
+    negative: boolean;
+    x: number;
+    y: number;
   }): void {
     const steps = Math.max(1, this.scoreStepCount);
     // El puntaje no se acumula de forma lineal, pero repartirlo entre los pasos
@@ -1167,11 +1170,33 @@ export class HUD {
     void this.elTickerTotal.offsetWidth;
     this.elTickerTotal.classList.add('is-bump');
 
+    // Un paso que RESTA se grafica como daño (veneno) y no como ganancia: es la
+    // unica forma de que se vea que la mano esta perdiendo puntos, no sumando.
+    if (info.negative) this.effect(info.x, info.y, 'poison');
+    // Un bonus es un momento, no un numero: estalla.
+    if (info.isBonus) this.effect(info.x, info.y, 'burst');
+
     if (this.tickerTimer !== null) window.clearTimeout(this.tickerTimer);
     this.tickerTimer = window.setTimeout(() => {
       this.elTicker.classList.remove('is-visible');
       this.tickerTimer = null;
     }, 1400);
+  }
+
+  /**
+   * Efecto con sprite en una posicion de pantalla. Se autodestruye al terminar
+   * la animacion: sin eso el DOM crece sin techo a lo largo de una partida.
+   *
+   * Los sprites vienen del Super Pixel Effects Gigapack y estan ADAPTADOS al
+   * estilo pintado del juego (upscale suave + halo). Ver public/fx/LICENSE.txt.
+   */
+  effect(x: number, y: number, kind: 'poison' | 'burst'): void {
+    const el = document.createElement('div');
+    el.className = `fx-sprite fx-${kind}`;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    this.elPopups.appendChild(el);
+    window.setTimeout(() => el.remove(), kind === 'poison' ? 1700 : 700);
   }
 
   popup(x: number, y: number, text: string, color: number): void {
