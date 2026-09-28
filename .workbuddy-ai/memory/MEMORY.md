@@ -134,18 +134,40 @@ Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `a
 - El arranque espera `document.fonts.load()` + `fonts.ready` antes de crear el render.
 
 ## Assets
-- **Arte de cartas**: `art_card_<elemento>_<rareza>.webp` (8×5 = 40) a 512×744, dibujado a
-  SANGRE. Cadena de respaldo: nuevo → `card_<elemento>_common` → los 11 viejos → procedural.
-  `public/art/index.json` (generado por `npm run art:index`) lista los que existen: sin él
-  serían 40 404 en cada arranque.
+- **Arte de cartas: 40/40 hechos** (`art_card_<elemento>_<rareza>.webp`, 8×5) a 512×744,
+  dibujado a SANGRE, 0.70 MB en total. Cadena de respaldo: nuevo →
+  `card_<elemento>_common` → los 11 viejos → procedural. **Los 11 viejos NO se borran todavía**
+  (lote L6 del plan): primero hay que jugar una temporada con los 40.
+- **Iconos de UI: 25/25 SVG** en `public/art/ui_icon_<id>.svg`, monocromo y tintables. No
+  pasan por `ArtAssets` (que solo indexa los `.webp`).
+- `public/art/index.json` (generado por `npm run art:index`) lista los que existen: sin él
+  serían decenas de 404 en cada arranque.
 - **El sujeto del arte nuevo va entre el 18% y el 62% de la altura** (arriba el nombre, abajo
   los chips).
 - Las fuentes PNG viven en `art-source/` (gitignored), no en `public/art/`.
 - **El catálogo de prompts de arte es `ART_PROMPTS.md`** (raíz del repo): 40 ilustraciones + 25
-  iconos SVG, un prompt listo para pegar por asset, la paleta bloqueada, la banda de composición,
-  los lotes (L1 = los 8 `common` es el lote de mayor impacto) y los criterios de aceptación.
-  Es la fuente de verdad para generar arte; el README solo resume la especificación.
-- Falta: 40 ilustraciones, el logo y 25 iconos SVG monocromo (la tipografía ya está, v1.4).
+  iconos, la paleta bloqueada, la banda de composición, los lotes y los criterios de aceptación.
+- **`npm run art` RECORTA, no deforma** (`fit()`): el generador devuelve 2:3 (1:1.491) y la
+  carta es 1:1.453. Un `resize()` directo estiraba 2.6% y ovalaba los círculos.
+- La hoja de contactos va a `tools/shots/`, **nunca** a `public/` (todo lo de `public/` se
+  publica).
+- Falta: el logo (`ui_logo_mark.webp`). La tipografía está desde v1.4.
+
+## Generar arte nuevo (v1.5) — la regla que importa
+**El estilo no se describe: se hereda.** Probado A/B sobre el mismo slot: por texto-a-imagen
+sale **fotorrealista** y rompe el set; por **imagen-a-imagen** con una carta del juego como
+referencia (`input_fidelity: medium`) sale en estilo. Anclaje jerárquico: cada familia se ancla
+en su propio `common`; las 8 familias se anclaron en `poison_common`. En el prompt, cambiar el
+acento **por nombre y por hex** y recordar la variante explícitamente (el ancla arrastra forma
+y paleta). Detalle completo en `ART_PROMPTS.md` §0.4 y en el skill
+`game-art-asset-pipeline`.
+
+## Pendiente conocido (bug de layout, no de arte)
+Con la mano llena (`MAX_HAND_SIZE = 12`), **las 4 cartas de los extremos quedan tapadas por los
+montones de mazo y descarte** (medido: los extremos caen a 37 px del centro del montón, con un
+ancho de carta de ~110 px en pantalla). Con 8 cartas ya pasa con las 2 de las puntas.
+`DECK_X = ±7.8` y el abanico llega a ±8. Arreglo candidato: acotar el ancho del abanico según
+la cantidad de cartas, o alejar los montones.
 
 ## Trampas del render / del smoke (ya resueltas, no reintroducir)- **El dorso no se toca por frame.** Cara `FrontSide` + dorso `BackSide` coplanares: el culling
   del GPU decide cuál se ve y el raycaster respeta `material.side`. No volver a alternar
