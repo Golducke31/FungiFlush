@@ -12,7 +12,12 @@
 
      --font-ui        Fredoka SemiCondensed Bold   el HUD, los paneles, los botones
      --font-display   Gasoek One                   titulos, marcador, nombres de carta
-     --font-wordmark  Borsok                       SOLO el logotipo del menu
+     --font-wordmark  Pirata One                   SOLO el logotipo del menu
+
+   Pirata One reemplaza a Borsok (que tenia problemas de licencia): viene de
+   Google Fonts (SIL Open Font License, redistribuible), mantiene la onda de
+   "display caps decorativa" y queda legible sobre el fondo del menu con el
+   glow cian del bosque.
 
    Los archivos son subsets en WOFF2 que genera `npm run fonts`: de 1167 KB de
    TTF quedan 38 KB (Gasoek One traia 3099 glifos por el hangul y el juego usa
@@ -45,15 +50,15 @@
 }
 
 @font-face {
-  font-family: 'Borsok';
-  src: url('/fonts/borsok-regular.woff2') format('woff2');
+  font-family: 'Pirata One';
+  src: url('/fonts/pirata-one-regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 :root {
-  /* Las tres familias traen UN solo peso (Fredoka 700, Gasoek 400, Borsok 400).
+  /* Las tres familias traen UN solo peso (Fredoka 700, Gasoek 400, Pirata One 400).
      Sin esto, un `font-weight: 900` haria que el navegador FABRIQUE una negrita
      sintetica, y sobre una fuente que ya es pesada eso se ve emborronado. Con
      `font-synthesis: none` cada familia usa el peso que realmente tiene, sin
@@ -62,7 +67,7 @@
 
   --font-ui: 'Fredoka SemiCondensed', 'Segoe UI', system-ui, sans-serif;
   --font-display: 'Gasoek One', 'Fredoka SemiCondensed', system-ui, sans-serif;
-  --font-wordmark: 'Borsok', 'Gasoek One', system-ui, sans-serif;
+  --font-wordmark: 'Pirata One', 'Gasoek One', system-ui, sans-serif;
 
   --bg: #080b10;
   --panel: rgba(13, 19, 27, 0.82);
@@ -995,34 +1000,55 @@ body {
   background: rgba(4, 7, 11, 0.5);
 }
 
+/* Menu: ocupa toda la ventana con la imagen del bosque micelial de fondo.
+   El panel base (.panel) aporta border, border-radius y box-shadow: aqui se
+   anulan para que el fondo cubra de borde a borde y el titulo flote arriba. */
 .panel.is-menu {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 38%);
-  grid-template-areas:
-    'hero actions'
-    'footer actions';
-  gap: var(--gap);
-  width: min(1080px, calc(100vw - var(--safe-l) - var(--safe-r) - 32px));
-  max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 24px);
-  padding: calc(18px + var(--safe-t)) calc(18px + var(--safe-r)) calc(18px + var(--safe-b))
-    calc(18px + var(--safe-l));
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  padding: calc(24px + var(--safe-t)) calc(24px + var(--safe-r)) calc(20px + var(--safe-b)) calc(24px + var(--safe-l));
+  overflow: hidden;
+  background:
+    /* Viñeta sutil: oscurece arriba y abajo para que el titulo y el footer
+       respiren sin tapar el centro de la imagen. */
+    linear-gradient(180deg, rgba(4, 7, 11, 0.62) 0%, rgba(4, 7, 11, 0.1) 32%, rgba(4, 7, 11, 0.15) 72%, rgba(4, 7, 11, 0.7) 100%),
+    url('/menu-bg.jpg') center / cover no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .menu-hero {
-  grid-area: hero;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  align-items: center;
+  text-align: center;
   gap: 6px;
+  flex: 0 0 auto;
+  /* Empuja el titulo hacia arriba sin pegarlo al borde (respeta safe-area). */
+  margin-top: clamp(12px, 4vh, 40px);
 }
 
+/* Card translucida para que las opciones sean legibles sobre la imagen. */
 .menu-actions {
-  grid-area: actions;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  justify-content: center;
+  width: min(380px, calc(100vw - 48px));
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 18px 16px;
+  background: rgba(10, 14, 20, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
 }
 
 .menu-row {
@@ -1035,33 +1061,43 @@ body {
 }
 
 .menu-footer {
-  grid-area: footer;
   color: var(--dim);
   font-size: 12px;
+  text-align: center;
+  flex: 0 0 auto;
 }
 
+/* Titulo apilado: marca arriba, palabra abajo, ambos centrados. */
 .menu-logo {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
+/* La palabra es lo que cuenta. Pirata One es display caps decorativa con
+   la onda "vintage" de la referencia. El gradiente se ve sobre el fondo
+   oscuro del bosque y el drop-shadow le da el glow cian sin taparlo. */
 .menu-logo-word {
-  font-size: 40px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  background: linear-gradient(92deg, var(--spores), var(--violet), #5fd8e8);
+  font-family: var(--font-wordmark);
+  font-size: clamp(46px, 9vw, 96px);
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  background: linear-gradient(92deg, #9df5c6, #5fd8e8 55%, #a78bfa);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  font-family: var(--font-wordmark);
+  filter:
+    drop-shadow(0 0 22px rgba(95, 216, 232, 0.4))
+    drop-shadow(0 2px 10px rgba(0, 0, 0, 0.75));
 }
 
 .menu-logo-mark {
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 48px;
   display: block;
-  filter: drop-shadow(0 2px 8px rgba(79, 209, 139, 0.4));
+  filter: drop-shadow(0 2px 10px rgba(79, 209, 139, 0.5));
 }
 
 /* La marca es SVG inline: el svg rellena el contenedor. Si algun dia se
@@ -1379,14 +1415,13 @@ body {
   color: var(--dim);
 }
 
-/* En retrato (o casi cuadrado) el menu se apila: mejor scrollear que recortar. */
+/* En retrato (o casi cuadrado) el menu es angosto: dejamos que scrolee y
+   alineamos arriba para que el titulo no quede tapado por el teclado virtual
+   o las barras del sistema. */
 @media (orientation: portrait), (max-aspect-ratio: 1/1) {
   .panel.is-menu {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'hero'
-      'actions'
-      'footer';
+    overflow: auto;
+    justify-content: flex-start;
   }
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1519,12 +1554,50 @@ body {
    se compacta pero sigue siendo tocable. Va al final para ganarles a las
    reglas generales de .btn.is-large. */
 @media (max-height: 430px) {
-  .menu-logo-word {
-    font-size: 27px;
+  .panel.is-menu {
+    /* Landscape de celular: si igual no entra, scrollea el panel. */
+    overflow: auto;
+    justify-content: flex-start;
   }
-  .btn.is-large {
-    min-height: 46px;
-    font-size: 15px;
+  .menu-hero {
+    margin-top: 4px;
+    gap: 2px;
+  }
+  .menu-logo {
+    gap: 4px;
+  }
+  .menu-logo-word {
+    font-size: 24px;
+  }
+  .menu-logo-mark {
+    width: 28px;
+    height: 28px;
+  }
+  /* Tagline y version ocupan espacio que no sobra en 390 px de alto. */
+  .panel-subtitle,
+  .menu-meta {
+    display: none;
+  }
+  .menu-actions {
+    padding: 8px 10px;
+    gap: 4px;
+    margin-top: 8px;
+    margin-bottom: auto;
+    width: min(360px, calc(100vw - 32px));
+  }
+  .menu-actions .btn {
+    min-height: 34px;
+    padding: 3px 8px;
+    font-size: 11.5px;
+  }
+  .menu-actions .btn.is-large {
+    min-height: 36px;
+    font-size: 12.5px;
+    padding: 4px 8px;
+  }
+  .menu-footer {
+    font-size: 10.5px;
+    margin-top: 4px;
   }
   .settings-field {
     padding: 7px 10px;
