@@ -106,6 +106,9 @@ export const HALO_FRAG = /* glsl */ `
     vec3 mixed = a > 0.001 ? color / a : color;
 
     gl_FragColor = vec4(mixed * a, a);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -144,7 +147,10 @@ export function createHaloMaterial(options: {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
-    toneMapped: false,
+    // `true` desde D2: sin esto el renderer no define `TONE_MAPPING` y el chunk
+    // de abajo seria un no-op justo en el camino donde hace falta (el render
+    // directo al canvas de `low`).
+    toneMapped: true,
   });
 }
 
@@ -176,7 +182,13 @@ export const AMBIENT_SPORE_VERT = /* glsl */ `
   varying vec3  vColor;
 
   void main() {
-    vColor = aColor;
+    // Variacion POR ESPORA derivada del tercer componente de la semilla, que
+    // ya es distinto en cada una. Sin esto, las del mismo color se ven como
+    // clones: mismo brillo, mismo tamaño, y el campo se lee como una textura
+    // repetida.
+    float v = fract(sin(aSeed.z * 17.13) * 43758.5453);
+
+    vColor = aColor * (0.72 + 0.56 * v);
 
     // Caida con wrap: al salir por abajo vuelve a entrar por arriba.
     float t = uTime * uFallSpeed + aSeed.y;
@@ -192,7 +204,10 @@ export const AMBIENT_SPORE_VERT = /* glsl */ `
 
     vec4 mv = modelViewMatrix * vec4(x, y, z, 1.0);
     // Atenuacion por perspectiva: las esporas lejanas se ven mas chicas.
-    gl_PointSize = aSize * (340.0 / max(0.001, -mv.z)) * vAlpha;
+    // El mismo factor del color tambien escala el punto, asi que brillo y
+    // tamaño van de la mano: una espora chica y brillante se lee como un
+    // destello, y una grande y opaca como algo mas cerca.
+    gl_PointSize = aSize * (0.85 + 0.4 * v) * (340.0 / max(0.001, -mv.z)) * vAlpha;
     gl_Position  = projectionMatrix * mv;
   }
 `;
@@ -209,6 +224,9 @@ export const AMBIENT_SPORE_FRAG = /* glsl */ `
     float a = (core + halo) * vAlpha;
     if (a < 0.01) discard;
     gl_FragColor = vec4(vColor * (0.6 + 0.4 * core), a);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -225,7 +243,7 @@ export function createAmbientSporeMaterial(height = 10): THREE.ShaderMaterial {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    toneMapped: false,
+    toneMapped: true,
   });
 }
 
@@ -260,6 +278,9 @@ export const SPORE_FRAG = /* glsl */ `
     float a = (core + halo) * vLife;
     if (a < 0.01) discard;
     gl_FragColor = vec4(vColor * (0.6 + 0.4 * core), a);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -270,7 +291,74 @@ export function createSporeMaterial(): THREE.ShaderMaterial {
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    toneMapped: false,
+    toneMapped: true,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cielo
+// ---------------------------------------------------------------------------
+
+/**
+ * Esfera invertida con degradado vertical. Reemplaza el color plano de
+ * `scene.background` en los tiers con atmosfera.
+ *
+ * Lleva los dos chunks de salida a proposito, y por la misma razon que los
+ * demas materiales de este archivo: con el composer el cuadro va a un render
+ * target, donde `TONE_MAPPING` no se define y `linearToOutputTexel` es la
+ * identidad (el `OutputPass` lo hace al final). Renderizando directo al canvas
+ * (`low`) los dos se activan y el cielo queda codificado como el resto de la
+ * escena. Sin los chunks, el cielo se veria distinto en cada camino.
+ */
+export const SKY_VERT = /* glsl */ `
+  varying vec3 vDir;
+
+  void main() {
+    vDir = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+export const SKY_FRAG = /* glsl */ `
+  uniform vec3 uZenith;
+  uniform vec3 uHorizon;
+  uniform vec3 uNadir;
+  varying vec3 vDir;
+
+  void main() {
+    // 0 en el nadir, 0.5 en el horizonte, 1 en el cenit.
+    float h = vDir.y * 0.5 + 0.5;
+
+    // Dos ramas y no una sola mezcla: si se interpolara del nadir al cenit de
+    // una vez, el horizonte quedaria a medio camino entre los dos en vez de
+    // ser su propio color, y la franja de luz se perderia.
+    vec3 c = h > 0.5
+      ? mix(uHorizon, uZenith, smoothstep(0.5, 1.0, h))
+      : mix(uNadir, uHorizon, smoothstep(0.0, 0.5, h));
+
+    gl_FragColor = vec4(c, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+export function createSkyMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: SKY_VERT,
+    fragmentShader: SKY_FRAG,
+    uniforms: {
+      // Apagados pero no negros: un cielo negro plano se lee como "no hay
+      // nada", y lo que tiene que verse es el degradado.
+      uZenith: { value: new THREE.Color(0x081420) },
+      uHorizon: { value: new THREE.Color(0x14384a) },
+      uNadir: { value: new THREE.Color(0x03060a) },
+    },
+    side: THREE.BackSide,
+    depthWrite: false,
+    // Si el cielo se niebla desaparece: esta a 120 unidades y el far de la
+    // niebla es 62, asi que la niebla se lo comeria entero.
+    fog: false,
   });
 }
 

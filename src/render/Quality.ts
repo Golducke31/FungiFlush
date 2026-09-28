@@ -31,8 +31,20 @@ export interface TierConfig {
   bloomIterations: number;
   bloomStrength: number;
   bloomThreshold: number;
+  /**
+   * Rodilla del bloom: cuan brusco es el paso entre "no brilla" y "brilla".
+   * Antes estaba hardcodeado en `PostFx.ts`; ahora es del tier porque es la
+   * mitad del ajuste que decide si el glow se ve suave o como un sticker.
+   */
+  bloomKnee: number;
   /** Mezcla del grade (0 = apagado). */
   gradeMix: number;
+  /**
+   * Iluminacion por imagen (IBL) y atmosfera: cubo PMREM procedural, cielo
+   * degradado y luz de rim. `false` en `low`, donde el camino de render tiene
+   * que seguir siendo exactamente el de siempre.
+   */
+  environment: boolean;
   /** Muestras de MSAA del render target del composer (WebGL2). */
   samples: number;
   /** Esporas de fondo, calculadas 100% en la GPU. */
@@ -61,7 +73,9 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     bloomIterations: 0,
     bloomStrength: 0,
     bloomThreshold: 0.7,
+    bloomKnee: 0.2,
     gradeMix: 0,
+    environment: false,
     samples: 0,
     ambientSpores: 0,
     transientSpores: 1200,
@@ -74,7 +88,9 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     bloomIterations: 1,
     bloomStrength: 0.7,
     bloomThreshold: 0.7,
+    bloomKnee: 0.35,
     gradeMix: 0.6,
+    environment: true,
     samples: 0,
     ambientSpores: 400,
     transientSpores: 1200,
@@ -87,7 +103,9 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     bloomIterations: 2,
     bloomStrength: 0.9,
     bloomThreshold: 0.7,
+    bloomKnee: 0.45,
     gradeMix: 1,
+    environment: true,
     samples: 4,
     ambientSpores: 900,
     transientSpores: 2000,

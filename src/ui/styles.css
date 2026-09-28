@@ -83,6 +83,65 @@
   --radius: 12px;
   --gap: 10px;
 
+  /* -------------------------------------------------------------------------
+     Escala de espaciado. Se nombran por nivel (1=minimo, 6=maximo) para que
+     el codigo no codifique los px directamente. Si la escala cambia, cambia
+     en un solo lugar.
+     ------------------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+
+  /* -------------------------------------------------------------------------
+     Sombras de elevacion. Tres niveles (1=ras del suelo, 3=flotando) mas una
+     inset para el highlight interior de los paneles.
+     El highlight inset crea la ilusion de que la luz viene de arriba: un px
+     blanco muy tenue en el borde superior se lee como borde iluminado.
+     ------------------------------------------------------------------------- */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 10px 30px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* -------------------------------------------------------------------------
+     Tokens de motion. Tres duraciones y dos curvas de aceleracion.
+     `--ease-back` llega un poco mas alla del destino antes de asentarse:
+     es lo que hace que un boton de menu se sienta con peso y no plano.
+     ------------------------------------------------------------------------- */
+  --dur-fast: 0.11s;
+  --dur-base: 0.18s;
+  --dur-slow: 0.30s;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* -------------------------------------------------------------------------
+     Escala de z-index. Fuente unica: cero literales de z-index fuera de aqui.
+     El orden importa: curtain (dentro de un panel) < popup < tooltip <
+     overlay (pantalla completa) < toast (siempre encima) < loader.
+     ------------------------------------------------------------------------- */
+  --z-curtain: 5;
+  --z-popup:   50;
+  --z-tooltip: 60;
+  --z-overlay: 80;
+  --z-toast:   90;
+  --z-loader:  120;
+
+  /* -------------------------------------------------------------------------
+     Escala tipografica. El CSS no tenia escala: habia ~20 font-size distintos
+     en px. Estos tokens no reemplazan todos de golpe, pero dan el vocabulario
+     para unificar progresivamente. Se listan de menor a mayor.
+     ------------------------------------------------------------------------- */
+  --text-xs:   9.5px;
+  --text-sm:   11px;
+  --text-base: 13px;
+  --text-md:   15px;
+  --text-lg:   18px;
+  --text-xl:   22px;
+  --text-xxl:  34px;
+
   /* Safe areas: en celulares con notch el HUD no debe quedar debajo. */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
@@ -179,6 +238,7 @@ body {
   font-weight: 800;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .hud-value.is-substrate {
@@ -209,11 +269,12 @@ body {
 }
 
 .hud-score-current {
-  font-size: 34px;
+  font-size: var(--text-xxl);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  text-shadow: 0 0 24px rgba(79, 209, 139, 0.55);
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 24px rgba(79, 209, 139, 0.55), 0 2px 8px rgba(0, 0, 0, 0.7);
   transition: color 0.2s;
   font-family: var(--font-display);
 }
@@ -316,12 +377,16 @@ body {
   font-size: 11.5px;
   max-width: 168px;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-back),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 .joker-chip:hover {
   border-color: var(--border-strong);
   transform: translateX(3px);
+  box-shadow: var(--shadow-2);
 }
 
 .joker-chip-name {
@@ -356,12 +421,13 @@ body {
 }
 
 .counter {
-  background: var(--panel);
+  background: linear-gradient(180deg, rgba(18, 27, 38, 0.92), rgba(13, 19, 27, 0.88));
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px 11px;
   text-align: center;
   min-width: 62px;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .counter-value {
@@ -393,13 +459,20 @@ body {
   cursor: pointer;
   /* 44px minimo: es el tamaño de un dedo, no de un puntero. */
   min-height: 46px;
-  transition: transform 0.12s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  /* El transform USA `--ease-back`: al soltar, el boton rebota un pelo antes
+     de asentarse. Con una curva lineal el mismo gesto se siente muerto. */
+  transition:
+    transform var(--dur-fast) var(--ease-back),
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
   white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
   background: rgba(95, 216, 232, 0.14);
   border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .btn:active:not(:disabled) {
@@ -453,7 +526,7 @@ body {
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.14s, transform 0.14s;
-  z-index: 60;
+  z-index: var(--z-tooltip);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -492,9 +565,10 @@ body {
 .tooltip-stat {
   flex: 1;
   text-align: center;
-  background: rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(22, 32, 44, 0.9), rgba(12, 18, 26, 0.9));
   border-radius: 8px;
   padding: 6px 4px;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .tooltip-stat-value {
@@ -525,7 +599,7 @@ body {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  z-index: 50;
+  z-index: var(--z-popup);
 }
 
 .score-popup {
@@ -566,13 +640,80 @@ body {
   background: rgba(4, 7, 11, 0.86);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
-  z-index: 80;
+  z-index: var(--z-overlay);
   padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
   overflow-y: auto;
 }
 
+/* Abierto: el fondo solo desvanece y el panel escala. Son dos animaciones
+   separadas a proposito: escalar el fondo entero se leeria como un zoom de
+   camara, no como un panel que aparece. */
 .overlay.is-open {
   display: flex;
+  animation: overlay-in var(--dur-base) var(--ease-out);
+}
+
+.overlay.is-open > .panel {
+  animation: panel-in var(--dur-slow) var(--ease-back);
+}
+
+/*
+ * Cerrando. `display: flex` se sostiene hasta que `animationend` dispare la
+ * limpieza en HUD.ts (si lo apagaramos aqui, el panel desapareceria de golpe
+ * y la animacion de salida no se veria nunca).
+ *
+ * `pointer-events: none` NO es opcional: sin el, los ~200ms que dura la
+ * salida el overlay sigue siendo `auto` (hereda de `#ui-root > .overlay`) y
+ * se come los toques destinados al canvas.
+ */
+.overlay.is-closing {
+  display: flex;
+  pointer-events: none;
+  animation: overlay-out var(--dur-base) var(--ease-out) forwards;
+}
+
+.overlay.is-closing > .panel {
+  animation: panel-out var(--dur-base) var(--ease-out) forwards;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
 }
 
 .panel {
@@ -589,6 +730,8 @@ body {
   font-weight: 900;
   margin: 0 0 4px;
   font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .panel-subtitle {
@@ -612,12 +755,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-back),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 .offer:hover:not(.is-sold) {
   border-color: var(--border-strong);
   transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
 }
 
 .offer.is-sold {
@@ -671,9 +818,10 @@ body {
 }
 
 .stat-cell {
-  background: rgba(255, 255, 255, 0.04);
+  background: linear-gradient(180deg, rgba(18, 27, 38, 0.92), rgba(13, 19, 27, 0.88));
   border-radius: 10px;
   padding: 11px 13px;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .stat-cell-value {
@@ -703,12 +851,16 @@ body {
   border-radius: 13px;
   padding: 15px;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-back),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 .blind-card:hover {
   border-color: var(--border-strong);
   transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
 }
 
 .blind-card.is-current {
@@ -748,7 +900,7 @@ body {
   justify-content: center;
   gap: 18px;
   background: var(--bg);
-  z-index: 120;
+  z-index: var(--z-loader);
   transition: opacity 0.5s;
 }
 
@@ -798,7 +950,7 @@ body {
   justify-content: center;
   gap: 16px;
   background: var(--bg);
-  z-index: 110;
+  z-index: calc(var(--z-loader) - 10);
   text-align: center;
   padding: 24px;
 }
@@ -906,12 +1058,18 @@ body {
 }
 
 .menu-logo-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  border: 1px solid var(--border-strong);
-  background: radial-gradient(circle at 50% 62%, var(--spores), transparent 68%);
-  box-shadow: 0 0 22px rgba(79, 209, 139, 0.35);
+  width: 38px;
+  height: 38px;
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(79, 209, 139, 0.4));
+}
+
+/* La marca es SVG inline: el svg rellena el contenedor. Si algun dia se
+   reemplaza por un `<img>`, este selector sigue aplicando. */
+.menu-logo-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .menu-meta {
@@ -1087,7 +1245,8 @@ body {
   padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
+  background: linear-gradient(180deg, rgba(16, 24, 34, 0.9), rgba(11, 17, 25, 0.9));
+  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .deck-card-name {
@@ -1182,9 +1341,10 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
+  background: linear-gradient(180deg, rgba(16, 24, 34, 0.9), rgba(11, 17, 25, 0.9));
   font-size: 12px;
   flex-wrap: wrap;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .collection-card.is-locked {
@@ -1253,17 +1413,18 @@ body {
   gap: 7px;
   align-items: center;
   pointer-events: none;
-  z-index: 90;
+  z-index: var(--z-toast);
 }
 
 .toast {
-  background: rgba(13, 19, 27, 0.95);
+  background: linear-gradient(180deg, rgba(18, 27, 40, 0.98), rgba(10, 15, 22, 0.98));
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 9px 17px;
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 600;
-  animation: toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-inset), var(--shadow-2);
+  animation: toast-in var(--dur-slow) var(--ease-out);
 }
 
 .toast.is-warn {
@@ -1499,21 +1660,61 @@ body {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+  /* Micro-relieve: la celda se lee como una ficha apoyada sobre la mesa, no
+     como un agujero recortado en el panel. */
+  box-shadow: var(--shadow-inset), var(--shadow-1);
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
+/* El gradiente va DE ARRIBA: la luz de la escena 3D viene de arriba, y un
+   panel con la base mas oscura que el techo se lee como hundido. */
 .board-cell[data-owner='0'] {
   border-color: var(--p0);
-  background: rgba(95, 216, 232, 0.12);
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(95, 216, 232, 0.28), rgba(95, 216, 232, 0.05) 62%, transparent 100%),
+    linear-gradient(180deg, rgba(18, 29, 39, 0.96), rgba(10, 15, 22, 0.96));
 }
 
 .board-cell[data-owner='1'] {
   border-color: var(--p1);
-  background: rgba(224, 92, 138, 0.12);
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(224, 92, 138, 0.28), rgba(224, 92, 138, 0.05) 62%, transparent 100%),
+    linear-gradient(180deg, rgba(35, 20, 31, 0.96), rgba(14, 10, 17, 0.96));
 }
 
+/* Celdas donde se puede soltar. El ritmo NO es arbitrario: `DropZone.ts`
+   pulsa con `Math.sin(time * 6.5)`, o sea 6.5 rad/s, que es un periodo de
+   2*PI/6.5 = 0.967s. Usar la misma cadencia hace que la mesa 3D y el tablero
+   del duelo respiren juntos en vez de competir.
+
+   Se anima `opacity` de un pseudo-elemento y no `box-shadow`: la opacidad la
+   compone el GPU, y con hasta 16 celdas pulsando a la vez un repaint por
+   frame se nota en un celular. */
 .board-cell.is-legal {
   border-style: dashed;
   border-color: rgba(79, 209, 139, 0.75);
+}
+
+.board-cell.is-legal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(79, 209, 139, 0.6);
+  animation: cell-legal-pulse 0.967s ease-in-out infinite;
+}
+
+@keyframes cell-legal-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 .board-cell.is-flipped {
@@ -1538,6 +1739,57 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  /* Marco de rareza. El color y el grosor los inyecta BoardScreen.ts como
+     variables porque viven en `palette.ts`, junto a los del render 3D: una
+     sola fuente para los dos mundos. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 var(--rarity-w, 0px) var(--rarity-color, transparent);
+}
+
+/* Marca de agua del elemento. Aporta identidad de un vistazo sin competir
+   con los numeros, que son lo que el jugador realmente lee. */
+.board-face-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Reemplaza al punto de 5px que habia antes: un velo del color del elemento
+   que unifica ilustracion, borde y nombre. Va al final del stack, asi que
+   necesita `z-index: 0` para no tapar los numeros. */
+.board-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(72% 58% at 50% 44%, var(--card-color, var(--muted)), transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 48%);
+  opacity: 0.24;
+}
+
+/* Boca abajo: no se pueden ver los numeros, asi que se tapa TODO y se deja
+   solo un patron de dorso. Sin esto una carta oculta era indistinguible de
+   una revelada, y en hot-seat eso es informacion que se filtra. */
+.board-face.is-hidden-face .board-face-art,
+.board-face.is-hidden-face .board-arrow,
+.board-face.is-hidden-face .board-face-name {
+  display: none;
+}
+
+.board-face.is-hidden-face {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0 3px, transparent 3px 6px),
+    linear-gradient(180deg, rgba(30, 22, 34, 0.98), rgba(12, 10, 16, 0.98));
+  border-radius: 5px;
 }
 
 .board-face-name {
@@ -1549,28 +1801,20 @@ body {
   font-size: 8.5px;
   line-height: 1.05;
   text-align: center;
-  opacity: 0.7;
+  opacity: 0.85;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-
-.board-face::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
-  background: var(--card-color, #9aa5b1);
-  opacity: 0.5;
+  /* Sobre la marca de agua el texto pierde contraste: la sombra lo separa. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  z-index: 2;
 }
 
 .board-arrow {
   position: absolute;
+  /* Encima de la marca de agua y del velo: los numeros son lo primero. */
+  z-index: 2;
   font-size: 9.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1640,11 +1884,22 @@ body {
   cursor: pointer;
   overflow: hidden;
   flex: 0 0 auto;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
+  transition:
+    transform var(--dur-fast) var(--ease-back),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.board-hand-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
 }
 
 .board-hand-card.is-selected {
   border-color: var(--spores, #4fd18b);
-  box-shadow: 0 0 0 2px rgba(79, 209, 139, 0.45);
+  box-shadow: var(--shadow-inset), var(--shadow-1), 0 0 0 2px rgba(79, 209, 139, 0.45);
+  transform: translateY(-3px);
 }
 
 .board-log {
@@ -1695,7 +1950,7 @@ body {
   background: rgba(4, 7, 11, 0.97);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  z-index: 5;
+  z-index: var(--z-curtain);
 }
 
 .board-curtain.is-open {

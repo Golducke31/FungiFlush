@@ -30,6 +30,7 @@ import {
   createCardBackCanvas,
   createShadowCanvas,
   createTableCanvas,
+  createTableNormalCanvas,
 } from './CardTexture';
 import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
@@ -46,6 +47,7 @@ import {
   type TierDetection,
   type TierReason,
 } from './Quality';
+import { createSkyMaterial } from './Shaders';
 import { TweenManager } from './Tween';
 import { ELEMENT_COLOR, UI_COLORS } from './palette';
 
@@ -238,6 +240,22 @@ export class SceneManager {
   private shadowMesh: THREE.InstancedMesh | null = null;
   private readonly shadowDummy = new THREE.Object3D();
 
+  // --- Atmosfera (C1-C3): todo opcional y ausente en `low` ---
+  /** Luces base. Se re-ajustan cuando entra el IBL (C2). */
+  private hemiLight: THREE.HemisphereLight | null = null;
+  private keyLight: THREE.DirectionalLight | null = null;
+  /** Cubo PMREM procedural. Se genera una sola vez, la primera vez que hace falta. */
+  private envTexture: THREE.Texture | null = null;
+  /** Tapete: material base (`low`) y su reemplazo con relieve y sheen (E1). */
+  private tableMesh: THREE.Mesh | null = null;
+  private tableMap: THREE.Texture | null = null;
+  private tableStandard: THREE.MeshStandardMaterial | null = null;
+  private tablePhysical: THREE.MeshPhysicalMaterial | null = null;
+  /** Esfera de cielo con degradado. Propia de los tiers con `environment`. */
+  private skyMesh: THREE.Mesh | null = null;
+  /** Rim light tenue. Una sola y solo con `environment`. */
+  private rimLight: THREE.PointLight | null = null;
+
   constructor(options: SceneOptions) {
     this.engine = options.engine;
     this.assets = options.assets;
@@ -321,10 +339,171 @@ export class SceneManager {
       ambient: config.ambientSpores,
     });
     this.syncAmbient();
+    this.syncEnvironment();
     this.syncPostFx();
     if (this.shadowMesh) this.shadowMesh.visible = config.contactShadows;
 
     if (resizeNow) this.resize();
+  }
+
+  // ==========================================================================
+  // Atmosfera (C1-C3)
+  // ==========================================================================
+
+  /**
+   * Prende y apaga IBL, cielo y luz de rim segun el tier.
+   *
+   * Se construye de forma PEREZOSA: en `low` no se crea nada, ni el cubo PMREM
+   * ni la esfera. Eso es lo que sostiene la regla de oro de la calidad —`low`
+   * es el camino de render de siempre— sin tener que preguntar por el tier
+   * dentro de `buildWorld()`, que corre antes de que el nivel se fije.
+   */
+  private syncEnvironment(): void {
+    const on = TIER_CONFIG[this.tier].environment;
+
+    if (on && !this.envTexture) this.buildEnvironment();
+
+    // `scene.environment` se lee en todos los `MeshStandardMaterial`: las
+    // cartas, el tapete y las pilas. En null, simplemente no aporta.
+    this.scene.environment = on ? this.envTexture : null;
+    // Menos de 1: el IBL suma, no reemplaza. Con intensidad plena el tapete
+    // se lava y las caras pierden contraste.
+    this.scene.environmentIntensity = on ? 0.55 : 0;
+    this.syncTableMaterial(on);
+
+    if (this.skyMesh) this.skyMesh.visible = on;
+    if (this.rimLight) this.rimLight.visible = on;
+
+    // Con IBL las dos luces base BAJAN: el ambiente ya aporta luz difusa, y
+    // dejarlas como estan suma de mas y aplana las caras. Los valores de `off`
+    // son exactamente los de siempre, asi que `low` no cambia.
+    if (this.hemiLight) this.hemiLight.intensity = on ? 0.72 : 1.05;
+    if (this.keyLight) this.keyLight.intensity = on ? 1.45 : 1.7;
+
+    // Niebla: en los tiers con atmosfera se usa la exponencial, que crece sin
+    // llegar a saturar y se lee como una bruma detras de la mesa. Three.js
+    // acepta UNA sola `scene.fog`, asi que la "segunda capa" del plan se
+    // expresa cambiando la curva, no apilandola: `FogExp2` a densidad 0.014
+    // deja la mesa legible (12% a 30u) y funde el horizonte (40% a 60u).
+    this.scene.fog = on
+      ? new THREE.FogExp2(UI_COLORS.background, 0.014)
+      : new THREE.Fog(UI_COLORS.background, 30, 62);
+  }
+
+  /**
+   * Cubo PMREM procedural de 64 px de lado.
+   *
+   * Sin HDRI externo a proposito: sumaria una descarga y una dependencia de
+   * licencia para algo que aca solo tiene que aportar una distribucion de luz
+   * (cielo frio arriba, relleno violeta abajo). El PMREM se genera UNA vez y
+   * se reutiliza aunque el jugador cambie de calidad.
+   */
+  private buildEnvironment(): void {
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+
+    const envScene = new THREE.Scene();
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(10, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0x0d1a24, side: THREE.BackSide }),
+    );
+    // Dos emisores: el key frio arriba (el que ya pinta la DirectionalLight) y
+    // un relleno violeta abajo, que es lo que da la sensacion de "humedad".
+    const key = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0x3d6f8c }),
+    );
+    key.position.set(-2, 6, 2);
+    const fill = new THREE.Mesh(
+      new THREE.SphereGeometry(2.4, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x33244a }),
+    );
+    fill.position.set(4, -4, -3);
+    envScene.add(dome, key, fill);
+
+    try {
+      this.envTexture = pmrem.fromScene(envScene, 0.04).texture;
+    } finally {
+      // El generador y la escena auxiliar se van: solo sobrevive la textura.
+      pmrem.dispose();
+      dome.geometry.dispose();
+      (dome.material as THREE.Material).dispose();
+      key.geometry.dispose();
+      (key.material as THREE.Material).dispose();
+      fill.geometry.dispose();
+      (fill.material as THREE.Material).dispose();
+    }
+
+    this.disposables.push(this.envTexture);
+
+    // --- Cielo (C3) ---
+    const skyGeometry = new THREE.SphereGeometry(120, 24, 16);
+    const skyMaterial = createSkyMaterial();
+    this.skyMesh = new THREE.Mesh(skyGeometry, skyMaterial);
+    // Se dibuja PRIMERO y no escribe profundidad: asi todo lo demas queda
+    // encima sin pelear por el depth buffer.
+    this.skyMesh.renderOrder = -1;
+    this.skyMesh.frustumCulled = false;
+    this.scene.add(this.skyMesh);
+    this.disposables.push(skyGeometry, skyMaterial);
+
+    // --- Rim light (C2) ---
+    // Una sola y tenue: separa las cartas del fondo sin sumar una vuelta cara
+    // al bucle de iluminacion (las `PointLight` son las mas costosas).
+    this.rimLight = new THREE.PointLight(0x5fd8e8, 12, 40, 2);
+    this.rimLight.position.set(0, 5, -14);
+    this.scene.add(this.rimLight);
+
+    this.buildTableMaterial();
+  }
+
+  /**
+   * Material del tapete con relieve (E1): mapa de normales procedural,
+   * `roughness` mas bajo y sheen. Solo para los tiers con atmosfera.
+   *
+   * Por que un material APARTE y no mutar el estandar: si se lo tocara en
+   * caliente, `low` dejaria de ser el camino de render de siempre (que es la
+   * regla que sostiene las aserciones del smoke test). Con el swap, `low`
+   * conserva el `MeshStandardMaterial` con `roughness` 0.95 de siempre.
+   */
+  private buildTableMaterial(): void {
+    if (!this.tableMesh || !this.tableMap || !this.tableStandard || this.tablePhysical) return;
+
+    const normalMap = new THREE.CanvasTexture(createTableNormalCanvas(256));
+    normalMap.wrapS = THREE.RepeatWrapping;
+    normalMap.wrapT = THREE.RepeatWrapping;
+    normalMap.repeat.set(6, 6);
+    normalMap.anisotropy = 2;
+    normalMap.needsUpdate = true;
+
+    this.tablePhysical = new THREE.MeshPhysicalMaterial({
+      map: this.tableMap,
+      normalMap,
+      // 0.95 hacia 0.7: con el tapete casi mate no hay reflejo difuso y el
+      // relieve del normal map no se ve. No se baja mas porque por debajo de
+      // ~0.6 la mesa empieza a brillar como plastico.
+      roughness: 0.7,
+      metalness: 0.05,
+      color: 0xffffff,
+      normalScale: new THREE.Vector2(0.55, 0.55),
+      // Sheen: el brillo aterciopelado del fieltro. Es lo que hace que la luz
+      // rasante se vea "peluda" en vez de metalica.
+      sheen: 0.5,
+      sheenRoughness: 0.85,
+      sheenColor: new THREE.Color(0x6fd8e8),
+    });
+
+    this.disposables.push(normalMap, this.tablePhysical);
+  }
+
+  /** Intercambia el material del tapete segun el tier. */
+  private syncTableMaterial(on: boolean): void {
+    if (!this.tableMesh) return;
+    if (on) {
+      this.buildTableMaterial();
+      if (this.tablePhysical) this.tableMesh.material = this.tablePhysical;
+      return;
+    }
+    if (this.tableStandard) this.tableMesh.material = this.tableStandard;
   }
 
   /** Las esporas de fondo son decorativas: se apagan con `reduceMotion`. */
@@ -364,6 +543,7 @@ export class SceneManager {
       bloom: config.bloom,
       bloomStrength: config.bloomStrength,
       bloomThreshold: config.bloomThreshold,
+      bloomKnee: config.bloomKnee,
       bloomIterations: config.bloomIterations,
       gradeMix: config.gradeMix,
       samples: config.samples,
@@ -452,6 +632,12 @@ export class SceneManager {
     table.rotation.x = -Math.PI / 2;
     table.position.y = 0;
     this.scene.add(table);
+    // Se guardan los dos: `syncEnvironment()` cambia al material fisico cuando
+    // entra el IBL y vuelve a este en `low`, que tiene que seguir exactamente
+    // como estaba antes de esta fase.
+    this.tableMesh = table;
+    this.tableStandard = tableMaterial;
+    this.tableMap = tableTexture;
     this.disposables.push(tableTexture, tableGeometry, tableMaterial);
 
     // --- Luces ---
@@ -465,10 +651,10 @@ export class SceneManager {
     // charco de luz horneado en el canvas de la mesa. La `HemisphereLight` toma
     // el lugar del ambient Y ademas da un gradiente direccional (cielo cian,
     // suelo casi negro) que el ambient plano no daba.
-    const sky = new THREE.HemisphereLight(0x5b8ba8, 0x080c12, 1.05);
-    const key = new THREE.DirectionalLight(0xcfe6ff, 1.7);
-    key.position.set(-6, 18, 12);
-    this.scene.add(sky, key);
+    this.hemiLight = new THREE.HemisphereLight(0x5b8ba8, 0x080c12, 1.05);
+    this.keyLight = new THREE.DirectionalLight(0xcfe6ff, 1.7);
+    this.keyLight.position.set(-6, 18, 12);
+    this.scene.add(this.hemiLight, this.keyLight);
 
     // --- Particulas ---
     this.scene.add(this.particles.group);

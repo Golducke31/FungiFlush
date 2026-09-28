@@ -98,6 +98,10 @@ export class HUD {
   private lastStatus: string | null = null;
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
+  /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
+  private closeSeq = 0;
+  /** Respaldo por si `animationend` no llega (animacion desactivada). */
+  private closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: {
     engine: GameEngine;
@@ -422,14 +426,62 @@ export class HUD {
   }
 
   private openOverlay(content: HTMLElement): void {
+    this.cancelPendingClose();
     this.elOverlay.innerHTML = '';
     this.elOverlay.appendChild(content);
+    // Si ya estaba abierto, quitar y volver a poner `is-open` en el mismo
+    // frame no reinicia la animacion: hay que forzar un reflow entre medias.
+    this.elOverlay.classList.remove('is-open', 'is-closing');
+    void this.elOverlay.offsetWidth;
     this.elOverlay.classList.add('is-open');
   }
 
+  /**
+   * Cierra CON animacion. El contenido no se borra hasta `animationend`,
+   * porque si lo borramos antes el panel desaparece de golpe y la salida no
+   * se ve. `pointer-events` durante la salida lo apaga el CSS.
+   */
   hideOverlay(): void {
+    if (this.elOverlay.classList.contains('is-closing')) return; // ya cerrando
+    if (!this.elOverlay.classList.contains('is-open')) {
+      this.elOverlay.innerHTML = '';
+      return;
+    }
+
+    this.cancelPendingClose();
     this.elOverlay.classList.remove('is-open');
-    this.elOverlay.innerHTML = '';
+    this.elOverlay.classList.add('is-closing');
+
+    const seq = ++this.closeSeq;
+    const finish = (): void => {
+      // Un `openOverlay()` posterior ya reprogramo esto: no pisar su contenido.
+      if (seq !== this.closeSeq) return;
+      this.closeTimer = null;
+      this.elOverlay.classList.remove('is-closing');
+      this.elOverlay.innerHTML = '';
+    };
+
+    // `animationend` burbujea: sin el filtro por `target`, la animacion del
+    // panel hijo cerraria el overlay antes que la del fondo.
+    const onEnd = (event: AnimationEvent): void => {
+      if (event.target !== this.elOverlay) return;
+      this.elOverlay.removeEventListener('animationend', onEnd);
+      finish();
+    };
+    this.elOverlay.addEventListener('animationend', onEnd);
+
+    // Respaldo: con `prefers-reduced-motion` las animaciones se apagan y
+    // `animationend` nunca dispara. Sin esto el overlay quedaria colgado.
+    this.closeTimer = setTimeout(finish, 400);
+  }
+
+  /** Cancela un cierre en vuelo para que no borre contenido ya reemplazado. */
+  private cancelPendingClose(): void {
+    this.closeSeq++;
+    if (this.closeTimer !== null) {
+      clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
   }
 
   /**
@@ -978,6 +1030,7 @@ export class HUD {
   }
 
   destroy(): void {
+    this.cancelPendingClose();
     for (const unsubscribe of this.unsubscribes) unsubscribe();
     this.unsubscribes.length = 0;
     this.root.innerHTML = '';

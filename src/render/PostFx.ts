@@ -8,7 +8,7 @@
  * celular de gama media es la diferencia entre 60 y 25 FPS. Aca el bloom es de
  * CUATRO pases y tres de ellos a un cuarto de resolucion:
  *
- *     RenderPass (HDR) → Bright → BlurH → BlurV → Composite → Output → LUT
+ *     RenderPass (HDR) → Bright → BlurH → BlurV → Composite → Output → LUT → Grade
  *
  * El ahorro grande no es la cantidad de pases sino que el blur corre a ¼ de
  * resolucion: el ancho de banda de un blur separable escala con los pixeles.
@@ -23,12 +23,16 @@
  *
  * EL TONE MAPPING VIVE EN `OutputPass`
  * ------------------------------------
- * Los tres materiales de `Shaders.ts` son `ShaderMaterial` crudos y NO incluyen
- * los chunks de tone mapping ni de colorspace: hoy escriben valores lineales en
- * un framebuffer sRGB (por eso se ven mas oscuros de lo que sugiere su color).
  * Con el composer, `OutputPass` aplica ACES + exposure + sRGB UNA sola vez, al
- * final, y todo el cuadro queda bien codificado. Como contrapartida el glow
- * cambia de brillo: se re-calibra mirando una captura, no antes.
+ * final, y todo el cuadro queda bien codificado.
+ *
+ * Antes (D2) los materiales propios de `Shaders.ts` no incluian los chunks de
+ * salida, asi que escribian valores lineales en un framebuffer sRGB y en `low`
+ * se veian MAS OSCUROS que en `medium`. Ahora los incluyen y eso los deja
+ * correctos en los dos caminos sin ramas de codigo: el renderer solo define
+ * `TONE_MAPPING` cuando dibuja al canvas (con el composer el destino es un
+ * render target), y `linearToOutputTexel` es la identidad en ese mismo caso.
+ * O sea: en `medium`/`high` los chunks son no-ops y en `low` hacen el trabajo.
  */
 
 import * as THREE from 'three';
@@ -86,6 +90,47 @@ const BLUR_FRAG = /* glsl */ `
     sum += texture2D(tDiffuse, vUv + uDirection * 4.0).rgb * 0.0162162162;
     sum += texture2D(tDiffuse, vUv - uDirection * 4.0).rgb * 0.0162162162;
     gl_FragColor = vec4(sum, 1.0);
+  }
+`;
+
+/**
+ * Vignette + grano. Corre AL FINAL, despues de `OutputPass`, o sea en espacio
+ * de pantalla: el grano se autoriza en display porque es ahi donde se juzga
+ * ("se ve sucio" o "no se ve"), y hacerlo en lineal obligaria a re-tocar la
+ * intensidad cada vez que cambie el tone mapping.
+ *
+ * No incluye los chunks de salida por la misma razon: a esta altura el cuadro
+ * YA esta codificado por `OutputPass` (que es un `RawShaderMaterial` con
+ * `SRGB_TRANSFER` fijo), y volver a codificarlo lo lavaria.
+ */
+const GRADE_FRAG = /* glsl */ `
+  uniform sampler2D tDiffuse;
+  uniform float uAmount;
+  uniform float uTime;
+  uniform vec2 uTexel;
+  varying vec2 vUv;
+
+  // Hash barato. El grano tiene que ser ruido POR PIXEL: una textura de ruido
+  // se repetiria en cuanto el cuadro se agrande, y ademas costaria una subida
+  // mas a la GPU.
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  }
+
+  void main() {
+    vec4 c = texture2D(tDiffuse, vUv);
+
+    // Vignette: la distancia se normaliza a la esquina (0.5 * raiz de 2) para
+    // que el oscurecido llegue justo al borde y no antes.
+    float d = length(vUv - 0.5) * 1.4142;
+    float vig = 1.0 - smoothstep(0.55, 1.0, d) * 0.55 * uAmount;
+
+    // El grano se suma en luminancia y no por canal: teñirlo por canal se lee
+    // como ruido de sensor barato, y aca tiene que parecer pelicula.
+    float n = hash(vUv / max(uTexel, vec2(1e-5)) + uTime) - 0.5;
+    c.rgb = c.rgb * vig + n * 0.045 * uAmount;
+
+    gl_FragColor = c;
   }
 `;
 
@@ -276,6 +321,65 @@ class BloomPass extends Pass {
   }
 }
 
+/**
+ * Vignette y grano: UN quad de pantalla completa sobre el cuadro ya resuelto.
+ *
+ * Es un unico draw call con cuatro muestras de textura... en realidad una sola:
+ * no hay blur, ni downsample, ni muestreos vecinos. Eso es lo que lo hace
+ * ponible en movil, donde cualquier cosa que toque resolucion completa duele.
+ */
+class GradePass extends Pass {
+  private readonly material: THREE.ShaderMaterial;
+  private readonly quad: FullScreenQuad;
+
+  constructor(amount: number) {
+    super();
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: FULLSCREEN_VERT,
+      fragmentShader: GRADE_FRAG,
+      uniforms: {
+        tDiffuse: { value: null },
+        uAmount: { value: amount },
+        uTime: { value: 0 },
+        uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.quad = new FullScreenQuad(this.material);
+  }
+
+  override setSize(width: number, height: number): void {
+    // El grano se mide en pixeles: si el texel no sigue al tamaño, el ruido
+    // cambia de escala al redimensionar y se ve como una textura que respira.
+    (this.material.uniforms['uTexel']!.value as THREE.Vector2).set(1 / Math.max(1, width), 1 / Math.max(1, height));
+  }
+
+  override render(
+    renderer: THREE.WebGLRenderer,
+    writeBuffer: THREE.WebGLRenderTarget,
+    readBuffer: THREE.WebGLRenderTarget,
+  ): void {
+    this.material.uniforms['tDiffuse']!.value = readBuffer.texture;
+    // El tiempo mueve el ruido. Sin esto el grano es una mancha FIJA pegada al
+    // cristal, que es exactamente el defecto que se nota en una pantalla quieta.
+    this.material.uniforms['uTime']!.value = (this.material.uniforms['uTime']!.value as number) + 0.618;
+
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (!this.needsSwap) renderer.clear();
+    }
+    this.quad.render(renderer);
+  }
+
+  override dispose(): void {
+    this.material.dispose();
+    this.quad.dispose();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fachada
 // ---------------------------------------------------------------------------
@@ -289,8 +393,10 @@ export interface PostFxOptions {
   bloom: boolean;
   bloomStrength: number;
   bloomThreshold: number;
+  /** Rodilla del bloom: cuan brusco es el corte del umbral. */
+  bloomKnee: number;
   bloomIterations: number;
-  /** 0 = sin grade. */
+  /** 0 = sin grade. Tambien gatea el vignette y el grano. */
   gradeMix: number;
   /** Muestras de MSAA del render target (0 en movil). */
   samples: number;
@@ -305,6 +411,7 @@ export interface PostFxOptions {
 export class PostFx {
   private readonly composer: EffectComposer;
   private readonly bloomPass: BloomPass | null = null;
+  private readonly gradePass: GradePass | null = null;
   private readonly lutPass: LUTPass | null = null;
   private readonly lutTexture: THREE.Data3DTexture | null = null;
   private readonly renderPass: RenderPass;
@@ -336,7 +443,7 @@ export class PostFx {
         iterations: options.bloomIterations,
         strength: options.bloomStrength,
         threshold: options.bloomThreshold,
-        knee: 0.2,
+        knee: options.bloomKnee,
       });
       this.composer.addPass(this.bloomPass);
     }
@@ -351,6 +458,11 @@ export class PostFx {
       // El grade va DESPUES del tone mapping: esta autorado en espacio de
       // pantalla (asi lo lee cualquiera que lo ajuste mirando una captura).
       this.composer.addPass(this.lutPass);
+
+      // Cierra la cadena: vignette + grano. Es el ultimo, asi que el composer
+      // lo marca solo como `renderToScreen`.
+      this.gradePass = new GradePass(options.gradeMix);
+      this.composer.addPass(this.gradePass);
     }
 
     this.composer.setPixelRatio(renderer.getPixelRatio());
@@ -380,6 +492,7 @@ export class PostFx {
   dispose(): void {
     this.composer.dispose();
     this.bloomPass?.dispose();
+    this.gradePass?.dispose();
     this.lutTexture?.dispose();
     this.renderPass.dispose();
   }

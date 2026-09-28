@@ -67,6 +67,41 @@ function flagged(label: string, act: string, hasBadge: boolean, onClick: () => v
   return el;
 }
 
+/**
+ * Marca del logo.
+ *
+ * Es SVG inline y no un archivo por una razon practica: el plan pide generar
+ * `art/ui_logo_mark.webp`, pero hasta que ese asset exista esto es mejor que el
+ * degradado radial que habia (un circulo verde sin forma) y no agrega una
+ * peticion mas al arranque. Cuando llegue el webp, se cambia este bloque por un
+ * `<img src="art/ui_logo_mark.webp">` y se borra el `background` del CSS: el
+ * resto de la pantalla no se entera.
+ *
+ * Los colores salen de la paleta y no de `currentColor` a proposito: la marca
+ * tiene que verse igual sobre el panel oscuro y sobre la cortina del duelo.
+ */
+const LOGO_MARK_SVG = `<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="ffCap" cx="50%" cy="32%" r="68%">
+      <stop offset="0" stop-color="#9df5c6"/>
+      <stop offset="52%" stop-color="#4fd18b"/>
+      <stop offset="100%" stop-color="#17694a"/>
+    </radialGradient>
+    <linearGradient id="ffStem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef5fb"/>
+      <stop offset="100%" stop-color="#7f93a6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="15" fill="#4fd18b" opacity="0.13"/>
+  <path d="M3.6 15.4C3.6 9.5 9 4.6 16 4.6s12.4 4.9 12.4 10.8c0 1.2-.9 2.1-2.1 2.1H5.7c-1.2 0-2.1-.9-2.1-2.1z" fill="url(#ffCap)"/>
+  <path d="M8.2 12.2c1.7-3.3 4.6-5.4 8.3-5.7-3.7.6-6.4 3-7.9 6.3-.2.5-.8.6-1.1.2-.3-.3-.2-.7.1-.8z" fill="#ffffff" opacity="0.34"/>
+  <rect x="12.7" y="17" width="6.6" height="10.4" rx="2.6" fill="url(#ffStem)"/>
+  <path d="M11.2 17.5h9.6" stroke="#17694a" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+  <circle cx="6.2" cy="8.4" r="1.5" fill="#9df5c6" opacity="0.85"/>
+  <circle cx="25.6" cy="9.8" r="1.1" fill="#9df5c6" opacity="0.7"/>
+  <circle cx="26.4" cy="20.4" r="0.9" fill="#a78bfa" opacity="0.8"/>
+</svg>`;
+
 export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'panel is-menu';
@@ -79,6 +114,8 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   logo.className = 'menu-logo';
   const mark = document.createElement('span');
   mark.className = 'menu-logo-mark';
+  // SVG inline: ver `LOGO_MARK_SVG` mas arriba. Sin asset webp todavia.
+  mark.innerHTML = LOGO_MARK_SVG;
   const word = document.createElement('span');
   word.className = 'menu-logo-word';
   word.textContent = t('ui.title');

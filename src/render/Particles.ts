@@ -49,6 +49,8 @@ export class AmbientSporeField {
     const colors = new Float32Array(this.capacity * 3);
     const sizes = new Float32Array(this.capacity);
     const color = new THREE.Color();
+    const green = new THREE.Color(0x4fd18b);
+    const violet = new THREE.Color(0xa78bfa);
 
     for (let i = 0; i < this.capacity; i++) {
       // Semilla: posicion base + fase de la caida (en `y`).
@@ -56,12 +58,17 @@ export class AmbientSporeField {
       seeds[i * 3 + 1] = Math.random() * options.height;
       seeds[i * 3 + 2] = (Math.random() - 0.5) * options.area * 0.7;
 
-      color.setHex(Math.random() > 0.5 ? 0x4fd18b : 0xa78bfa);
+      // El color era una MONEDA: verde o violeta, sin nada en el medio, y con
+      // 900 esporas eso se lee como dos nubes separadas. Ahora es una mezcla
+      // continua, y el mismo `t` maneja el tamaño: las del extremo violeta son
+      // mas grandes, asi que la mezcla se lee como profundidad y no como ruido.
+      const t = Math.random();
+      color.copy(green).lerp(violet, t);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
 
-      sizes[i] = 0.03 + Math.random() * 0.045;
+      sizes[i] = 0.028 + t * 0.028 + Math.random() * 0.028;
     }
 
     this.geometry = new THREE.BufferGeometry();

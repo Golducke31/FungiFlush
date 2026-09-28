@@ -22,7 +22,9 @@ import {
   bus,
   detectCombos,
   type CardDefinition,
+  type ElementType,
   type JokerDefinition,
+  type Rarity,
   type RunSaveData,
 } from '@engine/index';
 import type { BoardState } from '@engine/board';
@@ -531,6 +533,14 @@ async function boot(): Promise<void> {
     colorOf: (defId: string): number => {
       const def = engine.registry.tryGetCard(defId);
       return def ? ELEMENT_COLOR[def.element] : 0x9aa5b1;
+    },
+    elementOf: (defId: string): ElementType => {
+      const def = engine.registry.tryGetCard(defId);
+      return def ? def.element : 'neutral';
+    },
+    rarityOf: (defId: string): Rarity => {
+      const def = engine.registry.tryGetCard(defId);
+      return def ? def.rarity : 'common';
     },
   };
 

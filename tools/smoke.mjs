@@ -399,6 +399,10 @@ const afterBlind = await page.evaluate(() => {
     target: ff.engine.round?.target,
     hand: ff.engine.round?.hand.length ?? 0,
     sceneHand: ff.scene.stats().hand,
+    // Baseline de draw calls de ESCENA en el tier bajo (sin composer, sin sky):
+    // es el "camino de siempre". El camino con post-procesamiento solo suma el
+    // sky dome (+1), asi que el alta no debe pasar de este valor + 4.
+    drawCalls: ff.scene.stats().drawCalls,
   };
 });
 console.log('\n--- Tras elegir ciego ---');
@@ -966,6 +970,9 @@ const ok =
   postFx?.gradeMix === 1 &&
   postFx?.drawCalls > 0 &&
   postFx?.drawCallsTotal > postFx?.drawCalls &&
+  // El camino con post-procesamiento NO debe inflar los draw calls de escena:
+  // solo agrega el sky dome (+1). Techo generoso contra el baseline de low tier.
+  fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 4 &&
   fxPlaying?.status === 'playing' &&
   (fxPlaying?.hand ?? 0) > 0 &&
   fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0) &&

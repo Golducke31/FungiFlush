@@ -749,6 +749,29 @@ export function createShadowCanvas(size = 256): HTMLCanvasElement {
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
+  // DOS anillos, no uno. El primero es la sombra de CONTACTO (corta y oscura:
+  // es la que "pega" la carta al tapete). El segundo es la de AMBIENTE: mucho
+  // mas ancha y casi transparente, y es la que evita que la carta parezca un
+  // sticker recortado. Se dibuja debajo, asi que el centro sigue siendo el mas
+  // oscuro y la caida se lee como una sola sombra.
+  //
+  // Cuesta lo mismo que antes: es canvas 2D, una sola vez, al construir la
+  // escena. No agrega ni un draw call ni una textura.
+  const ambient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    size * 0.1,
+    size / 2,
+    size / 2,
+    size * 0.5,
+  );
+  ambient.addColorStop(0, 'rgba(0, 0, 0, 0.16)');
+  ambient.addColorStop(0.45, 'rgba(0, 0, 0, 0.09)');
+  ambient.addColorStop(0.8, 'rgba(0, 0, 0, 0.03)');
+  ambient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = ambient;
+  ctx.fillRect(0, 0, size, size);
+
   const gradient = ctx.createRadialGradient(
     size / 2,
     size / 2,
@@ -757,13 +780,82 @@ export function createShadowCanvas(size = 256): HTMLCanvasElement {
     size / 2,
     size * 0.5,
   );
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
-  gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.42)');
-  gradient.addColorStop(0.78, 'rgba(0, 0, 0, 0.14)');
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+  gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.38)');
+  gradient.addColorStop(0.78, 'rgba(0, 0, 0, 0.13)');
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = gradient;
+  // El segundo anillo se suma al primero porque el canvas 2D compone con
+  // source-over: en el centro quedan los dos y la sombra se refuerza.
   ctx.fillRect(0, 0, size, size);
 
+  return canvas;
+}
+
+/**
+ * Mapa de normales procedural para el tapete (E1).
+ *
+ * Es un campo de altura de ruido de valor sobre una rejilla de `cells`, del que
+ * se deriva la normal por diferencias centrales. La rejilla es PERIODICA: el
+ * material del tapete repite la textura 6x6, y una rejilla que no cerrara
+ * dejaria una costura visible en cada baldosa.
+ *
+ * El relieve es deliberadamente sutil: no se busca que se vea arrugado, sino
+ * que la luz rasante de la escena tenga algo que recorrer. Con pendientes
+ * fuertes el tapete se lee como papel aluminio.
+ */
+export function createTableNormalCanvas(size = 256, cells = 32): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const lattice = new Float32Array(cells * cells);
+  for (let i = 0; i < lattice.length; i++) lattice[i] = Math.random();
+
+  const at = (cx: number, cy: number): number =>
+    lattice[(((cy % cells) + cells) % cells) * cells + (((cx % cells) + cells) % cells)] ?? 0;
+
+  /** Suavizado cubico: sin el, la rejilla se ve como escalones. */
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
+
+  const sample = (x: number, y: number): number => {
+    const fx = (x / size) * cells;
+    const fy = (y / size) * cells;
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const tx = smooth(fx - x0);
+    const ty = smooth(fy - y0);
+    const top = at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx;
+    const bottom = at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx;
+    return top * (1 - ty) + bottom * ty;
+  };
+
+  const image = ctx.createImageData(size, size);
+  const data = image.data;
+  // Escala de la pendiente. 2.2 con una rejilla de 32 da un relieve que se
+  // ve de cerca y desaparece a distancia, que es lo que hace un tapete real.
+  const strength = 2.2;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = sample(x + 1, y) - sample(x - 1, y);
+      const dy = sample(x, y + 1) - sample(x, y - 1);
+      // Normal en espacio de tangente: (-dh/dx, -dh/dy, 1) normalizada.
+      const nx = -dx * strength;
+      const ny = -dy * strength;
+      const len = Math.sqrt(nx * nx + ny * ny + 1) || 1;
+
+      const i = (y * size + x) * 4;
+      data[i] = Math.round((nx / len * 0.5 + 0.5) * 255);
+      data[i + 1] = Math.round((ny / len * 0.5 + 0.5) * 255);
+      data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(image, 0, 0);
   return canvas;
 }
 

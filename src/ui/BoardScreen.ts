@@ -27,16 +27,52 @@
 // tablero: si el HUD importara `@engine/board`, el chunk diferido del duelo
 // dejaria de ser diferido.
 import type { BattleStep, BoardCardView, BoardView, PlayerIndex } from '@engine/board';
+import type { ElementType, Rarity } from '@engine/index';
 import { ARROW_DIRS } from '@engine/index';
 import { t } from '@i18n/index';
-import { hexToCss } from '@render/palette';
+import { hexToCss, RARITY_COLOR } from '@render/palette';
 
 export interface BoardResolvers {
   /** Nombre legible de una carta a partir de su `defId`. */
   nameOf: (defId: string) => string;
   /** Color del elemento de la carta (hex numerico). */
   colorOf: (defId: string) => number;
+  /**
+   * Elemento de la carta. Opcional: si no llega, la celda se queda sin
+   * ilustracion y se pinta solo con el gradiente del elemento. El duelo se
+   * sigue pudiendo jugar igual.
+   */
+  elementOf?: (defId: string) => ElementType;
+  /** Rareza de la carta. Opcional: sin ella no se dibuja el marco de rareza. */
+  rarityOf?: (defId: string) => Rarity;
 }
+
+/**
+ * Ilustracion de cada elemento en el tablero.
+ *
+ * `neutral` NO tiene archivo en el catalogo (ver `ArtAssets.ts`): pedirlo
+ * daria un 404 en cada arranque. Por eso se declara `null` y la celda cae al
+ * gradiente, que es exactamente el respaldo que ya usa el render 3D.
+ */
+const ELEMENT_ART: Record<ElementType, string | null> = {
+  neutral: null,
+  poison: 'art/art_poison.webp',
+  spore: 'art/art_spore.webp',
+  decay: 'art/art_decay.webp',
+  symbiosis: 'art/art_symbiosis.webp',
+  crystal: 'art/art_crystal.webp',
+  mycelium: 'art/art_mycelium.webp',
+  parasite: 'art/art_parasite.webp',
+};
+
+/** Grosor del marco de rareza, en px. Misma escala que `RARITY_BORDER`. */
+const RARITY_WIDTH: Record<Rarity, number> = {
+  common: 1,
+  uncommon: 1,
+  rare: 1.5,
+  legendary: 2,
+  mythic: 2.5,
+};
 
 export interface BoardScreenCallbacks {
   onPlace: (cell: number, uid: string, faceDown: boolean) => void;
@@ -341,6 +377,29 @@ export class BoardScreen {
     const face = document.createElement('span');
     face.className = 'board-face';
     face.style.setProperty('--card-color', hexToCss(this.resolve.colorOf(card.defId)));
+
+    const element = this.resolve.elementOf?.(card.defId);
+    if (element) {
+      face.dataset['element'] = element;
+      const art = ELEMENT_ART[element];
+      if (art) {
+        const img = document.createElement('img');
+        img.className = 'board-face-art';
+        // `alt` vacio: es decorativa, el nombre ya esta en texto al lado.
+        img.alt = '';
+        img.decoding = 'async';
+        img.loading = 'lazy';
+        img.src = art;
+        face.appendChild(img);
+      }
+    }
+
+    const rarity = this.resolve.rarityOf?.(card.defId);
+    if (rarity) {
+      face.dataset['rarity'] = rarity;
+      face.style.setProperty('--rarity-color', hexToCss(RARITY_COLOR[rarity]));
+      face.style.setProperty('--rarity-w', `${RARITY_WIDTH[rarity]}px`);
+    }
 
     for (let dir = 0; dir < ARROW_DIRS.length; dir++) {
       const value = card.arrows[dir] ?? 0;
