@@ -99,6 +99,11 @@
   --frame-body: #094540;
   --frame-body-hi: #0d5a52;
   --frame-body-lo: #05322c;
+  /* Cuerpo del panel grande: mas OSCURO que las piezas que se apoyan encima.
+     Es la jerarquia tablon/apoyado; ver la nota de `.panel`. */
+  --frame-deep-hi: #073a34;
+  --frame-deep: #052e29;
+  --frame-deep-lo: #03221f;
   --frame-moss: #2eb2a4;
   --frame-edge: #062a2e;
   --frame-rim: rgba(120, 240, 214, 0.34);
@@ -579,14 +584,24 @@ body {
   cursor: not-allowed;
 }
 
+/* El unico boton que AVANZA (jugar mano, comprar, cerrar). Se lleva el verde de
+   las esporas para que se distinga del resto sin salirse del material: misma
+   losa, distinta luz. */
 .btn.is-play {
-  background: linear-gradient(180deg, rgba(79, 209, 139, 0.32), rgba(79, 209, 139, 0.12));
-  border-color: rgba(79, 209, 139, 0.65);
-  box-shadow: 0 0 22px rgba(79, 209, 139, 0.28);
+  background:
+    linear-gradient(180deg, rgba(79, 209, 139, 0.55) 0%, rgba(79, 209, 139, 0.08) 42%),
+    linear-gradient(180deg, #0f6b4e 0%, #0a5138 52%, #06372a 100%);
+  border-color: rgba(79, 209, 139, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(160, 255, 210, 0.4),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 0 22px rgba(79, 209, 139, 0.3);
 }
 
 .btn.is-play:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(79, 209, 139, 0.45), rgba(79, 209, 139, 0.2));
+  background:
+    linear-gradient(180deg, rgba(79, 209, 139, 0.7) 0%, rgba(79, 209, 139, 0.15) 45%),
+    linear-gradient(180deg, #14855f 0%, #0c6444 52%, #07422f 100%);
 }
 
 .btn.is-discard {
@@ -606,13 +621,14 @@ body {
   min-height: 38px;
 }
 
-/* --- Botones del HUD en partida: la misma losa que los marcos del menu ---
-   Va scopeado a `.hud-top` y `.hud-actions` a proposito. `.btn` se usa en
-   TODAS las pantallas (tienda, ajustes, coleccion, paneles), asi que tocar el
-   global seria mover medio juego de una sola vez. Si mas adelante se quiere el
-   mismo material en los paneles, se extiende esta lista, no se reescribe. */
-.hud-top .btn,
-.hud-actions .btn {
+/* --- Botones: la misma losa que los marcos del menu ---
+   Ahora es GLOBAL. Antes estaba scopeada a `.hud-top` / `.hud-actions` porque
+   `.btn` se usa en todas las pantallas y cambiar el global movia medio juego de
+   una sola vez. Ya no queda ninguna superficie con el estilo viejo (el menu usa
+   `.menu-btn`, no `.btn`), asi que la excepcion dejo de tener sentido: los
+   botones de la tienda, ajustes, mazo y coleccion son los mismos que los del
+   HUD y tienen que verse iguales. */
+.btn {
   border-color: var(--frame-edge);
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.42) 0%, rgba(46, 178, 164, 0) 38%),
@@ -625,35 +641,39 @@ body {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.hud-top .btn:hover:not(:disabled),
-.hud-actions .btn:hover:not(:disabled) {
+.btn:hover:not(:disabled) {
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.62) 0%, rgba(46, 178, 164, 0.06) 42%),
     linear-gradient(180deg, #106a60 0%, #0b5148 50%, #06372f 100%);
   border-color: rgba(46, 178, 164, 0.6);
 }
 
-/* Jugar mano: el unico boton que AVANZA. Se lleva el verde de las esporas
-   para que se distinga de los otros dos sin salirse del material. */
-.hud-actions .btn.is-play {
+/* "Fantasma" NO es transparente: es el mismo tablon sin la luz de musgo.
+   Dejarlo transparente encima de la losa lo hacia desaparecer, que es
+   exactamente lo que pasaba con el boton de idioma del HUD. */
+.btn.is-ghost {
   background:
-    linear-gradient(180deg, rgba(79, 209, 139, 0.55) 0%, rgba(79, 209, 139, 0.08) 42%),
-    linear-gradient(180deg, #0f6b4e 0%, #0a5138 52%, #06372a 100%);
-  border-color: rgba(79, 209, 139, 0.7);
-  box-shadow:
-    inset 0 1px 0 rgba(160, 255, 210, 0.4),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
-    0 0 22px rgba(79, 209, 139, 0.3);
+    linear-gradient(180deg, rgba(46, 178, 164, 0.16) 0%, rgba(46, 178, 164, 0) 34%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+  border-color: var(--frame-edge);
+  color: var(--frame-dim);
 }
 
-.hud-actions .btn.is-play:hover:not(:disabled) {
-  background:
-    linear-gradient(180deg, rgba(79, 209, 139, 0.7) 0%, rgba(79, 209, 139, 0.15) 45%),
-    linear-gradient(180deg, #14855f 0%, #0c6444 52%, #07422f 100%);
+.btn.is-ghost:hover:not(:disabled) {
+  color: #e2fbf4;
+  border-color: rgba(46, 178, 164, 0.5);
 }
 
-.hud-actions .btn.is-discard {
-  border-color: rgba(224, 92, 138, 0.6);
+/* Pestaña activa: la unica que lleva la luz de musgo al maximo.
+   La del constructor de mazo tiene su propia regla mas abajo en el archivo (mas
+   especifica), asi que se edito alla y no aca: una regla puesta en este punto
+   perderia por orden. */
+.btn.is-current {
+  border-color: rgba(46, 178, 164, 0.7);
+  color: #eafff8;
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.5) 0%, rgba(46, 178, 164, 0.08) 40%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body-lo) 100%);
 }
 
 /* --------------------------------------------------------------------------
@@ -869,13 +889,30 @@ body {
   }
 }
 
+/* El panel es el TABLON sobre el que se apoyan las piezas (ofertas, celdas de
+   mazo, campos de ajustes). Por eso va MAS OSCURO que ellas: si el contenedor
+   brilla igual que lo que sostiene, deja de leerse cual es cual. Los colores
+   salen de los tokens --frame-*, muestreados de los marcos del menu. */
 .panel {
   width: min(920px, 100%);
-  background: linear-gradient(180deg, rgba(16, 23, 32, 0.97), rgba(10, 15, 21, 0.99));
-  border: 1px solid var(--border-strong);
+  background:
+    /* Musgo: filo luminoso en el borde de arriba. En un panel alto es una
+       franja fina, no la banda ancha que lleva una pieza chica. */
+    linear-gradient(180deg, rgba(46, 178, 164, 0.3) 0%, rgba(46, 178, 164, 0) 9%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0 2px,
+      rgba(0, 0, 0, 0.02) 2px 5px
+    ),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep) 55%, var(--frame-deep-lo) 100%);
+  border: 1px solid var(--frame-edge);
   border-radius: 18px;
   padding: 22px 24px;
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 28px 70px rgba(0, 0, 0, 0.7),
+    0 0 30px rgba(46, 178, 164, 0.1);
 }
 
 .panel-title {
@@ -1562,9 +1599,11 @@ body {
 }
 
 .deck-toolbar .btn.is-current {
-  border-color: var(--border-strong);
-  color: var(--text);
-  background: rgba(95, 216, 232, 0.12);
+  border-color: rgba(46, 178, 164, 0.7);
+  color: #eafff8;
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.5) 0%, rgba(46, 178, 164, 0.08) 40%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body-lo) 100%);
 }
 
 .deck-grid,
@@ -1793,6 +1832,87 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ==========================================================================
+   Piezas apoyadas en el tablon: la misma losa que el HUD
+   ==========================================================================
+   Va todo JUNTO y al final a proposito. La losa se declara una vez para todas
+   las piezas de adentro de los paneles, en vez de repartirla por diez reglas:
+   asi una pantalla nueva hereda el material por agregar su clase a una lista, y
+   no hay forma de que una quede en el vidrio oscuro viejo sin que nadie lo note.
+
+   Las clases de abajo son las de tienda (`.offer`), recompensa (`.reward-card`),
+   mazo (`.deck-card`), coleccion (`.collection-card`) y ajustes
+   (`.settings-field`). Cada una conserva su layout; aca solo se pisa el
+   material.
+   ========================================================================== */
+
+.offer,
+.reward-card,
+.deck-card,
+.collection-card,
+.settings-field {
+  border-color: var(--frame-edge);
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.4) 0%, rgba(46, 178, 164, 0) 30%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 48%, var(--frame-body-lo) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.offer:hover:not(.is-sold),
+.reward-card:hover:not(.is-sold) {
+  border-color: rgba(46, 178, 164, 0.62);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(46, 178, 164, 0.22);
+}
+
+/* Lo bloqueado se HUNDE en el tablon en vez de flotar: mismo material, mas
+   oscuro. Conserva el borde punteado, que es lo que dice "esto no lo tenes". */
+.collection-card.is-locked {
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.14) 0%, rgba(46, 178, 164, 0) 30%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
+/* Texto secundario sobre la losa: `--dim` es un gris azulado pensado para fondo
+   casi negro y sobre el verde-azulado se ensucia. */
+.panel-subtitle,
+.offer-kind,
+.deck-card-meta,
+.deck-card-plays,
+.collection-lock {
+  color: var(--frame-dim);
+}
+
+/* --- Ajustes: controles ---
+   El control segmentado (Auto/Baja/Media) NO se toca aca: su regla original
+   esta mas abajo en el archivo, asi que una regla puesta en este punto perderia
+   en la cascada por orden. Se edito en su lugar, donde vive. */
+
+.settings-toggle {
+  border-color: var(--frame-edge);
+  background: rgba(0, 0, 0, 0.34);
+  color: var(--frame-dim);
+}
+
+.settings-toggle.is-on {
+  background: linear-gradient(180deg, #3fd39c 0%, #1c8b6a 100%);
+  border-color: rgba(79, 209, 139, 0.85);
+  color: #05221a;
+}
+
+/* El tablero del duelo se queda con el fondo OSCURO: es pantalla completa y
+   muestra la escena 3D detras, asi que la madera taparia la mesa y ensuciaria
+   la lectura de la grilla. Es la unica excepcion, y por eso esta escrita. */
+.panel.is-board {
+  background: linear-gradient(180deg, rgba(16, 23, 32, 0.97), rgba(10, 15, 21, 0.99));
 }
 
 /* --------------------------------------------------------------------------
@@ -2375,11 +2495,14 @@ body {
 /* --------------------------------------------------------------------------
    Control segmentado (Ajustes -> Calidad grafica)
    -------------------------------------------------------------------------- */
+/* Mismo material que el resto: la caja es un canal hundido en la losa y el
+   segmento activo es la unica parte que se levanta. */
 .settings-segmented {
   display: inline-flex;
-  border: 1px solid var(--border);
+  border: 1px solid var(--frame-edge);
   border-radius: 9px;
   overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .settings-segment {
@@ -2387,7 +2510,7 @@ body {
   padding: 5px 12px;
   border: 0;
   background: transparent;
-  color: var(--dim);
+  color: var(--frame-dim);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -2395,14 +2518,17 @@ body {
 }
 
 .settings-segment + .settings-segment {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--frame-edge);
 }
 
 .settings-segment.is-on {
-  background: rgba(79, 209, 139, 0.18);
-  color: var(--spores);
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.55) 0%, rgba(46, 178, 164, 0.1) 45%),
+    linear-gradient(180deg, var(--frame-body-hi), var(--frame-body-lo));
+  color: #eafff8;
 }
 
 .settings-segment:hover:not(.is-on) {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(46, 178, 164, 0.14);
+  color: #e2fbf4;
 }
