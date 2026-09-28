@@ -21,7 +21,9 @@ Balance reference: mean ante 6.33, wins 29.6%/500; judge mean ante, not noisy wi
 ## Render/assets
 low = direct renderer, DPR 1.75; smoke uses low. Higher tiers auto-degrade by p95. OutputPass owns tone mapping; composer MSAA via target samples, resize pixelRatio then size.
 Card front FrontSide/back BackSide coplanar; flip tween separate from layout. Delayed tween from-values capture on creation: chain return legs onComplete.
-Fonts: Fredoka UI, Gasoek display, Borsok logo only; Borsok needs licensing/replacement before release. font-synthesis:none; canvas uses real weights; await fonts.
+Fonts: Fredoka UI, Gasoek display, Pirata One wordmark (now unused: the menu title is part of the artwork). font-synthesis:none; canvas uses real weights; await fonts.
+Menu = layered composition over public/menu-bg.jpg (the art already contains the title + 4 button frames). The 4 buttons are HTML using per-frame crops (public/menu-btn-*.png, English labels inpainted out) positioned in % of the art; `background-size: cover` is replicated with min/max-aspect-ratio media queries so the % positions stay glued to the frames at any aspect. `.panel.is-menu` is `position:fixed; inset:0`. Frame positions in MenuScreen.ts FRAMES (art 1376x768).
+Never software-upscale a texture before use (GPU filtering beats it): pass photos at native resolution.
 40 WebP card arts +25 SVG icons; retain 11 legacy fallbacks. art:index prevents 404s; art processing crops, never stretches. Sources in ignored art-source; contact sheets outside public. ART_PROMPTS.md and game-art-asset-pipeline cover image-to-image style anchors.
 
 ## Pending/decisions

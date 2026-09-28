@@ -1013,119 +1013,245 @@ body {
   background: rgba(4, 7, 11, 0.5);
 }
 
-/* Menu: ocupa toda la ventana con la imagen del bosque micelial de fondo.
-   El panel base (.panel) aporta border, border-radius y box-shadow: aqui se
-   anulan para que el fondo cubra de borde a borde y el titulo flote arriba. */
+/* --------------------------------------------------------------------------
+   Menu: composicion por CAPAS.
+   `public/menu-bg.jpg` ya trae el bosque, el titulo y los 4 marcos dibujados:
+   es la capa base. Encima se apoyan capas propias (esporas, halo del titulo y
+   los botones funcionales alineados a los marcos). Ver MenuScreen.ts.
+   -------------------------------------------------------------------------- */
 .panel.is-menu {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100vw;
-  height: 100vh;
+  /* `fixed` + `inset:0`: el arte queda pegado a los bordes de la VENTANA,
+     ignorando el padding (safe-area) del overlay. Sin esto, en un telefono con
+     notch el arte se correria y los botones dejarian de caer sobre los marcos. */
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
   max-width: none;
   max-height: none;
-  padding: calc(24px + var(--safe-t)) calc(24px + var(--safe-r)) calc(20px + var(--safe-b)) calc(24px + var(--safe-l));
+  padding: 0;
   overflow: hidden;
-  background:
-    /* Viñeta sutil: oscurece arriba y abajo para que el titulo y el footer
-       respiren sin tapar el centro de la imagen. */
-    linear-gradient(180deg, rgba(4, 7, 11, 0.62) 0%, rgba(4, 7, 11, 0.1) 32%, rgba(4, 7, 11, 0.15) 72%, rgba(4, 7, 11, 0.7) 100%),
-    url('/menu-bg.jpg') center / cover no-repeat;
+  background: #04070b;
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
 
-.menu-hero {
+/* El arte vive en vw/vh y no escalaria con el panel: al entrar solo funde. */
+.overlay.is-open > .panel.is-menu {
+  animation: overlay-in var(--dur-base) var(--ease-out);
+}
+
+/* Capa base: el arte. Las media queries replican `background-size: cover`
+   EXACTAS, asi el arte llena la pantalla sin deformar y los botones (en % del
+   arte) quedan clavados sobre los marcos en cualquier relacion de aspecto. */
+.menu-art {
+  position: absolute;
+  background: url('/menu-bg.jpg') center / 100% 100% no-repeat;
+  overflow: hidden;
+}
+/* Pantalla mas ancha que el arte (16:9): llena el ancho y recorta arriba/abajo. */
+@media (min-aspect-ratio: 1376/768) {
+  .menu-art {
+    left: 0;
+    top: calc((100vh - 100vw * 768 / 1376) / 2);
+    width: 100vw;
+    height: calc(100vw * 768 / 1376);
+  }
+}
+/* Pantalla mas alta/angosta: llena el alto y recorta los costados. */
+@media (max-aspect-ratio: 1376/768) {
+  .menu-art {
+    top: 0;
+    left: calc((100vw - 100vh * 1376 / 768) / 2);
+    height: 100vh;
+    width: calc(100vh * 1376 / 768);
+  }
+}
+
+/* --- Capa 1: atmosfera (esporas que suben) --- */
+.menu-atmosphere {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.menu-spore {
+  position: absolute;
+  bottom: -6%;
+  width: var(--size, 3px);
+  height: var(--size, 3px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(190, 255, 226, 0.95), rgba(95, 216, 232, 0.4) 55%, transparent 72%);
+  box-shadow: 0 0 7px rgba(95, 216, 232, 0.75);
+  opacity: 0;
+  animation: menu-spore-rise var(--dur, 12s) linear var(--delay, 0s) infinite;
+}
+
+@keyframes menu-spore-rise {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(var(--drift, 0), -110vh, 0);
+    opacity: 0;
+  }
+}
+
+/* --- Capa 2: halo del titulo --- */
+.menu-title-glow {
+  position: absolute;
+  left: 50%;
+  top: 31%;
+  width: 66%;
+  height: 46%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(95, 216, 232, 0.3), rgba(95, 216, 232, 0.09) 46%, transparent 72%);
+  filter: blur(16px);
+  animation: menu-glow-breathe 5.5s ease-in-out infinite;
+}
+
+@keyframes menu-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
+/* --- Capa 3: botones principales --- */
+.menu-btn {
+  position: absolute;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  /* Empuja el titulo hacia arriba sin pegarlo al borde (respeta safe-area). */
-  margin-top: clamp(12px, 4vh, 40px);
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  cursor: pointer;
+  transition: filter var(--dur-base) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-btn--play {
+  background-image: url('/menu-btn-play.png');
+}
+.menu-btn--settings {
+  background-image: url('/menu-btn-settings.png');
+}
+.menu-btn--gallery {
+  background-image: url('/menu-btn-gallery.png');
+}
+.menu-btn--exit {
+  background-image: url('/menu-btn-exit.png');
 }
 
-/* Card translucida para que las opciones sean legibles sobre la imagen. */
-.menu-actions {
+.menu-btn:hover,
+.menu-btn:focus-visible {
+  outline: none;
+  filter: brightness(1.28) drop-shadow(0 0 14px rgba(95, 216, 232, 0.85));
+}
+.menu-btn:active {
+  filter: brightness(1.45) drop-shadow(0 0 18px rgba(157, 245, 198, 0.9));
+}
+
+.menu-btn-label {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: clamp(10px, 1.05vw, 19px);
+  color: #f0fff9;
+  text-shadow:
+    0 0 10px rgba(95, 216, 232, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.85),
+    0 -1px 1px rgba(0, 0, 0, 0.6);
+}
+
+/* --- Capa 4: fila secundaria (dentro del arte, franja libre titulo/botones) --- */
+.menu-secondary {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 63%;
+  transform: translateY(-50%);
   display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  width: min(380px, calc(100vw - 48px));
-  margin-top: auto;
-  margin-bottom: auto;
-  padding: 18px 16px;
-  background: rgba(10, 14, 20, 0.62);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
-}
-
-.menu-row {
-  display: flex;
-  gap: var(--gap);
-}
-
-.menu-row > .btn {
-  flex: 1 1 0;
-}
-
-.menu-footer {
-  color: var(--dim);
-  font-size: 12px;
-  text-align: center;
-  flex: 0 0 auto;
-}
-
-/* Titulo apilado: marca arriba, palabra abajo, ambos centrados. */
-.menu-logo {
-  display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 0.6em;
+  justify-content: center;
   align-items: center;
-  gap: 10px;
+  padding: 0 12px;
+  z-index: 2;
 }
 
-/* La palabra es lo que cuenta. Pirata One es display caps decorativa con
-   la onda "vintage" de la referencia. El gradiente se ve sobre el fondo
-   oscuro del bosque y el drop-shadow le da el glow cian sin taparlo. */
-.menu-logo-word {
-  font-family: var(--font-wordmark);
-  font-size: clamp(46px, 9vw, 96px);
-  line-height: 1;
-  font-weight: 400;
+.menu-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 1.1em;
+  font-size: clamp(9px, 0.92vw, 13px);
+  font-weight: 700;
   letter-spacing: 0.02em;
-  background: linear-gradient(92deg, #9df5c6, #5fd8e8 55%, #a78bfa);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter:
-    drop-shadow(0 0 22px rgba(95, 216, 232, 0.4))
-    drop-shadow(0 2px 10px rgba(0, 0, 0, 0.75));
+  color: #cfe6f2;
+  background: rgba(6, 12, 18, 0.55);
+  border: 1px solid rgba(95, 216, 232, 0.24);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-ghost:hover:not(.is-disabled) {
+  background: rgba(95, 216, 232, 0.16);
+  border-color: rgba(95, 216, 232, 0.6);
+  color: #fff;
+}
+.menu-ghost.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
-.menu-logo-mark {
-  width: 48px;
-  height: 48px;
-  display: block;
-  filter: drop-shadow(0 2px 10px rgba(79, 209, 139, 0.5));
+.menu-version {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  z-index: 2;
+  font-size: 10.5px;
+  color: rgba(207, 230, 242, 0.5);
+  pointer-events: none;
 }
 
-/* La marca es SVG inline: el svg rellena el contenedor. Si algun dia se
-   reemplaza por un `<img>`, este selector sigue aplicando. */
-.menu-logo-mark svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.menu-meta {
-  display: flex;
-  gap: 10px;
-  color: var(--dim);
-  font-size: 11.5px;
+/* Texto solo para lectores de pantalla. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .btn.is-large {
@@ -1439,14 +1565,8 @@ body {
   color: var(--dim);
 }
 
-/* En retrato (o casi cuadrado) el menu es angosto: dejamos que scrolee y
-   alineamos arriba para que el titulo no quede tapado por el teclado virtual
-   o las barras del sistema. */
+/* En retrato (o casi cuadrado) los paneles angostos pasan a una sola columna. */
 @media (orientation: portrait), (max-aspect-ratio: 1/1) {
-  .panel.is-menu {
-    overflow: auto;
-    justify-content: flex-start;
-  }
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1578,50 +1698,16 @@ body {
    se compacta pero sigue siendo tocable. Va al final para ganarles a las
    reglas generales de .btn.is-large. */
 @media (max-height: 430px) {
-  .panel.is-menu {
-    /* Landscape de celular: si igual no entra, scrollea el panel. */
-    overflow: auto;
-    justify-content: flex-start;
-  }
-  .menu-hero {
-    margin-top: 4px;
-    gap: 2px;
-  }
-  .menu-logo {
+  /* Landscape de celular: achicar la fila secundaria. */
+  .menu-secondary {
     gap: 4px;
   }
-  .menu-logo-word {
-    font-size: 24px;
+  .menu-ghost {
+    padding: 0.3em 0.8em;
+    font-size: 9px;
   }
-  .menu-logo-mark {
-    width: 28px;
-    height: 28px;
-  }
-  /* Tagline y version ocupan espacio que no sobra en 390 px de alto. */
-  .panel-subtitle,
-  .menu-meta {
+  .menu-version {
     display: none;
-  }
-  .menu-actions {
-    padding: 8px 10px;
-    gap: 4px;
-    margin-top: 8px;
-    margin-bottom: auto;
-    width: min(360px, calc(100vw - 32px));
-  }
-  .menu-actions .btn {
-    min-height: 34px;
-    padding: 3px 8px;
-    font-size: 11.5px;
-  }
-  .menu-actions .btn.is-large {
-    min-height: 36px;
-    font-size: 12.5px;
-    padding: 4px 8px;
-  }
-  .menu-footer {
-    font-size: 10.5px;
-    margin-top: 4px;
   }
   .settings-field {
     padding: 7px 10px;
