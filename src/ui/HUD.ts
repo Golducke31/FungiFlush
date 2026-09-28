@@ -692,6 +692,7 @@ export class HUD {
           this.render();
         },
         onOpenStore: () => this.callbacks.onOpenExpansions(),
+        onOpenPass: () => this.callbacks.onOpenPass(),
       }),
     );
   }

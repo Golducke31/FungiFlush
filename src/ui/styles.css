@@ -1170,11 +1170,22 @@ body {
   filter: brightness(1.45) drop-shadow(0 0 18px rgba(157, 245, 198, 0.9));
 }
 
+/* Texto tallado en el marco. Va ABSOLUTO a 62% del alto del boton (no al 50%)
+   porque la cara del cartel cae por debajo del borde de musgo: al 50% el texto
+   se veia pegado arriba. Ver el perfil de brillo que lo confirma. */
 .menu-btn-label {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 700;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 62%;
+  transform: translateY(-50%);
+  padding: 0 7%;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  line-height: 1;
   font-size: clamp(10px, 1.05vw, 19px);
   color: #f0fff9;
   text-shadow:
@@ -1183,23 +1194,15 @@ body {
     0 -1px 1px rgba(0, 0, 0, 0.6);
 }
 
-/* --- Capa 4: fila secundaria (dentro del arte, franja libre titulo/botones) --- */
-.menu-secondary {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 63%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6em;
-  justify-content: center;
-  align-items: center;
-  padding: 0 12px;
-  z-index: 2;
+/* La fila de abajo tiene el marco un poco mas alto: la cara cae mas abajo. */
+.menu-btn--gallery .menu-btn-label,
+.menu-btn--exit .menu-btn-label {
+  top: 66%;
 }
 
+/* --- Chips secundarios (acciones que no van sobre los 4 marcos) --- */
 .menu-ghost {
+  position: absolute;
   display: inline-flex;
   align-items: center;
   gap: 0.5em;
@@ -1215,6 +1218,7 @@ body {
   -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
   white-space: nowrap;
+  z-index: 3;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
@@ -1229,6 +1233,22 @@ body {
 .menu-ghost.is-disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+.menu-ghost.is-hidden {
+  display: none;
+}
+
+/* "Continuar": pegado arriba del marco de "Nueva partida". */
+.menu-ghost--continue {
+  left: 40.75%;
+  top: 67.4%;
+  transform: translate(-50%, -50%);
+}
+
+/* "Duelo micelial": esquina superior izquierda, fijo (el cover no lo recorta). */
+.menu-ghost--board {
+  top: calc(10px + var(--safe-t));
+  left: calc(14px + var(--safe-l));
 }
 
 .menu-version {
@@ -1698,10 +1718,7 @@ body {
    se compacta pero sigue siendo tocable. Va al final para ganarles a las
    reglas generales de .btn.is-large. */
 @media (max-height: 430px) {
-  /* Landscape de celular: achicar la fila secundaria. */
-  .menu-secondary {
-    gap: 4px;
-  }
+  /* Landscape de celular: achicar los chips secundarios. */
   .menu-ghost {
     padding: 0.3em 0.8em;
     font-size: 9px;

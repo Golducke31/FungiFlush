@@ -13,7 +13,7 @@ TypeScript + Vite + Three.js + Tauri 2 roguelite deckbuilder. Repo: Golducke31/F
 
 ## Code and checks
 Spanish UI/comments; English identifiers. UI owns DOM and emits callbacks. CSS is BEM-ish, is- states, safe-area variables, buttons >=46 px. Menu test hooks: data-act.
-Run typecheck, test, validate, sim, smoke, build:release. Node tests use quoted tests/*.test.ts glob. validate checks content and literal t() keys.
+Run typecheck, test, validate, sim, smoke, build:release. Node tests use quoted tests/*.test.ts glob. validate checks content and literal t() keys. smoke needs a dev server at 127.0.0.1:1420 (`npm run dev`); smoke.mjs does NOT start one.
 Smoke must use real pointer events, check canvas hit-testing, lazy requests and hidden rival ids in DOM. handState()/projectPointToScreen() provide targets. dt capped .05: software-rendered animations need extra settling; inspect screenshots.
 Flow: menu -> blind_select -> playing -> reward -> shop (packs without reward skip draft).
 Balance reference: mean ante 6.33, wins 29.6%/500; judge mean ante, not noisy win rate. Duel: 4x4, hand 6, defender_holds, randomized starter; sim:board measures fairness.

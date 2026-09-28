@@ -36,6 +36,8 @@ export interface CollectionCallbacks {
   onClose: () => void;
   /** Opcional: abrir la tienda de expansiones desde una carta bloqueada. */
   onOpenStore?: () => void;
+  /** Opcional: abrir el pase de temporada. */
+  onOpenPass?: () => void;
 }
 
 type Filter = 'all' | 'cards' | 'jokers' | 'locked';
@@ -140,6 +142,26 @@ export function buildCollectionPanel(
 
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
+
+  // La tienda de expansiones y el pase viven aca: son contenido, y esta es la
+  // pantalla de contenido. Asi ya no ocupan lugar en el menu principal.
+  if (callbacks.onOpenStore) {
+    const store = document.createElement('button');
+    store.className = 'btn is-ghost';
+    store.textContent = t('menu.expansions');
+    store.dataset['act'] = 'expansions';
+    store.addEventListener('click', () => callbacks.onOpenStore?.());
+    actions.appendChild(store);
+  }
+  if (callbacks.onOpenPass) {
+    const pass = document.createElement('button');
+    pass.className = 'btn is-ghost';
+    pass.textContent = t('menu.pass');
+    pass.dataset['act'] = 'pass';
+    pass.addEventListener('click', () => callbacks.onOpenPass?.());
+    actions.appendChild(pass);
+  }
+
   const close = document.createElement('button');
   close.className = 'btn is-play';
   close.textContent = t('ui.close');

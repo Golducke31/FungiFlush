@@ -11,7 +11,13 @@
  *                           marco (`public/menu-btn-*.png`, con el texto en
  *                           ingles borrado por inpaint) como fondo y encima
  *                           el texto traducido.
- *   4. `menu-secondary`  -> fila fija de opciones secundarias (siempre visible).
+ *
+ * Opciones secundarias: NO van en el menu. Cada una vive donde corresponde:
+ *   - Continuar        -> chip sobre el marco de "Nueva partida", y SOLO si
+ *                         hay una partida guardada.
+ *   - Idioma           -> dentro de Ajustes (ya estaba).
+ *   - Expansiones/Pase -> dentro de Coleccion.
+ *   - Duelo micelial   -> chip en la esquina superior izquierda.
  *
  * Los botones son capas independientes: se iluminan sin tocar el fondo. Las
  * posiciones son % del arte (1376x768) y el arte se escala como `cover` por
@@ -38,17 +44,14 @@ export interface MenuState {
   version: string;
   /** Etiqueta de la partida guardada, o null si no hay ninguna. */
   continueLabel: string | null;
-  /** Punto rojo en los botones con recompensas pendientes. */
-  badges?: { expansions?: boolean; pass?: boolean };
-  /** Muestra el boton de duelo (Fase 5). */
+  /** Muestra el chip de duelo (Fase 5). */
   showBoard?: boolean;
   onOpenBoard?: () => void;
 }
 
 /**
  * Marcos de los 4 botones en el arte, en % de 1376x768.
- * Salen de detectar las etiquetas cian en la imagen (ver `tools/`): son las
- * cajas de cada cartel de madera.
+ * Salen de detectar los bordes de cada cartel de madera en la imagen.
  */
 const FRAMES = {
   play: { left: 32.7, top: 69.01, width: 16.13, height: 8.85 },
@@ -79,25 +82,23 @@ function artButton(frame: FrameId, label: string, act: string, onClick: () => vo
   return el;
 }
 
-/** Opcion secundaria: pill translucido en la fila inferior. */
-function ghost(
-  label: string,
-  act: string,
-  onClick: () => void,
-  opts: { disabled?: boolean; title?: string; badge?: boolean } = {},
-): HTMLButtonElement {
+interface ChipOptions {
+  disabled?: boolean;
+  hidden?: boolean;
+  title?: string;
+  mod: string;
+}
+
+/** Pill secundario para acciones que NO van sobre uno de los 4 marcos. */
+function chip(label: string, act: string, onClick: () => void, opts: ChipOptions): HTMLButtonElement {
   const el = document.createElement('button');
   el.type = 'button';
-  el.className = 'menu-ghost';
+  el.className = `menu-ghost ${opts.mod}`;
   el.dataset['act'] = act;
   el.textContent = label;
   if (opts.disabled) el.classList.add('is-disabled');
+  if (opts.hidden) el.classList.add('is-hidden');
   if (opts.title) el.title = opts.title;
-  if (opts.badge) {
-    const dot = document.createElement('span');
-    dot.className = 'menu-badge';
-    el.appendChild(dot);
-  }
   el.addEventListener('click', onClick);
   return el;
 }
@@ -143,32 +144,29 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   const gallery = artButton('gallery', t('menu.collection'), 'collection', callbacks.onOpenCollection);
   const credits = artButton('exit', t('menu.about'), 'about', callbacks.onOpenAbout);
 
-  // --- Capa 4: fila secundaria ---
-  // Va DENTRO del arte, en la franja libre entre el titulo y los botones
-  // (art y ~62%): asi escala con el arte y nunca choca con los marcos, ni
-  // siquiera en pantallas mas anchas que 16:9 (donde el arte se recorta).
-  const secondary = document.createElement('div');
-  secondary.className = 'menu-secondary';
+  // "Continuar" SOLO aparece si hay partida guardada, como chip pegado arriba
+  // del marco de "Nueva partida". Se deja SIEMPRE en el DOM (con is-disabled +
+  // is-hidden) porque el smoke lee su clase `is-disabled` para saber que no hay
+  // partida en curso (ver tools/smoke.mjs).
+  const hasSave = state.continueLabel !== null;
+  const continueChip = chip(t('menu.continue'), 'continue', callbacks.onContinueRun, {
+    mod: 'menu-ghost--continue',
+    disabled: !hasSave,
+    hidden: !hasSave,
+    ...(hasSave ? {} : { title: t('menu.noSave') }),
+  });
 
-  secondary.appendChild(
-    ghost(state.continueLabel ? `${t('menu.continue')} — ${state.continueLabel}` : t('menu.continue'), 'continue', callbacks.onContinueRun, {
-      disabled: !state.continueLabel,
-      title: state.continueLabel ? '' : t('menu.noSave'),
-    }),
-  );
-  secondary.appendChild(
-    ghost(t('menu.expansions'), 'expansions', callbacks.onOpenExpansions, { badge: state.badges?.expansions === true }),
-  );
-  secondary.appendChild(ghost(t('menu.pass'), 'pass', callbacks.onOpenPass, { badge: state.badges?.pass === true }));
-  secondary.appendChild(ghost(t('ui.language'), 'lang', callbacks.onToggleLanguage));
-  if (state.showBoard && state.onOpenBoard) {
-    secondary.appendChild(ghost(t('board.title'), 'board', state.onOpenBoard));
-  }
-
-  art.append(atmosphere, glow, play, settings, gallery, credits, secondary);
+  art.append(atmosphere, glow, play, settings, gallery, credits, continueChip);
   panel.appendChild(art);
 
-  // Version (esquina superior derecha, fija sobre el bosque).
+  // --- Duelo micelial: chip fijo en la esquina superior izquierda ---
+  // Va fijo (no dentro del arte) para que nunca lo recorte el `cover`. El smoke
+  // lo abre por `boundingBox()` + click real, asi que tiene que estar visible.
+  if (state.showBoard && state.onOpenBoard) {
+    panel.appendChild(chip(t('board.title'), 'board', state.onOpenBoard, { mod: 'menu-ghost--board' }));
+  }
+
+  // Version (esquina superior derecha).
   const version = document.createElement('span');
   version.className = 'menu-version';
   version.textContent = t('menu.version', { version: state.version });
