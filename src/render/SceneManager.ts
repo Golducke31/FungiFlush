@@ -28,7 +28,7 @@ import {
 
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
 import { ARENA_GLOW_BASE, ARENA_GLOW_ENVIRONMENT, type Arena, buildArena } from './Arena';
-import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
+import { CARD_HALO_WIDTH, CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
@@ -1127,7 +1127,18 @@ export class SceneManager {
     const count = cards.length;
     if (count === 0) return;
 
-    const spacing = 1.5;
+    // El espaciado sale del ancho REAL de la carta, no de un numero fijo.
+    // Y lo que manda no es `CARD_WIDTH` sino el HALO, que es el contorno mas
+    // grande: a escala joker la carta mide 1.1 pero el halo 1.63. El 1.5 fijo
+    // de antes era menor que el halo, asi que se pisaban y la fila se leia
+    // como una mancha continua en vez de como cartas separadas.
+    const haloWidth = CARD_HALO_WIDTH * JOKER_SCALE;
+    const gap = 0.3;
+    // Si algun dia entran mas jokers de los que caben, se comprime el espacio
+    // ANTES que dejar que la fila se salga de cuadro.
+    const maxSpan = this.handSpread + CARD_WIDTH;
+    const wanted = haloWidth + gap;
+    const spacing = count > 1 ? Math.min(wanted, maxSpan / (count - 1)) : wanted;
     const total = spacing * (count - 1);
 
     cards.forEach((card, i) => {

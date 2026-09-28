@@ -88,6 +88,17 @@ export class HUD {
   private readonly cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
   /** Ilustracion real de un joker. Ver la nota del constructor. */
   private readonly jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
+  /**
+   * Refresco en vivo del panel de la tienda, o `null` si no hay tienda abierta.
+   *
+   * El panel se construye UNA vez (y reconstruirlo es caro: cada oferta dibuja
+   * su carta en un canvas y la pasa a data URL). Pero el dinero cambia mientras
+   * la tienda esta abierta — al comprar, al vender un joker, o al volver del
+   * mazo despues de mejorar. Sin este refresco el subtitulo y los botones se
+   * quedan con el dinero de cuando se abrio: se veian "7 Fungis" y los tres
+   * botones habilitados con 3 en la caja, y cada click daba "no te alcanza".
+   */
+  private shopRefresh: (() => void) | null = null;
   private readonly appInfo: HudAppInfo;
 
   // Referencias cacheadas: buscar en el DOM cada frame es gratis hasta que
@@ -248,6 +259,9 @@ export class HUD {
 
       bus.on('money:changed', ({ money, delta }) => {
         this.elMoney.textContent = formatNumber(money);
+        // La tienda muestra el dinero y decide que se puede comprar: si esta
+        // abierta, se refresca con el valor nuevo.
+        this.shopRefresh?.();
         if (delta !== 0) {
           this.popup(
             window.innerWidth - 90,
@@ -465,6 +479,9 @@ export class HUD {
 
   private openOverlay(content: HTMLElement): void {
     this.cancelPendingClose();
+    // El panel anterior deja de existir: su refresco tambien. `showShop` vuelve
+    // a asignarlo justo despues de llamar aca.
+    this.shopRefresh = null;
     this.elOverlay.innerHTML = '';
     this.elOverlay.appendChild(content);
     // Si ya estaba abierto, quitar y volver a poner `is-open` en el mismo
@@ -831,6 +848,9 @@ export class HUD {
       grid.appendChild(empty);
     }
 
+    /** Botones de compra, para poder recalcular su estado sin rehacer el panel. */
+    const buyButtons: { offer: ShopOffer; button: HTMLButtonElement; card: HTMLElement }[] = [];
+
     for (const offer of offers) {
       const affordable = this.engine.run.money >= offer.cost;
       const card = document.createElement('div');
@@ -876,6 +896,7 @@ export class HUD {
       buy.textContent = offer.sold ? t('shop.sold') : t('action.buy');
       buy.disabled = offer.sold || !affordable;
       buy.addEventListener('click', () => this.callbacks.onBuy(offer.id));
+      buyButtons.push({ offer, button: buy, card });
 
       footer.append(price, buy);
       card.append(kind, name, desc, footer);
@@ -911,6 +932,20 @@ export class HUD {
     actions.append(sellInfo, deck, reroll, leave);
     panel.append(title, subtitle, grid, actions);
     this.openOverlay(panel);
+
+    // Ver la nota de `shopRefresh`. Solo se recalcula lo que depende del
+    // dinero: las tarjetas NO se reconstruyen, asi que las ilustraciones ya
+    // dibujadas no se vuelven a generar en cada cambio de plata.
+    this.shopRefresh = () => {
+      const money = this.engine.run.money;
+      subtitle.textContent = `${t('hud.money')}: ${formatNumber(money)} · ${t('hud.jokers')} ${this.engine.run.jokers.length}/${this.engine.run.jokerSlots}`;
+      for (const entry of buyButtons) {
+        entry.button.disabled = entry.offer.sold || money < entry.offer.cost;
+        entry.button.textContent = entry.offer.sold ? t('shop.sold') : t('action.buy');
+        entry.card.classList.toggle('is-sold', entry.offer.sold);
+      }
+      reroll.disabled = money < cost;
+    };
   }
 
   private showGameOver(reason: 'loss' | 'victory'): void {

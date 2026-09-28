@@ -51,6 +51,16 @@ const HALO_GEO = new THREE.PlaneGeometry(
   CARD_HEIGHT * 1.24 * HALO_SPREAD,
 );
 
+/**
+ * Ancho del halo: el contorno MAS GRANDE que dibuja una carta.
+ *
+ * Lo necesita quien tenga que poner cartas una al lado de otra. Separarlas por
+ * `CARD_WIDTH` no alcanza: el halo es ~48% mas ancho, asi que dos cartas
+ * separadas por el ancho "de la carta" igual tienen los halos pisados y la fila
+ * se lee como una mancha continua. Es el error que tenia la fila de jokers.
+ */
+export const CARD_HALO_WIDTH = CARD_WIDTH * 1.3 * HALO_SPREAD;
+
 /** Posicion/rotacion "en reposo": es lo unico que animan los tweens. */
 export interface CardHome {
   x: number;
