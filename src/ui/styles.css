@@ -775,6 +775,96 @@ body {
   z-index: var(--z-popup);
 }
 
+/* --------------------------------------------------------------------------
+   Contador en vivo del calculo
+   --------------------------------------------------------------------------
+   Va en la franja libre entre la barra de arriba y las cartas que se juegan al
+   centro: es lo unico que no tapa ni el HUD ni el resultado. El motor emite
+   todos los pasos de golpe, pero el render los escalona, asi que el contador
+   sube al ritmo de lo que se VE. */
+.score-ticker {
+  position: fixed;
+  left: 50%;
+  top: 21%;
+  transform: translateX(-50%) scale(0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.16s var(--ease-out),
+    transform 0.16s var(--ease-back);
+  z-index: var(--z-popup);
+}
+
+.score-ticker.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.score-ticker-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* La operacion del paso que se esta viendo: +12 o x3. El color lo pone el
+   render con el del elemento que la produce. */
+.score-ticker-op {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2.4vw, 30px);
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.score-ticker-total {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 52px);
+  line-height: 1;
+  color: #eaf6ff;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 22px rgba(95, 216, 232, 0.5),
+    0 2px 10px rgba(0, 0, 0, 0.85);
+}
+
+.score-ticker-total.is-bump {
+  animation: ticker-bump 0.22s var(--ease-back);
+}
+
+@keyframes ticker-bump {
+  from {
+    transform: scale(1.16);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.score-ticker-source {
+  font-size: clamp(10px, 1.1vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--frame-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+/* Un combo no es un paso mas: es una regla de la mano cumpliendose. Se marca
+   para que se distinga de "esta carta sumo 4". */
+.score-ticker.is-combo .score-ticker-total {
+  color: #fff3d6;
+  text-shadow:
+    0 0 30px rgba(255, 200, 87, 0.7),
+    0 2px 10px rgba(0, 0, 0, 0.85);
+}
+
+.score-ticker.is-combo .score-ticker-source {
+  color: #ffd98a;
+}
+
 .score-popup {
   position: absolute;
   font-size: 21px;

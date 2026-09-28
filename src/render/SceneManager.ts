@@ -136,6 +136,21 @@ export interface SceneCallbacks {
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
   onScorePopup?: (screenX: number, screenY: number, text: string, color: number) => void;
   /**
+   * Un paso del calculo ACABA de aparecer en pantalla.
+   *
+   * No es lo mismo que `score:step`: el motor emite TODOS los pasos de golpe y
+   * el render los escalona para que se lean uno por uno. El contador en vivo
+   * tiene que ir al ritmo de lo que se VE, asi que lo dispara el render, no el
+   * motor. `index` es el orden dentro de la mano.
+   */
+  onScoreTick?: (info: {
+    index: number;
+    text: string;
+    color: number;
+    sourceKey: string;
+    isCombo: boolean;
+  }) => void;
+  /**
    * El jugador solto una carta sobre una zona. El render sabe QUE zona es; el
    * controlador decide que significa ("play" = seleccionar, "discard" =
    * descartar esa carta, "hand" = devolverla). El render no toca el motor.
@@ -1249,15 +1264,24 @@ export class SceneManager {
 
       if (step.action === 'MULTIPLY_SPORES') this.rig.addShake(0.05);
 
+      const sign = step.value >= 0 ? '+' : '';
+      const text =
+        step.action === 'MULTIPLY_SPORES' ? `x${step.value}` : `${sign}${Math.round(step.value)}`;
+
       if (this.callbacks.onScorePopup) {
         const screen = this.projectToScreen(origin.position);
-        const sign = step.value >= 0 ? '+' : '';
-        const text =
-          step.action === 'MULTIPLY_SPORES'
-            ? `x${step.value}`
-            : `${sign}${Math.round(step.value)}`;
         this.callbacks.onScorePopup(screen.x, screen.y, text, color);
       }
+
+      // El contador en vivo: el HUD necesita saber QUE paso se esta viendo
+      // AHORA para ir al ritmo de la animacion, no al del motor.
+      this.callbacks.onScoreTick?.({
+        index,
+        text,
+        color,
+        sourceKey: step.sourceNameKey,
+        isCombo: step.sourceId.startsWith('combo:'),
+      });
     });
   }
 

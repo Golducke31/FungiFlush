@@ -117,6 +117,16 @@ export class HUD {
   private elPopups = document.createElement('div');
   private elToasts = document.createElement('div');
   private elPreview = document.createElement('div');
+  /** Contador grande: aparece durante la secuencia y suma en vivo. */
+  private elTicker = document.createElement('div');
+  private elTickerOp = document.createElement('span');
+  private elTickerTotal = document.createElement('span');
+  private elTickerSource = document.createElement('div');
+  /** Pasos del calculo de la mano actual (el motor los emite todos juntos). */
+  private scoreStepCount = 0;
+  /** Puntaje final de la mano, para repartir el conteo entre los pasos. */
+  private scoreHandTotal = 0;
+  private tickerTimer: number | null = null;
 
   private readonly unsubscribes: Array<() => void> = [];
   private lastStatus: string | null = null;
@@ -239,7 +249,27 @@ export class HUD {
     this.elPopups.className = 'hud-popups';
     this.elToasts.className = 'toast-stack';
 
-    this.root.append(top, this.elJokers, bottom, this.elPopups, this.elToasts, this.elTooltip, this.elOverlay);
+    // Contador en vivo. Va entre la barra de arriba y las cartas jugadas: es la
+    // franja libre de la mesa, asi no tapa ni el HUD ni el resultado.
+    this.elTicker.className = 'score-ticker';
+    this.elTickerOp.className = 'score-ticker-op';
+    this.elTickerTotal.className = 'score-ticker-total';
+    this.elTickerSource.className = 'score-ticker-source';
+    const tickerLine = document.createElement('div');
+    tickerLine.className = 'score-ticker-line';
+    tickerLine.append(this.elTickerOp, this.elTickerTotal);
+    this.elTicker.append(tickerLine, this.elTickerSource);
+
+    this.root.append(
+      top,
+      this.elJokers,
+      bottom,
+      this.elTicker,
+      this.elPopups,
+      this.elToasts,
+      this.elTooltip,
+      this.elOverlay,
+    );
   }
 
   // ==========================================================================
@@ -255,6 +285,28 @@ export class HUD {
         this.elScore.classList.toggle('is-hot', total >= target * 0.75);
         const fill = this.elProgress.firstElementChild as HTMLElement | null;
         if (fill) fill.style.width = `${Math.min(100, (total / Math.max(1, target)) * 100)}%`;
+      }),
+
+      // El motor emite TODOS los pasos del calculo juntos y despues el total.
+      // El HUD los cuenta para poder REPARTIR el conteo entre ellos: asi el
+      // contador termina exacto en el puntaje de la mano en vez de quedar cerca.
+      bus.on('score:step', () => {
+        this.scoreStepCount += 1;
+      }),
+
+      bus.on('score:hand', ({ total }) => {
+        this.scoreHandTotal = total;
+        this.elTickerTotal.textContent = '0';
+      }),
+
+      // Una mano nueva reinicia la cuenta. Va aca y no en `score:hand` porque
+      // los pasos llegan ANTES que el total: si se reseteara ahi, el conteo se
+      // quedaria sin denominador justo cuando lo necesita.
+      bus.on('card:played', ({ index }) => {
+        if (index === 0) {
+          this.scoreStepCount = 0;
+          this.scoreHandTotal = 0;
+        }
       }),
 
       bus.on('money:changed', ({ money, delta }) => {
@@ -1084,6 +1136,44 @@ export class HUD {
   }
 
   /** Numero flotante de puntos. `color` es un hex numerico. */
+  /**
+   * Un paso del calculo acaba de aparecer en pantalla: se muestra la operacion
+   * y el contador sube. Lo llama el RENDER, que es quien escalona los pasos: el
+   * contador tiene que ir al ritmo de lo que se VE, no al del motor (que emite
+   * todo junto).
+   */
+  scoreTick(info: {
+    index: number;
+    text: string;
+    color: number;
+    sourceKey: string;
+    isCombo: boolean;
+  }): void {
+    const steps = Math.max(1, this.scoreStepCount);
+    // El puntaje no se acumula de forma lineal, pero repartirlo entre los pasos
+    // da un conteo que se lee bien y que CIERRA exacto en el total real.
+    const shown = Math.round((this.scoreHandTotal * (info.index + 1)) / steps);
+
+    this.elTickerOp.textContent = info.text;
+    this.elTickerOp.style.color = hexToCss(info.color);
+    this.elTickerSource.textContent = t(info.sourceKey);
+    this.elTickerTotal.textContent = formatNumber(shown);
+    this.elTicker.classList.toggle('is-combo', info.isCombo);
+    this.elTicker.classList.add('is-visible');
+
+    // Reinicia el "golpe" del numero: quitar y volver a poner la clase en el
+    // mismo frame no reinicia la animacion, hay que forzar un reflow en medio.
+    this.elTickerTotal.classList.remove('is-bump');
+    void this.elTickerTotal.offsetWidth;
+    this.elTickerTotal.classList.add('is-bump');
+
+    if (this.tickerTimer !== null) window.clearTimeout(this.tickerTimer);
+    this.tickerTimer = window.setTimeout(() => {
+      this.elTicker.classList.remove('is-visible');
+      this.tickerTimer = null;
+    }, 1400);
+  }
+
   popup(x: number, y: number, text: string, color: number): void {
     const el = document.createElement('div');
     el.className = 'score-popup';

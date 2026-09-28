@@ -343,6 +343,7 @@ async function boot(): Promise<void> {
         hud.showTooltip(card, lastPointer.x, lastPointer.y, hint);
       },
       onScorePopup: (x, y, text, color) => hud?.popup(x, y, text, color),
+      onScoreTick: (info) => hud?.scoreTick(info),
       // El monitor de frames bajo el nivel solo. El render no muestra avisos:
       // avisa y el controlador decide. NO se persiste en el perfil a proposito:
       // es un ajuste de la sesion, y el jugador puede forzarlo en Ajustes.
