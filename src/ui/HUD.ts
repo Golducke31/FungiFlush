@@ -14,6 +14,7 @@ import { bus, type CardInstance, type GameEngine, type RunSnapshot, type ShopOff
 import type { BoardView } from '@engine/board';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import { createCardCanvas, type CardTextureSpec } from '@render/index';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
@@ -796,6 +797,17 @@ export class HUD {
       const card = document.createElement('div');
       card.className = `offer${offer.sold ? ' is-sold' : ''}`;
 
+      // Miniatura de la carta: misma cara procedural que la carta real.
+      const artUrl = offerArtUrl(offer, this.engine);
+      if (artUrl) {
+        const art = document.createElement('img');
+        art.className = 'offer-art';
+        art.src = artUrl;
+        art.alt = t(offer.nameKey);
+        art.loading = 'lazy';
+        card.appendChild(art);
+      }
+
       const kind = document.createElement('div');
       kind.className = 'offer-kind';
       kind.textContent = offer.kind.toUpperCase();
@@ -1045,5 +1057,60 @@ function rarityOfOffer(engine: GameEngine, offer: ShopOffer): keyof typeof RARIT
     return engine.registry.getJoker(offer.refId).rarity;
   } catch {
     return 'common';
+  }
+}
+
+/**
+ * Miniatura de la carta en la tienda: render del MISMO canvas procedural que
+ * usa el 3D (`createCardCanvas` con el `ArtSpec` de la carta/joker). Asi el
+ * jugador ve "cual esta mejorando" antes de pagar. Voucher no tiene carta, asi
+ * que devuelve `null`.
+ */
+function offerArtUrl(offer: ShopOffer, engine: GameEngine): string | null {
+  let spec: CardTextureSpec | null = null;
+  try {
+    if (offer.kind === 'card') {
+      const def = engine.registry.tryGetCard(offer.refId);
+      if (!def) return null;
+      spec = {
+        kind: 'card',
+        name: t(offer.nameKey),
+        desc: t(offer.descKey),
+        element: def.element,
+        family: def.family,
+        rarity: def.rarity,
+        art: def.art,
+        substrate: def.baseSubstrate,
+        spores: def.baseSpores,
+      };
+    } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
+      const def = engine.registry.tryGetJoker(offer.refId);
+      if (!def) return null;
+      spec = {
+        kind: offer.kind === 'mutation' ? 'mutation' : 'joker',
+        name: t(offer.nameKey),
+        desc: t(offer.descKey),
+        element: 'neutral',
+        family: 'agaricaceae',
+        rarity: def.rarity,
+        art: def.art,
+        cost: def.cost,
+      };
+    }
+  } catch {
+    return null;
+  }
+  if (!spec) return null;
+  try {
+    const canvas = createCardCanvas(spec);
+    try {
+      return canvas.toDataURL('image/webp', 0.85);
+    } catch {
+      // Algun entorno no codifica webp en canvas: caer a png para no perder
+      // la miniatura.
+      return canvas.toDataURL('image/png');
+    }
+  } catch {
+    return null;
   }
 }

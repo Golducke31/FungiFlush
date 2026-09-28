@@ -795,6 +795,19 @@ body {
   flex: 1;
 }
 
+/* Miniatura de la carta en la tienda: data URL del mismo `createCardCanvas`
+   que usa el render 3D (mismo ArtSpec -> misma ilustracion). Asi "veo cual
+   estoy mejorando" antes de comprar. */
+.offer-art {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  margin-bottom: 2px;
+  box-shadow: var(--shadow-inset);
+}
+
 .offer-price {
   font-size: 17px;
   font-weight: 800;
@@ -1283,6 +1296,17 @@ body {
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(16, 24, 34, 0.9), rgba(11, 17, 25, 0.9));
   box-shadow: var(--shadow-inset), var(--shadow-1);
+}
+
+/* Banner con la ilustracion arriba de la celda del mazo. Mismo origen que
+   `.offer-art`: `createCardCanvas` con el ArtSpec de la carta. */
+.deck-card-art {
+  width: 100%;
+  height: 62px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+  margin-bottom: 3px;
 }
 
 .deck-card-name {
@@ -1777,16 +1801,19 @@ body {
   border-radius: inherit;
   pointer-events: none;
   box-shadow: inset 0 0 0 2px rgba(79, 209, 139, 0.6);
-  animation: cell-legal-pulse 0.967s ease-in-out infinite;
+  /* Antes 0.967s con opacity 0.25<->0.85: demasiado rapido y agresivo, parecia
+     un neon parpadeando en vez de una pista de "aca podes jugar". 1.8s con un
+     rango mas chico (0.35<->0.55) lo vuelve un respiro calmo. */
+  animation: cell-legal-pulse 1.8s ease-in-out infinite;
 }
 
 @keyframes cell-legal-pulse {
   0%,
   100% {
-    opacity: 0.25;
+    opacity: 0.35;
   }
   50% {
-    opacity: 0.85;
+    opacity: 0.55;
   }
 }
 

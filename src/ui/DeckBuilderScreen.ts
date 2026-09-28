@@ -15,6 +15,7 @@
 import type { CardInstance, Rarity } from '@engine/index';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import { createCardCanvas, type CardTextureSpec } from '@render/index';
 
 export type DeckSort = 'element' | 'family' | 'rarity' | 'level';
 
@@ -111,6 +112,38 @@ export function buildDeckBuilderPanel(
       const cell = document.createElement('div');
       cell.className = `deck-card${card.uid === state.highlightUid ? ' is-flash' : ''}`;
       cell.dataset['uid'] = card.uid;
+
+      // Banner con la ilustracion de la carta. Mismo `createCardCanvas` que la
+      // tienda y el render 3D: el jugador ve cual esta mejorando.
+      try {
+        const spec: CardTextureSpec = {
+          kind: 'card',
+          name: t(card.def.nameKey),
+          desc: t(card.def.descKey),
+          element: card.def.element,
+          family: card.def.family,
+          rarity: card.def.rarity,
+          art: card.def.art,
+          substrate: card.def.baseSubstrate + card.bonusSubstrate,
+          spores: card.def.baseSpores + card.bonusSpores,
+          level: card.level,
+        };
+        const art = document.createElement('img');
+        art.className = 'deck-card-art';
+        const canvas = createCardCanvas(spec);
+        let url: string;
+        try {
+          url = canvas.toDataURL('image/webp', 0.85);
+        } catch {
+          url = canvas.toDataURL('image/png');
+        }
+        art.src = url;
+        art.alt = t(card.def.nameKey);
+        art.loading = 'lazy';
+        cell.appendChild(art);
+      } catch {
+        // Si el canvas falla (ej. navegador sin webp), seguimos con texto solo.
+      }
 
       const name = document.createElement('div');
       name.className = 'deck-card-name';
