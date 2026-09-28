@@ -69,9 +69,7 @@ export type LegacyArtKey =
   | 'art_mythic'
   | 'art_cardback'
   | 'art_table';
-/** Fondo de la mesa del duelo (Arena): foto real, no es arte de carta. */
-export type BoardArtKey = 'board_bg';
-export type ArtKey = CardArtKey | LegacyArtKey | BoardArtKey;
+export type ArtKey = CardArtKey | LegacyArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -86,7 +84,6 @@ function buildFileMap(): Record<ArtKey, string> {
   map['art_mythic'] = 'art_mythic.webp';
   map['art_cardback'] = 'art_cardback.webp';
   map['art_table'] = 'art_table.webp';
-  map['board_bg'] = 'board-bg.webp';
 
   return map;
 }
@@ -250,7 +247,11 @@ export function artFileFor(key: ArtKey): string {
 
 /** Clave del dorso. */
 export const CARD_BACK_KEY: ArtKey = 'art_cardback';
-/** Clave del tapete. */
+/**
+ * Clave del tapete.
+ *
+ * La Arena ya NO usa esto: su suelo es geometria 3D de Polyfork (`Arena.ts`).
+ * La clave y el archivo se quedan porque son parte de la cadena de respaldo del
+ * catalogo viejo y hay un test que la cubre.
+ */
 export const TABLE_KEY: ArtKey = 'art_table';
-/** Clave del fondo de la mesa del duelo (Arena). */
-export const BOARD_BG_KEY: ArtKey = 'board_bg';

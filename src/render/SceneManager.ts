@@ -23,15 +23,10 @@ import {
   type ScoreStep,
 } from '@engine/index';
 
-import { ArtAssets, BOARD_BG_KEY, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
+import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
+import { ARENA_GLOW_BASE, ARENA_GLOW_ENVIRONMENT, type Arena, buildArena } from './Arena';
 import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
-import {
-  CardTextureCache,
-  createCardBackCanvas,
-  createShadowCanvas,
-  createTableCanvas,
-  createTableNormalCanvas,
-} from './CardTexture';
+import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
 import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
@@ -246,13 +241,8 @@ export class SceneManager {
   private keyLight: THREE.DirectionalLight | null = null;
   /** Cubo PMREM procedural. Se genera una sola vez, la primera vez que hace falta. */
   private envTexture: THREE.Texture | null = null;
-  /** Tapete: material base (`low`) y su reemplazo con relieve y sheen (E1). */
-  private tableMesh: THREE.Mesh | null = null;
-  private tableMap: THREE.Texture | null = null;
-  private tableStandard: THREE.MeshStandardMaterial | null = null;
-  private tablePhysical: THREE.MeshPhysicalMaterial | null = null;
-  /** `true` cuando la mesa usa la foto del duelo: se queda con el mate estandar. */
-  private boardBg = false;
+  /** La Arena: suelo de tiles 3D + vegetacion. Dos draw calls, ver `Arena.ts`. */
+  private arena: Arena | null = null;
   /** Esfera de cielo con degradado. Propia de los tiers con `environment`. */
   private skyMesh: THREE.Mesh | null = null;
   /** Rim light tenue. Una sola y solo con `environment`. */
@@ -371,7 +361,9 @@ export class SceneManager {
     // Menos de 1: el IBL suma, no reemplaza. Con intensidad plena el tapete
     // se lava y las caras pierden contraste.
     this.scene.environmentIntensity = on ? 0.55 : 0;
-    this.syncTableMaterial(on);
+    // Los hongos de la Arena brillan mas cuando entra el IBL: con la escena mas
+    // levantada, el glow de siempre ya no alcanza para despegarlos del fondo.
+    this.arena?.setGlow(on ? ARENA_GLOW_ENVIRONMENT : ARENA_GLOW_BASE);
 
     if (this.skyMesh) this.skyMesh.visible = on;
     if (this.rimLight) this.rimLight.visible = on;
@@ -454,66 +446,6 @@ export class SceneManager {
     this.rimLight = new THREE.PointLight(0x5fd8e8, 12, 40, 2);
     this.rimLight.position.set(0, 5, -14);
     this.scene.add(this.rimLight);
-
-    this.buildTableMaterial();
-  }
-
-  /**
-   * Material del tapete con relieve (E1): mapa de normales procedural,
-   * `roughness` mas bajo y sheen. Solo para los tiers con atmosfera.
-   *
-   * Por que un material APARTE y no mutar el estandar: si se lo tocara en
-   * caliente, `low` dejaria de ser el camino de render de siempre (que es la
-   * regla que sostiene las aserciones del smoke test). Con el swap, `low`
-   * conserva el `MeshStandardMaterial` con `roughness` 0.95 de siempre.
-   */
-  private buildTableMaterial(): void {
-    if (!this.tableMesh || !this.tableMap || !this.tableStandard || this.tablePhysical) return;
-
-    const normalMap = new THREE.CanvasTexture(createTableNormalCanvas(256));
-    normalMap.wrapS = THREE.RepeatWrapping;
-    normalMap.wrapT = THREE.RepeatWrapping;
-    normalMap.repeat.set(6, 6);
-    normalMap.anisotropy = 2;
-    normalMap.needsUpdate = true;
-
-    this.tablePhysical = new THREE.MeshPhysicalMaterial({
-      map: this.tableMap,
-      normalMap,
-      // 0.95 hacia 0.7: con el tapete casi mate no hay reflejo difuso y el
-      // relieve del normal map no se ve. No se baja mas porque por debajo de
-      // ~0.6 la mesa empieza a brillar como plastico.
-      roughness: 0.7,
-      metalness: 0.05,
-      color: 0xffffff,
-      normalScale: new THREE.Vector2(0.55, 0.55),
-      // Sheen: el brillo aterciopelado del fieltro. Es lo que hace que la luz
-      // rasante se vea "peluda" en vez de metalica.
-      sheen: 0.5,
-      sheenRoughness: 0.85,
-      sheenColor: new THREE.Color(0x6fd8e8),
-    });
-
-    this.disposables.push(normalMap, this.tablePhysical);
-  }
-
-  /** Intercambia el material del tapete segun el tier. */
-  private syncTableMaterial(on: boolean): void {
-    if (!this.tableMesh) return;
-    // Mesa del duelo: con la foto de superficie nos quedamos con el material
-    // estandar mate (sin relieve de fieltro ni sheen), que es justo el camino
-    // `low` y ademas es el correcto para una foto real. No se construye el
-    // material fisico en este caso.
-    if (this.boardBg) {
-      if (this.tableStandard) this.tableMesh.material = this.tableStandard;
-      return;
-    }
-    if (on) {
-      this.buildTableMaterial();
-      if (this.tablePhysical) this.tableMesh.material = this.tablePhysical;
-      return;
-    }
-    if (this.tableStandard) this.tableMesh.material = this.tableStandard;
   }
 
   /** Las esporas de fondo son decorativas: se apagan con `reduceMotion`. */
@@ -612,54 +544,19 @@ export class SceneManager {
     this.scene.background = new THREE.Color(UI_COLORS.background);
     this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
 
-    // --- Tapete / mesa del duelo ---
+    // --- Arena: suelo de tiles 3D + vegetacion ---
     //
-    // Si el pack trae `board-bg.webp` se usa como superficie de la mesa del
-    // duelo (Arena): es una foto real, no tileable, asi que se cubre UNA vez
-    // (repeat 1,1, ClampToEdge) en vez de repetirse como el tapete procedural.
-    // Si no, el tapete normal: `art_table.webp` si existe, si no el canvas
-    // procedural de respaldo.
-    const boardBg = this.assets.get(BOARD_BG_KEY);
-    this.boardBg = !!boardBg;
-    const tableArt = boardBg ?? this.assets.get(TABLE_KEY);
-    const tableTexture = tableArt
-      ? new THREE.Texture(tableArt)
-      : new THREE.CanvasTexture(createTableCanvas(1024));
-    tableTexture.colorSpace = THREE.SRGBColorSpace;
-    if (boardBg) {
-      // Foto real: cubrir la mesa una sola vez sin repeticion ni costuras.
-      tableTexture.wrapS = THREE.ClampToEdgeWrapping;
-      tableTexture.wrapT = THREE.ClampToEdgeWrapping;
-      tableTexture.repeat.set(1, 1);
-    } else {
-      // El tapete mide 90x64 unidades y una carta 2.2 de ancho: con repeat 2 el
-      // texel queda gigante y la textura se lee como manchas. 6 la deja a una
-      // escala en la que se ve el detalle sin repetirse de forma evidente.
-      tableTexture.wrapS = THREE.RepeatWrapping;
-      tableTexture.wrapT = THREE.RepeatWrapping;
-      tableTexture.repeat.set(6, 6);
-    }
-    tableTexture.anisotropy = 4;
-    tableTexture.needsUpdate = true;
-
-    const tableGeometry = new THREE.PlaneGeometry(90, 64);
-    const tableMaterial = new THREE.MeshStandardMaterial({
-      map: tableTexture,
-      roughness: 0.95,
-      metalness: 0.05,
-      color: 0xffffff,
-    });
-    const table = new THREE.Mesh(tableGeometry, tableMaterial);
-    table.rotation.x = -Math.PI / 2;
-    table.position.y = 0;
-    this.scene.add(table);
-    // Se guardan los dos: `syncEnvironment()` cambia al material fisico cuando
-    // entra el IBL y vuelve a este en `low`, que tiene que seguir exactamente
-    // como estaba antes de esta fase.
-    this.tableMesh = table;
-    this.tableStandard = tableMaterial;
-    this.tableMap = tableTexture;
-    this.disposables.push(tableTexture, tableGeometry, tableMaterial);
+    // Reemplaza al viejo plano de 90x64 con la foto pegada. El suelo ahora es
+    // geometria de verdad (piedra lisa en la franja de juego, tierra y pasto
+    // alrededor) y los hongos se apiñan en la banda de atras, que es la que la
+    // camara ve. Ver `Arena.ts`: la arena entera sale en DOS draw calls.
+    //
+    // No depende de `assets`: los tiles y los hongos son geometria procedural
+    // de Polyfork, no texturas del pack de arte. Por eso aca no hay cadena de
+    // respaldo ni 404 posible.
+    this.arena = buildArena();
+    this.scene.add(this.arena.group);
+    this.disposables.push(...this.arena.disposables);
 
     // --- Luces ---
     //
