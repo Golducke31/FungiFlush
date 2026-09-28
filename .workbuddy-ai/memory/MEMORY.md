@@ -165,9 +165,26 @@ y paleta). Detalle completo en `ART_PROMPTS.md` §0.4 y en el skill
 ## Pendiente conocido (bug de layout, no de arte)
 Con la mano llena (`MAX_HAND_SIZE = 12`), **las 4 cartas de los extremos quedan tapadas por los
 montones de mazo y descarte** (medido: los extremos caen a 37 px del centro del montón, con un
-ancho de carta de ~110 px en pantalla). Con 8 cartas ya pasa con las 2 de las puntas.
-`DECK_X = ±7.8` y el abanico llega a ±8. Arreglo candidato: acotar el ancho del abanico según
-la cantidad de cartas, o alejar los montones.
+ancho de carta de ~110 px en pantalla). Con 8 cartas —la mano por defecto— ya pasa con las 2 de
+las puntas.
+
+**Causa raíz medida** (raycast en el punto de solape, no deducida): los montones están en
+`DECK_X/DISCARD_X = ±7.8` **fijo**, mientras el abanico de la mano llega a ±8,25
+(`handSpread = 16.5`). En el punto de solape el rayo toca primero la capa del montón
+(d = 19.14) y después la carta (d = 19.17): las dos son planos grandes y apoyados, y a esa
+altura el borde cercano del montón queda 0,03 unidades más cerca. Gana el montón por un pelo.
+
+**Arreglo descartado**: acotar el ancho del abanico. No alcanza — para que la carta más externa
+salga de la sombra del montón su borde izquierdo tiene que pasar los 243 px de pantalla, o sea
+mundo x > -4,6: el abanico quedaría en ±4,6 y con 12 cartas el solape entre cartas sería del
+62%. Peor que el bug.
+
+**Arreglo correcto**: mover los montones, no las cartas. Opciones, de menor a mayor alcance:
+(a) llevarlos a `±10.5` en x (su centro proyecta a ~66 px, fuera del abanico) y ampliar los
+límites de `CameraRig.fit()` para que entren; (b) correrlos hacia atrás en z y bajarlos en y,
+para que queden claramente detrás del plano de la mano; (c) sacarlos de la fila de la mano y
+ponerlos en una esquina, como hace Balatro. Cualquiera de las tres toca el encuadre y hay que
+re-verificar la zona de drop del descarte, que hoy está sobre el pilar del montón.
 
 ## Trampas del render / del smoke (ya resueltas, no reintroducir)- **El dorso no se toca por frame.** Cara `FrontSide` + dorso `BackSide` coplanares: el culling
   del GPU decide cuál se ve y el raycaster respeta `material.side`. No volver a alternar
