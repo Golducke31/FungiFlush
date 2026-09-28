@@ -7,6 +7,7 @@ dist-ssr/
 # public/art (704 KB). Los fuentes quedan aca para reprocesar con
 # `python tools/optimize_art.py` sin volver a gastar creditos de generacion.
 art-source/
+fonts-source/
 
 # Tauri / Rust
 src-tauri/target/

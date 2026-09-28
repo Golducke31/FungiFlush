@@ -1,0 +1,50 @@
+Tipografias de FungiFlush
+=========================
+
+Las tres fuentes se recortan y comprimen con `npm run fonts` (ver
+`tools/build_fonts.py`). Los archivos de `public/fonts/*.woff2` son la salida del
+script: NO editarlos a mano, editar el TTF de origen en `fonts-source/` y volver
+a correrlo.
+
+
+Fredoka SemiCondensed Bold          -> fredoka-semicondensed-bold.woff2
+--------------------------------------------------------------------------
+Copyright 2016 The Fredoka Project Authors
+(https://github.com/hafontia/Fredoka-One)
+
+Licencia: SIL Open Font License, Version 1.1
+https://scripts.sil.org/OFL
+
+USO COMERCIAL: permitido, incluido embeberla en una aplicacion paga.
+
+
+Gasoek One Regular                  -> gasoek-one-regular.woff2
+--------------------------------------------------------------------------
+Copyright 2022 The Gasoek Project Authors
+(https://github.com/JAMO-TYPEFACE/Gasoek)
+
+Licencia: SIL Open Font License, Version 1.1
+https://scripts.sil.org/OFL
+
+USO COMERCIAL: permitido, incluido embeberla en una aplicacion paga.
+
+
+Borsok Regular                      -> borsok-regular.woff2
+--------------------------------------------------------------------------
+Copyright (c) 2018 by Dastan Miraj. All rights reserved.
+Disenador: Dastan Miraj
+"Borsok is a trademark of Dastan Miraj."
+
+Licencia: NINGUNA DECLARADA. El archivo dice "All rights reserved" y no incluye
+un campo de licencia. No es una fuente OFL.
+
+USO COMERCIAL: NO VERIFICADO. Tal como esta, publicar el juego en Google Play
+con esta fuente es un riesgo legal. Antes del release hay que:
+  a) conseguir una licencia comercial por escrito del autor, o
+  b) reemplazarla por una OFL con un aire parecido (condensada y con caracter),
+     o
+  c) sacarla del juego.
+
+Mientras tanto se usa SOLO en el logotipo del menu (`.menu-logo-word`), que es un
+elemento decorativo: reemplazarla es cambiar un archivo y una linea de CSS
+(`--font-wordmark`), sin regenerar ningun asset.

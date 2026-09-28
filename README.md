@@ -897,7 +897,6 @@ means the missing ones are never requested.
 
 | File | Purpose | Format and specs |
 | --- | --- | --- |
-| `public/fonts/<family>-var.woff2` | The system font stack is the last thing that says "prototype". | **One variable file**, weight 400–900. WOFF2, subset to Latin-1 + `ÁÉÍÓÚÜÑáéíóúüñ¿¡·—→✓` and digits. `font-display: swap`. **The licence must allow embedding in a paid app** (SIL OFL or an explicit commercial licence) — leave it in `public/fonts/LICENSE.txt`. Then: add the family to `CARD_FONT` in `src/render/CardTexture.ts` and to the CSS `font-family`. The boot already waits for `document.fonts.ready` before baking any card texture, so no other change is needed. |
 | `public/art/ui_logo_mark.webp` | Menu, loader, About; the app icon comes from `make_icons.py` instead. | **1024×1024**, WebP with alpha, readable at 48 px on `#080b10`, one centred subject, 12% margin. |
 | `public/art/ui_icon_<id>.svg` × 24 | Buttons are text-only today; the only glyphs in the whole UI are `✓` and `→`. | **SVG, not WebP**: a sprite with `viewBox="0 0 24 24"` and `fill="currentColor"` tints from CSS and stays crisp at any size. Uniform 2 px stroke, no fill, 20 px safe area. IDs: `money hand discard ante joker_slot reroll sell settings language collection store lock xp tier claim upgrade evolve flip drag hotseat online sfx music haptics close`. **Monochrome is required** for tinting. |
 
@@ -916,6 +915,59 @@ means the missing ones are never requested.
 - **KTX2 / Basis**: 40 WebPs are ~2.4 MB; the loader plus transcoder WASM would cost more than it
   saves. Revisit only if VRAM becomes a measured problem.
 - **App icons**: `tools/make_icons.py` already generates every size from `art-source/art_legendary.png`.
+
+---
+
+## 🔤 Typography
+
+Three families, each with one job:
+
+| Variable | Family | Where |
+| --- | --- | --- |
+| `--font-ui` | **Fredoka SemiCondensed Bold** | the whole HUD, panels, buttons, chips |
+| `--font-display` | **Gasoek One** | panel titles, the score, the loader, card names |
+| `--font-wordmark` | **Borsok** | only the menu wordmark |
+
+The card canvas uses two of them explicitly (`CARD_DISPLAY_FONT` for the name and labels,
+`CARD_TEXT_FONT` for the chips and description), because at 15–21 px you want legibility, not
+personality.
+
+### `npm run fonts`
+
+The source TTFs are 1.17 MB — Gasoek One alone is 1 MB because it ships 3099 glyphs (hangul
+included). `tools/build_fonts.py` does two things:
+
+1. **Subsets** each face to the characters the game actually writes, read straight out of the
+   i18n dictionaries plus the symbols the HUD draws (`→ ✓ · — × …`). A new translation therefore
+   cannot end up with a blank glyph.
+2. **Compresses to WOFF2.**
+
+Result: **1167 KB → 38 KB (3.3%)**. The originals live in `fonts-source/` (gitignored); only the
+subsets are committed.
+
+### Two traps worth knowing
+
+- **`font-synthesis: none` on `:root`.** All three files carry a single weight (Fredoka 700,
+  Gasoek 400, Borsok 400) but the CSS asks for 800/900 all over the place. Without this, the
+  browser *manufactures* a synthetic bold on a face that is already heavy, and it smears. One
+  line fixes the whole stylesheet instead of rewriting every `font-weight`.
+- **The canvas does NOT honour `font-synthesis`.** `ctx.font` synthesises bold on its own, so the
+  card text asks for the real weights (700 for Fredoka, 400 for Gasoek) and nothing else. And
+  because card text is *baked*, the boot waits for `document.fonts.load()` + `document.fonts.ready`
+  before creating the renderer — otherwise a card generated early keeps the fallback font forever.
+
+Fonts are **not** preloaded: 38 KB behind a loading screen buys nothing, and since the document
+has no text until the loader appears, the browser logs "preloaded but not used" warnings.
+
+### Licence
+
+`public/fonts/LICENSE.txt`. Fredoka and Gasoek One are **SIL OFL 1.1** — fine to embed in a paid
+app.
+
+**Borsok is not.** Its file says *"Copyright (c) 2018 by Dastan Miraj. All rights reserved."* and
+declares no licence. It is confined to one decorative element (the wordmark) precisely so it can
+be swapped by changing one CSS variable and one file, with no asset regeneration. Before shipping
+to Google Play: get a written commercial licence, replace it with an OFL face, or drop it.
 
 ---
 

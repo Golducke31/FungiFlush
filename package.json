@@ -19,6 +19,7 @@
     "smoke": "node tools/smoke.mjs",
     "art": "python tools/optimize_art.py && node tools/genArtIndex.mjs",
     "art:index": "node tools/genArtIndex.mjs",
+    "fonts": "python tools/build_fonts.py",
     "icons": "python tools/make_icons.py",
     "tauri": "tauri"
   },

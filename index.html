@@ -33,6 +33,15 @@
     -->
     <link rel="manifest" href="./manifest.webmanifest" />
 
+    <!--
+      NO se precargan las tipografias. Son 38 KB las tres y el juego tiene
+      pantalla de carga, asi que la precarga no compra nada; y como el documento
+      no tiene TEXTO hasta que el loader aparece (todo el HUD lo construye el
+      controlador despues del bootstrap), el navegador avisa por consola que
+      precargamos una fuente que no se uso. `font-display: swap` ya cubre el caso
+      de red lenta.
+    -->
+
     <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>

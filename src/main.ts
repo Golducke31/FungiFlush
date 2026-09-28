@@ -33,7 +33,13 @@ import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
-import { ArtAssets, CARD_FONT, SceneManager, resolveQuality } from '@render/index';
+import {
+  ArtAssets,
+  CARD_DISPLAY_FONT,
+  CARD_TEXT_FONT,
+  SceneManager,
+  resolveQuality,
+} from '@render/index';
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
@@ -281,7 +287,11 @@ async function boot(): Promise<void> {
   // nivel), y eso no se nota hasta que se ve una carta vieja al lado de una
   // nueva. Esperar aca es barato: sin fuente propia resuelve al toque.
   try {
-    await document.fonts.load(`800 31px ${CARD_FONT}`);
+    // Se piden los dos pesos REALES que usa el canvas de las cartas.
+    await Promise.all([
+      document.fonts.load(`400 31px ${CARD_DISPLAY_FONT}`),
+      document.fonts.load(`700 21px ${CARD_TEXT_FONT}`),
+    ]);
     await document.fonts.ready;
   } catch {
     // Un navegador sin la API de fuentes no puede tener webfonts propias.

@@ -26,17 +26,26 @@ const H = 744;
 const TAU = Math.PI * 2;
 
 /**
- * Familia tipografica de las cartas.
+ * Tipografia de las cartas.
+ *
+ * DOS familias, con dos trabajos distintos:
+ *   - DISPLAY para el nombre y los rotulos: es lo que le da caracter a la carta
+ *     y se lee de un vistazo a 30 px.
+ *   - TEXTO para los chips y la descripcion: a 15-21 px hace falta legibilidad,
+ *     no personalidad.
  *
  * El texto de una carta se HORNEA en un canvas, asi que la fuente tiene que
- * estar cargada antes de generar la textura: si no, la carta queda con la
- * fuente de respaldo para siempre (hasta que cambie el idioma o el nivel). Por
- * eso el arranque espera a `document.fonts.ready` antes de crear el render.
+ * estar cargada ANTES de generar la textura: si no, la carta queda con la
+ * fuente de respaldo para siempre. Por eso el arranque espera a
+ * `document.fonts.ready` antes de crear el render.
  *
- * Esta en un solo lugar a proposito: cuando el juego tenga su propia tipografia,
- * se cambia aca y se agrega la familia al principio de la lista.
+ * Los pesos son los REALES de cada archivo (Fredoka es 700, Gasoek es 400) y no
+ * un 800 generico: el canvas 2D SI fabrica negritas sinteticas cuando el peso
+ * pedido no existe, y sobre una fuente ya pesada eso se ve emborronado. En el
+ * DOM lo mismo se resuelve con `font-synthesis: none` en el CSS.
  */
-export const CARD_FONT = '"Segoe UI", system-ui, sans-serif';
+export const CARD_DISPLAY_FONT = "'Gasoek One', 'Fredoka SemiCondensed', system-ui, sans-serif";
+export const CARD_TEXT_FONT = "'Fredoka SemiCondensed', 'Segoe UI', system-ui, sans-serif";
 
 export interface CardTextureSpec {
   kind: 'card' | 'joker' | 'mutation';
@@ -501,13 +510,13 @@ function drawChip(
   ctx.stroke();
 
   ctx.fillStyle = hexToRgba(color, 0.85);
-  ctx.font = `600 17px ${CARD_FONT}`;
+  ctx.font = `700 17px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(label.toUpperCase(), x + 14, y + h / 2 + 1);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = `800 38px ${CARD_FONT}`;
+  ctx.font = `700 38px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'right';
   ctx.fillText(value, x + w - 14, y + h / 2 + 2);
 }
@@ -583,11 +592,11 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   ctx.textBaseline = 'top';
 
   ctx.fillStyle = hexToRgba(elementColor, 0.95);
-  ctx.font = `700 17px ${CARD_FONT}`;
+  ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
   ctx.fillText(spec.element.toUpperCase(), W / 2, 30);
 
   ctx.fillStyle = '#f2f6fb';
-  ctx.font = `800 31px ${CARD_FONT}`;
+  ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
   const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 20, 2);
   nameLines.forEach((line, i) => ctx.fillText(line, W / 2, 56 + i * 36));
 
@@ -612,7 +621,7 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
     roundRect(ctx, pad, footerTop, W - pad * 2, 52, 12);
     ctx.stroke();
     ctx.fillStyle = hexToCss(rarityColor);
-    ctx.font = `800 24px ${CARD_FONT}`;
+    ctx.font = `400 24px ${CARD_DISPLAY_FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText(label, W / 2, footerTop + 27);
     ctx.textBaseline = 'top';
@@ -620,7 +629,7 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
 
   const descTop = spec.kind === 'card' ? footerTop + 92 : footerTop + 68;
   ctx.fillStyle = 'rgba(200, 214, 228, 0.88)';
-  ctx.font = `400 21px ${CARD_FONT}`;
+  ctx.font = `700 21px ${CARD_TEXT_FONT}`;
   const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 12, spec.kind === 'card' ? 4 : 5);
   descLines.forEach((line, i) => ctx.fillText(line, W / 2, descTop + i * 28));
 
@@ -644,7 +653,7 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
     roundRect(ctx, 22, 22, 52, 40, 10);
     ctx.stroke();
     ctx.fillStyle = hexToCss(rarityColor);
-    ctx.font = `800 22px ${CARD_FONT}`;
+    ctx.font = `700 22px ${CARD_TEXT_FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText(`+${spec.level ?? 1}`, 48, 43);
     ctx.textBaseline = 'top';
@@ -664,7 +673,7 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
     roundRect(ctx, x, y, 54, 30, 8);
     ctx.stroke();
     ctx.fillStyle = hexToCss(color);
-    ctx.font = `800 15px ${CARD_FONT}`;
+    ctx.font = `700 15px ${CARD_TEXT_FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText(status.slice(0, 4).toUpperCase(), x + 27, y + 16);
     ctx.textBaseline = 'top';

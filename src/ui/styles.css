@@ -5,7 +5,65 @@
    quede libre. En pantallas bajas se compacta verticalmente.
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Tipografia
+   --------------------------------------------------------------------------
+   Tres familias, cada una con un rol concreto:
+
+     --font-ui        Fredoka SemiCondensed Bold   el HUD, los paneles, los botones
+     --font-display   Gasoek One                   titulos, marcador, nombres de carta
+     --font-wordmark  Borsok                       SOLO el logotipo del menu
+
+   Los archivos son subsets en WOFF2 que genera `npm run fonts`: de 1167 KB de
+   TTF quedan 38 KB (Gasoek One traia 3099 glifos por el hangul y el juego usa
+   ~200 caracteres).
+
+   La ruta se escribe absoluta (`/fonts/...`) y Vite la reescribe a relativa
+   (`../fonts/...`) al construir, respetando `base: './'`. Escribirla relativa a
+   mano NO sirve: en dev el CSS se sirve desde `/src/ui/` y en el build desde
+   `/assets/`, asi que la misma cantidad de `..` no resuelve en los dos casos.
+
+   `font-display: swap` en las tres: el texto aparece enseguida con la fuente de
+   respaldo y cambia cuando llega. Con pantalla de carga no se nota, y evita un
+   arranque en blanco con red lenta.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Fredoka SemiCondensed';
+  src: url('/fonts/fredoka-semicondensed-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gasoek One';
+  src: url('/fonts/gasoek-one-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Borsok';
+  src: url('/fonts/borsok-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  /* Las tres familias traen UN solo peso (Fredoka 700, Gasoek 400, Borsok 400).
+     Sin esto, un `font-weight: 900` haria que el navegador FABRIQUE una negrita
+     sintetica, y sobre una fuente que ya es pesada eso se ve emborronado. Con
+     `font-synthesis: none` cada familia usa el peso que realmente tiene, sin
+     tener que reescribir los `font-weight` de todo el HUD. */
+  font-synthesis: none;
+
+  --font-ui: 'Fredoka SemiCondensed', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Gasoek One', 'Fredoka SemiCondensed', system-ui, sans-serif;
+  --font-wordmark: 'Borsok', 'Gasoek One', system-ui, sans-serif;
+
   --bg: #080b10;
   --panel: rgba(13, 19, 27, 0.82);
   --panel-solid: #0d131b;
@@ -45,7 +103,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  font-family: var(--font-ui);
   /* Nada de scroll, zoom ni rebote: es un juego, no una pagina. */
   touch-action: none;
   overscroll-behavior: none;
@@ -157,6 +215,7 @@ body {
   color: var(--text);
   text-shadow: 0 0 24px rgba(79, 209, 139, 0.55);
   transition: color 0.2s;
+  font-family: var(--font-display);
 }
 
 .hud-score-current.is-hot {
@@ -529,6 +588,7 @@ body {
   font-size: 25px;
   font-weight: 900;
   margin: 0 0 4px;
+  font-family: var(--font-display);
 }
 
 .panel-subtitle {
@@ -620,6 +680,7 @@ body {
   font-size: 22px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
 }
 
 .stat-cell-label {
@@ -704,6 +765,7 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-family: var(--font-display);
 }
 
 .loader-bar {
@@ -840,6 +902,7 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-family: var(--font-wordmark);
 }
 
 .menu-logo-mark {
@@ -1642,6 +1705,7 @@ body {
 .board-curtain-player {
   font-size: 26px;
   font-weight: 900;
+  font-family: var(--font-display);
 }
 
 .board-curtain-hint {
