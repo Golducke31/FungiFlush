@@ -85,6 +85,29 @@
   --danger: #e05c8a;
   --violet: #a78bfa;
 
+  /* -------------------------------------------------------------------------
+     Marco de madera y musgo del HUD.
+     Los colores NO estan elegidos a ojo: estan muestreados de
+     `public/menu-btn-play.png`, que es el recorte de un marco del menu
+     principal. Asi el HUD en partida y el menu comparten literalmente el mismo
+     material en vez de dos verdes parecidos que se pelean al cambiar de
+     pantalla.
+       cuerpo de la losa  #064039..#094540   (centro del marco)
+       borde de musgo     #2eb2a4           (banda superior iluminada)
+       borde exterior     #002e34..#062a2e  (perfil oscuro del marco)
+     ------------------------------------------------------------------------- */
+  --frame-body: #094540;
+  --frame-body-hi: #0d5a52;
+  --frame-body-lo: #05322c;
+  --frame-moss: #2eb2a4;
+  --frame-edge: #062a2e;
+  --frame-rim: rgba(120, 240, 214, 0.34);
+  /* Texto secundario SOBRE la losa. `--dim` es un gris azulado pensado para
+     fondo casi negro; sobre el verde-azulado del marco se ensucia y pierde
+     contraste. Este tinte va hacia el musgo para que se lea como parte de la
+     misma pieza. */
+  --frame-dim: rgba(178, 236, 220, 0.74);
+
   --radius: 12px;
   --gap: 10px;
 
@@ -221,20 +244,47 @@ body {
   padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));
 }
 
+/* Losa de madera y musgo: el mismo material que los marcos del menu.
+   La comparten los bloques de la barra de arriba y los contadores de abajo,
+   para que el HUD entero se lea como una sola pieza y no como tres cajas
+   distintas. No lleva `backdrop-filter`: la losa es opaca, asi que desenfocar
+   el 3D detras no se veria y solo costaria fill rate en cada frame. */
+.hud-block,
+.counter {
+  position: relative;
+  border: 1px solid var(--frame-edge);
+  border-radius: 10px;
+  background:
+    /* Musgo: banda luminosa en el borde de arriba, como el marco del menu. */
+    linear-gradient(180deg, rgba(46, 178, 164, 0.5) 0%, rgba(46, 178, 164, 0) 34%),
+    /* Veta: rayas verticales de 2-3 px, al limite de lo perceptible. Le sacan
+       el aspecto de "gradiente liso" sin llegar a leerse como textura. */
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0 2px,
+      rgba(0, 0, 0, 0.03) 2px 5px
+    ),
+    /* Cuerpo de la losa. */
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 46%, var(--frame-body-lo) 100%);
+  box-shadow:
+    /* Bisel: filo iluminado arriba, sombra abajo. Es lo que hace que se lea
+       como un objeto tallado y no como un rectangulo pintado. */
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    /* Elevacion + halo de musgo. */
+    0 4px 14px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(46, 178, 164, 0.13);
+}
+
 .hud-block {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 8px 14px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .hud-label {
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--dim);
+  color: var(--frame-dim);
   line-height: 1.3;
 }
 
@@ -254,6 +304,24 @@ body {
 }
 .hud-value.is-money {
   color: var(--money);
+}
+
+/* Icono de la moneda ("Fungis"): va pegado al numero, no en la etiqueta,
+   porque la etiqueta es texto traducible y el icono no. */
+.hud-money-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-money-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  /* Sin esto el filtrado bilineal emborrona el pixel art justo en el tamaño
+     donde mas se nota. */
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(95, 216, 232, 0.5));
 }
 .hud-value.is-danger {
   color: var(--danger);
@@ -290,15 +358,22 @@ body {
 
 .hud-score-target {
   font-size: 15px;
-  color: var(--dim);
+  color: var(--frame-dim);
   font-variant-numeric: tabular-nums;
 }
 
+/* Ranura tallada en la losa: el bisel va AL REVES que el de los paneles
+   (sombra arriba, luz abajo) para que se lea hundida en la madera y no
+   apoyada encima. */
 .hud-progress {
   margin-top: 7px;
-  height: 7px;
+  height: 8px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.22));
+  border: 1px solid rgba(0, 0, 0, 0.38);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(120, 240, 214, 0.14);
   overflow: hidden;
 }
 
@@ -306,15 +381,17 @@ body {
   height: 100%;
   width: 0%;
   border-radius: 99px;
-  background: linear-gradient(90deg, #2b8f6a, var(--spores));
-  box-shadow: 0 0 14px rgba(79, 209, 139, 0.7);
+  background: linear-gradient(180deg, #7ae7bd 0%, var(--spores) 55%, #1f9a68 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 14px rgba(79, 209, 139, 0.7);
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hud-blind-name {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--dim);
+  color: var(--frame-dim);
 }
 
 /* Previsualizacion del score de la seleccion actual. */
@@ -374,14 +451,24 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  /* Misma losa que el resto del HUD, pero conserva la barra violeta de la
+     izquierda: es lo que distingue "esto es un joker" de "esto es un contador"
+     de un vistazo, y es informacion, no decoracion. */
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.34) 0%, rgba(46, 178, 164, 0) 40%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 50%, var(--frame-body-lo) 100%);
+  border: 1px solid var(--frame-edge);
   border-left: 3px solid var(--violet);
   border-radius: 9px;
   padding: 6px 9px;
   font-size: 11.5px;
   max-width: 168px;
+  color: #e2fbf4;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 3px 10px rgba(0, 0, 0, 0.45);
   transition:
     border-color var(--dur-base) var(--ease-out),
     transform var(--dur-fast) var(--ease-back),
@@ -389,9 +476,14 @@ body {
 }
 
 .joker-chip:hover {
-  border-color: var(--border-strong);
+  border-color: rgba(46, 178, 164, 0.6);
+  border-left-color: var(--violet);
   transform: translateX(3px);
-  box-shadow: var(--shadow-2);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 0 16px rgba(167, 139, 250, 0.28);
 }
 
 .joker-chip-name {
@@ -402,7 +494,7 @@ body {
 }
 
 .joker-chip-fires {
-  color: var(--dim);
+  color: var(--frame-dim);
   font-variant-numeric: tabular-nums;
   font-size: 10px;
 }
@@ -425,14 +517,12 @@ body {
   flex-wrap: wrap;
 }
 
+/* El marco lo pone la regla compartida de `.hud-block, .counter`: aca solo va
+   el tamaño. */
 .counter {
-  background: linear-gradient(180deg, rgba(18, 27, 38, 0.92), rgba(13, 19, 27, 0.88));
-  border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 6px 11px;
   text-align: center;
   min-width: 62px;
-  box-shadow: var(--shadow-inset), var(--shadow-1);
 }
 
 .counter-value {
@@ -516,6 +606,56 @@ body {
   min-height: 38px;
 }
 
+/* --- Botones del HUD en partida: la misma losa que los marcos del menu ---
+   Va scopeado a `.hud-top` y `.hud-actions` a proposito. `.btn` se usa en
+   TODAS las pantallas (tienda, ajustes, coleccion, paneles), asi que tocar el
+   global seria mover medio juego de una sola vez. Si mas adelante se quiere el
+   mismo material en los paneles, se extiende esta lista, no se reescribe. */
+.hud-top .btn,
+.hud-actions .btn {
+  border-color: var(--frame-edge);
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.42) 0%, rgba(46, 178, 164, 0) 38%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 50%, var(--frame-body-lo) 100%);
+  color: #e2fbf4;
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.hud-top .btn:hover:not(:disabled),
+.hud-actions .btn:hover:not(:disabled) {
+  background:
+    linear-gradient(180deg, rgba(46, 178, 164, 0.62) 0%, rgba(46, 178, 164, 0.06) 42%),
+    linear-gradient(180deg, #106a60 0%, #0b5148 50%, #06372f 100%);
+  border-color: rgba(46, 178, 164, 0.6);
+}
+
+/* Jugar mano: el unico boton que AVANZA. Se lleva el verde de las esporas
+   para que se distinga de los otros dos sin salirse del material. */
+.hud-actions .btn.is-play {
+  background:
+    linear-gradient(180deg, rgba(79, 209, 139, 0.55) 0%, rgba(79, 209, 139, 0.08) 42%),
+    linear-gradient(180deg, #0f6b4e 0%, #0a5138 52%, #06372a 100%);
+  border-color: rgba(79, 209, 139, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(160, 255, 210, 0.4),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 0 22px rgba(79, 209, 139, 0.3);
+}
+
+.hud-actions .btn.is-play:hover:not(:disabled) {
+  background:
+    linear-gradient(180deg, rgba(79, 209, 139, 0.7) 0%, rgba(79, 209, 139, 0.15) 45%),
+    linear-gradient(180deg, #14855f 0%, #0c6444 52%, #07422f 100%);
+}
+
+.hud-actions .btn.is-discard {
+  border-color: rgba(224, 92, 138, 0.6);
+}
+
 /* --------------------------------------------------------------------------
    Tooltip de carta (solo raton)
    -------------------------------------------------------------------------- */
@@ -523,8 +663,15 @@ body {
 .hud-tooltip {
   position: fixed;
   max-width: 290px;
-  background: rgba(8, 12, 18, 0.96);
-  border: 1px solid var(--border-strong);
+  /* Misma losa, pero con un velo oscuro encima: el tooltip es texto denso
+     (nombre, descripcion, numeros) y sobre el verde-azulado puro el contraste
+     alcanza pero se lee incomodo. El velo baja la saturacion sin salirse del
+     material. */
+  background:
+    linear-gradient(180deg, rgba(2, 10, 10, 0.42), rgba(2, 10, 10, 0.5)),
+    linear-gradient(180deg, rgba(46, 178, 164, 0.3) 0%, rgba(46, 178, 164, 0) 34%),
+    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 46%, var(--frame-body-lo) 100%);
+  border: 1px solid var(--frame-edge);
   border-radius: var(--radius);
   padding: 12px 14px;
   pointer-events: none;
@@ -532,8 +679,9 @@ body {
   transform: translateY(6px);
   transition: opacity 0.14s, transform 0.14s;
   z-index: var(--z-tooltip);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    0 10px 30px rgba(0, 0, 0, 0.65);
 }
 
 .hud-tooltip.is-visible {
@@ -1657,6 +1805,12 @@ body {
   }
   .hud-value {
     font-size: 16px;
+  }
+  /* El icono acompaña al numero: si el numero baja y el icono no, el icono
+     termina mas alto que el valor y desalinea la fila. */
+  .hud-money-icon {
+    width: 16px;
+    height: 16px;
   }
   .hud-label {
     font-size: 9px;

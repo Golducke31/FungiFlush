@@ -1,0 +1,29 @@
+Iconos de UI de FungiFlush
+==========================
+
+fungi.png
+---------
+Icono de la moneda del juego ("Fungis"): un sprite recortado del
+
+    16X16 Pixel Mushroom Pack
+    by ssugmi — https://ssugmi.itch.io
+
+Licencia del pack (textual):
+
+    Free to use in both commercial and non-commercial projects
+    Modifications are allowed
+    Reselling, redistributing, or repackaging (even modified) is prohibited
+    Credit is appreciated but not required
+
+En criollo, para este proyecto:
+
+- **Se puede** usar en FungiFlush (es un juego comercial) y recortarlo/retocarlo.
+- **No se puede** revender ni redistribuir el pack (ni recortado) como asset.
+  Por eso aca va UN sprite suelto, no la hoja completa: el pack original se
+  queda fuera del repo.
+- El credito no es obligatorio, pero se da igual.
+
+El sprite es la fila 4, columna 1 de `sprites.png` (grilla de 8x5 celdas de
+16x16), recortado tal cual, sin reescalar. Se usa a 18-22 px con
+`image-rendering: pixelated` para que el pixel art quede nitido en vez de
+emborronado por el filtrado bilineal.

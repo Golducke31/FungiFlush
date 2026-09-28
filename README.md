@@ -907,6 +907,7 @@ They are **not** deleted on purpose: that's batch L6 in the plan, and it only ha
 | --- | --- | --- |
 | `public/art/ui_logo_mark.webp` ⬜ | Menu, loader, About; the app icon comes from `make_icons.py` instead. | **1024×1024**, WebP with alpha, readable at 48 px on `#080b10`, one centred subject, 12% margin. |
 | `public/art/ui_icon_<id>.svg` × 25 ✅ | Buttons are text-only today; the only glyphs in the whole UI are `✓` and `→`. | **SVG, not WebP**: `viewBox="0 0 24 24"`, **no `width`/`height` attributes**, `fill="none"`, `stroke="currentColor"`, `stroke-width="2"`, round caps and joins, geometry inside a 2–22 box. **Monochrome is required** so CSS can tint it. No `<text>`, no `<style>`, no `id`, no gradients, no filters. Legible at 16 px. IDs: `money hand discard ante joker_slot reroll sell settings language collection store lock xp tier claim upgrade evolve flip drag hotseat online sfx music haptics close` — per-icon glyph specs are in [`ART_PROMPTS.md` §5](./ART_PROMPTS.md). The 25 pass the contract, verified by a script that parses every file. |
+| `public/ui/fungi.png` ✅ | The currency icon, next to the money value in the in-game HUD. | **16×16 PNG with alpha**, cropped unchanged from the *16X16 Pixel Mushroom Pack* by ssugmi (see **Third-party** below). Drawn at 18–22 px with `image-rendering: pixelated` so the pixel art stays crisp instead of being smeared by bilinear filtering. |
 
 ### Optional
 
@@ -916,6 +917,21 @@ They are **not** deleted on purpose: that's batch L6 in the plan, and it only ha
 | `art-source/art_table.png` | A darker felt if the current forest floor is too busy. | **1024×1024 tileable**. Used at `repeat(6,6)` over a 90×64 table. |
 | `board_tile_*.webp` / `board_arrow_*.webp` | Only if the duel gets a skinned board. The DOM board works today. | 256×256 tiles, 128×128 arrows, alpha. |
 | `public/feature-1024x500.png`, `keyart_pack_base.webp`, `public/shots/<lang>/*.png` | Play Store listing (phase 8). | 1024×500 no alpha with 15% margins; 1600×900; 1920×1080. **The screenshots are better generated than hand-made** — a script can drive the game to specific states with `?quality=high` and capture them. |
+
+### Third-party
+
+Two external sets are used. Both are licensed for commercial use and both are
+**vendored into the repo** — nothing is fetched at runtime, because the game has
+to ship offline.
+
+| Set | Used for | Licence |
+| --- | --- | --- |
+| [Polyfork](https://polyfork.dev) — 3 ground tiles + 4 mushrooms | The in-game Arena diorama (`src/render/Arena.ts`), merged into 2 draw calls. Vendored as `src/render/polyfork/*.ts`. | Commercial use in games and apps allowed, modify freely, **no attribution required**; do not resell or redistribute the files as assets. Full text and the one local patch in [`src/render/polyfork/LICENSE.md`](./src/render/polyfork/LICENSE.md). |
+| [16X16 Pixel Mushroom Pack](https://ssugmi.itch.io) by ssugmi | The `Fungis` currency icon — one 16×16 sprite, shown at 18–22 px next to the money value. | Commercial use allowed, modifications allowed, **reselling or redistributing the pack prohibited**. Only the single sprite is committed, never the sheet. See [`public/ui/LICENSE.txt`](./public/ui/LICENSE.txt). |
+
+Note the asymmetry: Polyfork is imported as **code** (the modules are the asset), so they live
+under `src/`; the mushroom pack is a **raster**, so only the one cropped sprite lives under
+`public/ui/`.
 
 ### Not needed
 

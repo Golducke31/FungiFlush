@@ -159,7 +159,7 @@ function cardValue(card: CardInstance): number {
 const DRAFT_DECK_LIMIT = 55;
 
 /**
- * Dinero que el bot no gasta en mejoras. Sin reserva, volcaria TODO en una sola
+ * Fungis que el bot no gasta en mejoras. Sin reserva, volcaria TODO en una sola
  * carta y la simulacion dejaria de parecerse a una partida real.
  */
 const UPGRADE_RESERVE = 20;

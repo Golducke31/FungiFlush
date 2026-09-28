@@ -160,12 +160,27 @@ export class HUD {
     rightGroup.style.gap = 'var(--gap)';
 
     const moneyBlock = document.createElement('div');
-    moneyBlock.className = 'hud-block';
+    moneyBlock.className = 'hud-block hud-money';
     const moneyLabel = document.createElement('div');
     moneyLabel.className = 'hud-label';
     moneyLabel.textContent = t('hud.money');
+    // El icono va al lado del numero, no en la etiqueta: la etiqueta es texto
+    // traducible y el icono no. Juntos en una fila propia quedan centrados
+    // entre si sin depender de `line-height`.
+    const moneyRow = document.createElement('div');
+    moneyRow.className = 'hud-money-row';
+    const moneyIcon = document.createElement('img');
+    moneyIcon.className = 'hud-money-icon';
+    // Ruta relativa (no `/ui/...`): con `base: './'` de Vite esto resuelve
+    // igual en el dev server y bajo el protocolo asset:// de Tauri.
+    moneyIcon.src = 'ui/fungi.png';
+    // Decorativo: el numero ya dice cuanto hay, y el lector de pantalla ya lee
+    // la etiqueta "Fungis". Anunciar el icono seria ruido.
+    moneyIcon.alt = '';
+    moneyIcon.setAttribute('aria-hidden', 'true');
     this.elMoney.className = 'hud-value is-money';
-    moneyBlock.append(moneyLabel, this.elMoney);
+    moneyRow.append(moneyIcon, this.elMoney);
+    moneyBlock.append(moneyLabel, moneyRow);
 
     const langButton = document.createElement('button');
     langButton.className = 'btn is-ghost is-small';
