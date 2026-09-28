@@ -154,7 +154,12 @@ export interface SceneCallbacks {
     text: string;
     color: number;
     sourceKey: string;
-    isCombo: boolean;
+    /**
+     * El paso viene de una REGLA DE LA MANO (combo de composicion o bonus de
+     * orden) y no de una carta individual. El HUD lo muestra distinto: no es lo
+     * mismo "esta carta sumo 4" que "cumpliste Supercolonia".
+     */
+    isBonus: boolean;
   }) => void;
   /**
    * El jugador solto una carta sobre una zona. El render sabe QUE zona es; el
@@ -1301,7 +1306,7 @@ export class SceneManager {
         text,
         color,
         sourceKey: step.sourceNameKey,
-        isCombo: step.sourceId.startsWith('combo:'),
+        isBonus: step.sourceId.startsWith('combo:') || step.sourceId.startsWith('order:'),
       });
     });
   }

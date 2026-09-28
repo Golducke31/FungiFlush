@@ -17,6 +17,7 @@ import type { CardRegistry } from '../cards/CardRegistry';
 import type { RNG } from '../rng';
 import { ResolutionContext, type ResolutionInit } from '../resolution';
 import { detectCombos } from './combos';
+import { detectOrderBonuses } from './orderBonus';
 import type {
   CardInstance,
   EffectDefinition,
@@ -85,6 +86,20 @@ export class ScoreCalculator {
       }
       if (combo.sporeMultiplier !== 1) {
         res.multiplySpores(combo.sporeMultiplier, sourceId, combo.nameKey, 0);
+      }
+    }
+
+    // --- Paso 1.6: bonus por ORDEN de juego ---
+    // Hermano del paso 1.5: los combos miran QUE se jugo, esto mira EN QUE
+    // ORDEN. Se aplica despues de los combos y antes de los efectos por carta,
+    // asi los ON_PLAY ya ven el Sustrato con el bonus incluido.
+    for (const bonus of detectOrderBonuses(opts.scored)) {
+      const sourceId = `order:${bonus.id}`;
+      if (bonus.flatSubstrate !== 0) {
+        res.addSubstrate(bonus.flatSubstrate, sourceId, bonus.nameKey, 0);
+      }
+      if (bonus.sporeMultiplier !== 1) {
+        res.multiplySpores(bonus.sporeMultiplier, sourceId, bonus.nameKey, 0);
       }
     }
 

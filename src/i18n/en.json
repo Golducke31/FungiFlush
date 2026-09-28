@@ -627,5 +627,9 @@
     "reqPlays": "Needs {value} plays",
     "done": "{name} evolved",
     "blocked": "Not ready yet"
+  },
+  "order": {
+    "ladder": "Ladder (+12 Substrate)",
+    "crown": "Crown (x1.2 Spores)"
   }
 }

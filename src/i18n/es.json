@@ -627,5 +627,9 @@
     "reqPlays": "Necesita {value} jugadas",
     "done": "{name} evolucionó",
     "blocked": "Todavía no está lista"
+  },
+  "order": {
+    "ladder": "Escalera (+12 Sustrato)",
+    "crown": "Corona (x1.2 Esporas)"
   }
 }

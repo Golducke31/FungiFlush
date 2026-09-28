@@ -854,14 +854,14 @@ body {
 
 /* Un combo no es un paso mas: es una regla de la mano cumpliendose. Se marca
    para que se distinga de "esta carta sumo 4". */
-.score-ticker.is-combo .score-ticker-total {
+.score-ticker.is-bonus .score-ticker-total {
   color: #fff3d6;
   text-shadow:
     0 0 30px rgba(255, 200, 87, 0.7),
     0 2px 10px rgba(0, 0, 0, 0.85);
 }
 
-.score-ticker.is-combo .score-ticker-source {
+.score-ticker.is-bonus .score-ticker-source {
   color: #ffd98a;
 }
 

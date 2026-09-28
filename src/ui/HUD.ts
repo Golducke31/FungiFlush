@@ -1147,7 +1147,7 @@ export class HUD {
     text: string;
     color: number;
     sourceKey: string;
-    isCombo: boolean;
+    isBonus: boolean;
   }): void {
     const steps = Math.max(1, this.scoreStepCount);
     // El puntaje no se acumula de forma lineal, pero repartirlo entre los pasos
@@ -1158,7 +1158,7 @@ export class HUD {
     this.elTickerOp.style.color = hexToCss(info.color);
     this.elTickerSource.textContent = t(info.sourceKey);
     this.elTickerTotal.textContent = formatNumber(shown);
-    this.elTicker.classList.toggle('is-combo', info.isCombo);
+    this.elTicker.classList.toggle('is-bonus', info.isBonus);
     this.elTicker.classList.add('is-visible');
 
     // Reinicia el "golpe" del numero: quitar y volver a poner la clase en el

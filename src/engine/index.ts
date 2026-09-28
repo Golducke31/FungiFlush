@@ -23,6 +23,8 @@ export type { ConditionWorld } from './triggers/conditions';
 export { ScoreCalculator, breakdownOf } from './scoring/ScoreCalculator';
 export type { ResolveHandOptions } from './scoring/ScoreCalculator';
 export { detectCombos, handComposition } from './scoring/combos';
+export { detectOrderBonuses } from './scoring/orderBonus';
+export type { OrderBonus } from './scoring/orderBonus';
 export type { ComboResult } from './scoring/combos';
 export { createRunState, rerollCost, jokerSellValue } from './state/RunState';
 export type { RunState, ShopState, GameStatus } from './state/RunState';
