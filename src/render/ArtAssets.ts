@@ -69,7 +69,20 @@ export type LegacyArtKey =
   | 'art_mythic'
   | 'art_cardback'
   | 'art_table';
-export type ArtKey = CardArtKey | LegacyArtKey;
+/**
+ * Clave de arte PROPIA de una carta.
+ *
+ * Existe porque el catalogo de 40 archivos se indexa por (elemento x rareza)
+ * — 8 x 5 — y el juego tiene 35 cartas que caen en solo 23 de esos pares. Sin
+ * esta clave, 22 cartas (62%) compartian dibujo con otra. La clave propia gana
+ * sobre la del par: `artKeysFor` la pone PRIMERA en la cadena.
+ *
+ * El archivo se llama `art_card_own_<id>.webp`. NO se puede enumerar aca: los
+ * ids salen de los packs de contenido, que son datos, no codigo. Por eso el
+ * manifiesto se resuelve por PATRON (ver `keyForFile`).
+ */
+export type CardOwnArtKey = `card_own_${string}`;
+export type ArtKey = CardArtKey | LegacyArtKey | CardOwnArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -94,6 +107,22 @@ const FILES: Record<ArtKey, string> = buildFileMap();
 const KEY_BY_FILE = new Map<string, ArtKey>(
   Object.entries(FILES).map(([key, file]) => [file, key as ArtKey]),
 );
+
+/** `art_card_own_<id>.webp` -> `card_own_<id>`. */
+const CARD_OWN_FILE = /^art_card_own_(.+)\.webp$/;
+
+/**
+ * Clave de un archivo del manifiesto. Cubre las 51 fijas por tabla y las de
+ * arte propio por patron. Devuelve `undefined` si el archivo no es arte nuestro
+ * (una hoja de contactos, un temporal): el llamador lo ignora.
+ */
+function keyForFile(file: string): ArtKey | undefined {
+  const known = KEY_BY_FILE.get(file);
+  if (known) return known;
+  const own = CARD_OWN_FILE.exec(file);
+  const id = own?.[1];
+  return id ? (`card_own_${id}` as ArtKey) : undefined;
+}
 
 /** Los que siempre existen: es el respaldo si no hay manifiesto. */
 const LEGACY_FILES = Object.values(FILES).filter((file) => file.startsWith('art_') && !file.startsWith('art_card_'));
@@ -121,7 +150,7 @@ export class ArtAssets {
       files.map(
         (file) =>
           new Promise<void>((resolve) => {
-            const key = KEY_BY_FILE.get(file);
+            const key = keyForFile(file);
             // Un archivo suelto que no corresponde a ninguna clave se ignora:
             // puede ser una hoja de contactos o un temporal.
             if (!key) {
@@ -222,8 +251,14 @@ export class ArtAssets {
  * Se dedupe conservando el orden: para `common` el primer eslabon Y el segundo
  * son el mismo archivo, y pedirlo dos veces confunde al leer el log de carga.
  */
-export function artKeysFor(element: ElementType, rarity: Rarity): ArtKey[] {
-  const keys: ArtKey[] = [`card_${element}_${rarity}`, `card_${element}_common`];
+export function artKeysFor(element: ElementType, rarity: Rarity, cardId?: string): ArtKey[] {
+  const keys: ArtKey[] = [];
+
+  // El arte PROPIO de la carta va primero: si existe, gana. Es el eslabon que
+  // desempata a las cartas que comparten (elemento, rareza).
+  if (cardId) keys.push(`card_own_${cardId}` as ArtKey);
+
+  keys.push(`card_${element}_${rarity}`, `card_${element}_common`);
 
   // El catalogo viejo tenia arte propio solo para las dos rarezas altas.
   if (rarity === 'mythic') keys.push('art_mythic');
@@ -240,9 +275,15 @@ export function artKeysForJoker(element: ElementType, rarity: Rarity): ArtKey[] 
   return artKeysFor(element, rarity);
 }
 
-/** Nombre de archivo de una clave. Lo usan los tests y `genArtIndex`. */
+/**
+ * Nombre de archivo de una clave. Lo usan los tests y `genArtIndex`.
+ *
+ * Las claves de arte propio no estan en `FILES` (no se pueden enumerar: los ids
+ * son datos), asi que se resuelven por patron.
+ */
 export function artFileFor(key: ArtKey): string {
-  return FILES[key];
+  if (key.startsWith('card_own_')) return `art_card_own_${key.slice('card_own_'.length)}.webp`;
+  return FILES[key as Exclude<ArtKey, CardOwnArtKey>];
 }
 
 /** Clave del dorso. */

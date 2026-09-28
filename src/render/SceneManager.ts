@@ -1045,10 +1045,11 @@ export class SceneManager {
   }
 
   private artForCard(card: CardInstance): HTMLImageElement | undefined {
-    // Cadena de respaldo: arte nuevo por elemento x rareza, despues el del
-    // elemento en su version base, despues los 11 archivos viejos, y si no hay
-    // ninguno la textura cae al dibujo procedural.
-    return this.assets.getFirst(artKeysFor(card.def.element, card.def.rarity));
+    // Cadena de respaldo: arte PROPIO de la carta, despues el del par
+    // (elemento x rareza), despues el del elemento en su version base, despues
+    // los 11 archivos viejos, y si no hay ninguno la textura cae al dibujo
+    // procedural.
+    return this.assets.getFirst(artKeysFor(card.def.element, card.def.rarity, card.def.id));
   }
 
   private artForJoker(joker: JokerInstance): HTMLImageElement | undefined {

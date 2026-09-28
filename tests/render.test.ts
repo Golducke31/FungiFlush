@@ -395,6 +395,32 @@ test('la cadena de respaldo va de lo especifico a lo generico', () => {
   ]);
 });
 
+test('el arte propio de la carta gana sobre el del par elemento x rareza', () => {
+  // El catalogo se indexa por (elemento, rareza) — 8 x 5 — y las 35 cartas
+  // caen en solo 23 de esos pares. Sin este eslabon, 22 cartas comparten
+  // dibujo; con el, cada una puede tener el suyo.
+  assert.deepEqual(artKeysFor('crystal', 'rare', 'ghost_fungus'), [
+    'card_own_ghost_fungus',
+    'card_crystal_rare',
+    'card_crystal_common',
+    'art_crystal',
+  ]);
+
+  // Sin id (los jokers no tienen arte propio) la cadena es la de siempre.
+  assert.deepEqual(artKeysFor('crystal', 'rare'), [
+    'card_crystal_rare',
+    'card_crystal_common',
+    'art_crystal',
+  ]);
+});
+
+test('artFileFor resuelve las claves fijas y las de arte propio', () => {
+  assert.equal(artFileFor('card_crystal_rare'), 'art_card_crystal_rare.webp');
+  // Las de arte propio NO estan en la tabla (los ids son datos, no codigo):
+  // se resuelven por patron.
+  assert.equal(artFileFor('card_own_ghost_fungus'), 'art_card_own_ghost_fungus.webp');
+});
+
 test('la cadena no repite archivos (para `common` el primero y el segundo coinciden)', () => {
   for (const element of ELEMENTS) {
     for (const rarity of RARITIES) {
