@@ -601,37 +601,76 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   nameLines.forEach((line, i) => ctx.fillText(line, W / 2, 56 + i * 36));
 
   // --- 5. Pie: chips de stats + descripcion ---
-  const footerTop = spec.kind === 'card' ? 508 : 520;
+  //
+  // El pie es una PILA de tres filas que no se solapan:
+  //     chips de stats -> descripcion -> statuses
+  //
+  // Cada posicion se DERIVA de la anterior a proposito. Antes eran tres
+  // numeros sueltos (508, 600 y `H - 46` = 698) y la cuenta no cerraba: la
+  // descripcion podia llegar a y=712 y los statuses se dibujaban en y=698, o
+  // sea ENCIMA de la ultima linea. Con la pila, mover una fila mueve las de
+  // abajo y el traslape no puede volver por descuido.
+  const chipsTop = 466;
+  const chipsHeight = 72;
+  const descTop = chipsTop + chipsHeight + 14;
+  const descHeight = 126;
+  const statusTop = descTop + descHeight + 10;
 
   if (spec.kind === 'card') {
     const chipW = (W - pad * 2 - 18) / 2;
-    drawChip(ctx, pad, footerTop, chipW, 74, 'SUSTRATO', String(spec.substrate ?? 0), 0xf2a63b);
-    drawChip(ctx, pad + chipW + 18, footerTop, chipW, 74, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b);
+    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', String(spec.substrate ?? 0), 0xf2a63b);
+    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b);
   } else {
     // Jokers y mutaciones: sin stats, solo un rotulo de tipo.
     const label = spec.kind === 'joker' ? 'JOKER' : 'MUTACION';
-    const g = ctx.createLinearGradient(0, footerTop, 0, footerTop + 52);
+    const g = ctx.createLinearGradient(0, chipsTop, 0, chipsTop + 52);
     g.addColorStop(0, hexToRgba(rarityColor, 0.34));
     g.addColorStop(1, hexToRgba(rarityColor, 0.12));
     ctx.fillStyle = g;
-    roundRect(ctx, pad, footerTop, W - pad * 2, 52, 12);
+    roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
     ctx.fill();
     ctx.strokeStyle = hexToRgba(rarityColor, 0.75);
     ctx.lineWidth = 2.5;
-    roundRect(ctx, pad, footerTop, W - pad * 2, 52, 12);
+    roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
     ctx.stroke();
     ctx.fillStyle = hexToCss(rarityColor);
     ctx.font = `400 24px ${CARD_DISPLAY_FONT}`;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, W / 2, footerTop + 27);
+    ctx.fillText(label, W / 2, chipsTop + 27);
     ctx.textBaseline = 'top';
   }
 
-  const descTop = spec.kind === 'card' ? footerTop + 92 : footerTop + 68;
-  ctx.fillStyle = 'rgba(200, 214, 228, 0.88)';
-  ctx.font = `700 21px ${CARD_TEXT_FONT}`;
-  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 12, spec.kind === 'card' ? 4 : 5);
-  descLines.forEach((line, i) => ctx.fillText(line, W / 2, descTop + i * 28));
+  // Panel de la descripcion. A esta altura el fondo ya es casi solido (el
+  // fundido inferior del arte arranca en `bottomStart` y llega a opaco en el
+  // borde), asi que el panel no esta para dar contraste sino para AGRUPAR: sin
+  // el, el texto queda flotando suelto y se lee como un pie de foto en vez de
+  // como las reglas de la carta.
+  ctx.fillStyle = 'rgba(6, 10, 16, 0.55)';
+  roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
+  ctx.fill();
+  ctx.strokeStyle = hexToRgba(elementColor, 0.38);
+  ctx.lineWidth = 2;
+  roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
+  ctx.stroke();
+
+  // `drawChip` deja `textAlign` en 'right' y NUNCA lo restaura. La descripcion
+  // se dibujaba con `fillText(line, W / 2, ...)`, asi que con `right` cada
+  // linea quedaba pegada al centro por su borde DERECHO: el texto ocupaba solo
+  // la mitad izquierda de la carta y se veia apretado contra el medio. Ese era
+  // el "mal distribuida". Hay que reponer el centrado antes de dibujar.
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(233, 241, 249, 0.97)';
+  ctx.font = `700 25px ${CARD_TEXT_FONT}`;
+  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, 3);
+  // El bloque se centra VERTICALMENTE en el panel: una descripcion de una sola
+  // linea queda al medio en vez de pegada al borde de arriba.
+  const descLineHeight = 32;
+  const descBlockHeight = descLines.length * descLineHeight;
+  const descFirstLineY = descTop + descHeight / 2 - descBlockHeight / 2 + descLineHeight / 2;
+  ctx.textBaseline = 'middle';
+  descLines.forEach((line, i) => ctx.fillText(line, W / 2, descFirstLineY + i * descLineHeight));
+  ctx.textBaseline = 'top';
 
   // --- 7. Gema de rareza (esquina superior derecha) ---
   ctx.save();
@@ -660,11 +699,14 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   }
 
   // --- 9. Statuses activos ---
+  // Cierran la pila del pie: `statusTop` los deja DEBAJO del panel de la
+  // descripcion. Antes iban en `H - 46` (y=698), que caia dentro del area de
+  // la descripcion: los chips de estado tapaban la ultima linea del texto.
   const statuses = spec.statuses ?? [];
   statuses.slice(0, 4).forEach((status, i) => {
     const color = STATUS_COLOR[status];
-    const x = 22 + i * 62;
-    const y = H - 46;
+    const x = pad + i * 62;
+    const y = statusTop;
     ctx.fillStyle = hexToRgba(color, 0.22);
     roundRect(ctx, x, y, 54, 30, 8);
     ctx.fill();
