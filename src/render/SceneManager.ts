@@ -23,7 +23,7 @@ import {
   type ScoreStep,
 } from '@engine/index';
 
-import { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
+import { ArtAssets, BOARD_BG_KEY, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
 import { CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import {
   CardTextureCache,
@@ -251,6 +251,8 @@ export class SceneManager {
   private tableMap: THREE.Texture | null = null;
   private tableStandard: THREE.MeshStandardMaterial | null = null;
   private tablePhysical: THREE.MeshPhysicalMaterial | null = null;
+  /** `true` cuando la mesa usa la foto del duelo: se queda con el mate estandar. */
+  private boardBg = false;
   /** Esfera de cielo con degradado. Propia de los tiers con `environment`. */
   private skyMesh: THREE.Mesh | null = null;
   /** Rim light tenue. Una sola y solo con `environment`. */
@@ -498,6 +500,14 @@ export class SceneManager {
   /** Intercambia el material del tapete segun el tier. */
   private syncTableMaterial(on: boolean): void {
     if (!this.tableMesh) return;
+    // Mesa del duelo: con la foto de superficie nos quedamos con el material
+    // estandar mate (sin relieve de fieltro ni sheen), que es justo el camino
+    // `low` y ademas es el correcto para una foto real. No se construye el
+    // material fisico en este caso.
+    if (this.boardBg) {
+      if (this.tableStandard) this.tableMesh.material = this.tableStandard;
+      return;
+    }
     if (on) {
       this.buildTableMaterial();
       if (this.tablePhysical) this.tableMesh.material = this.tablePhysical;
@@ -602,22 +612,33 @@ export class SceneManager {
     this.scene.background = new THREE.Color(UI_COLORS.background);
     this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
 
-    // --- Tapete ---
+    // --- Tapete / mesa del duelo ---
     //
-    // Si el pack trae `art_table.webp` se usa ESA textura; el canvas procedural
-    // queda como respaldo. Hasta ahora el archivo se cargaba y se tiraba a la
-    // basura: 103 kB descargados para dibujar un tapete generado por codigo.
-    const tableArt = this.assets.get(TABLE_KEY);
+    // Si el pack trae `board-bg.webp` se usa como superficie de la mesa del
+    // duelo (Arena): es una foto real, no tileable, asi que se cubre UNA vez
+    // (repeat 1,1, ClampToEdge) en vez de repetirse como el tapete procedural.
+    // Si no, el tapete normal: `art_table.webp` si existe, si no el canvas
+    // procedural de respaldo.
+    const boardBg = this.assets.get(BOARD_BG_KEY);
+    this.boardBg = !!boardBg;
+    const tableArt = boardBg ?? this.assets.get(TABLE_KEY);
     const tableTexture = tableArt
       ? new THREE.Texture(tableArt)
       : new THREE.CanvasTexture(createTableCanvas(1024));
     tableTexture.colorSpace = THREE.SRGBColorSpace;
-    tableTexture.wrapS = THREE.RepeatWrapping;
-    tableTexture.wrapT = THREE.RepeatWrapping;
-    // El tapete mide 90x64 unidades y una carta 2.2 de ancho: con repeat 2 el
-    // texel queda gigante y la textura se lee como manchas. 6 la deja a una
-    // escala en la que se ve el detalle sin repetirse de forma evidente.
-    tableTexture.repeat.set(6, 6);
+    if (boardBg) {
+      // Foto real: cubrir la mesa una sola vez sin repeticion ni costuras.
+      tableTexture.wrapS = THREE.ClampToEdgeWrapping;
+      tableTexture.wrapT = THREE.ClampToEdgeWrapping;
+      tableTexture.repeat.set(1, 1);
+    } else {
+      // El tapete mide 90x64 unidades y una carta 2.2 de ancho: con repeat 2 el
+      // texel queda gigante y la textura se lee como manchas. 6 la deja a una
+      // escala en la que se ve el detalle sin repetirse de forma evidente.
+      tableTexture.wrapS = THREE.RepeatWrapping;
+      tableTexture.wrapT = THREE.RepeatWrapping;
+      tableTexture.repeat.set(6, 6);
+    }
     tableTexture.anisotropy = 4;
     tableTexture.needsUpdate = true;
 

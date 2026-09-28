@@ -69,7 +69,9 @@ export type LegacyArtKey =
   | 'art_mythic'
   | 'art_cardback'
   | 'art_table';
-export type ArtKey = CardArtKey | LegacyArtKey;
+/** Fondo de la mesa del duelo (Arena): foto real, no es arte de carta. */
+export type BoardArtKey = 'board_bg';
+export type ArtKey = CardArtKey | LegacyArtKey | BoardArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -84,6 +86,7 @@ function buildFileMap(): Record<ArtKey, string> {
   map['art_mythic'] = 'art_mythic.webp';
   map['art_cardback'] = 'art_cardback.webp';
   map['art_table'] = 'art_table.webp';
+  map['board_bg'] = 'board-bg.webp';
 
   return map;
 }
@@ -249,3 +252,5 @@ export function artFileFor(key: ArtKey): string {
 export const CARD_BACK_KEY: ArtKey = 'art_cardback';
 /** Clave del tapete. */
 export const TABLE_KEY: ArtKey = 'art_table';
+/** Clave del fondo de la mesa del duelo (Arena). */
+export const BOARD_BG_KEY: ArtKey = 'board_bg';
