@@ -875,30 +875,38 @@ the bottom 38% carries the stat chips and the description, both over a darkening
 
 ---
 
-## 📦 Assets still missing
+## 📦 Assets
 
-Everything here can be dropped in without touching code. After adding files, run
-`npm run art` (optimise + rebuild the manifest).
+**The 40 card illustrations and the 25 UI icons are done.** Every file is in
+`art-source/` (source PNGs, gitignored) and `public/art/` (shipped WebPs/SVGs), and
+`public/art/index.json` lists them. After adding or replacing files, run `npm run art`
+(optimise + rebuild the manifest).
 
 ### Cards — the big one
 
 | File | Purpose | Format and specs |
 | --- | --- | --- |
-| `art-source/art_card_<element>_<rarity>.png` × 40 | Today 30 cards share 9 illustrations. This is what makes each card its own thing. | Source PNG **1024×1488** (the script downsizes to **512×744**). **Composition (full-bleed):** the subject lives in the band between **18% and 62% of the height** — the top 18% carries the element label and the card name, the bottom 38% carries the stat chips and the description, both over a darkening gradient. Silhouette readable at 96 px wide. No text, no frame, no signature. |
+| `art-source/art_card_<element>_<rarity>.png` × 40 ✅ | 30 cards now have their own illustration instead of sharing 9. | Source PNG **vertical 2:3** (848×1264 or 1024×1536 — any 2:3 bucket works). `optimize_art.py` **crops** it to **512×744** (the card is 1:1.453, not 1:1.500) instead of stretching it, so circles stay circles. **Composition (full-bleed):** the subject lives in the band between **18% and 62% of the height** — the top 18% carries the element label and the card name, the bottom 38% carries the stat chips and the description, both over a darkening gradient. Silhouette readable at 96 px wide. No text, no frame, no signature. |
 
 Elements: `neutral poison spore decay symbiosis crystal mycelium parasite` · Rarities: `common
-uncommon rare legendary mythic` — **40 files**. The style guide and the per-element subject /
-per-rarity treatment tables are in the project plan (`§7.1`–`§7.3`).
+uncommon rare legendary mythic` — **40 files**, 0.70 MB total, none over 60 KB.
 
-You do **not** need all 40 to ship: the fallback chain means any subset works, and the manifest
-means the missing ones are never requested.
+**The generation plan is [`ART_PROMPTS.md`](./ART_PROMPTS.md)**: one ready-to-paste prompt per
+asset, the locked palette, the per-rarity treatment table, the composition band, the batch
+order and the acceptance criteria. **§0.4 is the part that matters if you regenerate
+anything:** the style is not described, it is *inherited* by image-to-image from the family's
+`common`. Text-to-image was tried and it comes out photorealistic — it breaks the set.
+
+The old 11 element illustrations are still in `public/art/` and still in the fallback chain.
+They are **not** deleted on purpose: that's batch L6 in the plan, and it only happens once the
+40 have been played with for a while.
 
 ### Identity
 
 | File | Purpose | Format and specs |
 | --- | --- | --- |
-| `public/art/ui_logo_mark.webp` | Menu, loader, About; the app icon comes from `make_icons.py` instead. | **1024×1024**, WebP with alpha, readable at 48 px on `#080b10`, one centred subject, 12% margin. |
-| `public/art/ui_icon_<id>.svg` × 24 | Buttons are text-only today; the only glyphs in the whole UI are `✓` and `→`. | **SVG, not WebP**: a sprite with `viewBox="0 0 24 24"` and `fill="currentColor"` tints from CSS and stays crisp at any size. Uniform 2 px stroke, no fill, 20 px safe area. IDs: `money hand discard ante joker_slot reroll sell settings language collection store lock xp tier claim upgrade evolve flip drag hotseat online sfx music haptics close`. **Monochrome is required** for tinting. |
+| `public/art/ui_logo_mark.webp` ⬜ | Menu, loader, About; the app icon comes from `make_icons.py` instead. | **1024×1024**, WebP with alpha, readable at 48 px on `#080b10`, one centred subject, 12% margin. |
+| `public/art/ui_icon_<id>.svg` × 25 ✅ | Buttons are text-only today; the only glyphs in the whole UI are `✓` and `→`. | **SVG, not WebP**: `viewBox="0 0 24 24"`, **no `width`/`height` attributes**, `fill="none"`, `stroke="currentColor"`, `stroke-width="2"`, round caps and joins, geometry inside a 2–22 box. **Monochrome is required** so CSS can tint it. No `<text>`, no `<style>`, no `id`, no gradients, no filters. Legible at 16 px. IDs: `money hand discard ante joker_slot reroll sell settings language collection store lock xp tier claim upgrade evolve flip drag hotseat online sfx music haptics close` — per-icon glyph specs are in [`ART_PROMPTS.md` §5](./ART_PROMPTS.md). The 25 pass the contract, verified by a script that parses every file. |
 
 ### Optional
 
@@ -990,6 +998,10 @@ Latest runs: **`npm test` 116/116**, **`npm run validate` 0 errors / 0 warnings*
 **`npm run smoke` ✓ OK, 0 errors / 0 warnings / 0 exceptions**,
 **`npm run build:release` 0.80 MB of JS, no sourcemaps** (of which a 5.2 kB board chunk
 loads only when a duel starts).
+
+Art: **40/40 card illustrations** (0.70 MB of WebP, all 512×744, none over 60 KB) and
+**25/25 UI icons** (SVG, contract-verified). The smoke passing with 0 console warnings is the
+proof that the manifest matches the files on disk: a misnamed file would be a 404 there.
 
 > **On timing in the smoke test.** The rAF loop clamps `dt` to 0.05 s, so under
 > SwiftShader (~12 FPS) animations run slower than wall-clock. Waits around animated

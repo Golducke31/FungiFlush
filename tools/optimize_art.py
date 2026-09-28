@@ -59,10 +59,40 @@ def target_for(stem: str) -> tuple[int, int]:
     return DEFAULT_TARGET
 
 
+def fit(img: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Encaja la imagen en `size` RECORTANDO el sobrante, sin deformarla.
+
+    Por que no un `resize()` directo: el generador devuelve 2:3 (848x1264, ratio
+    1:1.491) y la carta es 512x744 (1:1.453). No son la misma proporcion, asi que
+    un resize a secas estira la imagen un 2.6% en vertical y los circulos salen
+    ovalados. Con 40 imagenes ese 2.6% se nota al poner dos cartas al lado.
+
+    El recorte es centrado y es chico (1.3% arriba y abajo), asi que no toca la
+    banda util del sujeto (18%-62% de la altura). Si alguna vez entra una imagen
+    con otra proporcion, esto la encaja igual en vez de deformarla.
+    """
+    target_ratio = size[0] / size[1]
+    width, height = img.size
+    ratio = width / height
+
+    if ratio > target_ratio:
+        # Sobra ancho: se recorta a los lados.
+        new_width = round(height * target_ratio)
+        left = (width - new_width) // 2
+        img = img.crop((left, 0, left + new_width, height))
+    elif ratio < target_ratio:
+        # Sobra alto: se recorta arriba y abajo.
+        new_height = round(width / target_ratio)
+        top = (height - new_height) // 2
+        img = img.crop((0, top, width, top + new_height))
+
+    return img.resize(size, Image.LANCZOS)
+
+
 def optimize(src: Path, out: Path, size: tuple[int, int]) -> tuple[int, int]:
     with Image.open(src) as img:
         img = img.convert("RGB")
-        img = img.resize(size, Image.LANCZOS)
+        img = fit(img, size)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out, "WEBP", quality=QUALITY, method=6)
     return src.stat().st_size, out.stat().st_size
@@ -115,7 +145,11 @@ def main() -> int:
             y = (i // cols) * (cell + 20)
             sheet.paste(im, (x, y))
             draw.text((x + 6, y + cell + 3), f.stem, fill=(200, 215, 230))
-        sheet_path = ART / "_contact_sheet.jpg"
+        # La hoja va a `tools/shots/`, NO a `public/art/`: todo lo que vive en
+        # `public/` se copia al bundle, y esta es una herramienta de revision,
+        # no un asset del juego (208 KB que no tiene por que viajar al celular).
+        sheet_path = ROOT / "tools" / "shots" / "art-contact-sheet.jpg"
+        sheet_path.parent.mkdir(parents=True, exist_ok=True)
         sheet.save(sheet_path, "JPEG", quality=78)
         print(f"\nHoja de contacto: {sheet_path.relative_to(ROOT)}")
 

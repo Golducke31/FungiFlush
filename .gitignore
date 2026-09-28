@@ -3,9 +3,10 @@ dist/
 dist-ssr/
 *.local
 
-# PNG originales de 1024px. Los assets que se shipean son los .webp de
-# public/art (704 KB). Los fuentes quedan aca para reprocesar con
-# `python tools/optimize_art.py` sin volver a gastar creditos de generacion.
+# PNG originales de 2:3. Los assets que se shipean son los .webp de public/art
+# (1.4 MB: 40 cartas + los 11 viejos + dorso y tapete) mas los 25 SVG de iconos.
+# Los fuentes quedan aca para reprocesar con `python tools/optimize_art.py` sin
+# volver a gastar creditos de generacion.
 art-source/
 fonts-source/
 

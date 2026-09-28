@@ -141,8 +141,11 @@ Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `a
 - **El sujeto del arte nuevo va entre el 18% y el 62% de la altura** (arriba el nombre, abajo
   los chips).
 - Las fuentes PNG viven en `art-source/` (gitignored), no en `public/art/`.
-- Falta: 40 ilustraciones, una tipografía propia (el arranque ya espera `document.fonts.ready`),
-  el logo, y 24 iconos SVG monocromo.
+- **El catálogo de prompts de arte es `ART_PROMPTS.md`** (raíz del repo): 40 ilustraciones + 25
+  iconos SVG, un prompt listo para pegar por asset, la paleta bloqueada, la banda de composición,
+  los lotes (L1 = los 8 `common` es el lote de mayor impacto) y los criterios de aceptación.
+  Es la fuente de verdad para generar arte; el README solo resume la especificación.
+- Falta: 40 ilustraciones, el logo y 25 iconos SVG monocromo (la tipografía ya está, v1.4).
 
 ## Trampas del render / del smoke (ya resueltas, no reintroducir)- **El dorso no se toca por frame.** Cara `FrontSide` + dorso `BackSide` coplanares: el culling
   del GPU decide cuál se ve y el raycaster respeta `material.side`. No volver a alternar
