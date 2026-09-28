@@ -18,6 +18,7 @@
 
 import * as THREE from 'three';
 import type { CardInstance, JokerInstance, Rarity, StatusType } from '@engine/index';
+import { t } from '@i18n/index';
 import type { CardTextureCache } from './CardTexture';
 import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
@@ -172,12 +173,17 @@ export class Card3D {
       card.bonusSpores,
     ].join('|');
 
+    // El nombre y la descripcion van HORNEADOS en la textura (el canvas 2D
+    // dibuja el texto con `fillText`). Si se manda la clave i18n cruda
+    // (`card.mycelium_webcap.name`) en vez del texto traducido, eso es lo que
+    // aparece en la carta. La cache indexa por idioma, asi que un cambio de
+    // idioma fuerza una textura nueva con el texto nuevo.
     const texture = cache.get(
       key,
       {
         kind: 'card',
-        name: card.def.nameKey,
-        desc: card.def.descKey,
+        name: t(card.def.nameKey),
+        desc: t(card.def.descKey),
         element: card.def.element,
         family: card.def.family,
         rarity: card.def.rarity,
@@ -204,12 +210,14 @@ export class Card3D {
 
     const key = ['joker', joker.def.id, lang].join('|');
     const isMutation = (joker.def.tags ?? []).includes('mutation');
+    // Mismo razonamiento que en `setCard`: hornear el texto exige traducir
+    // primero, no la clave cruda.
     const texture = cache.get(
       key,
       {
         kind: isMutation ? 'mutation' : 'joker',
-        name: joker.def.nameKey,
-        desc: joker.def.descKey,
+        name: t(joker.def.nameKey),
+        desc: t(joker.def.descKey),
         element: 'neutral',
         family: 'agaricaceae',
         rarity: joker.def.rarity,

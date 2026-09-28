@@ -63,10 +63,18 @@ const HAND_Z = 3.0;
 const JOKER_Y = 0.16;
 const JOKER_Z = -3.4;
 const JOKER_SCALE = 0.5;
-const DECK_X = 7.8;
-const DECK_Z = 2.4;
-const DISCARD_X = -7.8;
-const DISCARD_Z = 2.4;
+// Piles moved outward in X (±10.5, antes ±7.8) and back in Z (1.0, antes 2.4)
+// para dejar de tapar las cartas de los extremos de la mano: con la mano en
+// X hasta ±8.25 y los piles en ±7.8, los montones compartian pantalla con la
+// primera y ultima carta del abanico y el depth buffer los ganaba por 0.03u
+// (la pila estaba un poco MAS cerca de la camara que la carta). Al sacarlos
+// del abanico y empujarlos a Z=1.0 (claramente detras del plano de la mano,
+// que vive en Z=3+), los piles quedan por detras de la mano en profundidad
+// Y por fuera de la mano en pantalla.
+const DECK_X = 10.5;
+const DECK_Z = 1.0;
+const DISCARD_X = -10.5;
+const DISCARD_Z = 1.0;
 const PLAY_Y = 0.18;
 const PLAY_Z = -0.6;
 const PLAY_SCALE = 0.86;
@@ -82,16 +90,16 @@ const DRAG_TILT_RX = -1.0;
 // El ORDEN de la lista es la prioridad: el descarte se evalua antes que la mano
 // porque sus rectangulos se solapan. Ver `resolveDropZone`.
 //
-// Las medidas salen del layout real: la mano vive en z = 3.0..3.5, el mazo y el
-// descarte en z = 2.4, y la camara encuadra z entre -4.2 y 4.6. Por eso las tres
-// zonas entran enteras en cuadro (si no, el marco se ve cortado) y son
-// contiguas: la unica forma de "fallar" un drop es soltarlo fuera de la mesa.
+// Con los piles en X=±10.5 y Z=1.0, la zona de descarte vive pegada al pilar:
+// minX=-11.5 .. maxX=-9.3 cubre el rectangulo del monton con margen, y
+// minZ=-0.5 .. maxZ=2.5 lo mantiene claramente DETRAS de la mano (que vive en
+// Z>=3.0). Antes la banda del descarte solapaba la mano por arriba (maxZ=2.8)
+// y por eso "tirar para descartar" se leia como "tirar hacia atras"; ahora es
+// "tirar hacia el costado del pilar", que es mas directo.
 //
-// CLAVE del descarte: su borde cercano (z = 2.8) queda POR DETRAS de la mano
-// (z >= 3.0). Descartar exige tirar la carta hacia atras, hacia el pilar, y
-// ninguna carta de la mano cae ahi por accidente. Si el rectangulo llegara
-// hasta la mano, arrastrar la carta de la punta izquierda la descartaria sola.
-const ZONE_DISCARD: ZoneRect = { minX: -10.2, maxX: -5.4, minZ: 0.6, maxZ: 2.8 };
+// La mano (ZONE_HAND) sigue cubriendo toda la mesa: cualquier drop que NO
+// caiga sobre descarte/play vuelve a la mano.
+const ZONE_DISCARD: ZoneRect = { minX: -11.5, maxX: -9.3, minZ: -0.5, maxZ: 2.5 };
 const ZONE_PLAY: ZoneRect = { minX: -8.8, maxX: 8.8, minZ: -4.4, maxZ: 1.5 };
 const ZONE_HAND: ZoneRect = { minX: -11, maxX: 11, minZ: 1.5, maxZ: 4.6 };
 
@@ -1563,10 +1571,19 @@ export class SceneManager {
 
     // El encuadre se DERIVA del layout real, no de un numero a ojo: si se
     // mueve la mano o los jokers, la camara se reajusta sola.
+    //
+    // El ancho cubre lo MAS ancho entre la mano y los piles: como ahora los
+    // piles viven en X=±10.5 (mas alla de los ±8.25 de la mano), el ancho
+    // efectivo lo mandan los piles. Si no se ensancha el bound, los pillars
+    // quedan fuera de cuadro y el jugador no los ve.
+    const pileHalfWidth = Math.max(Math.abs(DECK_X), Math.abs(DISCARD_X)) + CARD_WIDTH * 0.5;
+    const handHalfWidth = this.handSpread * 0.5 + CARD_WIDTH * 0.5;
+    const halfWidth = Math.max(pileHalfWidth, handHalfWidth) + 0.3;
+
     const bounds = {
       topZ: HAND_Z + CARD_HALF_DEPTH,
       bottomZ: JOKER_Z - CARD_HALF_DEPTH * JOKER_SCALE,
-      width: this.handSpread + CARD_WIDTH + 0.6,
+      width: halfWidth * 2,
     };
 
     // Corrimiento del encuadre hacia la mano. 0.72 del alto visible del HUD

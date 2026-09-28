@@ -60,7 +60,6 @@ export const HALO_FRAG = /* glsl */ `
   uniform vec2  uInnerRing;
   uniform float uFalloff;
   uniform float uRingFalloff;
-  uniform float uPulse;
   varying vec2  vUv;
 
   vec3 hsv2rgb(vec3 c) {
@@ -84,7 +83,11 @@ export const HALO_FRAG = /* glsl */ `
     float sdfRing = max(dRing.x, dRing.y);
     float ring    = exp(-abs(sdfRing) * uRingFalloff);
 
-    float pulse = 1.0 - uPulse * 0.5 + uPulse * 0.5 * sin(uTime * 2.6 + p.y * 3.4);
+    // Pulso apagado. Antes era 'sin(uTime * 2.6 + p.y * 3.4)': a 2.6 Hz un
+    // recorrido vertical leia como parpadeo al pasar el cursor sobre la carta.
+    // La respiracion la maneja uIntensity desde JS (hover/seleccion con factor
+    // exponencial). Si en algun momento se quiere un pulso real, es opt-in.
+    float pulse = 1.0;
 
     float aHalo = halo * uIntensity * pulse;
     float aRing = ring * uRingIntensity;
@@ -136,7 +139,6 @@ export function createHaloMaterial(options: {
       uInnerRing: { value: new THREE.Vector2(HALO_INNER_RING, HALO_INNER_RING) },
       uFalloff: { value: options.falloff ?? 9 },
       uRingFalloff: { value: 6.5 },
-      uPulse: { value: 0.35 },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,

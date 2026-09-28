@@ -473,8 +473,10 @@ console.log('\n--- Fase 4: arrastre a la zona de juego ---');
 console.log(JSON.stringify(afterDragPlay, null, 2));
 
 // --- Arrastre al descarte: debe descartar ESA carta y respetar la seleccion ---
+// Coords del pilar de descarte: SceneManager las define en `src/render/SceneManager.ts`
+// (DISCARD_X / DISCARD_Z). Si se mueven, hay que mover el target del smoke junto.
 const discardPoint = await page.evaluate(() =>
-  window.__fungiflush.scene.projectPointToScreen(-7.8, 0.95, 2.4),
+  window.__fungiflush.scene.projectPointToScreen(-10.5, 0.95, 1.0),
 );
 const beforeDiscard = await page.evaluate(() => {
   const ff = window.__fungiflush;

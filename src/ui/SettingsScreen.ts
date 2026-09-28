@@ -6,6 +6,7 @@
  * guardan su valor: cuando el audio sea real, no hay que tocar esta pantalla.
  */
 
+import { bus } from '@engine/index';
 import { currentLanguage, t } from '@i18n/index';
 import type { ProfileSettings } from '@meta/ProfileState';
 
@@ -15,13 +16,10 @@ export interface SettingsCallbacks {
   onClose: () => void;
 }
 
-function field(label: string, control: HTMLElement): HTMLDivElement {
+function field(label: HTMLElement, control: HTMLElement): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'settings-field';
-  const name = document.createElement('span');
-  name.className = 'settings-label';
-  name.textContent = label;
-  el.append(name, control);
+  el.append(label, control);
   return el;
 }
 
@@ -53,7 +51,7 @@ function slider(value: number, onChange: (value: number) => void): HTMLInputElem
 }
 
 /**
- * Control segmentado para elegir entre pocas opciones excluyentes.
+ * Segmentado para elegir entre pocas opciones excluyentes.
  *
  * NO es un `<select>` a proposito: en movil un select nativo abre la rueda del
  * sistema operativo, que rompe por completo la estetica del panel.
@@ -61,17 +59,21 @@ function slider(value: number, onChange: (value: number) => void): HTMLInputElem
  * El estado visual se actualiza al hacer clic y no esperando a que se rearme el
  * panel: el HUD solo reconstruye Ajustes al abrirlo, asi que sin esto el
  * jugador tocaria una opcion y no veria ninguna respuesta.
+ *
+ * Devuelve ademas la lista de botones para que `buildSettingsPanel` pueda
+ * reescribir sus textos cuando cambia el idioma (los nombres de las rarezas
+ * se traducen igual que el resto del HUD).
  */
-function segmented<T extends string>(
+function buildSegmented<T extends string>(
   value: T,
   options: ReadonlyArray<{ value: T; label: string }>,
   onChange: (value: T) => void,
-): HTMLDivElement {
-  const el = document.createElement('div');
-  el.className = 'settings-segmented';
-  el.dataset['act'] = 'quality';
+): { container: HTMLDivElement; buttons: Array<{ button: HTMLButtonElement; label: string }> } {
+  const container = document.createElement('div');
+  container.className = 'settings-segmented';
+  container.dataset['act'] = 'quality';
 
-  const buttons: Array<{ button: HTMLButtonElement; value: T }> = [];
+  const buttons: Array<{ button: HTMLButtonElement; label: string }> = [];
 
   for (const option of options) {
     const button = document.createElement('button');
@@ -79,21 +81,18 @@ function segmented<T extends string>(
     button.textContent = option.label;
     button.dataset['value'] = option.value;
     button.setAttribute('aria-pressed', String(option.value === value));
-
     button.addEventListener('click', () => {
       for (const entry of buttons) {
-        const on = entry.value === option.value;
+        const on = entry.button.dataset['value'] === option.value;
         entry.button.classList.toggle('is-on', on);
         entry.button.setAttribute('aria-pressed', String(on));
       }
       onChange(option.value);
     });
-
-    buttons.push({ button, value: option.value });
-    el.appendChild(button);
+    buttons.push({ button, label: option.label });
+    container.appendChild(button);
   }
-
-  return el;
+  return { container, buttons };
 }
 
 export function buildSettingsPanel(settings: ProfileSettings, callbacks: SettingsCallbacks): HTMLElement {
@@ -114,27 +113,45 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   const langButton = document.createElement('button');
   langButton.className = 'btn is-ghost';
   langButton.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
+  langButton.dataset['act'] = 'lang';
   langButton.addEventListener('click', () => callbacks.onToggleLanguage());
 
+  // Etiquetas: las guardamos como referencias vivas para reescribir su texto
+  // al cambiar de idioma. Sin esto, despues de tocar el toggle el jugador ve
+  // el mismo texto y cree que no funciono (el toggle SI cambia el idioma, pero
+  // el panel DOM queda congelado con el texto del idioma anterior).
+  const makeLabel = (key: string): HTMLSpanElement => {
+    const span = document.createElement('span');
+    span.className = 'settings-label';
+    span.textContent = t(key);
+    span.dataset['i18nKey'] = key;
+    return span;
+  };
+  const reduceMotionLabel = makeLabel('settings.reduceMotion');
+  const hapticsLabel = makeLabel('settings.haptics');
+  const sfxLabel = makeLabel('settings.sfx');
+  const musicLabel = makeLabel('settings.music');
+  const langLabel = makeLabel('settings.language');
+  const qualityLabel = makeLabel('settings.quality.label');
+
+  const { container: qualityControl, buttons: qualityButtons } = buildSegmented(
+    settings.quality,
+    [
+      { value: 'auto', label: t('settings.quality.auto') },
+      { value: 'low', label: t('settings.quality.low') },
+      { value: 'medium', label: t('settings.quality.medium') },
+      { value: 'high', label: t('settings.quality.high') },
+    ] as const,
+    (v) => callbacks.onPatch({ quality: v }),
+  );
+
   body.append(
-    field(t('settings.language'), langButton),
-    field(t('settings.reduceMotion'), checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
-    field(
-      t('settings.quality.label'),
-      segmented(
-        settings.quality,
-        [
-          { value: 'auto', label: t('settings.quality.auto') },
-          { value: 'low', label: t('settings.quality.low') },
-          { value: 'medium', label: t('settings.quality.medium') },
-          { value: 'high', label: t('settings.quality.high') },
-        ] as const,
-        (v) => callbacks.onPatch({ quality: v }),
-      ),
-    ),
-    field(t('settings.haptics'), checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
-    field(t('settings.sfx'), slider(settings.sfxVolume, (v) => callbacks.onPatch({ sfxVolume: v }))),
-    field(t('settings.music'), slider(settings.musicVolume, (v) => callbacks.onPatch({ musicVolume: v }))),
+    field(langLabel, langButton),
+    field(reduceMotionLabel, checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
+    field(qualityLabel, qualityControl),
+    field(hapticsLabel, checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
+    field(sfxLabel, slider(settings.sfxVolume, (v) => callbacks.onPatch({ sfxVolume: v }))),
+    field(musicLabel, slider(settings.musicVolume, (v) => callbacks.onPatch({ musicVolume: v }))),
   );
 
   const actions = document.createElement('div');
@@ -147,5 +164,51 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   actions.appendChild(close);
 
   panel.append(title, subtitle, body, actions);
+
+  // Al cambiar de idioma: actualizamos todos los textos traducibles del panel.
+  // El boton de idioma ademas muestra el codigo activo, asi que se reconstruye
+  // aparte. Sin esta suscripcion, despues del toggle el panel sigue mostrando
+  // el texto del idioma anterior y el jugador piensa que no cambio nada.
+  const allLabels = [
+    reduceMotionLabel,
+    hapticsLabel,
+    sfxLabel,
+    musicLabel,
+    langLabel,
+    qualityLabel,
+  ];
+  const unsub = bus.on('i18n:changed', () => {
+    for (const span of allLabels) {
+      const key = span.dataset['i18nKey'];
+      if (key) span.textContent = t(key);
+    }
+    title.textContent = t('settings.title');
+    subtitle.textContent = t('settings.audioSoon');
+    langButton.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
+    close.textContent = t('settings.close');
+
+    const labels: Record<string, string> = {
+      auto: t('settings.quality.auto'),
+      low: t('settings.quality.low'),
+      medium: t('settings.quality.medium'),
+      high: t('settings.quality.high'),
+    };
+    for (const entry of qualityButtons) {
+      const next = labels[entry.button.dataset['value'] ?? ''];
+      if (next) entry.label = next;
+      entry.button.textContent = entry.label;
+    }
+  });
+
+  // Cuando el panel se quita del DOM hay que soltar la suscripcion, si no
+  // cada `i18n:changed` reescribe nodos sueltos.
+  const observer = new MutationObserver(() => {
+    if (!panel.isConnected) {
+      unsub();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
   return panel;
 }
