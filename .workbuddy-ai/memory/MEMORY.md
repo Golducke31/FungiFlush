@@ -121,6 +121,18 @@ Palancas para endurecer el juego sin tocar código: subir ~10% los targets de `a
   calls. Las sombras de contacto son UN `InstancedMesh` (+1 draw call para todas).
 - Las esporas de ambiente se calculan en la GPU; los `burst`/`stream` siguen en CPU (homing).
 
+## Tipografía (v1.4)
+- `--font-ui` Fredoka SemiCondensed Bold (HUD) · `--font-display` Gasoek One (títulos, marcador,
+  nombres de carta) · `--font-wordmark` Borsok (SOLO el logotipo).
+- El canvas de las cartas usa `CARD_DISPLAY_FONT` y `CARD_TEXT_FONT` (ver `CardTexture.ts`).
+- `npm run fonts` subsetea + comprime: 1167 KB → 38 KB. Los TTF van en `fonts-source/` (gitignored).
+- **`font-synthesis: none` en `:root`** es obligatorio: las tres traen un solo peso y el CSS pide
+  800/900, así que sin eso el navegador fabrica negritas sintéticas. El canvas NO respeta esa
+  regla: `ctx.font` tiene que pedir los pesos reales.
+- **Borsok NO tiene licencia comercial** ("All rights reserved"): está confinada al logotipo a
+  propósito. Antes de publicar en Play hay que licenciarla, reemplazarla o sacarla.
+- El arranque espera `document.fonts.load()` + `fonts.ready` antes de crear el render.
+
 ## Assets
 - **Arte de cartas**: `art_card_<elemento>_<rareza>.webp` (8×5 = 40) a 512×744, dibujado a
   SANGRE. Cadena de respaldo: nuevo → `card_<elemento>_common` → los 11 viejos → procedural.
