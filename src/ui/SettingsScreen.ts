@@ -38,6 +38,19 @@ function checkbox(checked: boolean, onChange: (value: boolean) => void): HTMLBut
   return el;
 }
 
+/**
+ * Separador de seccion dentro del grid de ajustes. Ocupa las dos columnas (el
+ * grid es `auto-fit`), asi que agrupa visualmente lo que viene despues. Lleva
+ * su propia clave i18n para reescribirse al cambiar de idioma.
+ */
+function section(titleKey: string): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'settings-section';
+  el.textContent = t(titleKey);
+  el.dataset['i18nKey'] = titleKey;
+  return el;
+}
+
 function slider(value: number, onChange: (value: number) => void): HTMLInputElement {
   const el = document.createElement('input');
   el.type = 'range';
@@ -129,6 +142,9 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   };
   const reduceMotionLabel = makeLabel('settings.reduceMotion');
   const hapticsLabel = makeLabel('settings.haptics');
+  const notifyDailyLabel = makeLabel('settings.notifyDaily');
+  const notifyAchievementsLabel = makeLabel('settings.notifyAchievements');
+  const notifySection = section('settings.notifications');
   const sfxLabel = makeLabel('settings.sfx');
   const musicLabel = makeLabel('settings.music');
   const langLabel = makeLabel('settings.language');
@@ -150,6 +166,9 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
     field(reduceMotionLabel, checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
     field(qualityLabel, qualityControl),
     field(hapticsLabel, checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
+    notifySection,
+    field(notifyDailyLabel, checkbox(settings.notifyDaily, (v) => callbacks.onPatch({ notifyDaily: v }))),
+    field(notifyAchievementsLabel, checkbox(settings.notifyAchievements, (v) => callbacks.onPatch({ notifyAchievements: v }))),
     field(sfxLabel, slider(settings.sfxVolume, (v) => callbacks.onPatch({ sfxVolume: v }))),
     field(musicLabel, slider(settings.musicVolume, (v) => callbacks.onPatch({ musicVolume: v }))),
   );
@@ -176,6 +195,9 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
     musicLabel,
     langLabel,
     qualityLabel,
+    notifyDailyLabel,
+    notifyAchievementsLabel,
+    notifySection,
   ];
   const unsub = bus.on('i18n:changed', () => {
     for (const span of allLabels) {

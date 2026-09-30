@@ -1,0 +1,12 @@
+{
+  "cycleDays": 7,
+  "rewards": [
+    { "day": 1, "reward": { "type": "card", "id": "morel_prize" } },
+    { "day": 2, "reward": { "type": "card", "id": "chanterelle_gold" } },
+    { "day": 3, "reward": { "type": "joker", "id": "joker_golden_mold" } },
+    { "day": 4, "reward": { "type": "card", "id": "lion_mane" } },
+    { "day": 5, "reward": { "type": "card", "id": "turkey_tail" } },
+    { "day": 6, "reward": { "type": "joker", "id": "joker_double_helix" } },
+    { "day": 7, "reward": { "type": "card", "id": "reishi_elixir" } }
+  ]
+}

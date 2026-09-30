@@ -3,9 +3,10 @@
  *
  * QUE ES ESTO
  * -----------
- * Antes la mesa era UN plano de 90x64 con una foto pegada. Ahora es un diorama
- * de verdad: un suelo de tiles 3D (piedra en la franja de juego, tierra y pasto
- * alrededor) y racimos de hongos 3D en el fondo y los costados.
+ * Antes la mesa era UN plano de 90x64 con una foto pegada. Ahora es una
+ * PLATAFORMA de piedra que emerge del agua: la cara superior es un suelo de
+ * tiles 3D donde apoyan las cartas, los costados se ven por encima de la linea
+ * de agua, y los racimos de hongos 3D crecen en el borde de atras.
  *
  * TODO SALE EN DOS DRAW CALLS
  * ---------------------------
@@ -36,8 +37,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { createAsset as createDirtTile } from './polyfork/dirt-ground-tile';
-import { createAsset as createGrassTile } from './polyfork/grass-ground-tile';
 import { createAsset as createStoneTile } from './polyfork/stone-path-tile';
 import { createAsset as createClusterA } from './polyfork/mushroom-cluster-f2e3ba';
 import { createAsset as createCap } from './polyfork/mushroom-679e55';
@@ -64,29 +63,34 @@ import { createAsset as createClusterB } from './polyfork/mushroom-cluster-18dc1
  */
 const TILE = 4;
 
-/** x de -16 a 16 (9 columnas): cubre los 36 de ancho visible con margen. */
-const COLUMNS = 9;
-const COLUMN_ORIGIN = -16;
-/** z de -12 a 8 (6 filas): -12 y 8 son las filas de margen, ya fuera de cuadro. */
-const ROWS = 6;
-const ROW_ORIGIN = -12;
+/**
+ * LA ARENA ES UNA PLATAFORMA, NO UN PISO PLANO.
+ *
+ * El suelo de piedra es la cara SUPERIOR de un bloque que emerge del agua (el
+ * "cubo" de la referencia, tematizado): los costados se ven por encima de la
+ * linea de agua y el agua lo rodea. Por eso la grilla cubre exactamente la
+ * plataforma: fuera de aca no hay piso, hay agua.
+ *
+ * x de -14 a 14 (7 columnas de 4) y z de -6 a 6 (3 filas): las cartas llegan a
+ * x = +-11.6 (los montones viven en +-10.5) y a z de -4.5 a 4.5, asi que sobra
+ * margen. La vegetacion se planta en el borde de atras de la plataforma.
+ */
+const COLUMNS = 6;
+const COLUMN_ORIGIN = -10;
+const ROWS = 3;
+const ROW_ORIGIN = -4;
 
 /**
- * La franja de juego: aca va piedra (lisa, sin matas) porque es donde apoyan
- * las cartas, y las matas del tile de tierra las atravesarian.
- *
- * Cubre x en [-14, 14] y z en [-6, 6]. Las cartas llegan a x=+-11.6 (los
- * montones viven en +-10.5) y a z de -4.5 a 4.5, asi que sobra margen.
- *
- * Todo lo que queda FUERA de esta franja es campo (tierra/pasto/hongos), y cae
- * justo en el borde del cuadro: la fila cz=-8 asoma por arriba y las columnas
- * cx=+-16 por los costados. Eso es lo que se ve del diorama.
+ * Media planta de la plataforma. Debe coincidir con la grilla de arriba.
+ * Se mantiene AJUSTADA a lo que ocupan las cartas (los montones viven en
+ * x=+-10.5): cuanto mas grande, menos agua se ve alrededor.
  */
-const PATH_HALF_X = 12;
-const PATH_HALF_Z = 4;
-
-/** Probabilidad de que un tile de campo sea tierra en vez de pasto. */
-const DIRT_SHARE = 0.42;
+export const PLATFORM_HALF_X = 12;
+export const PLATFORM_HALF_Z = 6;
+/** Cuanto baja el bloque. El agua entra a `WATER_Y`, asi que se ve el costado. */
+export const PLATFORM_DEPTH = 2.6;
+/** Altura del agua respecto de la cara superior de la plataforma. */
+export const WATER_Y = -1.3;
 
 // ---------------------------------------------------------------------------
 // Vegetacion
@@ -127,10 +131,10 @@ interface Species {
 const SIDE_HEDGE: number = 5;
 const CORNER_HEDGE: number = 2;
 /** La ventana util: ni tan al medio (barra) ni tan al borde (recorte). */
-const WINDOW_MIN_X = 10;
-const WINDOW_MAX_X = 15;
-const WINDOW_BACK_Z = -5.2;
-const WINDOW_FRONT_Z = -2.6;
+const WINDOW_MIN_X = 8.2;
+const WINDOW_MAX_X = 11.4;
+const WINDOW_BACK_Z = -5.4;
+const WINDOW_FRONT_Z = -2.8;
 /** Dispersion dentro de la ventana, en unidades. */
 const HEDGE_JITTER = 0.9;
 /** Alto del seto como fraccion del alto de la especie. Ver el punto 1 de arriba. */
@@ -244,8 +248,6 @@ export interface Arena {
 export function buildArena(seed = 0x5eed1a7e): Arena {
   const random = mulberry32(seed);
 
-  const dirt = extractPiece(createDirtTile);
-  const grass = extractPiece(createGrassTile);
   const stone = extractPiece(createStoneTile);
 
   // Las especies se arman aca porque necesitan las piezas ya construidas.
@@ -271,18 +273,14 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   let tiles = 0;
   let floraCount = 0;
 
+  // Toda la plataforma es piedra: es la cara superior del bloque que emerge del
+  // agua. El orden de las tiradas de `random` se mantiene estable para que la
+  // arena sea identica en cada arranque (ver la nota de determinismo del header).
   for (let column = 0; column < COLUMNS; column += 1) {
     for (let row = 0; row < ROWS; row += 1) {
       const cx = COLUMN_ORIGIN + column * TILE;
       const cz = ROW_ORIGIN + row * TILE;
-
-      const onPath = Math.abs(cx) <= PATH_HALF_X && Math.abs(cz) <= PATH_HALF_Z;
-
-      // Sendero: piedra lisa y sin matas, porque es donde apoyan las cartas.
-      // Campo: tierra o pasto. El random va con cortocircuito para que los tiles
-      // de piedra no consuman tiradas y la secuencia siga siendo estable.
-      const field = onPath ? stone : random() < DIRT_SHARE ? dirt : grass;
-      appendPiece(ground, field, TILE / field.width, cx, cz, random, rotation, scaling, matrix);
+      appendPiece(ground, stone, TILE / stone.width, cx, cz, random, rotation, scaling, matrix);
       tiles += 1;
     }
   }
@@ -305,8 +303,8 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   // hongo partido al medio.
   for (const side of [-1, 1]) {
     for (let i = 0; i < CORNER_HEDGE; i += 1) {
-      const x = side * (12.5 + random() * 3.2);
-      const z = WINDOW_BACK_Z - 0.5 - random() * 0.9;
+      const x = side * (11.4 + random() * 2.0);
+      const z = WINDOW_BACK_Z - 0.1 - random() * 0.5;
       floraCount += plant(flora, species, random, x, z, CORNER_HEDGE_SCALE);
     }
   }
@@ -318,7 +316,7 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
 
   // Las piezas originales ya dieron sus clones: liberarlas ahora evita dejar
   // ~7 geometrias colgadas por cada arranque de escena.
-  for (const piece of [dirt, grass, stone, ...species.map((s) => s.piece)]) {
+  for (const piece of [stone, ...species.map((s) => s.piece)]) {
     for (const geometry of piece.geometries) geometry.dispose();
   }
 
@@ -345,9 +343,29 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   groundMesh.name = 'arena-ground';
   group.add(groundMesh);
 
+  // EL BLOQUE: los costados que emergen del agua. La cara superior queda 1 cm
+  // por debajo de los tiles de piedra, para que no peleen en profundidad.
+  const platformGeometry = new THREE.BoxGeometry(
+    PLATFORM_HALF_X * 2,
+    PLATFORM_DEPTH,
+    PLATFORM_HALF_Z * 2,
+  );
+  const platformMaterial = new THREE.MeshStandardMaterial({
+    color: 0x59604f,
+    roughness: 0.95,
+    metalness: 0,
+    flatShading: true,
+  });
+  const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+  platformMesh.name = 'arena-platform';
+  platformMesh.position.set(0, -PLATFORM_DEPTH / 2 - 0.01, 0);
+  group.add(platformMesh);
+
   const disposables: (THREE.BufferGeometry | THREE.Material)[] = [
     groundGeometry,
     groundMaterial,
+    platformGeometry,
+    platformMaterial,
     floraMaterial,
   ];
 

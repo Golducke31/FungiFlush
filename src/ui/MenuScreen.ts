@@ -38,6 +38,10 @@ export interface MenuCallbacks {
   onOpenSettings: () => void;
   onOpenAbout: () => void;
   onToggleLanguage: () => void;
+  /** Recompensa diaria (retencion). */
+  onOpenDaily: () => void;
+  /** Logros (retencion). */
+  onOpenAchievements: () => void;
 }
 
 export interface MenuState {
@@ -47,6 +51,8 @@ export interface MenuState {
   /** Muestra el chip de duelo (Fase 5). */
   showBoard?: boolean;
   onOpenBoard?: () => void;
+  /** Hay recompensa diaria sin reclamar: el chip se marca. */
+  dailyPending?: boolean;
 }
 
 /**
@@ -159,12 +165,30 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   art.append(atmosphere, glow, play, settings, gallery, credits, continueChip);
   panel.appendChild(art);
 
-  // --- Duelo micelial: chip fijo en la esquina superior izquierda ---
-  // Va fijo (no dentro del arte) para que nunca lo recorte el `cover`. El smoke
-  // lo abre por `boundingBox()` + click real, asi que tiene que estar visible.
+  // --- Chips de la esquina superior izquierda ---
+  // Van en una FILA (no cada uno posicionado a mano) porque son tres y el
+  // ancho de cada uno depende del idioma. Siguen fuera del arte para que el
+  // `cover` nunca los recorte, y respetan safe-area: en landscape el notch
+  // muerde justo ahi.
+  const chips = document.createElement('div');
+  chips.className = 'menu-chips';
+
   if (state.showBoard && state.onOpenBoard) {
-    panel.appendChild(chip(t('board.title'), 'board', state.onOpenBoard, { mod: 'menu-ghost--board' }));
+    chips.appendChild(chip(t('board.title'), 'board', state.onOpenBoard, { mod: 'menu-ghost--board' }));
   }
+
+  chips.appendChild(
+    chip(t('menu.daily'), 'daily', callbacks.onOpenDaily, {
+      mod: `menu-ghost--daily${state.dailyPending ? ' is-pending' : ''}`,
+      ...(state.dailyPending ? { title: t('daily.ready') } : {}),
+    }),
+  );
+  chips.appendChild(
+    chip(t('menu.achievements'), 'achievements', callbacks.onOpenAchievements, {
+      mod: 'menu-ghost--achievements',
+    }),
+  );
+  panel.appendChild(chips);
 
   // Version (esquina superior derecha).
   const version = document.createElement('span');

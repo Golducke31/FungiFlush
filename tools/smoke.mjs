@@ -19,7 +19,11 @@ import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const URL_TO_TEST = process.argv[2] ?? 'http://127.0.0.1:1420/';
+// `daily=0` apaga el modal de la recompensa diaria, que aparece solo en la
+// primera apertura del dia (o sea: SIEMPRE, porque el smoke arranca con un
+// perfil limpio). Sin esto el modal se abre sobre la pantalla de inicio y le
+// tapa los botones que el smoke tiene que clickear.
+const URL_TO_TEST = process.argv[2] ?? 'http://127.0.0.1:1420/?daily=0';
 
 /**
  * playwright-core vive en el workspace aislado de WorkBuddy, no en el
@@ -802,7 +806,9 @@ console.log(`\nFPS medidos (SwiftShader, sin GPU real): ${fps}`);
 // Aca solo se afirma que el camino ARRANCA y que el reparto de draw calls es el
 // esperado. Que se vea bien se juzga mirando la captura, no con un assert.
 
-await page.goto(`${URL_TO_TEST.replace(/\?.*$/, '')}?quality=high`, {
+// `daily=0` por el mismo motivo que arriba: esta recarga usa el MISMO perfil,
+// y como en la primer carga no se reclamo, el modal volveria a abrirse.
+await page.goto(`${URL_TO_TEST.replace(/\?.*$/, '')}?quality=high&daily=0`, {
   waitUntil: 'load',
   timeout: 45000,
 });
@@ -927,7 +933,7 @@ const ok =
   menuState?.particles === 0 &&
   menuState?.continueEnabled === false &&
   settingsOpened?.opened === true &&
-  settingsOpened?.fields === 6 &&
+  settingsOpened?.fields === 8 &&
   // --- Calidad grafica (V0) ---
   qualityBoot?.tier === 'low' &&
   qualityBoot?.reason === 'software' &&

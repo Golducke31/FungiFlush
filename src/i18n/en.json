@@ -507,7 +507,9 @@
     "hint": "Tap to select up to 5 cards, then play the hand.",
     "noSave": "No run in progress",
     "saveLabel": "Ante {ante} · Seed {seed}",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "daily": "Daily",
+    "achievements": "Achievements"
   },
   "settings": {
     "title": "Settings",
@@ -524,7 +526,10 @@
     "sfx": "Sound effects",
     "music": "Music",
     "haptics": "Vibration",
+    "notifyDaily": "Daily reward notifications",
+    "notifyAchievements": "Achievement notifications",
     "audioSoon": "Audio arrives in a future update",
+    "notifications": "Notifications",
     "close": "Close"
   },
   "collection": {
@@ -535,7 +540,13 @@
     "unknown": "Undiscovered",
     "cards": "Specimens",
     "jokers": "Jokers",
-    "all": "All"
+    "all": "All",
+    "unlocked": "Unlocked",
+    "unlockSource": {
+      "daily": "Daily streak",
+      "achievement": "Achievement",
+      "season": "Season pass"
+    }
   },
   "store": {
     "title": "Expansions",
@@ -553,8 +564,12 @@
     "premium": "Premium",
     "claim": "Claim",
     "claimed": "Claimed",
+    "requireXp": "Requires {xp} XP",
     "lockedPremium": "Premium track locked",
     "comingSoon": "The first season starts soon."
+  },
+  "season": {
+    "founder": { "name": "Founder Season" }
   },
   "board": {
     "title": "Mycelial Duel",
@@ -631,5 +646,49 @@
   "order": {
     "ladder": "Ladder (+12 Substrate)",
     "crown": "Crown (x1.2 Spores)"
+  },
+  "daily": {
+    "title": "Daily reward",
+    "subtitle": "Streak {streak} · best {best}",
+    "day": "Day {day}",
+    "reward": "Today",
+    "claim": "Claim",
+    "claimed": "Claimed",
+    "claimedToday": "Already claimed today. Come back tomorrow to keep the streak.",
+    "ready": "Claim today's reward to keep the streak alive",
+    "empty": "Nothing today",
+    "claimDone": "Unlocked {name}"
+  },
+  "achievement": {
+    "title": "Achievements",
+    "unlocked": "Achievement unlocked: {name}",
+    "total": "{unlocked} of {total} unlocked",
+    "progress": "{current}/{max}",
+    "reward": "Reward",
+    "done": "Unlocked",
+    "empty": "No achievements yet",
+    "ach_first_hand": { "name": "First flush", "desc": "Score your first hand" },
+    "ach_first_blind": { "name": "First spores", "desc": "Clear a blind" },
+    "ach_ante_3": { "name": "Into the undergrowth", "desc": "Reach ante 3" },
+    "ach_ante_5": { "name": "Deep mycelium", "desc": "Reach ante 5" },
+    "ach_ante_8": { "name": "Old growth", "desc": "Reach ante 8" },
+    "ach_big_hand": { "name": "Rich substrate", "desc": "Score 500 in a single hand" },
+    "ach_huge_hand": { "name": "Spore storm", "desc": "Score 2000 in a single hand" },
+    "ach_joker_hoard": { "name": "Symbiosis", "desc": "Hold 5 jokers at once" },
+    "ach_first_evolution": { "name": "Something new", "desc": "Evolve a card for the first time" },
+    "ach_cards_100": { "name": "Steady hands", "desc": "Play 100 cards" },
+    "ach_runs_10": { "name": "Ten harvests", "desc": "Finish 10 runs" }
+  },
+  "notify": {
+    "daily": {
+      "title": "FungiFlush",
+      "body": "Your daily reward is waiting",
+      "claimed": "Day {day} claimed — {name} unlocked! Come back tomorrow for day {next}."
+    },
+    "achievement": { "title": "Achievement unlocked", "body": "{name}" }
+  },
+  "banner": {
+    "daily": { "ready": "Your daily reward is waiting" },
+    "achievement": { "unlocked": "Achievement unlocked: {name}" }
   }
 }

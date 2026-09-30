@@ -942,15 +942,16 @@ They are **not** deleted on purpose: that's batch L6 in the plan, and it only ha
 
 ### Third-party
 
-Three external sets are used. All are licensed for commercial use and all are
-**vendored into the repo** — nothing is fetched at runtime, because the game has
-to ship offline.
+Four external sets are used. All are licensed for commercial use, and nothing is
+fetched at runtime — the game has to ship offline. Three are **vendored into the
+repo** as files; GSAP is a normal npm dependency, bundled at build time.
 
 | Set | Used for | Licence |
 | --- | --- | --- |
 | [Polyfork](https://polyfork.dev) — 3 ground tiles + 4 mushrooms | The in-game Arena diorama (`src/render/Arena.ts`), merged into 2 draw calls. Vendored as `src/render/polyfork/*.ts`. | Commercial use in games and apps allowed, modify freely, **no attribution required**; do not resell or redistribute the files as assets. Full text and the one local patch in [`src/render/polyfork/LICENSE.md`](./src/render/polyfork/LICENSE.md). |
 | [16X16 Pixel Mushroom Pack](https://ssugmi.itch.io) by ssugmi | The `Fungis` currency icon — one 16×16 sprite, shown at 18–22 px next to the money value. | Commercial use allowed, modifications allowed, **reselling or redistributing the pack prohibited**. Only the single sprite is committed, never the sheet. See [`public/ui/LICENSE.txt`](./public/ui/LICENSE.txt). |
 | [Super Pixel Effects Gigapack](https://untiedgames.com) (Free Version) — Will Tice / unTied Games | The scoring effects: `public/fx/fx_poison.webp` (damage / negative steps) and `fx_burst.webp` (combos and order bonuses). Played at 15 FPS via CSS `steps()`. | Commercial use allowed, bundling with the game allowed, **attribution required**. Redistributing the pack as an asset store is not permitted. Full text and the adaptation notes in [`public/fx/LICENSE.txt`](./public/fx/LICENSE.txt). |
+| [GSAP](https://gsap.com) 3.15.0 (core + CSSPlugin) | The orchestrated animation layer: card/hand sequences, stagger, arcs and the DOM/UI transitions (`src/render/anim.ts`). npm dependency, bundled by Vite into its own chunk. | Standard **"no charge"** licence: free for commercial use, including a paid game. The only prohibitions are building a competing visual animation builder, reverse-engineering, and removing the proprietary notices. Full text: <https://gsap.com/standard-license> (verified 2026-09-29 against `node_modules/gsap/package.json` → `license` field). |
 
 ### Credits
 

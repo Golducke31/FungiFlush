@@ -1,0 +1,90 @@
+[
+  {
+    "id": "ach_first_hand",
+    "nameKey": "achievement.ach_first_hand.name",
+    "descKey": "achievement.ach_first_hand.desc",
+    "event": "score:hand",
+    "when": { "op": "gte", "path": "payload.total", "value": 1 },
+    "reward": { "type": "card", "id": "oyster_cluster" }
+  },
+  {
+    "id": "ach_first_blind",
+    "nameKey": "achievement.ach_first_blind.name",
+    "descKey": "achievement.ach_first_blind.desc",
+    "event": "round:win",
+    "when": { "op": "always" },
+    "reward": { "type": "card", "id": "fly_agaric_ring" }
+  },
+  {
+    "id": "ach_ante_3",
+    "nameKey": "achievement.ach_ante_3.name",
+    "descKey": "achievement.ach_ante_3.desc",
+    "event": "round:win",
+    "when": { "op": "gte", "path": "ctx.ante", "value": 3 },
+    "reward": { "type": "joker", "id": "joker_first_spore" }
+  },
+  {
+    "id": "ach_ante_5",
+    "nameKey": "achievement.ach_ante_5.name",
+    "descKey": "achievement.ach_ante_5.desc",
+    "event": "round:win",
+    "when": { "op": "gte", "path": "ctx.ante", "value": 5 },
+    "reward": { "type": "card", "id": "ghost_fungus" }
+  },
+  {
+    "id": "ach_ante_8",
+    "nameKey": "achievement.ach_ante_8.name",
+    "descKey": "achievement.ach_ante_8.desc",
+    "event": "round:win",
+    "when": { "op": "gte", "path": "ctx.ante", "value": 8 },
+    "reward": { "type": "card", "id": "armillaria_honey" }
+  },
+  {
+    "id": "ach_big_hand",
+    "nameKey": "achievement.ach_big_hand.name",
+    "descKey": "achievement.ach_big_hand.desc",
+    "event": "score:hand",
+    "when": { "op": "gte", "path": "payload.total", "value": 500 },
+    "reward": { "type": "joker", "id": "joker_hyphal_growth" }
+  },
+  {
+    "id": "ach_huge_hand",
+    "nameKey": "achievement.ach_huge_hand.name",
+    "descKey": "achievement.ach_huge_hand.desc",
+    "event": "score:hand",
+    "when": { "op": "gte", "path": "payload.total", "value": 2000 },
+    "reward": { "type": "card", "id": "old_man_of_woods" }
+  },
+  {
+    "id": "ach_joker_hoard",
+    "nameKey": "achievement.ach_joker_hoard.name",
+    "descKey": "achievement.ach_joker_hoard.desc",
+    "event": "joker:added",
+    "when": { "op": "gte", "path": "ctx.jokerCount", "value": 5 },
+    "reward": { "type": "joker", "id": "joker_mycelial_network" }
+  },
+  {
+    "id": "ach_first_evolution",
+    "nameKey": "achievement.ach_first_evolution.name",
+    "descKey": "achievement.ach_first_evolution.desc",
+    "event": "card:evolved",
+    "when": { "op": "always" },
+    "reward": { "type": "card", "id": "spore_giant_puffball" }
+  },
+  {
+    "id": "ach_cards_100",
+    "nameKey": "achievement.ach_cards_100.name",
+    "descKey": "achievement.ach_cards_100.desc",
+    "event": "card:played",
+    "incremental": { "max": 100 },
+    "reward": { "type": "joker", "id": "joker_ancient_lichen" }
+  },
+  {
+    "id": "ach_runs_10",
+    "nameKey": "achievement.ach_runs_10.name",
+    "descKey": "achievement.ach_runs_10.desc",
+    "event": "game:over",
+    "incremental": { "max": 10 },
+    "reward": { "type": "card", "id": "shiitake_hearty" }
+  }
+]

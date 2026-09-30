@@ -507,7 +507,9 @@
     "hint": "Tocá hasta 5 cartas para seleccionarlas y después jugá la mano.",
     "noSave": "No hay ninguna partida en curso",
     "saveLabel": "Ante {ante} · Semilla {seed}",
-    "version": "Versión {version}"
+    "version": "Versión {version}",
+    "daily": "Diaria",
+    "achievements": "Logros"
   },
   "settings": {
     "title": "Ajustes",
@@ -524,7 +526,10 @@
     "sfx": "Efectos de sonido",
     "music": "Música",
     "haptics": "Vibración",
+    "notifyDaily": "Avisos de recompensa diaria",
+    "notifyAchievements": "Avisos de logros",
     "audioSoon": "El audio llega en una próxima actualización",
+    "notifications": "Avisos",
     "close": "Cerrar"
   },
   "collection": {
@@ -535,7 +540,13 @@
     "unknown": "Sin descubrir",
     "cards": "Especímenes",
     "jokers": "Jokers",
-    "all": "Todas"
+    "all": "Todas",
+    "unlocked": "Desbloqueado",
+    "unlockSource": {
+      "daily": "Racha diaria",
+      "achievement": "Logro",
+      "season": "Pase de temporada"
+    }
   },
   "store": {
     "title": "Expansiones",
@@ -553,8 +564,12 @@
     "premium": "Premium",
     "claim": "Reclamar",
     "claimed": "Reclamado",
+    "requireXp": "Requiere {xp} XP",
     "lockedPremium": "Senda premium bloqueada",
     "comingSoon": "La primera temporada empieza pronto."
+  },
+  "season": {
+    "founder": { "name": "Temporada Fundador" }
   },
   "board": {
     "title": "Duelo micelial",
@@ -631,5 +646,49 @@
   "order": {
     "ladder": "Escalera (+12 Sustrato)",
     "crown": "Corona (x1.2 Esporas)"
+  },
+  "daily": {
+    "title": "Recompensa diaria",
+    "subtitle": "Racha {streak} · mejor {best}",
+    "day": "Día {day}",
+    "reward": "Hoy",
+    "claim": "Reclamar",
+    "claimed": "Reclamada",
+    "claimedToday": "Ya la reclamaste hoy. Volvé mañana para no cortar la racha.",
+    "ready": "Reclamá la recompensa de hoy para no cortar la racha",
+    "empty": "Nada por hoy",
+    "claimDone": "Desbloqueaste {name}"
+  },
+  "achievement": {
+    "title": "Logros",
+    "unlocked": "Logro desbloqueado: {name}",
+    "total": "{unlocked} de {total} desbloqueados",
+    "progress": "{current}/{max}",
+    "reward": "Recompensa",
+    "done": "Desbloqueado",
+    "empty": "Todavía no hay logros",
+    "ach_first_hand": { "name": "Primera cosecha", "desc": "Puntuá tu primera mano" },
+    "ach_first_blind": { "name": "Primeras esporas", "desc": "Pasá un ciego" },
+    "ach_ante_3": { "name": "Bajo el sotobosque", "desc": "Llegá al ante 3" },
+    "ach_ante_5": { "name": "Micelio profundo", "desc": "Llegá al ante 5" },
+    "ach_ante_8": { "name": "Bosque viejo", "desc": "Llegá al ante 8" },
+    "ach_big_hand": { "name": "Sustrato rico", "desc": "Hacé 500 puntos en una mano" },
+    "ach_huge_hand": { "name": "Tormenta de esporas", "desc": "Hacé 2000 puntos en una mano" },
+    "ach_joker_hoard": { "name": "Simbiosis", "desc": "Tené 5 jokers a la vez" },
+    "ach_first_evolution": { "name": "Algo nuevo", "desc": "Evolucioná una carta por primera vez" },
+    "ach_cards_100": { "name": "Mano firme", "desc": "Jugá 100 cartas" },
+    "ach_runs_10": { "name": "Diez cosechas", "desc": "Terminá 10 partidas" }
+  },
+  "notify": {
+    "daily": {
+      "title": "FungiFlush",
+      "body": "Tu recompensa diaria te espera",
+      "claimed": "Día {day} reclamado — ¡{name} desbloqueado! Vuelve mañana por el día {next}."
+    },
+    "achievement": { "title": "Logro desbloqueado", "body": "{name}" }
+  },
+  "banner": {
+    "daily": { "ready": "Tu recompensa diaria te espera" },
+    "achievement": { "unlocked": "Logro desbloqueado: {name}" }
   }
 }

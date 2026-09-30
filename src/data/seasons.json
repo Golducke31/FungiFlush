@@ -1,0 +1,16 @@
+{
+  "id": "founder",
+  "nameKey": "season.founder.name",
+  "tiers": [
+    { "level": 1, "xp": 0, "reward": { "type": "card", "id": "spore_puffball" } },
+    { "level": 2, "xp": 120, "reward": { "type": "joker", "id": "joker_spore_printer" } },
+    { "level": 3, "xp": 260, "reward": { "type": "card", "id": "spore_veilcap" } },
+    { "level": 4, "xp": 420, "reward": { "type": "joker", "id": "joker_substrate_compost" } },
+    { "level": 5, "xp": 600, "reward": { "type": "joker", "id": "joker_poison_bloom" } },
+    { "level": 6, "xp": 800, "reward": { "type": "joker", "id": "joker_crystal_lens" } },
+    { "level": 7, "xp": 1020, "reward": { "type": "joker", "id": "joker_mycelial_network" } },
+    { "level": 8, "xp": 1260, "reward": { "type": "joker", "id": "joker_decay_engine" } },
+    { "level": 9, "xp": 1520, "reward": { "type": "joker", "id": "joker_symbiotic_pact" } },
+    { "level": 10, "xp": 1800, "reward": { "type": "joker", "id": "joker_parasitic_drive" } }
+  ]
+}

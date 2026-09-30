@@ -1,9 +1,11 @@
 /**
- * Tween.ts — Sistema de interpolacion propio (sin GSAP).
+ * Tween.ts — Motor de interpolacion propio para los tweens SIMPLES por frame.
  *
- * Por que no GSAP: un juego de cartas necesita ~200 tweens simultaneos y un
- * control total sobre el orden de actualizacion dentro del requestAnimationFrame.
- * 120 lineas propias dan eso sin dependencias ni asignaciones por frame.
+ * LIMITE (integracion hibrida): este motor sigue siendo el dueno de los tweens
+ * de posicion/rotacion que corren todos a la vez (~200 con la mano llena),
+ * donde importa el control del orden de update dentro del requestAnimationFrame
+ * y no asignar por frame. Lo que NO sabe hacer —secuencias, stagger, arcos y el
+ * DOM/UI— vive en `anim.ts` sobre GSAP. Ver ese archivo para la frontera.
  *
  * Soporta rutas con punto: tween.to(card.group, { 'position.x': 3 }, {...})
  */
@@ -81,6 +83,16 @@ function setPath(target: Record<string, unknown>, path: string[], value: number)
 
 export class TweenManager {
   private tweens: Tween[] = [];
+  /** Multiplicador de duracion. 1 = normal; 0.001 = reduceMotion (al toque). */
+  private speed = 1;
+
+  /**
+   * Espejo del CSS de reduceMotion: se ACORTA la duracion en vez de anular el
+   * tween, para que el estado final siempre se alcance y `onComplete` dispare.
+   */
+  setReduceMotion(value: boolean): void {
+    this.speed = value ? 0.001 : 1;
+  }
 
   /**
    * Anima propiedades numericas de un objeto.
@@ -105,8 +117,8 @@ export class TweenManager {
       target: record,
       props: resolved,
       elapsed: 0,
-      delay: options.delay ?? 0,
-      duration: Math.max(0.0001, options.duration ?? 0.4),
+      delay: (options.delay ?? 0) * this.speed,
+      duration: Math.max(0.0001, (options.duration ?? 0.4) * this.speed),
       ease: typeof options.ease === 'function' ? options.ease : Easing[options.ease ?? 'cubicOut'],
       cancelled: false,
       ...(options.onUpdate ? { onUpdate: options.onUpdate } : {}),

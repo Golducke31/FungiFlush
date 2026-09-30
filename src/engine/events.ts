@@ -24,6 +24,13 @@ import type {
   TriggerEvent,
 } from './types';
 
+/**
+ * `RetentionReward` vive en `src/retention/types.ts`, que NO importa nada: por
+ * eso el motor puede nombrarlo sin volverse impuro. Es un import de SOLO tipo,
+ * asi que no queda ninguna referencia en runtime (y por lo tanto ningun ciclo).
+ */
+import type { RetentionReward } from '../retention/types';
+
 // ---------------------------------------------------------------------------
 // Emitter generico y fuertemente tipado
 // ---------------------------------------------------------------------------
@@ -145,6 +152,19 @@ export interface GameEventMap {
   'state:changed': { run: RunSnapshot; round: RoundSnapshot | null };
   'i18n:changed': { lang: string };
   'log': { level: 'info' | 'warn' | 'error'; key: string; params?: Record<string, unknown> };
+
+  // --- Retencion (NO los emite el motor) ---
+  // El motor solo emite gameplay. Estos cuatro los emiten los observadores de
+  // `main.ts`: son el unico canal por el que la capa de retencion le habla a la
+  // UI sin que el motor sepa que existe.
+  /** Un logro se desbloqueo por primera vez. */
+  'achievement:unlocked': { id: string; nameKey: string; reward?: RetentionReward };
+  /** El jugador reclamo la recompensa diaria de hoy. */
+  'daily:claim': { streak: number; reward?: RetentionReward };
+  /** Aviso no bloqueante en el HUD (fallback del aviso del sistema). */
+  'banner:show': { key: string; params?: Record<string, unknown>; kind?: 'info' | 'warn' | 'success' };
+  /** XP de temporada ganada. */
+  'pass:xp': { seasonId: string; amount: number; total: number };
 }
 
 /** Instancia global del bus observable. Renderer y UI se suscriben aqui. */

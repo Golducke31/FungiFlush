@@ -29,6 +29,37 @@ export interface ProfileSettings {
   sfxVolume: number;
   musicVolume: number;
   haptics: boolean;
+  /**
+   * Avisos del sistema. Arrancan en `true` pero el permiso se pide RECIEN
+   * cuando el jugador hace algo que lo justifica (ver `src/notify/notify.ts`):
+   * pedirlo en frio al abrir la app es la forma mas rapida de que lo denieguen
+   * para siempre. El banner in-app funciona igual si estan en `false`.
+   */
+  notifyDaily: boolean;
+  notifyAchievements: boolean;
+}
+
+/**
+ * Recompensa diaria y su racha.
+ *
+ * `lastClaimDate` es la fuente de verdad ('YYYY-MM-DD' en hora LOCAL) y
+ * `lastClaimTs` existe solo para detectar relojes atrasados: sin el, adelantar
+ * el dia del dispositivo daria una racha infinita. Ver `evaluateDaily`.
+ */
+export interface DailyState {
+  lastClaimDate: string | null;
+  lastClaimTs: number;
+  streak: number;
+  bestStreak: number;
+  /** Dias ya reclamados, 'YYYY-MM-DD'. Solo para poder medir retencion. */
+  history: string[];
+}
+
+/** Logros desbloqueados y el progreso de los incrementales. */
+export interface AchievementState {
+  unlockedIds: string[];
+  /** id -> valor actual (un logro incremental guarda su contador parcial). */
+  progress: Record<string, number>;
 }
 
 /** Estado de un pase de temporada. */
@@ -63,7 +94,17 @@ export interface ProfileSave {
     seenCardIds: string[];
     unlockedCardIds: string[];
     unlockedJokerIds: string[];
+    /**
+     * De donde salio cada desbloqueo: id -> 'daily' | 'achievement' | 'season'.
+     * Es lo que permite que la Coleccion diga "la ganaste con la racha diaria"
+     * en vez de mostrar un candado generico.
+     */
+    unlockSource: Record<string, string>;
   };
+  /** Recompensa diaria y racha. Ver `DailyState`. */
+  daily: DailyState;
+  /** Logros permanentes. Ver `AchievementState`. */
+  achievements: AchievementState;
   cosmetics: {
     equippedCardBack: string;
     equippedFelt: string;
@@ -98,6 +139,8 @@ export function defaultProfile(): ProfileSave {
       sfxVolume: 0.8,
       musicVolume: 0.6,
       haptics: true,
+      notifyDaily: true,
+      notifyAchievements: true,
     },
     // Comprar la app otorga el pack base. Nunca se pone detras de otro pago.
     entitlements: {
@@ -105,7 +148,14 @@ export function defaultProfile(): ProfileSave {
       passes: [],
       offlineGraceMs: DEFAULT_OFFLINE_GRACE_MS,
     },
-    collection: { seenCardIds: [], unlockedCardIds: [], unlockedJokerIds: [] },
+    collection: {
+      seenCardIds: [],
+      unlockedCardIds: [],
+      unlockedJokerIds: [],
+      unlockSource: {},
+    },
+    daily: { lastClaimDate: null, lastClaimTs: 0, streak: 0, bestStreak: 0, history: [] },
+    achievements: { unlockedIds: [], progress: {} },
     cosmetics: { equippedCardBack: 'default', equippedFelt: 'default', owned: ['default'] },
     starterOverrides: [],
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },

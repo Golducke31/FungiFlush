@@ -27,7 +27,15 @@ import {
 } from '@engine/index';
 
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
-import { ARENA_GLOW_BASE, ARENA_GLOW_ENVIRONMENT, type Arena, buildArena } from './Arena';
+import {
+  ARENA_GLOW_BASE,
+  ARENA_GLOW_ENVIRONMENT,
+  PLATFORM_HALF_X,
+  PLATFORM_HALF_Z,
+  WATER_Y,
+  type Arena,
+  buildArena,
+} from './Arena';
 import { CARD_HALO_WIDTH, CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
@@ -47,6 +55,9 @@ import {
 } from './Quality';
 import { createSkyMaterial } from './Shaders';
 import { TweenManager } from './Tween';
+import { CardCarousel, type CarouselEntryView } from './CardCarousel';
+import { Water, hitHorizontalPlane } from './Water';
+import * as anim from './anim';
 import { ELEMENT_COLOR, UI_COLORS } from './palette';
 
 // --- Constantes de layout (unidades de mundo) ---
@@ -84,6 +95,10 @@ const PLAY_SCALE = 0.86;
  * (En la fila de jokers es al reves, ahi si tienen que leerse separadas.)
  */
 const PLAY_SPACING = 2.05;
+
+// --- Carrusel de coleccion (F1) ---
+/** Radio del anillo de cartas, en unidades de mundo. */
+const CAROUSEL_RADIUS = 9;
 
 // --- Arrastre ---
 /** Altura a la que flota la carta mientras se la arrastra. */
@@ -235,6 +250,8 @@ export class SceneManager {
   private stepIndex = 0;
   /** Separacion temporal entre pasos de score. */
   private readonly stepStagger = 0.055;
+  /** Timeline de la secuencia de puntuacion de la mano en curso. */
+  private scoreTl: ReturnType<typeof anim.sequence> | null = null;
 
   private clock = 0;
   private frameId = 0;
@@ -252,6 +269,19 @@ export class SceneManager {
   private readonly menuCards: Card3D[] = [];
   private menuBaseZ: number[] = [];
   private reduceMotion = false;
+
+  // --- Carrusel de coleccion (F1) ---
+  /** Anillo de cartas. Se crea perezosamente la primera vez que se abre. */
+  private carousel: CardCarousel | null = null;
+  /** Mientras esta activo, el juego se oculta y el anillo manda. */
+  private carouselActive = false;
+  private carouselDrag: { id: number; x: number; moved: number } | null = null;
+
+  // --- Agua reactiva (F2). Solo en tiers con `environment`. ---
+  private water: Water | null = null;
+  private readonly waterRay = new THREE.Raycaster();
+  private readonly waterNdc = new THREE.Vector2();
+  private lastWaterRipple = -1;
 
   // --- Calidad grafica ---
   /** Nivel efectivo. Arranca en `low` (el camino de siempre) hasta que se detecte. */
@@ -401,6 +431,20 @@ export class SceneManager {
 
     if (this.skyMesh) this.skyMesh.visible = on;
     if (this.rimLight) this.rimLight.visible = on;
+
+    // Agua reactiva: se crea PEREZOSAMENTE la primera vez que el tier la
+    // habilita (igual que el IBL) y despues solo se prende/apaga. En `low` no
+    // existe: ese tier no tiene margen de presupuesto.
+    if (on && !this.water) {
+      this.water = new Water(this.tier === 'high' ? 'high' : 'medium');
+      // La superficie va por debajo de la cara superior de la plataforma, asi se
+      // ve el costado del bloque emergiendo (el "cubo" de la referencia).
+      this.water.mesh.position.set(0, WATER_Y, 0);
+      this.water.setDryHalf(PLATFORM_HALF_X + 0.2, PLATFORM_HALF_Z + 0.2);
+      this.scene.add(this.water.mesh);
+      this.attachWaterInput();
+    }
+    this.water?.setEnabled(on);
 
     // Con IBL las dos luces base BAJAN: el ambiente ya aporta luz difusa, y
     // dejarlas como estan suma de mas y aplana las caras. Los valores de `off`
@@ -783,6 +827,10 @@ export class SceneManager {
     // que apagar las esporas igual, y el modo no cambia.
     if (reduceMotion !== this.reduceMotion) {
       this.reduceMotion = reduceMotion;
+      // Espejo del CSS: los DOS motores de animacion se ACORTAN (no se anulan),
+      // asi el estado final siempre se alcanza y los onComplete disparan.
+      anim.setReduceMotion(reduceMotion);
+      this.tweens.setReduceMotion(reduceMotion);
       this.syncAmbient();
     }
     if (this.mode === mode) return;
@@ -799,6 +847,189 @@ export class SceneManager {
 
     if (inMenu) this.buildMenuDecor();
     else this.clearMenuDecor();
+  }
+
+  // ==========================================================================
+  // Carrusel de coleccion (F1)
+  // ==========================================================================
+
+  /**
+   * Entra o sale del modo carrusel. Con entradas, oculta el juego y muestra el
+   * anillo; con `null`, restaura lo que corresponda al modo actual.
+   */
+  setCarousel(entries: readonly CarouselEntryView[] | null, onFocus?: (index: number) => void): void {
+    if (!entries) {
+      if (!this.carouselActive) return;
+      this.carouselActive = false;
+      this.carousel?.setVisible(false);
+      this.detachCarouselInput();
+      this.applyRunVisibility();
+      this.refreshTargets();
+      this.resize();
+      return;
+    }
+
+    if (!this.carousel) {
+      this.carousel = new CardCarousel({
+        createCard: () => this.createCard3D(null),
+        applyEntry: (card, entry) => this.applyCarouselEntry(card, entry),
+        radius: CAROUSEL_RADIUS,
+        halfSpan: 5,
+      });
+      this.carousel.attachTo(this.scene);
+    }
+    if (onFocus) this.carousel.setOnFocus(onFocus);
+
+    this.carouselActive = true;
+    this.carousel.setEntries(entries);
+    this.carousel.setVisible(true);
+    this.applyRunVisibility();
+    this.refreshTargets();
+    this.attachCarouselInput();
+    this.fitCarousel();
+  }
+
+  /** Aplica una entrada del carrusel a un slot: cara (o dorso) y snap. */
+  private applyCarouselEntry(card3d: Card3D, entry: CarouselEntryView): void {
+    card3d.home.flip = 0;
+    if (!entry.discovered) {
+      // Sin descubrir: se muestra el dorso. No se toca la cara.
+      if (this.backTexture) card3d.setBackTexture(this.backTexture);
+      card3d.setFaceUp(false, { animated: false });
+      card3d.snapToHome();
+      return;
+    }
+    if (entry.jokerId) {
+      const joker = this.engine.registry.instantiateJoker(entry.jokerId);
+      card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
+    } else if (entry.cardId) {
+      const def = this.engine.registry.tryGetCard(entry.cardId);
+      if (def) {
+        const inst = this.engine.registry.instantiateFrom(def);
+        card3d.setCard(inst, this.textures, this.lang(), this.artForCard(inst));
+      }
+    }
+    card3d.setFaceUp(true, { animated: false });
+    card3d.snapToHome();
+  }
+
+  /** Muestra u oculta los objetos de la partida segun el modo carrusel. */
+  private applyRunVisibility(): void {
+    const showRun = !this.carouselActive;
+    const inMenu = this.mode === 'menu';
+    for (const card3d of this.handCards.values()) card3d.group.visible = showRun;
+    for (const card3d of this.jokerCards.values()) card3d.group.visible = showRun;
+    for (const card3d of this.scoringCards) card3d.group.visible = showRun;
+    for (const card3d of this.menuCards) card3d.group.visible = showRun;
+    if (this.deckMesh) this.deckMesh.visible = showRun && !inMenu;
+    if (this.discardMesh) this.discardMesh.visible = showRun && !inMenu;
+    if (!showRun) for (const zone of this.dropZones) zone.setEnabled(false);
+  }
+
+  /**
+   * Encuadre del carrusel: vista FRONTAL al anillo.
+   *
+   * No usa `rig.fit()`: ese ajuste fija el objetivo en y=0, asi que las cartas
+   * PARADAS (centro en y≈1.9) quedarian fuera de cuadro. Aca se fija la camara
+   * a mano y se restaura sola al salir (el `resize()` normal vuelve a correr).
+   */
+  private fitCarousel(aspect?: number): void {
+    this.rig.setBase(new THREE.Vector3(0, 3.6, 11.5), new THREE.Vector3(0, 1.85, -2.0));
+    const canvas = this.renderer.domElement;
+    const a = aspect ?? (canvas.clientWidth || 1) / Math.max(1, canvas.clientHeight || 1);
+    this.rig.resize(a);
+  }
+
+  private readonly onCarouselWheel = (event: WheelEvent): void => {
+    if (!this.carouselActive) return;
+    event.preventDefault();
+    // Rueda vertical u horizontal: las dos scrollean el anillo.
+    this.carousel?.scrollBy((event.deltaY + event.deltaX) * 0.0016);
+  };
+
+  private readonly onCarouselDown = (event: PointerEvent): void => {
+    if (!this.carouselActive) return;
+    this.carouselDrag = { id: event.pointerId, x: event.clientX, moved: 0 };
+  };
+
+  private readonly onCarouselMove = (event: PointerEvent): void => {
+    const drag = this.carouselDrag;
+    if (!this.carouselActive || !drag || drag.id !== event.pointerId) return;
+    const dx = event.clientX - drag.x;
+    drag.x = event.clientX;
+    drag.moved += Math.abs(dx);
+    // Arrastrar a la derecha trae la carta de la izquierda (giro inverso).
+    this.carousel?.scrollBy(-dx * 0.006);
+  };
+
+  private readonly onCarouselUp = (event: PointerEvent): void => {
+    const drag = this.carouselDrag;
+    if (!drag || drag.id !== event.pointerId) return;
+    this.carouselDrag = null;
+    // Un gesto corto es un TAP: enfoca la carta golpeada.
+    if (drag.moved < 8) this.tapCarousel(event.clientX, event.clientY);
+  };
+
+  private tapCarousel(clientX: number, clientY: number): void {
+    const carousel = this.carousel;
+    if (!carousel) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    // En PANTALLA (px del canvas), no en NDC: el carrusel proyecta los centros
+    // de sus cartas y elige el mas cercano al toque.
+    const index = carousel.pickNearest(
+      clientX - rect.left,
+      clientY - rect.top,
+      (v) => this.projectToScreen(v),
+    );
+    if (index !== null) carousel.focus(index);
+  }
+
+  private attachCarouselInput(): void {
+    const el = this.renderer.domElement;
+    el.addEventListener('wheel', this.onCarouselWheel, { passive: false });
+    el.addEventListener('pointerdown', this.onCarouselDown);
+    el.addEventListener('pointermove', this.onCarouselMove);
+    el.addEventListener('pointerup', this.onCarouselUp);
+    el.addEventListener('pointercancel', this.onCarouselUp);
+  }
+
+  private detachCarouselInput(): void {
+    const el = this.renderer.domElement;
+    el.removeEventListener('wheel', this.onCarouselWheel);
+    el.removeEventListener('pointerdown', this.onCarouselDown);
+    el.removeEventListener('pointermove', this.onCarouselMove);
+    el.removeEventListener('pointerup', this.onCarouselUp);
+    el.removeEventListener('pointercancel', this.onCarouselUp);
+    this.carouselDrag = null;
+  }
+
+  // ==========================================================================
+  // Agua reactiva (F2)
+  // ==========================================================================
+
+  private readonly onWaterPointerMove = (event: PointerEvent): void => {
+    const water = this.water;
+    if (!water?.enabled || this.carouselActive) return;
+    // Un ripple cada ~60 ms: mas seguido no se distingue y gasta slots.
+    if (this.clock - this.lastWaterRipple < 0.06) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.waterNdc.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this.waterRay.setFromCamera(this.waterNdc, this.rig.camera);
+    const hit = hitHorizontalPlane(
+      this.waterRay.ray.origin,
+      this.waterRay.ray.direction,
+      water.mesh.position.y,
+    );
+    if (!hit) return;
+    this.lastWaterRipple = this.clock;
+    water.ripple(hit.x, hit.z, 0.45);
+  };
+
+  private attachWaterInput(): void {
+    this.renderer.domElement.addEventListener('pointermove', this.onWaterPointerMove);
   }
 
   private buildMenuDecor(): void {
@@ -833,9 +1064,19 @@ export class SceneManager {
     }
   }
 
+  /**
+   * Cancela TODO lo que mueva a una carta: el motor propio Y las secuencias de
+   * GSAP. Sin esto, una timeline vieja pelea con el dedo durante el arrastre o
+   * escribe sobre una carta que ya salio de la mano.
+   */
+  private stopCard(card3d: Card3D): void {
+    this.tweens.cancelFor(card3d.home);
+    anim.killOf(card3d.home);
+  }
+
   private clearMenuDecor(): void {
     for (const card3d of this.menuCards) {
-      this.tweens.cancelFor(card3d.home);
+      this.stopCard(card3d);
       card3d.dispose();
       this.scene.remove(card3d.group);
     }
@@ -944,19 +1185,20 @@ export class SceneManager {
    */
   private celebrateCard(card3d: Card3D, color: number, particles: number): void {
     const flash = { value: 0 };
-    this.tweens.to(flash, { value: 1 }, {
-      duration: 0.18,
-      ease: 'quadOut',
-      onUpdate: () => card3d.setFlash(flash.value),
-      onComplete: () => {
-        const fade = { value: 1 };
-        this.tweens.to(fade, { value: 0 }, {
-          duration: 0.5,
-          ease: 'cubicOut',
-          onUpdate: () => card3d.setFlash(fade.value),
-        });
-      },
-    });
+    anim
+      .sequence()
+      .to(flash, {
+        value: 1,
+        duration: anim.d(0.18),
+        ease: anim.EASE.quadOut,
+        onUpdate: () => card3d.setFlash(flash.value),
+      })
+      .to(flash, {
+        value: 0,
+        duration: anim.d(0.5),
+        ease: anim.EASE.cubicOut,
+        onUpdate: () => card3d.setFlash(flash.value),
+      });
 
     const origin = card3d.worldPosition();
     this.particles.burst(origin, particles, { color, speed: 4.2, spread: 0.55, size: 0.1, life: 0.8 });
@@ -973,21 +1215,30 @@ export class SceneManager {
    * mejora (que solo destella).
    */
   private playEvolution(card3d: Card3D, card: CardInstance): void {
-    this.tweens.cancelFor(card3d.home);
-    // El giro se encadena a mano en vez de usar `setFaceUp` + `delay`: la
-    // `from` de un tween se resuelve al crearlo, y en ese momento `home.flip`
-    // todavia vale 0. Encadenando en `onComplete` el segundo tramo arranca
-    // desde 1 de verdad.
-    this.tweens.to(card3d.home, { flip: 1 }, {
-      duration: 0.2,
-      ease: 'quadIn',
-      onComplete: () => {
-        // La textura se regenera aca: la cache indexa por id + nivel, asi que
-        // la definicion nueva produce una textura nueva.
+    this.stopCard(card3d);
+    // Una TIMELINE resuelve el problema del `from`: el segundo tramo lee
+    // `home.flip` cuando ARRANCA a renderizar (vale 1), no cuando se crea. Con
+    // el encadenado a mano habia que recurrir a un `onComplete` para eso.
+    anim
+      .sequence()
+      .to(card3d.home, { flip: 1, duration: anim.d(0.2), ease: anim.EASE.quadIn })
+      .add(() => {
+        // La textura se regenera con la carta BOCA ABAJO: la cache indexa por
+        // id + nivel, asi que la definicion nueva produce una textura nueva.
         card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
-        this.tweens.to(card3d.home, { flip: 0 }, { duration: 0.32, ease: 'quadOut' });
-      },
-    });
+      })
+      .to(card3d.home, { flip: 0, duration: anim.d(0.32), ease: anim.EASE.quadOut })
+      // Rebote de "renacio".
+      .to(
+        card3d.home,
+        {
+          keyframes: [
+            { sx: 1.16, sy: 0.88, duration: anim.d(0.08), ease: anim.EASE.quadOut },
+            { sx: 1, sy: 1, duration: anim.d(0.26), ease: anim.EASE.backOut },
+          ],
+        },
+        '-=0.08',
+      );
     this.celebrateCard(card3d, 0xa78bfa, 60);
   }
 
@@ -1004,13 +1255,18 @@ export class SceneManager {
       this.handCards.delete(uid);
       // Si esta en la zona de puntuacion, la maneja la secuencia de scoring.
       if (!this.scoringCards.includes(card3d)) {
-        this.tweens.cancelFor(card3d.home);
+        this.stopCard(card3d);
         card3d.dispose();
         this.scene.remove(card3d.group);
       }
     }
 
     // --- Dentro: cartas nuevas ---
+    // ¿Es el REPARTO de apertura? Pasa al empezar una partida y al empezar cada
+    // ronda: la mano esta vacia y llegan cartas. Es el momento de repartir boca
+    // abajo y dar vuelta en cascada para "dar comienzo".
+    const openingDeal = this.handCards.size === 0 && cards.length > 0 && !this.reduceMotion;
+    const newHomes: Array<Card3D['home']> = [];
     for (const card of cards) {
       let card3d = this.handCards.get(card.uid);
       if (!card3d) {
@@ -1020,6 +1276,9 @@ export class SceneManager {
         card3d.home.x = DECK_X;
         card3d.home.y = 0.05;
         card3d.home.z = DECK_Z;
+        newHomes.push(card3d.home);
+        // Llega BOCA ABAJO: el destape es lo que cierra el reparto.
+        if (openingDeal) card3d.setFaceUp(false, { animated: false });
       } else {
         card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
       }
@@ -1033,7 +1292,34 @@ export class SceneManager {
       this.interaction.cancelDrag();
     }
 
+    if (this.carouselActive) this.applyRunVisibility();
     this.layoutHand();
+    // Arco de reparto SOLO para las cartas nuevas: suben y bajan mientras el
+    // layout las lleva a su lugar. Usa la propiedad `arc`, asi que no compite
+    // con el layout (que mueve x/y/z).
+    for (const home of newHomes) {
+      anim.tweenOf(home, {
+        keyframes: [
+          { arc: 0.9, duration: anim.d(0.16), ease: anim.EASE.quadOut },
+          { arc: 0, duration: anim.d(0.26), ease: anim.EASE.quadIn },
+        ],
+      });
+    }
+
+    // El destape cierra el reparto: cada carta se da vuelta un poco DESPUES de
+    // aterrizar, en cascada de izquierda a derecha. Es el "comienza" de la
+    // ronda. Se usa `flip` (que `applyTransform` compone) y no `rotation.y`
+    // directo, porque el giro tambien suma el `PI * flip` de la carta.
+    if (openingDeal) {
+      const flip = anim.sequence();
+      newHomes.forEach((home, i) => {
+        flip.to(
+          home,
+          { flip: 0, duration: anim.d(0.22), ease: anim.EASE.quadOut },
+          anim.d(0.28 + i * 0.05),
+        );
+      });
+    }
     this.refreshTargets();
   }
 
@@ -1057,6 +1343,7 @@ export class SceneManager {
       }
     }
 
+    if (this.carouselActive) this.applyRunVisibility();
     this.layoutJokers();
     this.refreshTargets();
   }
@@ -1072,7 +1359,10 @@ export class SceneManager {
     if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
     if (joker) card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
 
-    if (isJoker) card3d.group.scale.setScalar(JOKER_SCALE);
+    if (isJoker) card3d.setBaseScale(JOKER_SCALE);
+    // En modo carrusel las cartas de la partida nacen ocultas: si no, una mano
+    // que se sincroniza con la coleccion abierta apareceria encima del anillo.
+    if (this.carouselActive) card3d.group.visible = false;
     this.scene.add(card3d.group);
     card3d.snapToHome();
     return card3d;
@@ -1133,24 +1423,30 @@ export class SceneManager {
     const spacing = count <= 1 ? 0 : Math.min(2.32, this.handSpread / (count - 1));
     const total = spacing * (count - 1);
 
-    cards.forEach((card, i) => {
-      const x = -total / 2 + i * spacing;
-      const t = total === 0 ? 0 : x / (total / 2);
-      const home = card.home;
+    const half = total / 2;
+    const pos = (i: number): { x: number; t: number } => {
+      const x = -half + i * spacing;
+      return { x, t: total === 0 ? 0 : x / half };
+    };
 
-      this.tweens.to(
-        home,
-        {
-          x,
-          y: HAND_Y - Math.abs(t) * 0.1,
-          z: HAND_Z + t * t * 0.5,
-          rx: -Math.PI / 2,
-          ry: 0,
-          rz: -x * 0.016,
-        },
-        { duration: 0.42, ease: 'backOut' },
-      );
-    });
+    // Una sola pasada con STAGGER: las cartas entran en cascada desde el centro
+    // en vez de arrancar y terminar todas juntas. `amount` (no `each`) acota el
+    // spread TOTAL, asi una mano grande no estira el relayout (el smoke espera
+    // 1.6 s a que la mano vuelva a su lugar).
+    anim.tweenOf(
+      cards.map((card) => card.home),
+      {
+        x: (i: number) => pos(i).x,
+        y: (i: number) => HAND_Y - Math.abs(pos(i).t) * 0.1,
+        z: (i: number) => HAND_Z + pos(i).t * pos(i).t * 0.5,
+        rx: -Math.PI / 2,
+        ry: 0,
+        rz: (i: number) => -pos(i).x * 0.016,
+        duration: anim.d(0.42),
+        ease: anim.EASE.backOut,
+        stagger: { amount: anim.d(0.22), from: 'center' },
+      },
+    );
   }
 
   private layoutJokers(): void {
@@ -1172,14 +1468,21 @@ export class SceneManager {
     const spacing = count > 1 ? Math.min(wanted, maxSpan / (count - 1)) : wanted;
     const total = spacing * (count - 1);
 
-    cards.forEach((card, i) => {
-      const x = -total / 2 + i * spacing;
-      this.tweens.to(
-        card.home,
-        { x, y: JOKER_Y, z: JOKER_Z, rx: -Math.PI / 2, ry: 0, rz: 0 },
-        { duration: 0.36, ease: 'cubicOut' },
-      );
-    });
+    const half = total / 2;
+    anim.tweenOf(
+      cards.map((card) => card.home),
+      {
+        x: (i: number) => -half + i * spacing,
+        y: JOKER_Y,
+        z: JOKER_Z,
+        rx: -Math.PI / 2,
+        ry: 0,
+        rz: 0,
+        duration: anim.d(0.36),
+        ease: anim.EASE.cubicOut,
+        stagger: { amount: anim.d(0.16), from: 'center' },
+      },
+    );
   }
 
   private moveToPlayZone(uid: string): void {
@@ -1189,7 +1492,7 @@ export class SceneManager {
     this.handCards.delete(uid);
     this.scoringCards.push(card3d);
     card3d.setSelected(false);
-    card3d.group.scale.setScalar(PLAY_SCALE);
+    card3d.setBaseScale(PLAY_SCALE);
 
     // Se re-acomoda TODA la fila, no solo la carta que llega.
     //
@@ -1201,34 +1504,69 @@ export class SceneManager {
     // ademas se lee mucho mejor: la mano se "acomoda" en el centro.
     const spacing = PLAY_SPACING;
     const total = spacing * Math.max(0, this.scoringCards.length - 1);
+    const xFor = (card: Card3D): number => -total / 2 + this.scoringCards.indexOf(card) * spacing;
 
-    this.scoringCards.forEach((card, index) => {
-      const x = -total / 2 + index * spacing;
-      this.tweens.to(
-        card.home,
-        { x, y: PLAY_Y, z: PLAY_Z, rx: -Math.PI / 2, ry: 0, rz: 0 },
+    // Las que ya estaban se DESLIZAN (no tocan la mesa). Stagger corto.
+    const others = this.scoringCards.filter((card) => card !== card3d);
+    if (others.length > 0) {
+      anim.tweenOf(
+        others.map((card) => card.home),
         {
-          duration: 0.42,
-          ease: 'backOut',
-          // El golpe de aterrizaje es solo para la que LLEGA: las que se corren
-          // no tocan la mesa, se deslizan.
-          ...(card === card3d
-            ? {
-                onComplete: () => {
-                  this.particles.burst(card3d.worldPosition(), 14, {
-                    color: card3d.elementColor,
-                    speed: 1.9,
-                    upward: 1.6,
-                    size: 0.07,
-                    life: 0.85,
-                  });
-                  this.rig.addShake(0.035);
-                },
-              }
-            : {}),
+          x: (i: number) => xFor(others[i] as Card3D),
+          y: PLAY_Y,
+          z: PLAY_Z,
+          rx: -Math.PI / 2,
+          ry: 0,
+          rz: 0,
+          duration: anim.d(0.34),
+          ease: anim.EASE.cubicOut,
+          stagger: { amount: anim.d(0.12) },
         },
       );
-    });
+    }
+
+    // La que LLEGA: anticipacion -> arco -> aterrizaje con squash.
+    anim
+      .sequence()
+      .to(card3d.home, { sx: 0.9, sy: 1.12, duration: anim.d(0.09), ease: anim.EASE.quadOut }, 0)
+      .to(
+        card3d.home,
+        {
+          x: xFor(card3d),
+          y: PLAY_Y,
+          z: PLAY_Z,
+          rx: -Math.PI / 2,
+          ry: 0,
+          rz: 0,
+          duration: anim.d(0.34),
+          ease: anim.EASE.cubicOut,
+        },
+        anim.d(0.09),
+      )
+      .to(
+        card3d.home,
+        {
+          keyframes: [
+            { arc: 1.5, duration: anim.d(0.15), ease: anim.EASE.quadOut },
+            { arc: 0, duration: anim.d(0.19), ease: anim.EASE.quadIn },
+          ],
+        },
+        anim.d(0.09),
+      )
+      .to(card3d.home, { sx: 1.14, sy: 0.86, duration: anim.d(0.07), ease: anim.EASE.quadOut })
+      .to(card3d.home, { sx: 1, sy: 1, duration: anim.d(0.24), ease: anim.EASE.elasticOut })
+      .add(() => {
+        this.particles.burst(card3d.worldPosition(), 14, {
+          color: card3d.elementColor,
+          speed: 1.9,
+          upward: 1.6,
+          size: 0.07,
+          life: 0.85,
+        });
+        this.rig.addShake(0.035);
+        // La carta "cae" al agua: la onda sale de donde aterrizo.
+        this.water?.ripple(xFor(card3d), PLAY_Z, 0.75);
+      });
   }
 
   private flyToDiscard(uid: string): void {
@@ -1236,32 +1574,47 @@ export class SceneManager {
     if (!card3d) return;
     this.handCards.delete(uid);
 
-    this.tweens.to(
-      card3d.home,
-      {
-        x: DISCARD_X + (Math.random() - 0.5) * 0.4,
-        y: 0.4,
-        z: DISCARD_Z,
-        // `rx` explicito: si la carta venia de un arrastre esta inclinada, y
-        // sin esto volaria al descarte torcida.
-        rx: -Math.PI / 2,
-        rz: (Math.random() - 0.5) * 0.5,
-      },
-      {
-        duration: 0.45,
-        ease: 'quadOut',
-        onComplete: () => {
-          this.particles.burst(card3d.worldPosition(), 8, {
-            color: 0x7a8794,
-            speed: 1.1,
-            upward: 0.8,
-            size: 0.05,
-            life: 0.6,
-          });
-          this.retire(card3d);
+    const jitter = (Math.random() - 0.5) * 0.4;
+    const rz = (Math.random() - 0.5) * 0.5;
+    anim
+      .sequence()
+      .to(
+        card3d.home,
+        {
+          x: DISCARD_X + jitter,
+          y: 0.4,
+          z: DISCARD_Z,
+          // `rx` explicito: si la carta venia de un arrastre esta inclinada, y
+          // sin esto volaria al descarte torcida.
+          rx: -Math.PI / 2,
+          rz,
+          duration: anim.d(0.45),
+          ease: anim.EASE.quadOut,
         },
-      },
-    );
+        0,
+      )
+      // Arco por encima del borde de la mesa, en vez de una linea recta.
+      .to(
+        card3d.home,
+        {
+          keyframes: [
+            { arc: 0.8, duration: anim.d(0.18), ease: anim.EASE.quadOut },
+            { arc: 0, duration: anim.d(0.27), ease: anim.EASE.quadIn },
+          ],
+        },
+        0,
+      )
+      .add(() => {
+        this.particles.burst(card3d.worldPosition(), 8, {
+          color: 0x7a8794,
+          speed: 1.1,
+          upward: 0.8,
+          size: 0.05,
+          life: 0.6,
+        });
+        this.water?.ripple(DISCARD_X + jitter, DISCARD_Z, 0.95);
+        this.retire(card3d);
+      });
   }
 
   private flyInFromDeck(card: CardInstance): void {
@@ -1281,7 +1634,18 @@ export class SceneManager {
     const index = this.stepIndex++;
     if (index >= MAX_ANIMATED_STEPS) return;
 
-    this.queueFx(0.42 + index * this.stepStagger, () => {
+    // Una TIMELINE reemplaza la cola de delays: mismo span temporal
+    // (0.42 + i * stagger), pero cancelable de una y sin acumular callbacks
+    // sueltos. El paso 0 abre la secuencia de la mano; uno nuevo la cierra.
+    if (index === 0 || !this.scoreTl) {
+      this.scoreTl?.kill();
+      this.scoreTl = anim.sequence();
+    }
+    this.scoreTl.call(() => this.runScoreStep(step, index), undefined, anim.d(0.42 + index * this.stepStagger));
+  }
+
+  private runScoreStep(step: ScoreStep, index: number): void {
+    {
       const origin = this.findWorldPosition(step.sourceId, step.targetUid);
       const color = this.colorForAction(step.action, origin.color);
 
@@ -1317,7 +1681,7 @@ export class SceneManager {
         x: screen.x,
         y: screen.y,
       });
-    });
+    }
   }
 
   private drawChain(fromId: string, toId: string, depth: number): void {
@@ -1332,18 +1696,14 @@ export class SceneManager {
   }
 
   private pulseJoker(card3d: Card3D, depth: number): void {
-    const base = JOKER_SCALE;
-    this.tweens.to(
-      card3d.group.scale,
-      { x: base * 1.22, y: base * 1.22, z: base * 1.22 },
-      {
-        duration: 0.1,
-        ease: 'quadOut',
-        onComplete: () => {
-          this.tweens.to(card3d.group.scale, { x: base, y: base, z: base }, { duration: 0.22 });
-        },
-      },
-    );
+    // Antes tweeneaba `group.scale`, que `applyTransform()` pisa cada frame:
+    // el pulso era INVISIBLE. Ahora anima `home.s*`, que si se compone.
+    anim.tweenOf(card3d.home, {
+      keyframes: [
+        { sx: 1.22, sy: 1.22, sz: 1.22, duration: anim.d(0.1), ease: anim.EASE.quadOut },
+        { sx: 1, sy: 1, sz: 1, duration: anim.d(0.22), ease: anim.EASE.cubicOut },
+      ],
+    });
     this.particles.burst(card3d.worldPosition(), 10, {
       color: 0x5fd8e8,
       speed: 1.8,
@@ -1355,34 +1715,62 @@ export class SceneManager {
   }
 
   private celebrate(): void {
-    this.rig.addShake(0.32);
     const center = new THREE.Vector3(0, 0.6, PLAY_Z);
-    this.particles.burst(center, this.isMobile ? 70 : 130, {
-      color: 0x4fd18b,
-      speed: 5.2,
-      upward: 3.4,
-      size: 0.11,
-      life: 1.5,
-    });
-    this.particles.burst(center, this.isMobile ? 40 : 70, {
-      color: 0xffc857,
-      speed: 3.8,
-      upward: 4.2,
-      size: 0.09,
-      life: 1.7,
-    });
-    this.retireScoringCards(0.4);
+    // Dos oleadas escalonadas: la segunda entra cuando la primera ya sube.
+    anim
+      .sequence()
+      .add(() => {
+        this.rig.addShake(0.32);
+        // Onda grande en el centro: la victoria "golpea" el agua.
+        this.water?.ripple(0, PLAY_Z, 1.6);
+      }, 0)
+      .add(() => {
+        this.particles.burst(center, this.isMobile ? 70 : 130, {
+          color: 0x4fd18b,
+          speed: 5.2,
+          upward: 3.4,
+          size: 0.11,
+          life: 1.5,
+        });
+      }, 0)
+      .add(() => {
+        this.particles.burst(center, this.isMobile ? 40 : 70, {
+          color: 0xffc857,
+          speed: 3.8,
+          upward: 4.2,
+          size: 0.09,
+          life: 1.7,
+        });
+      }, anim.d(0.14))
+      .add(() => this.retireScoringCards(0.4), 0);
   }
 
   private doom(): void {
-    this.rig.addShake(0.5);
-    this.particles.burst(new THREE.Vector3(0, 0.5, PLAY_Z), 80, {
-      color: 0xe05c8a,
-      speed: 3.4,
-      upward: 0.4,
-      size: 0.09,
-      life: 1.2,
-    });
+    const center = new THREE.Vector3(0, 0.5, PLAY_Z);
+    anim
+      .sequence()
+      .add(() => {
+        this.rig.addShake(0.5);
+        this.water?.ripple(0, PLAY_Z, 1.9);
+      }, 0)
+      .add(() => {
+        this.particles.burst(center, 80, {
+          color: 0xe05c8a,
+          speed: 3.4,
+          upward: 0.4,
+          size: 0.09,
+          life: 1.2,
+        });
+      }, 0)
+      .add(() => {
+        this.particles.burst(center, 30, {
+          color: 0x8a2f52,
+          speed: 2.0,
+          upward: 0.2,
+          size: 0.07,
+          life: 1.4,
+        });
+      }, anim.d(0.18));
   }
 
   private dissolve(card3d: Card3D): void {
@@ -1403,18 +1791,22 @@ export class SceneManager {
     // Se va boca abajo: es a donde va a parar (el descarte), y el descarte no
     // tiene por que mostrar caras que el jugador ya no puede usar.
     card3d.setFaceUp(false, { tweens: this.tweens, duration: 0.3 });
-    this.tweens.to(
-      card3d.home,
-      { y: -1.2, rz: card3d.home.rz + 0.6 },
-      {
-        duration: 0.35,
-        ease: 'quadIn',
+    // Squash -> se hunde -> se libera.
+    anim
+      .sequence()
+      .to(card3d.home, { sx: 1.15, sy: 0.85, duration: anim.d(0.08), ease: anim.EASE.quadOut })
+      .to(card3d.home, {
+        y: -1.2,
+        rz: card3d.home.rz + 0.6,
+        sx: 0.9,
+        sy: 0.9,
+        duration: anim.d(0.35),
+        ease: anim.EASE.quadIn,
         onComplete: () => {
           card3d.dispose();
           this.scene.remove(card3d.group);
         },
-      },
-    );
+      });
   }
 
   private retireScoringCards(delay = 0.6): void {
@@ -1468,7 +1860,7 @@ export class SceneManager {
     this.dragUid = card.uid;
     // A partir de aca `home` lo escribe el dedo: el tween de layout se cancela
     // o pelearia por la misma posicion.
-    this.tweens.cancelFor(card3d.home);
+    this.stopCard(card3d);
     card3d.setHover(false);
     card3d.setDragging(true);
 
@@ -1568,6 +1960,12 @@ export class SceneManager {
   }
 
   private refreshTargets(): void {
+    // En modo carrusel la mano esta OCULTA pero el raycaster la seguiria
+    // golpeando (la visibilidad no lo frena): se le sacan los targets.
+    if (this.carouselActive) {
+      this.interaction.setTargets([]);
+      return;
+    }
     const targets: THREE.Object3D[] = [];
     // Cara y dorso: el raycaster respeta `material.side`, asi que solo acierta
     // el que se esta viendo. Ver `Card3D.pickTargets`.
@@ -1591,16 +1989,29 @@ export class SceneManager {
 
       // dt acotado: si la pestana estuvo en background, no queremos un salto.
       const rawDt = (now - last) / 1000;
-      const dt = Math.min(0.05, rawDt);
+      // `Math.max(0, ...)`: el timestamp del primer rAF puede ser ANTERIOR al
+      // `performance.now()` de `start()`, y un dt negativo haria retroceder el
+      // reloj (y con el, el de GSAP).
+      const dt = Math.min(0.05, Math.max(0, rawDt));
       last = now;
       this.clock += dt;
 
       this.runFxQueue();
       this.tweens.update(dt);
-      for (const card3d of this.handCards.values()) card3d.update(dt, this.clock);
-      for (const card3d of this.jokerCards.values()) card3d.update(dt, this.clock);
-      for (const card3d of this.scoringCards) card3d.update(dt, this.clock);
-      if (this.mode === 'menu') this.updateMenuDecor(dt);
+      // GSAP con el MISMO dt acotado, antes del update de las cartas: asi las
+      // secuencias se aplican a `home` y `applyTransform()` las compone en el
+      // mismo frame que se dibuja (sin un frame de atraso).
+      anim.updateAnim(dt);
+      if (this.carouselActive) {
+        // Modo carrusel: la mano y los jokers estan ocultos y no se actualizan.
+        // Lo unico que se mueve es el anillo.
+        this.carousel?.update(dt, this.clock);
+      } else {
+        for (const card3d of this.handCards.values()) card3d.update(dt, this.clock);
+        for (const card3d of this.jokerCards.values()) card3d.update(dt, this.clock);
+        for (const card3d of this.scoringCards) card3d.update(dt, this.clock);
+        if (this.mode === 'menu') this.updateMenuDecor(dt);
+      }
 
       // Las zonas solo existen mientras se puede jugar: fuera de 'playing' no
       // hay cartas en la mano que arrastrar.
@@ -1612,6 +2023,7 @@ export class SceneManager {
 
       this.updateShadows();
       this.particles.update(dt);
+      this.water?.update(this.clock);
       this.rig.update(dt, this.clock);
 
       // Se renderiza SIEMPRE, tambien en el menu.
@@ -1664,7 +2076,8 @@ export class SceneManager {
   }
 
   private queueFx(delay: number, run: () => void): void {
-    this.fxQueue.push({ at: this.clock + delay, run });
+    // Con reduceMotion los efectos entran al toque: mismo criterio que el CSS.
+    this.fxQueue.push({ at: this.clock + (this.reduceMotion ? 0 : delay), run });
   }
 
   private runFxQueue(): void {
@@ -1761,6 +2174,13 @@ export class SceneManager {
 
     this.rig.resize(aspect);
 
+    // En modo carrusel el encuadre es PROPIO (frontal al anillo) y no se deriva
+    // del layout de la partida.
+    if (this.carouselActive) {
+      this.fitCarousel(aspect);
+      return;
+    }
+
     // En pantallas anchas la mano puede abrirse; en angostas se compacta.
     this.handSpread = aspect > 1.75 ? 16.5 : aspect > 1.45 ? 14 : 12;
 
@@ -1794,6 +2214,15 @@ export class SceneManager {
 
   dispose(): void {
     this.stop();
+    // Cortar TODA la animacion de GSAP antes de disponer las cartas: un
+    // onComplete pendiente no puede tocar un material ya liberado.
+    anim.killAll();
+    this.detachCarouselInput();
+    this.carousel?.dispose();
+    this.carousel = null;
+    this.renderer.domElement.removeEventListener('pointermove', this.onWaterPointerMove);
+    this.water?.dispose();
+    this.water = null;
     for (const unsubscribe of this.unsubscribes) unsubscribe();
     this.unsubscribes.length = 0;
     this.interaction.dispose();
@@ -1817,6 +2246,17 @@ export class SceneManager {
     this.renderer.dispose();
   }
 
+  /** Estado del carrusel (debug y tests). Null si no esta activo. */
+  carouselState(): { active: boolean; count: number; focus: number; visible: number } | null {
+    if (!this.carouselActive || !this.carousel) return null;
+    return {
+      active: true,
+      count: this.carousel.count,
+      focus: this.carousel.focusedIndex,
+      visible: this.carousel.visibleSlots,
+    };
+  }
+
   /** Resumen para el panel de debug. */
   stats(): Record<string, number> {
     const info = this.renderer.info;
@@ -1826,6 +2266,9 @@ export class SceneManager {
       scoring: this.scoringCards.length,
       particles: this.particles.activeCount,
       tweens: this.tweens.activeCount,
+      // Secuencias/tweens vivos de GSAP. Clave aparte de `tweens`: el panel de
+      // debug los lee por separado porque son dos motores distintos.
+      gsap: anim.activeCount(),
       textures: this.textures.size,
       // Con composer, `info.render.calls` acumula TODOS los pases (los quads de
       // pantalla completa incluidos). El numero comparable entre tiers es el de

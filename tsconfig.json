@@ -30,6 +30,8 @@
       "@ui/*": ["./src/ui/*"],
       "@i18n/*": ["./src/i18n/*"],
       "@persistence/*": ["./src/persistence/*"],
+      "@retention/*": ["./src/retention/*"],
+      "@notify/*": ["./src/notify/*"],
       "@audio/*": ["./src/audio/*"]
     }
   },

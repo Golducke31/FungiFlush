@@ -23,6 +23,7 @@ import type { BoardView } from '@engine/board';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import { createCardCanvas, type CardTextureSpec } from '@render/index';
+import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
@@ -30,7 +31,11 @@ import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
 import { buildDeckBuilderPanel, type DeckCardInfo } from './DeckBuilderScreen';
 import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
+import { buildDailyRewardPanel } from './DailyRewardPanel';
+import { buildAchievementsPanel, type AchievementView } from './AchievementsScreen';
 import { BoardScreen, type BoardResolvers, type BoardScreenCallbacks } from './BoardScreen';
+import type { DailyEvaluation, DailyRewardTable } from '../retention/DailyReward';
+import type { RetentionReward } from '../retention/types';
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -51,6 +56,10 @@ export interface HudCallbacks {
   onOpenPass: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
+  // --- Retencion: recompensa diaria y logros ---
+  onOpenDaily: () => void;
+  onClaimDaily: () => void;
+  onOpenAchievements: () => void;
   // --- Fase 2: recompensa y deckbuilding ---
   /** `null` = saltar el draft. */
   onPickReward: (offerId: string | null) => void;
@@ -116,6 +125,15 @@ export class HUD {
   private elTooltip = document.createElement('div');
   private elPopups = document.createElement('div');
   private elToasts = document.createElement('div');
+  /**
+   * Aviso no bloqueante (`.banner-stack`).
+   *
+   * Va entre el overlay (80) y el toast (90): si compartiera capa con el toast
+   * competiria por el mismo lugar en pantalla, y si quedara debajo del overlay
+   * un panel abierto lo taparia justo cuando se lo necesita. Es `pointer-events:
+   * none` igual que el toast: un aviso que se come los toques es un bug.
+   */
+  private elBanner = document.createElement('div');
   private elPreview = document.createElement('div');
   /** Contador grande: aparece durante la secuencia y suma en vivo. */
   private elTicker = document.createElement('div');
@@ -248,6 +266,7 @@ export class HUD {
     this.elTooltip.className = 'hud-tooltip';
     this.elPopups.className = 'hud-popups';
     this.elToasts.className = 'toast-stack';
+    this.elBanner.className = 'banner-stack';
 
     // Contador en vivo. Va entre la barra de arriba y las cartas jugadas: es la
     // franja libre de la mesa, asi no tapa ni el HUD ni el resultado.
@@ -266,6 +285,7 @@ export class HUD {
       bottom,
       this.elTicker,
       this.elPopups,
+      this.elBanner,
       this.elToasts,
       this.elTooltip,
       this.elOverlay,
@@ -343,6 +363,11 @@ export class HUD {
         this.build();
         this.render();
       }),
+
+      // El banner lo pide quien detecta la situacion (main.ts), no el HUD: el
+      // HUD solo sabe dibujarlo. Asi la regla de "cuando avisar" queda en un
+      // solo lugar y el aviso del sistema y el in-app salen del mismo evento.
+      bus.on('banner:show', ({ key, params, kind }) => this.showBanner(key, params, kind)),
     );
   }
 
@@ -529,12 +554,16 @@ export class HUD {
     }
   }
 
-  private openOverlay(content: HTMLElement): void {
+  private openOverlay(content: HTMLElement, carousel = false): void {
     this.cancelPendingClose();
     // El panel anterior deja de existir: su refresco tambien. `showShop` vuelve
     // a asignarlo justo despues de llamar aca.
     this.shopRefresh = null;
     this.elOverlay.innerHTML = '';
+    // `is-carousel`: overlay TRANSPARENTE y sin capturar punteros, para que la
+    // escena 3D (el anillo) quede a la vista y reciba rueda/arrastre/tap. El
+    // marco de la coleccion re-habilita `pointer-events` solo en sus controles.
+    this.elOverlay.classList.toggle('is-carousel', carousel);
     this.elOverlay.appendChild(content);
     // Si ya estaba abierto, quitar y volver a poner `is-open` en el mismo
     // frame no reinicia la animacion: hay que forzar un reflow entre medias.
@@ -551,6 +580,7 @@ export class HUD {
   hideOverlay(): void {
     if (this.elOverlay.classList.contains('is-closing')) return; // ya cerrando
     if (!this.elOverlay.classList.contains('is-open')) {
+      this.elOverlay.classList.remove('is-carousel');
       this.elOverlay.innerHTML = '';
       return;
     }
@@ -564,7 +594,7 @@ export class HUD {
       // Un `openOverlay()` posterior ya reprogramo esto: no pisar su contenido.
       if (seq !== this.closeSeq) return;
       this.closeTimer = null;
-      this.elOverlay.classList.remove('is-closing');
+      this.elOverlay.classList.remove('is-closing', 'is-carousel');
       this.elOverlay.innerHTML = '';
     };
 
@@ -607,8 +637,8 @@ export class HUD {
   // ==========================================================================
 
   /** Muestra un panel propio (ajustes, acerca de, coleccion...). */
-  showPanel(content: HTMLElement): void {
-    this.openOverlay(content);
+  showPanel(content: HTMLElement, opts?: { carousel?: boolean }): void {
+    this.openOverlay(content, opts?.carousel ?? false);
   }
 
   showMenu(): void {
@@ -630,6 +660,8 @@ export class HUD {
         onOpenSettings: () => this.callbacks.onOpenSettings(),
         onOpenAbout: () => this.callbacks.onOpenAbout(),
         onToggleLanguage: () => this.callbacks.onToggleLanguage(),
+        onOpenDaily: () => this.callbacks.onOpenDaily(),
+        onOpenAchievements: () => this.callbacks.onOpenAchievements(),
       },
     );
     this.openOverlay(panel);
@@ -804,6 +836,53 @@ export class HUD {
     );
   }
 
+  // ==========================================================================
+  // Retencion: recompensa diaria y logros
+  // ==========================================================================
+
+  /**
+   * El HUD no conoce el registro de contenido, asi que no puede traducir
+   * "desbloqueaste la carta X" a un nombre. Lo inyecta el controlador, igual
+   * que las ilustraciones de las cartas.
+   */
+  private rewardNames: ((reward: RetentionReward) => string) | null = null;
+
+  bindRewardNames(fn: (reward: RetentionReward) => string): void {
+    this.rewardNames = fn;
+  }
+
+  private nameOfReward(reward: RetentionReward): string {
+    return this.rewardNames?.(reward) ?? reward.id;
+  }
+
+  /**
+   * Recompensa diaria.
+   *
+   * El claim NO redibuja solo: lo vuelve a llamar el controlador con el estado
+   * nuevo. Asi el panel sigue siendo una funcion de los datos y no guarda un
+   * "ya reclame" propio que se pueda desincronizar del perfil.
+   */
+  showDailyReward(state: DailyEvaluation, table: DailyRewardTable, onClose: () => void): void {
+    this.showPanel(
+      buildDailyRewardPanel(state, table, {
+        nameOf: (reward) => this.nameOfReward(reward),
+        onClaim: () => this.callbacks.onClaimDaily(),
+        onClose,
+      }),
+    );
+  }
+
+  showAchievements(entries: AchievementView[]): void {
+    this.showPanel(
+      buildAchievementsPanel(entries, {
+        onClose: () => {
+          this.lastStatus = null;
+          this.render();
+        },
+      }),
+    );
+  }
+
   private showBlindSelect(): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
@@ -874,6 +953,21 @@ export class HUD {
 
     panel.append(title, subtitle, grid, actions);
     this.openOverlay(panel);
+    // Los ciegos entran en cascada. Es ADITIVO: el panel ya tiene su propia
+    // animacion de entrada; esto solo escalona las tarjetas de adentro.
+    anim
+      .sequence()
+      .fromTo(
+        grid.querySelectorAll('.blind-card'),
+        { y: 18, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: anim.d(0.3),
+          ease: anim.EASE.cssOut,
+          stagger: { amount: anim.d(0.18) },
+        },
+      );
   }
 
   private showShop(offers: ShopOffer[]): void {
@@ -1164,11 +1258,15 @@ export class HUD {
     this.elTicker.classList.toggle('is-bonus', info.isBonus);
     this.elTicker.classList.add('is-visible');
 
-    // Reinicia el "golpe" del numero: quitar y volver a poner la clase en el
-    // mismo frame no reinicia la animacion, hay que forzar un reflow en medio.
-    this.elTickerTotal.classList.remove('is-bump');
-    void this.elTickerTotal.offsetWidth;
-    this.elTickerTotal.classList.add('is-bump');
+    // "Golpe" del numero con GSAP: reemplaza el truco de quitar/poner la clase
+    // con un reflow FORZADO en medio (una lectura sincronica de layout por cada
+    // paso de puntuacion). Ahora se anima el transform directo.
+    anim.tweenOf(this.elTickerTotal, {
+      keyframes: [
+        { scale: 1.16, duration: anim.d(0.11), ease: anim.EASE.cssBack },
+        { scale: 1, duration: anim.d(0.11), ease: anim.EASE.cssOut },
+      ],
+    });
 
     // Un paso que RESTA se grafica como daño (veneno) y no como ganancia: es la
     // unica forma de que se vea que la mano esta perdiendo puntos, no sumando.
@@ -1217,6 +1315,29 @@ export class HUD {
     el.textContent = message;
     this.elToasts.appendChild(el);
     window.setTimeout(() => el.remove(), 3200);
+  }
+
+  /**
+   * Aviso no bloqueante: mas grande y mas lento que un toast, porque lo que
+   * dice es una OPORTUNIDAD ("tenes la recompensa de hoy") y no una
+   * confirmacion. Se autocierra solo: nada en la UI puede quedar esperando un
+   * tap para desaparecer.
+   */
+  showBanner(
+    key: string,
+    params?: Record<string, unknown>,
+    kind: 'info' | 'warn' | 'success' = 'info',
+  ): void {
+    const el = document.createElement('div');
+    el.className = `banner${kind === 'info' ? '' : ` is-${kind}`}`;
+    el.textContent = t(key, params);
+    this.elBanner.appendChild(el);
+    // Sale con animacion: quitarlo de golpe despues de 4 s se lee como un
+    // parpadeo. El `remove()` final limpia el nodo igual que en los toasts.
+    window.setTimeout(() => {
+      el.classList.add('is-leaving');
+      window.setTimeout(() => el.remove(), 300);
+    }, 4000);
   }
 
   /** Bloquea la UI mientras el motor resuelve (evita dobles clicks). */

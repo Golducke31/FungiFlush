@@ -37,6 +37,13 @@ export class PackGate {
   constructor(
     private readonly store: EntitlementStore,
     private readonly registry: ContentRegistry,
+    /**
+     * Ids desbloqueados por retencion (racha, logros, pase). Un DLC bloqueado
+     * que el jugador se GANÓ deja de estarlo: entra en sorteos/drafts y se
+     * muestra como 'unlocked' en la Coleccion. La referencia es al array VIVO
+     * del perfil, asi que un desbloqueo a mitad de sesion se refleja al toque.
+     */
+    private readonly unlocked?: { cards: readonly string[]; jokers: readonly string[] },
   ) {}
 
   /** Estado de un pack completo. */
@@ -49,9 +56,20 @@ export class PackGate {
 
   /** Estado de una definicion concreta (para la Coleccion). */
   contentState(contentId: string): GateResult {
+    // Un DLC bloqueado que el jugador SE GANO entra en sorteos/drafts y deja de
+    // verse como candado en la Coleccion/Tienda.
+    if (this.isUnlocked(contentId)) return 'allowed';
     const packId = this.registry.packOf(contentId);
     if (!packId) return 'allowed';
     return this.packState(packId);
+  }
+
+  /** ¿Este id lo gano el jugador por retencion (racha/logro/pase)? */
+  private isUnlocked(contentId: string): boolean {
+    return (
+      !!this.unlocked &&
+      (this.unlocked.cards.includes(contentId) || this.unlocked.jokers.includes(contentId))
+    );
   }
 
   /** Filtro para `CardRegistry.rollRandomCard(rng, filter)` y para el bundle. */
@@ -74,6 +92,8 @@ export class PackGate {
       if (this.store.has(entry.entitlement)) continue;
       if (entry.lockedVisibility === 'hidden') continue;
       for (const contentId of entry.contentIds) {
+        // Un DLC bloqueado que el jugador SE GANO deja de ser superficie de venta.
+        if (this.isUnlocked(contentId)) continue;
         out.push({
           id: contentId,
           kind: this.kindOf(contentId),

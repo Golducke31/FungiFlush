@@ -159,6 +159,10 @@
   --z-popup:   50;
   --z-tooltip: 60;
   --z-overlay: 80;
+  /* El banner va ENTRE el overlay y el toast: encima de cualquier panel
+     abierto (si no, un panel lo tapa justo cuando hace falta) pero debajo del
+     toast, que es el canal de error y tiene que ganar siempre. */
+  --z-banner:  85;
   --z-toast:   90;
   --z-loader:  120;
 
@@ -180,6 +184,20 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
+
+  /* -------------------------------------------------------------------------
+     Movil horizontal (landscape). Todo panel nuevo se disena para esto:
+     ancho y bajo, filas largas, sin scroll vertical largo.
+       `--touch-min`  alto minimo de un boton; el pulgar no afina.
+       `--panel-max-w` ancho tope de los paneles; uno mas ancho no se lee en
+                      horizontal porque el ojo recorre la fila entera.
+     Los BREAKPOINTS no pueden leer variables (limitacion de CSS), asi que van
+     literales y se documentan aca para no tener que adivinarlos:
+       560px de alto -> celular en landscape (con barra de navegacion)
+       430px de alto -> landscape apretado (chips y botones se compactan)
+     ------------------------------------------------------------------------- */
+  --touch-min: 46px;
+  --panel-max-w: 920px;
 }
 
 * {
@@ -1037,7 +1055,7 @@ body {
    brilla igual que lo que sostiene, deja de leerse cual es cual. Los colores
    salen de los tokens --frame-*, muestreados de los marcos del menu. */
 .panel {
-  width: min(920px, 100%);
+  width: min(var(--panel-max-w), 100%);
   /* Centra el panel en el overlay cuando entra, y NO lo recorta cuando no:
      un `margin: auto` se resuelve a 0 si no hay espacio libre, a diferencia de
      `align-items: center`. Ver la nota de `.overlay`. */
@@ -1577,10 +1595,49 @@ body {
   transform: translate(-50%, -50%);
 }
 
-/* "Duelo micelial": esquina superior izquierda, fijo (el cover no lo recorta). */
-.menu-ghost--board {
+/*
+ * Fila de chips secundarios: duelo, recompensa diaria y logros.
+ *
+ * Antes cada chip se posicionaba solo con top/left. Con tres chips eso no
+ * escala: el ancho depende del idioma, y apilarlos a mano es adivinar. Van en
+ * una fila que se posiciona UNA vez, fuera del arte (el `cover` no la recorta)
+ * y respetando safe-area, que en landscape muerde justo esa esquina.
+ */
+.menu-chips {
+  position: absolute;
   top: calc(10px + var(--safe-t));
   left: calc(14px + var(--safe-l));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  max-width: calc(100% - var(--safe-l) - var(--safe-r) - 28px);
+  z-index: 3;
+}
+
+.menu-chips .menu-ghost {
+  position: static;
+}
+
+/* Recompensa diaria sin reclamar: el chip respira. Es el unico pulso de la
+   pantalla de inicio y esta a proposito: sin el, la racha pasa desapercibida
+   y la recompensa diaria no existe para el jugador. */
+.menu-ghost.is-pending {
+  border-color: rgba(255, 200, 87, 0.7);
+  color: var(--money);
+  animation: chip-pulse 2.6s var(--ease-out) infinite;
+}
+
+@keyframes chip-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 200, 87, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(255, 200, 87, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 200, 87, 0);
+  }
 }
 
 .menu-version {
@@ -1684,6 +1741,18 @@ body {
 .settings-slider {
   width: 120px;
   accent-color: var(--spores);
+}
+
+/* Separador de seccion en Ajustes: ocupa las dos columnas del grid. */
+.settings-section {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  padding-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 /* --------------------------------------------------------------------------
@@ -1921,6 +1990,13 @@ body {
   opacity: 0.55;
 }
 
+/* Un desbloqueo de retencion se RESALTA: mismo material que 'owned', pero con
+   borde y halo de musgo para que se note que lo ganaste, no que lo compraste. */
+.collection-card.is-unlocked {
+  border-color: rgba(46, 178, 164, 0.72);
+  box-shadow: var(--shadow-inset), 0 0 12px rgba(46, 178, 164, 0.28);
+}
+
 .collection-swatch {
   width: 10px;
   height: 10px;
@@ -1938,6 +2014,160 @@ body {
   flex-basis: 100%;
   font-size: 10px;
   color: var(--dim);
+}
+
+/* Origen del desbloqueo de retencion: "Desbloqueado · Racha diaria". */
+.collection-unlock {
+  flex-basis: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--frame-moss, #2eb2a4);
+}
+
+/* --------------------------------------------------------------------------
+   Recompensa diaria (retencion)
+   --------------------------------------------------------------------------
+   La escalera de 7 dias es una FILA y no una columna: en horizontal el alto es
+   el recurso escaso, y siete filas no entran ni en un panel de escritorio. Las
+   celdas toman el material de la losa desde la regla compartida del final del
+   archivo, asi que aca solo se define layout.
+   -------------------------------------------------------------------------- */
+
+.daily-ladder {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.daily-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* Ya cobrado: se hunde un poco, pero sigue leyendose (es el historial de la
+   racha, no un candado). */
+.daily-day.is-done {
+  opacity: 0.62;
+}
+
+.daily-day.is-current {
+  border-color: rgba(255, 200, 87, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(255, 200, 87, 0.32),
+    var(--shadow-2);
+}
+
+.daily-day-number {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--frame-dim);
+}
+
+.daily-day-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.daily-focus {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.daily-focus-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--frame-dim);
+}
+
+.daily-focus-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.daily-status {
+  font-size: 12px;
+  color: var(--frame-dim);
+  margin: 0 0 14px;
+}
+
+/* --------------------------------------------------------------------------
+   Logros (retencion)
+   -------------------------------------------------------------------------- */
+
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  /* Igual que la coleccion: scrollea por dentro para no empujar los botones
+     fuera de la pantalla. */
+  max-height: min(46vh, 340px);
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 16px;
+}
+
+.achievement-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-inset), var(--shadow-1);
+}
+
+.achievement-card.is-unlocked {
+  border-color: rgba(79, 209, 139, 0.55);
+}
+
+.achievement-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.achievement-desc {
+  font-size: 11px;
+  color: var(--frame-dim);
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
+.achievement-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.achievement-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2eb2a4, #4fd18b);
+}
+
+.achievement-progress {
+  font-size: 10px;
+  color: var(--frame-dim);
+  margin-top: 3px;
+}
+
+.achievement-state {
+  font-size: 10.5px;
+  color: var(--frame-dim);
+  margin-top: 6px;
 }
 
 /* En retrato (o casi cuadrado) los paneles angostos pasan a una sola columna. */
@@ -2002,6 +2232,84 @@ body {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Banner: aviso no bloqueante (retencion)
+   --------------------------------------------------------------------------
+   Es el fallback GARANTIZADO del aviso del sistema: si el jugador deniega el
+   permiso (o la plataforma no tiene notificaciones), la recompensa diaria y el
+   logro se siguen anunciando aca. Por eso:
+
+     - `pointer-events: none` en el contenedor: un aviso que se come los toques
+       es un bug, y en landscape el centro de la pantalla es la mesa.
+     - Se apoya ABAJO (a diferencia del toast, que va arriba): lo que dice es
+       una oportunidad, y arriba ya viven el HUD y los toasts de error.
+     - Usa safe-area en los cuatro lados: en horizontal el notch y la barra de
+       navegacion muerden justo los bordes.
+   -------------------------------------------------------------------------- */
+
+.banner-stack {
+  position: fixed;
+  bottom: calc(14px + var(--safe-b));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - var(--safe-l) - var(--safe-r) - 24px);
+  pointer-events: none;
+  z-index: var(--z-banner);
+}
+
+.banner {
+  background: linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 55%, var(--frame-body-lo) 100%);
+  border: 1px solid var(--frame-moss);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  box-shadow: var(--shadow-inset), var(--shadow-2);
+  animation: banner-in var(--dur-slow) var(--ease-back);
+}
+
+.banner.is-warn {
+  border-color: rgba(255, 200, 87, 0.6);
+  color: var(--money);
+}
+
+.banner.is-success {
+  border-color: rgba(79, 209, 139, 0.65);
+  color: #b8f5d5;
+}
+
+.banner.is-leaving {
+  animation: banner-out var(--dur-base) var(--ease-out) forwards;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes banner-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 /* ==========================================================================
    Piezas apoyadas en el tablon: la misma losa que el HUD
    ==========================================================================
@@ -2020,6 +2328,10 @@ body {
 .reward-card,
 .deck-card,
 .collection-card,
+.pass-tier,
+.daily-day,
+.daily-focus,
+.achievement-card,
 .settings-field {
   border-color: var(--frame-edge);
   background:
@@ -2047,6 +2359,82 @@ body {
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.14) 0%, rgba(46, 178, 164, 0) 30%),
     linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
+/* --- Pase de Temporada (retencion) --- */
+.pass-xp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pass-xp-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--frame-dim);
+  white-space: nowrap;
+}
+.pass-xp-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  border: 1px solid var(--frame-edge);
+}
+.pass-xp-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--frame-deep-lo), var(--frame-moss, #2eb2a4));
+  transition: width 0.3s ease;
+}
+.pass-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding-right: 4px;
+}
+.pass-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+.pass-tier.is-locked {
+  opacity: 0.6;
+}
+.pass-tier.is-claimed {
+  border-color: rgba(46, 178, 164, 0.5);
+}
+.pass-tier-head {
+  display: flex;
+  align-items: baseline;
+}
+.pass-tier-level {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--frame-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pass-tier-reward {
+  font-size: 13px;
+  font-weight: 700;
+}
+.pass-tier-action {
+  margin-top: 2px;
+}
+.pass-tier-done {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--frame-moss, #2eb2a4);
+}
+.pass-tier-lock {
+  font-size: 11px;
+  color: var(--frame-dim);
 }
 
 /* Texto secundario sobre la losa: `--dim` es un gris azulado pensado para fondo
@@ -2136,6 +2524,11 @@ body {
   .blind-grid {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 9px;
+  }
+  /* Con ~360px de alto la lista de logros tiene que ceder antes que los
+     botones: dos filas alcanzan para ver el progreso y el resto scrollea. */
+  .achievement-grid {
+    max-height: min(38vh, 190px);
   }
   .score-popup {
     font-size: 17px;
@@ -2710,4 +3103,99 @@ body {
 .settings-segment:hover:not(.is-on) {
   background: rgba(46, 178, 164, 0.14);
   color: #e2fbf4;
+}
+
+/* --------------------------------------------------------------------------
+   Coleccion sobre el CARRUSEL 3D (F1)
+   --------------------------------------------------------------------------
+   El overlay deja de ser un telon: se vuelve transparente y NO captura
+   punteros, porque el anillo vive en el canvas de abajo y tiene que recibir
+   rueda, arrastre y tap. El marco re-habilita `pointer-events` solo en sus
+   controles. Es la excepcion deliberada a la regla de `#ui-root > .overlay`.
+   -------------------------------------------------------------------------- */
+
+/* OJO con la especificidad: la regla base `#ui-root > .overlay` es (1,1,0) y le
+   gana a `.overlay.is-carousel` (0,2,0). Hay que igualarla con el `#ui-root`. */
+#ui-root > .overlay.is-carousel {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+
+#ui-root > .overlay.is-carousel > .panel.is-carousel-frame {
+  /* `position: relative` + hijos absolutos: el centro queda LIBRE de verdad.
+     Con flex (`space-between`) el alto dependia del contenido y el detalle
+     terminaba cayendo en el medio, tapando el anillo y comiendose el input. */
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+  padding: 0;
+}
+
+.panel.is-carousel-frame .panel-title,
+.panel.is-carousel-frame .panel-subtitle {
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  text-align: center;
+}
+
+/* Arriba y abajo, nunca en el medio: el centro es del anillo. Los contenedores
+   NO capturan punteros; solo sus hijos interactivos lo hacen. */
+.carousel-top,
+.carousel-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.carousel-top {
+  top: max(10px, env(safe-area-inset-top));
+}
+
+.carousel-bottom {
+  bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+.deck-toolbar.is-floating,
+.panel-actions.is-floating,
+.carousel-detail {
+  pointer-events: auto;
+}
+
+.deck-toolbar.is-floating,
+.panel-actions.is-floating {
+  justify-content: center;
+}
+
+.carousel-detail {
+  align-self: center;
+  text-align: center;
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: rgba(4, 7, 11, 0.6);
+  border: 1px solid var(--frame-edge);
+  box-shadow: inset 0 1px 0 var(--frame-rim);
+}
+
+.carousel-detail-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.carousel-detail-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--frame-dim);
 }

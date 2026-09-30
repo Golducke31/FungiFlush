@@ -40,4 +40,5 @@ export type {
 } from './Quality';
 export { TweenManager, Easing } from './Tween';
 export type { TweenHandle, TweenOptions, EaseName } from './Tween';
+export * as anim from './anim';
 export { ELEMENT_COLOR, RARITY_COLOR, UI_COLORS, hexToCss, hexToRgba, mixHex } from './palette';

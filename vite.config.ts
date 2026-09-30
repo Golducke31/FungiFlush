@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => ({
       '@ui': r('./src/ui'),
       '@i18n': r('./src/i18n'),
       '@persistence': r('./src/persistence'),
+      '@retention': r('./src/retention'),
+      '@notify': r('./src/notify'),
       '@audio': r('./src/audio'),
     },
   },
@@ -45,6 +47,12 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks(id: string) {
           if (id.includes('node_modules/three')) return 'three';
+          // GSAP (core + CSSPlugin): chunk propio para que el delta de tamano
+          // sea medible y no se mezcle con el motor. SEGURO con la regla de
+          // abajo: ningun modulo de `/src/engine/board/` importa gsap (solo
+          // `../rng` y `../constants`), asi que este chunk NUNCA puede arrastrar
+          // al tablero diferido ni crear el ciclo que rompe la carga lazy.
+          if (id.includes('node_modules/gsap')) return 'gsap';
           // El duelo se carga con `await import('@engine/board')`. NO se le
           // asigna un chunk a mano: si se lo fuerza, Rollup reubica ahi los
           // modulos que el tablero REEXPORTA (las constantes de flechas) y el

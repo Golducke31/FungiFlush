@@ -22,6 +22,7 @@ import { t } from '@i18n/index';
 import type { CardTextureCache } from './CardTexture';
 import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
+import * as anim from './anim';
 import type { TweenHandle, TweenManager } from './Tween';
 
 export const CARD_WIDTH = 2.2;
@@ -71,6 +72,19 @@ export interface CardHome {
   rz: number;
   /** 0 = boca arriba, 1 = boca abajo. */
   flip: number;
+  /**
+   * Escala multiplicativa para squash/stretch (1 = normal). Va en `home` para
+   * que un tween la anime y `applyTransform()` la componga: escribir
+   * `group.scale` directamente NO sirve, porque `update()` lo pisa cada frame.
+   */
+  sx: number;
+  sy: number;
+  sz: number;
+  /**
+   * Altura EXTRA para volar en arco, sumada a `y` (que sigue siendo del
+   * layout). Va aparte para que el arco y el reacomodo no se peleen por `y`.
+   */
+  arc: number;
 }
 
 export type CardKind = 'card' | 'joker';
@@ -84,7 +98,26 @@ export class Card3D {
   joker: JokerInstance | null = null;
 
   /** Objeto de tweening: la posicion "en reposo" de la carta. */
-  readonly home: CardHome = { x: 0, y: 0, z: 0, rx: -Math.PI / 2, ry: 0, rz: 0, flip: 0 };
+  readonly home: CardHome = {
+    x: 0,
+    y: 0,
+    z: 0,
+    rx: -Math.PI / 2,
+    ry: 0,
+    rz: 0,
+    flip: 0,
+    sx: 1,
+    sy: 1,
+    sz: 1,
+    arc: 0,
+  };
+
+  /**
+   * Escala ESTRUCTURAL de la carta (joker 0.5, carta jugada 0.86). Vive aparte
+   * de `home.s*` (squash) y de `update()`: es lo unico que `applyTransform()`
+   * no recalcula, asi que sobrevive al frame.
+   */
+  private baseScale = 1;
 
   hovering = false;
   selected = false;
@@ -333,6 +366,9 @@ export class Card3D {
     const target = value ? 0 : 1;
     this.flipHandle?.cancel();
     this.flipHandle = null;
+    // El reparto de apertura gira la carta con GSAP: si no se mata SOLO esa
+    // animacion, el giro explicito pelea con la cascada y la carta no llega.
+    anim.killOfProp(this.home, 'flip');
 
     const tweens = options?.tweens;
     if (!(options?.animated ?? true) || !tweens) {
@@ -396,7 +432,7 @@ export class Card3D {
 
   private applyTransform(): void {
     const liftY = this.dragging ? 0 : this.lift * (this.hovering ? HOVER_LIFT : SELECT_LIFT);
-    this.group.position.set(this.home.x, this.home.y + liftY, this.home.z);
+    this.group.position.set(this.home.x, this.home.y + this.home.arc + liftY, this.home.z);
     // El giro entra por `rotation.y`: como la carta ya esta acostada sobre la
     // mesa, girar sobre su eje largo la da vuelta de verdad (no la hace girar
     // como una calesita).
@@ -405,8 +441,22 @@ export class Card3D {
       this.home.ry + Math.PI * this.home.flip,
       this.home.rz,
     );
-    const scale = (this.dragging ? DRAG_SCALE : 1) + this.lift * 0.05;
-    this.group.scale.setScalar(scale);
+    // La escala BASE (joker / carta jugada) y el SQUASH (`home.s*`) se
+    // multiplican; el lift/drag se suma encima. Antes esto era un `setScalar`
+    // que pisaba cualquier escala escrita por fuera: los jokers quedaban al
+    // doble de lo disenado y el pulso de joker era invisible.
+    const liftBoost = (this.dragging ? DRAG_SCALE : 1) + this.lift * 0.05;
+    this.group.scale.set(
+      this.baseScale * this.home.sx * liftBoost,
+      this.baseScale * this.home.sy * liftBoost,
+      this.baseScale * this.home.sz * liftBoost,
+    );
+  }
+
+  /** Escala estructural (joker 0.5 / carta jugada 0.86). La aplica al toque. */
+  setBaseScale(value: number): void {
+    this.baseScale = value;
+    this.applyTransform();
   }
 
   /** Posicion mundial del centro de la carta (para particulas y flechas). */
@@ -443,6 +493,9 @@ export class Card3D {
     this.disposed = true;
     this.flipHandle?.cancel();
     this.flipHandle = null;
+    // Cortar tambien lo de GSAP: si no, una secuencia pendiente escribiria
+    // sobre un material ya liberado.
+    anim.killOf(this.home);
     this.faceMaterial.dispose();
     this.backMaterial.dispose();
     this.haloMaterial.dispose();

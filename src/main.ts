@@ -35,6 +35,25 @@ import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
+import { notifier } from '@notify/notify';
+import {
+  AchievementTracker,
+  parseAchievements,
+  type AchievementContext,
+  type AchievementDef,
+} from '@retention/AchievementTracker';
+import {
+  claimDaily,
+  evaluateDaily,
+  parseDailyTable,
+  type DailyClaim,
+  type DailyRewardTable,
+} from '@retention/DailyReward';
+import { parseSeason, addXp, claimTier } from '@retention/SeasonTracker';
+import type { RetentionReward } from '@retention/types';
+import dailyRewardsData from '@data/daily-rewards.json';
+import achievementsData from '@data/achievements.json';
+import seasonsData from '@data/seasons.json';
 import {
   ArtAssets,
   CARD_DISPLAY_FONT,
@@ -45,7 +64,14 @@ import {
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
-import type { CollectionEntry, CollectionState } from '@ui/CollectionScreen';
+import {
+  buildCollectionCarousel,
+  type CollectionCarouselFrame,
+  type CollectionEntry,
+  type CollectionState,
+} from '@ui/CollectionScreen';
+import type { CarouselEntryView } from '@render/CardCarousel';
+import { buildPassPanel } from '@ui/EventPassPanel';
 import type { BoardScreen } from '@ui/BoardScreen';
 import { attachAudioHooks } from '@audio/AudioBus';
 import en from '@i18n/en.json';
@@ -149,7 +175,26 @@ async function boot(): Promise<void> {
 
   // --- Acceso por DLC ---
   const entitlements = EntitlementStore.from(profile.entitlements);
-  const gate = new PackGate(entitlements, content.registry);
+  // Los ids ganados por retencion (racha/logro/pase) se pasan como array VIVO:
+  // un desbloqueo a mitad de sesion entra al toque en sorteos/drafts y deja de
+  // listarse como bloqueado en la Coleccion/Tienda.
+  const gate = new PackGate(entitlements, content.registry, {
+    cards: profile.collection.unlockedCardIds,
+    jokers: profile.collection.unlockedJokerIds,
+  });
+
+  // --- Retencion (datos) ---
+  // JSON plano, NO packs: asi no pasan por `ContentRegistry.validate` ni por
+  // `artCoverage`. Se parsean al entrar y una entrada invalida se descarta.
+  const dailyTable: DailyRewardTable = parseDailyTable(dailyRewardsData);
+  const achievementDefs: AchievementDef[] = parseAchievements(achievementsData);
+  // P4: temporada unica (Founder). `null` si el JSON no sirve: el paso queda
+  // como "proximamente" y no tumba el arranque.
+  const seasonDef = parseSeason(seasonsData);
+
+  // El aviso del sistema se detecta al arrancar (barato y sin efectos); el
+  // PERMISO se pide recien en contexto, ver `onClaimDaily`.
+  void notifier.init();
 
   // --- Motor ---
   const params = new URLSearchParams(location.search);
@@ -214,7 +259,18 @@ async function boot(): Promise<void> {
       p.stats.runs += 1;
       if (reason === 'victory') p.stats.wins += 1;
       p.stats.bestAnte = Math.max(p.stats.bestAnte, ante);
+      // P4: XP de temporada por run (ante * 50, +200 si gana).
+      if (seasonDef) addXp(p, seasonDef.id, ante * 50 + (reason === 'victory' ? 200 : 0));
     });
+    if (seasonDef) {
+      const total =
+        profileStore.current.entitlements.passes.find((x) => x.seasonId === seasonDef.id)?.xp ?? 0;
+      bus.emit('pass:xp', {
+        seasonId: seasonDef.id,
+        amount: ante * 50 + (reason === 'victory' ? 200 : 0),
+        total,
+      });
+    }
   });
 
   /**
@@ -224,6 +280,9 @@ async function boot(): Promise<void> {
    */
   const buildCollection = (): CollectionEntry[] => {
     const stateOf = (id: string): CollectionState => {
+      // Un desbloqueo de retencion se muestra como 'unlocked' (con su origen),
+      // distinto de 'owned' (parte de un pack comprado).
+      if (profile.collection.unlockSource[id]) return 'unlocked';
       const state = gate.contentState(id);
       return state === 'allowed' ? 'owned' : state;
     };
@@ -242,6 +301,9 @@ async function boot(): Promise<void> {
         kind: 'card',
         state: stateOf(card.id),
         seen: seen.has(card.id),
+        ...(profile.collection.unlockSource[card.id]
+          ? { unlockSource: profile.collection.unlockSource[card.id] }
+          : {}),
         ...(packTitleOf(card.id) ? { packTitleKey: packTitleOf(card.id) } : {}),
       });
     }
@@ -254,6 +316,9 @@ async function boot(): Promise<void> {
         kind: 'joker',
         state: stateOf(joker.id),
         seen: seen.has(joker.id),
+        ...(profile.collection.unlockSource[joker.id]
+          ? { unlockSource: profile.collection.unlockSource[joker.id] }
+          : {}),
         ...(packTitleOf(joker.id) ? { packTitleKey: packTitleOf(joker.id) } : {}),
       });
     }
@@ -455,14 +520,73 @@ async function boot(): Promise<void> {
         engine.startRun(seed);
         scene.setMode('run');
       },
-      onOpenCollection: () => hud?.showCollection(),
+      onOpenCollection: () => {
+        // La Coleccion vive sobre el CARRUSEL 3D: el marco DOM solo manda los
+        // filtros y el detalle; el anillo esta en el canvas y recibe el input.
+        const all = buildCollection();
+        const toViews = (list: CollectionEntry[]): CarouselEntryView[] =>
+          list.map((e) => ({
+            uid: e.id,
+            discovered: e.seen,
+            ...(e.kind === 'joker' ? { jokerId: e.id } : { cardId: e.id }),
+          }));
+
+        // `frame` se referencia desde sus propios callbacks: se declara antes
+        // y se asigna despues (los callbacks corren mas tarde, no al construir).
+        let frame: CollectionCarouselFrame;
+        const focusHandler = (i: number): void => frame.setFocus(i);
+        frame = buildCollectionCarousel(all, {
+          onClose: () => {
+            scene.setCarousel(null);
+            hud?.hideOverlay();
+          },
+          onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
+          onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
+          onOpenPass: () => showPass(),
+        });
+        hud?.showPanel(frame.panel, { carousel: true });
+        scene.setCarousel(toViews(all), focusHandler);
+      },
       onOpenExpansions: () => hud?.toast(t('store.comingSoon'), 'info'),
-      onOpenPass: () => hud?.toast(t('pass.comingSoon'), 'info'),
+      onOpenPass: () => showPass(),
       onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
       onOpenAbout: () => hud?.showAbout(),
       onOpenBoard: () => {
         void openBoard();
       },
+      // --- Retencion: la UI solo pide; quien escribe en el perfil es aca ---
+      onOpenDaily: () => openDaily(),
+      onClaimDaily: () => {
+        // La recompensa se aplica DENTRO del patch: si el proceso muere antes
+        // del debounce, no queda un "desbloqueado" en memoria que no existe en
+        // el disco. El resultado sale por un objeto porque `claimDaily` corre
+        // en el callback y una variable suelta no sobrevive al analisis de
+        // tipos (y tampoco se lee con claridad).
+        const box: { claim: DailyClaim | null } = { claim: null };
+        profileStore.patch((p) => {
+          box.claim = claimDaily(p, Date.now(), dailyTable);
+        });
+        const claim = box.claim;
+        if (!claim?.ok) {
+          openDaily();
+          return;
+        }
+        // Pedir el permiso EN CONTEXTO: el claim es un gesto del usuario, y el
+        // navegador/OS solo lo concede dentro de uno. Si ya se pregunto antes
+        // (o se denego), `notify.ts` no insiste. Solo lo pedimos si el jugador
+        // dejo las notificaciones diarias prendidas: si las apago, no molestar.
+        if (profileStore.current.settings.notifyDaily) void notifier.ensurePermission();
+        bus.emit(
+          'daily:claim',
+          claim.reward ? { streak: claim.streak, reward: claim.reward } : { streak: claim.streak },
+        );
+        hud?.toast(
+          t('daily.claimDone', { name: claim.reward ? rewardName(claim.reward) : '—' }),
+          'info',
+        );
+        openDaily();
+      },
+      onOpenAchievements: () => hud?.showAchievements(achievementViews()),
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
@@ -506,6 +630,134 @@ async function boot(): Promise<void> {
   });
 
   hud.bindCollectionProvider(buildCollection);
+
+  // ==========================================================================
+  // Retencion: recompensa diaria y logros
+  // ==========================================================================
+  //
+  // Toda la REGLA vive en `src/retention/*` (puro, sin DOM). Este bloque solo
+  // traduce: le da al tracker el contexto de la partida y convierte los eventos
+  // en algo visible (panel, toast, banner). El motor no sabe nada de esto.
+
+  /**
+   * Nombre visible de un reward. El registry del MOTOR es el que sabe los
+   * nombres (es el contenido ya filtrado por DLC), asi que se resuelve aca.
+   */
+  const rewardName = (reward: RetentionReward): string => {
+    if (reward.type === 'card') {
+      const def = engine.registry.tryGetCard(reward.id);
+      return def ? t(def.nameKey) : reward.id;
+    }
+    if (reward.type === 'joker') {
+      const def = engine.registry.tryGetJoker(reward.id);
+      return def ? t(def.nameKey) : reward.id;
+    }
+    return reward.id;
+  };
+  hud.bindRewardNames(rewardName);
+
+  /** Abre el panel diario con el estado ACTUAL del perfil (no uno cacheado). */
+  const openDaily = (): void => {
+    const state = evaluateDaily(profileStore.current, Date.now(), dailyTable);
+    hud?.showDailyReward(state, dailyTable, () => {
+      // Cerro sin reclamar: queda el banner. Es el recordatorio que sobrevive
+      // al panel, y es tambien el fallback cuando no hay permiso de avisos.
+      if (!evaluateDaily(profileStore.current, Date.now(), dailyTable).alreadyClaimedToday) {
+        bus.emit('banner:show', { key: 'banner.daily.ready', kind: 'info' });
+      }
+      hud?.showMenu();
+    });
+  };
+
+  /** P4: abre (o re-renderiza) el panel del Pase de Temporada. */
+  const showPass = (): void => {
+    if (!seasonDef) {
+      hud?.toast(t('pass.comingSoon'), 'info');
+      return;
+    }
+    const pass =
+      profileStore.current.entitlements.passes.find((p) => p.seasonId === seasonDef.id) ??
+      { seasonId: seasonDef.id, xp: 0, premium: false, claimed: [] };
+    const panel = buildPassPanel(seasonDef, pass, rewardName, {
+      onClaim: (level) => {
+        let granted = false;
+        profileStore.patch((p) => {
+          if (seasonDef) granted = claimTier(p, seasonDef, level);
+        });
+        if (granted) hud?.toast(t('pass.claimed'), 'info');
+        // Re-renderiza para reflejar el nuevo estado (reclamado / mas XP).
+        showPass();
+      },
+      onClose: () => hud?.hideOverlay(),
+    });
+    hud?.showPanel(panel);
+  };
+
+  const achievementViews = () =>
+    achievementDefs.map((def) => {
+      const unlocked = profileStore.current.achievements.unlockedIds.includes(def.id);
+      const max = def.incremental?.max ?? 0;
+      return {
+        id: def.id,
+        name: t(def.nameKey),
+        desc: t(def.descKey),
+        unlocked,
+        current: unlocked ? max : (profileStore.current.achievements.progress[def.id] ?? 0),
+        max,
+        rewardLabel: def.reward ? rewardName(def.reward) : null,
+      };
+    });
+
+  /**
+   * Contexto de partida para los predicados de logros. Es un snapshot y no el
+   * estado vivo: el tracker es puro y no puede salir a buscar nada por su
+   * cuenta.
+   */
+  const achievementContext = (): AchievementContext => {
+    const run = engine.run;
+    return {
+      ante: run?.ante ?? 0,
+      money: run?.money ?? 0,
+      jokerCount: run?.jokers.length ?? 0,
+      deckSize: run?.deck.totalSize ?? 0,
+      runs: profileStore.current.stats.runs,
+      wins: profileStore.current.stats.wins,
+      bestAnte: profileStore.current.stats.bestAnte,
+    };
+  };
+
+  const achievements = new AchievementTracker({
+    bus,
+    defs: achievementDefs,
+    profile: profileStore,
+    getContext: achievementContext,
+  });
+  achievements.start();
+
+  // Un logro se anuncia SIEMPRE in-app (el banner es mas prominente que un
+  // toast y no se pierde detras de un boton) y se amplifica con un aviso del
+  // sistema si el jugador lo habilito. El banner es el fallback garantizado:
+  // si el permiso de notificaciones se denego, el jugador igual ve el logro.
+  bus.on('achievement:unlocked', ({ nameKey }) => {
+    const name = t(nameKey);
+    bus.emit('banner:show', { key: 'banner.achievement.unlocked', params: { name }, kind: 'success' });
+    if (profileStore.current.settings.notifyAchievements) {
+      notifier.notify({ title: t('notify.achievement.title'), body: t('notify.achievement.body', { name }) });
+    }
+  });
+
+  // La recompensa diaria amplifica el momento con un aviso del sistema: el
+  // "volve mañana por el dia N+1" es el verdadero gancho de retencion. El
+  // banner in-app ya lo cubre el panel + el toast, asi que aca solo sumamos la
+  // notificacion del SO cuando el permiso esta concedido.
+  bus.on('daily:claim', ({ streak, reward }) => {
+    if (!profileStore.current.settings.notifyDaily) return;
+    const name = reward ? rewardName(reward) : '—';
+    notifier.notify({
+      title: t('notify.daily.title'),
+      body: t('notify.daily.claimed', { day: streak, next: streak + 1, name }),
+    });
+  });
 
   // ==========================================================================
   // Fase 5: duelo micelial (hot-seat)
@@ -686,6 +938,16 @@ async function boot(): Promise<void> {
   loader.setProgress(1);
   loader.hide();
 
+  // --- Primera apertura del dia: la recompensa se ofrece sola ---
+  // El boot entra directo al menu y no hay vuelta al menu a mitad de run, asi
+  // que este es el UNICO momento donde el daily puede aparecer sin que el
+  // jugador lo pida. `?daily=0` lo apaga: lo usa el smoke para poder seguir
+  // midiendo la pantalla de inicio sin que un modal se le cruce.
+  if (params.get('daily') !== '0') {
+    const state = evaluateDaily(profileStore.current, Date.now(), dailyTable);
+    if (!state.alreadyClaimedToday) openDaily();
+  }
+
   if (import.meta.env.DEV) {
     console.info(
       `%cFungiFlush%c listo. Packs: ${content.loadedIds.join(', ')}. Guardado: ${saveBackend}. F3 = stats.`,
@@ -704,6 +966,7 @@ async function boot(): Promise<void> {
         content,
         profileStore,
         runStore,
+        achievements,
         // El duelo vive en una clausura de `boot()`. Se expone como funcion
         // porque la sesion se reemplaza en cada revancha, y el smoke test
         // necesita leer el estado real (sobre todo para comprobar que la mano

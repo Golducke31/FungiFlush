@@ -129,6 +129,11 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   const cosmetics = { ...fallback.cosmetics, ...((migrated['cosmetics'] as object) ?? {}) };
   const stats = { ...fallback.stats, ...((migrated['stats'] as object) ?? {}) };
   const board = { ...fallback.board, ...((migrated['board'] as object) ?? {}) };
+  // Retencion (P0): campos ADITIVOS. El merge sobre el default alcanza y sobra,
+  // asi que no hace falta entrada en PROFILE_MIGRATIONS. Sin estas tres lineas
+  // el objeto reconstruido de abajo los descartaria: el return es explícito.
+  const daily = { ...fallback.daily, ...((migrated['daily'] as object) ?? {}) };
+  const achievements = { ...fallback.achievements, ...((migrated['achievements'] as object) ?? {}) };
 
   return {
     version: CURRENT_PROFILE_VERSION,
@@ -136,6 +141,8 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     settings,
     entitlements,
     collection,
+    daily,
+    achievements,
     cosmetics,
     starterOverrides: Array.isArray(migrated['starterOverrides'])
       ? (migrated['starterOverrides'] as ProfileSave['starterOverrides'])
