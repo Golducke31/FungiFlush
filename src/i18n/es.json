@@ -528,7 +528,8 @@
     "saveLabel": "Ante {ante} · Semilla {seed}",
     "version": "Versión {version}",
     "daily": "Diaria",
-    "achievements": "Logros"
+    "achievements": "Logros",
+    "cosmetics": "Cosméticos"
   },
   "settings": {
     "title": "Ajustes",
@@ -928,5 +929,16 @@
       "name": "Colapso fúngico",
       "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de joker menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
     }
+  },
+  "cosmetics": {
+    "title": "Cosméticos",
+    "subtitle": "Dorso de carta y tapete de la mesa",
+    "cardback": "Dorso de carta",
+    "felt": "Tapete",
+    "equip": "Equipar",
+    "equipped": "Equipado",
+    "none": "Todavía no tenés cosméticos de este tipo.",
+    "cardback.default": "Clásico",
+    "felt.default": "Losa rúnica"
   }
 }

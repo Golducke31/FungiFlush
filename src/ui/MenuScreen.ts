@@ -42,6 +42,8 @@ export interface MenuCallbacks {
   onOpenDaily: () => void;
   /** Logros (retencion). */
   onOpenAchievements: () => void;
+  /** Cosméticos (R4b): dorso de carta y tapete. */
+  onOpenCosmetics: () => void;
 }
 
 export interface MenuState {
@@ -217,6 +219,11 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   chips.appendChild(
     chip(t('menu.achievements'), 'achievements', callbacks.onOpenAchievements, {
       mod: 'menu-ghost--achievements',
+    }),
+  );
+  chips.appendChild(
+    chip(t('menu.cosmetics'), 'cosmetics', callbacks.onOpenCosmetics, {
+      mod: 'menu-ghost--cosmetics',
     }),
   );
   panel.appendChild(chips);

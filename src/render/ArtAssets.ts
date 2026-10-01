@@ -95,7 +95,28 @@ export type CardOwnArtKey = `card_own_${string}`;
  * ciego de ante no obligue a renombrar el PNG.
  */
 export type BlindArtKey = `blind_${string}`;
-export type ArtKey = CardArtKey | LegacyArtKey | CardOwnArtKey | BlindArtKey;
+/**
+ * Dorso de carta cosmético (R4b): `cardback_<id>.webp`.
+ *
+ * No se enumeran: los ids son datos (los trae el perfil). Hoy solo existe
+ * `default` (que usa `art_cardback`), pero un dorso nuevo se cuelga de esta
+ * clave sin tocar la UI. El archivo se resuelve por patron en `keyForFile`.
+ */
+export type CardBackArtKey = `cardback_${string}`;
+/**
+ * Tapete/fieltro cosmético (R4b): `felt_<id>.webp`.
+ *
+ * Igual que `CardBackArtKey`: ids de datos, sin arte todavia. `default` deja la
+ * losa rúnica (sin fieltro). El archivo se resuelve por patron en `keyForFile`.
+ */
+export type FeltArtKey = `felt_${string}`;
+export type ArtKey =
+  | CardArtKey
+  | LegacyArtKey
+  | CardOwnArtKey
+  | BlindArtKey
+  | CardBackArtKey
+  | FeltArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -128,6 +149,12 @@ const CARD_OWN_FILE = /^art_card_own_(.+)\.webp$/;
 /** `art_blind_<clave>.webp` -> `blind_<clave>`. */
 const BLIND_FILE = /^art_blind_(.+)\.webp$/;
 
+/** `art_cardback_<id>.webp` -> `cardback_<id>`. */
+const CARDBACK_FILE = /^art_cardback_(.+)\.webp$/;
+
+/** `art_felt_<id>.webp` -> `felt_<id>`. */
+const FELT_FILE = /^art_felt_(.+)\.webp$/;
+
 /**
  * Clave de un archivo del manifiesto. Cubre las fijas por tabla y las de arte
  * propio (carta y ciego) por patron. Devuelve `undefined` si el archivo no es
@@ -139,7 +166,11 @@ function keyForFile(file: string): ArtKey | undefined {
   const own = CARD_OWN_FILE.exec(file);
   if (own?.[1]) return `card_own_${own[1]}` as ArtKey;
   const blind = BLIND_FILE.exec(file);
-  return blind?.[1] ? (`blind_${blind[1]}` as ArtKey) : undefined;
+  if (blind?.[1]) return `blind_${blind[1]}` as ArtKey;
+  const cardback = CARDBACK_FILE.exec(file);
+  if (cardback?.[1]) return `cardback_${cardback[1]}` as ArtKey;
+  const felt = FELT_FILE.exec(file);
+  return felt?.[1] ? (`felt_${felt[1]}` as ArtKey) : undefined;
 }
 
 /** Los que siempre existen: es el respaldo si no hay manifiesto. */
@@ -314,7 +345,9 @@ export function blindKeysFor(art: string | undefined): ArtKey[] {
 export function artFileFor(key: ArtKey): string {
   if (key.startsWith('card_own_')) return `art_card_own_${key.slice('card_own_'.length)}.webp`;
   if (key.startsWith('blind_')) return `art_blind_${key.slice('blind_'.length)}.webp`;
-  return FILES[key as Exclude<ArtKey, CardOwnArtKey | BlindArtKey>];
+  if (key.startsWith('cardback_')) return `art_cardback_${key.slice('cardback_'.length)}.webp`;
+  if (key.startsWith('felt_')) return `art_felt_${key.slice('felt_'.length)}.webp`;
+  return FILES[key as Exclude<ArtKey, CardOwnArtKey | BlindArtKey | CardBackArtKey | FeltArtKey>];
 }
 
 /** Clave del dorso. */

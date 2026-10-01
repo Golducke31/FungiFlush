@@ -26,7 +26,7 @@ import {
   type ScoreStep,
 } from '@engine/index';
 
-import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor } from './ArtAssets';
+import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor, type ArtKey } from './ArtAssets';
 import {
   ARENA_GLOW_BASE,
   ARENA_GLOW_ENVIRONMENT,
@@ -294,6 +294,11 @@ export class SceneManager {
   private readonly dropZones: DropZone[] = [];
   /** Textura del dorso, compartida por las cartas, el mazo y el descarte. */
   private backTexture: THREE.CanvasTexture | null = null;
+  /**
+   * Materiales de las pilas (mazo/descarte) que usan `backTexture`. Al cambiar
+   * el dorso hay que reasignarles el `map` (comparten una sola textura).
+   */
+  private readonly pileMaterials: THREE.MeshStandardMaterial[] = [];
   /** Carta que se esta arrastrando (uid), o null. */
   private dragUid: string | null = null;
 
@@ -846,6 +851,8 @@ export class SceneManager {
       emissive: new THREE.Color(0x1a3a4a),
       emissiveIntensity: 0.5,
     });
+    // Se rastrea para poder reasignarle el `map` cuando cambia el dorso.
+    this.pileMaterials.push(material);
     this.disposables.push(geometry, material);
 
     for (let i = 0; i < layers; i++) {
@@ -1754,6 +1761,54 @@ export class SceneManager {
    */
   blindArt(art: string | undefined): HTMLImageElement | undefined {
     return this.assets.getFirst(blindKeysFor(art));
+  }
+
+  // ==========================================================================
+  // Cosméticos (R4b): dorso de carta y tapete.
+  //
+  // El render es quien tiene los assets cargados, asi que la UI solo pide
+  // "pon el dorso/fieltro X" y el render resuelve la textura. El mapeo id->clave
+  // es el único punto que sabe qué arte corresponde a cada cosmético: hoy solo
+  // existe `default`, pero un fieltro/dorso nuevo se cuelga aqui sin tocar la UI.
+  // ==========================================================================
+
+  /**
+   * Aplica el dorso de carta `id`. `default` usa el arte base del dorso. El
+   * resto de ids reserva `cardback_<id>` (aún sin arte: cae al respaldo de
+   * `createCardBackCanvas`). Reconstruye la textura compartida y la reaplica a
+   * las pilas y a TODA carta viva (mano, jokers, zona de puntuación).
+   */
+  setCardBack(id: string): void {
+    const key: ArtKey = id === 'default' ? CARD_BACK_KEY : (`cardback_${id}` as ArtKey);
+    const art = this.assets.get(key);
+    const next = new THREE.CanvasTexture(createCardBackCanvas(art));
+    next.colorSpace = THREE.SRGBColorSpace;
+    // Liberar el dorso viejo: una textura colgada es RAM de GPU que no vuelve.
+    if (this.backTexture) {
+      this.backTexture.dispose();
+      const index = this.disposables.indexOf(this.backTexture);
+      if (index >= 0) this.disposables.splice(index, 1);
+    }
+    this.backTexture = next;
+    this.disposables.push(next);
+    // Pilas (mazo/descarte): una sola textura compartida por las dos.
+    for (const material of this.pileMaterials) {
+      material.map = next;
+      material.needsUpdate = true;
+    }
+    // Cartas vivas: cada Card3D tiene su propio material de dorso.
+    this.forEachCard((card) => card.setBackTexture(next));
+  }
+
+  /**
+   * Aplica el tapete/fieltro `id`. `default` deja la losa rúnica (sin fieltro);
+   * el resto de ids reserva `felt_<id>` y, si su arte existe, lo muestra como
+   * overlay sobre la losa. Un id sin arte no rompe: la Arena simplemente oculta
+   * el tapete.
+   */
+  setFelt(id: string): void {
+    const art = id === 'default' ? undefined : this.assets.get(`felt_${id}` as ArtKey);
+    this.arena?.setFelt(art);
   }
 
   private lang(): string {

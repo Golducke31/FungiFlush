@@ -2794,7 +2794,8 @@ body {
 .daily-focus,
 .achievement-card,
 .settings-field,
-.ascension-card {
+.ascension-card,
+.cosmetics-card {
   border-color: var(--frame-edge);
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.4) 0%, rgba(46, 178, 164, 0) 30%),
@@ -4179,5 +4180,167 @@ body {
   }
   .ascension-desc {
     font-size: 10.5px;
+  }
+}
+
+/* ==========================================================================
+   Cosméticos (R4b)
+   ========================================================================== */
+
+.panel.is-cosmetics {
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+}
+
+.cosmetics-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(640px, 92vw);
+  max-height: 86vh;
+  padding: 22px 26px;
+}
+
+.cosmetics-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cosmetics-title {
+  margin: 0;
+  font-size: 22px;
+  color: var(--frame-rim);
+  font-family: var(--display-font);
+}
+
+.cosmetics-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--frame-dim);
+}
+
+.cosmetics-body-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cosmetics-section-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--frame-rim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cosmetics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.cosmetics-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--frame-edge);
+}
+
+.cosmetics-card.is-selected {
+  border-color: rgba(46, 178, 164, 0.7);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 0 16px rgba(79, 209, 139, 0.22);
+}
+
+.cosmetics-body {
+  display: flex;
+  min-width: 0;
+}
+
+.cosmetics-name {
+  font-size: 14px;
+  color: var(--frame-rim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cosmetics-equip {
+  flex: none;
+  min-width: 88px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(46, 178, 164, 0.45);
+  background: rgba(46, 178, 164, 0.12);
+  color: var(--frame-rim);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cosmetics-equip:hover:not(:disabled) {
+  background: rgba(46, 178, 164, 0.22);
+}
+
+.cosmetics-equip.is-selected,
+.cosmetics-equip:disabled {
+  border-color: rgba(46, 178, 164, 0.7);
+  background: rgba(46, 178, 164, 0.3);
+  cursor: default;
+}
+
+.cosmetics-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--frame-dim);
+}
+
+.cosmetics-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cosmetics-close {
+  min-width: 120px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--frame-edge);
+  background: rgba(46, 178, 164, 0.14);
+  color: var(--frame-rim);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cosmetics-close:hover {
+  background: rgba(46, 178, 164, 0.24);
+}
+
+@media (max-height: 460px) {
+  .cosmetics-shell {
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .cosmetics-title {
+    font-size: 16px;
+  }
+  .cosmetics-subtitle {
+    display: none;
+  }
+  .cosmetics-card {
+    padding: 7px 12px;
+    min-height: 46px;
+  }
+  .cosmetics-name {
+    font-size: 12px;
   }
 }

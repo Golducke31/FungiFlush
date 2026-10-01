@@ -27,6 +27,7 @@ import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
 import { buildAscensionPanel, buildMenuPanel } from './MenuScreen';
+import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
@@ -106,6 +107,9 @@ export interface HudCallbacks {
   onRerollDie: () => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
   onOpenBoard: () => void;
+  // --- R4b: cosméticos (dorso de carta / tapete) ---
+  onOpenCosmetics: () => void;
+  onEquip: (kind: 'cardback' | 'felt', id: string) => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -234,6 +238,11 @@ export class HUD {
     unlocked: 0,
     selected: 0,
     max: 0,
+  };
+  /** Cosméticos (R4b): se los empuja el controlador desde el perfil. */
+  private cosmeticsState: CosmeticsState = {
+    owned: ['default'],
+    equipped: { cardback: 'default', felt: 'default' },
   };
   /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
   private closeSeq = 0;
@@ -1047,6 +1056,7 @@ export class HUD {
         onToggleLanguage: () => this.callbacks.onToggleLanguage(),
         onOpenDaily: () => this.callbacks.onOpenDaily(),
         onOpenAchievements: () => this.callbacks.onOpenAchievements(),
+        onOpenCosmetics: () => this.callbacks.onOpenCosmetics(),
       },
     );
     this.openOverlay(panel);
@@ -1067,6 +1077,33 @@ export class HUD {
     const state = { ...this.ascensionState };
     const panel = buildAscensionPanel(state, {
       onSelect: (level) => this.callbacks.onSelectAscension(level),
+      onClose: () => this.showMenu(),
+    });
+    this.openOverlay(panel);
+  }
+
+  /**
+   * Estado de cosméticos para el panel. Lo empuja el controlador cada vez que el
+   * perfil cambia (y antes de `showMenu`), porque el HUD no conoce el perfil.
+   */
+  setCosmeticsState(state: CosmeticsState): void {
+    this.cosmeticsState = state;
+  }
+
+  /** Abre el panel de cosméticos (dorso de carta / tapete). */
+  showCosmetics(): void {
+    // Igual que la ascension: el `openOverlay` limpia las referencias del panel,
+    // asi que se toma el estado ANTES de abrirlo.
+    const state: CosmeticsState = {
+      owned: [...this.cosmeticsState.owned],
+      equipped: { ...this.cosmeticsState.equipped },
+    };
+    const panel = buildCosmeticsPanel(state, {
+      onEquip: (kind: CosmeticKind, id: string) => {
+        this.callbacks.onEquip(kind, id);
+        // Reabre para reflejar la nueva selección (el equipado se marca).
+        this.showCosmetics();
+      },
       onClose: () => this.showMenu(),
     });
     this.openOverlay(panel);

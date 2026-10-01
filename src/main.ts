@@ -658,6 +658,19 @@ async function boot(): Promise<void> {
     });
   };
 
+  // --- R4b: cosméticos ---
+  // Mismo patrón que la ascensión: el HUD no conoce el perfil. Empuja el estado
+  // y, al arrancar y al cambiar, dice al render qué dorso/tapete mostrar.
+  const syncCosmetics = (): void => {
+    const c = profileStore.current.cosmetics;
+    hud?.setCosmeticsState({
+      owned: [...c.owned],
+      equipped: { cardback: c.equippedCardBack, felt: c.equippedFelt },
+    });
+    scene.setCardBack(c.equippedCardBack);
+    scene.setFelt(c.equippedFelt);
+  };
+
   // --- HUD ---
   hud = new HUD({
     engine,
@@ -816,6 +829,18 @@ async function boot(): Promise<void> {
         openDaily();
       },
       onOpenAchievements: () => hud?.showAchievements(achievementViews()),
+      // --- R4b: cosméticos ---
+      onOpenCosmetics: () => hud?.showCosmetics(),
+      onEquip: (kind, id) => {
+        // El perfil es la fuente de verdad; el render solo refleja. Un id que
+        // no se posee no llega aca (el panel solo lista lo que `owned` trae).
+        profileStore.patch((p) => {
+          if (kind === 'cardback') p.cosmetics.equippedCardBack = id;
+          else if (kind === 'felt') p.cosmetics.equippedFelt = id;
+        });
+        if (kind === 'cardback') scene.setCardBack(id);
+        else if (kind === 'felt') scene.setFelt(id);
+      },
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
@@ -1183,6 +1208,8 @@ async function boot(): Promise<void> {
   scene.setMode('menu', { reduceMotion: profile.settings.reduceMotion });
   // Antes de dibujar el menu: el chip de ascension lee este estado.
   syncAscension();
+  // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.
+  syncCosmetics();
 
   savedRun = await runStore.load();
   if (savedRun) {

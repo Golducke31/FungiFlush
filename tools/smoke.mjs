@@ -1030,6 +1030,74 @@ const ascensionPanel = await (async () => {
 console.log('\n--- R1: ascension ---');
 console.log(JSON.stringify(ascensionPanel, null, 2));
 
+// --- R4b: cosmeticos (dorso de carta + tapete) ---
+const cosmeticsPanel = await (async () => {
+  const setup = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    // Forzar cosmeticos de prueba para no depender del perfil del navegador.
+    ff.profileStore.current.cosmetics.owned = ['default', 'testback', 'testfelt'];
+    ff.profileStore.current.cosmetics.equippedCardBack = 'default';
+    ff.profileStore.current.cosmetics.equippedFelt = 'default';
+    ff.hud.setCosmeticsState({
+      owned: ['default', 'testback', 'testfelt'],
+      equipped: { cardback: 'default', felt: 'default' },
+    });
+    ff.hud.showMenu();
+    return { owned: 3 };
+  });
+  await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
+  await page.waitForTimeout(400);
+
+  const chip = await page.evaluate(() => {
+    const el = document.querySelector('.panel.is-menu [data-act="cosmetics"]');
+    return { present: Boolean(el), label: el?.textContent ?? null };
+  });
+
+  // Abrir el panel con un click REAL sobre el chip.
+  const chipBox = await page.locator('.panel.is-menu [data-act="cosmetics"]').boundingBox();
+  if (chipBox) {
+    await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  }
+  await page.waitForSelector('.panel.is-cosmetics .cosmetics-card', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(shotsDir, '21-cosmetics.png') });
+
+  const list = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.panel.is-cosmetics .cosmetics-card')];
+    const sections = [...document.querySelectorAll('.panel.is-cosmetics .cosmetics-section')];
+    const withButton = cards.filter((c) => c.querySelector('[data-act="cosmetic-equip"]')).length;
+    // Ninguna tarjeta debe quedar con una clave i18n sin resolver (texto t('...'.
+    const rawKeys = cards.filter((c) => /t\(['"]/.test(c.textContent ?? '')).length;
+    return { total: cards.length, sections: sections.length, withButton, rawKeys };
+  });
+
+  // Equipar el dorso de prueba con click real (sin arte: cae al respaldo).
+  const eqBox = await page
+    .locator('.panel.is-cosmetics [data-act="cosmetic-equip"][data-kind="cardback"][data-id="testback"]')
+    .boundingBox();
+  if (eqBox) {
+    await page.mouse.click(eqBox.x + eqBox.width / 2, eqBox.y + eqBox.height / 2);
+  }
+  await page.waitForTimeout(400);
+  const afterEquip = await page.evaluate(() => ({
+    equipped: window.__fungiflush.profileStore.current.cosmetics.equippedCardBack,
+    textures: window.__fungiflush.scene.stats().textures,
+  }));
+
+  // Cerrar y volver a la tienda para no romper el resto del smoke.
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff.hud.closePanel();
+    ff.engine.enterShop();
+    ff.hud.refreshPanel();
+  });
+  await page.waitForTimeout(400);
+
+  return { ...setup, ...chip, ...list, equipped: afterEquip.equipped, textures: afterEquip.textures };
+})();
+console.log('\n--- R4b: cosmeticos ---');
+console.log(JSON.stringify(cosmeticsPanel, null, 2));
+
 
 const deckBuilder = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));

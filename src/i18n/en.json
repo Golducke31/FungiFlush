@@ -528,7 +528,8 @@
     "saveLabel": "Ante {ante} · Seed {seed}",
     "version": "Version {version}",
     "daily": "Daily",
-    "achievements": "Achievements"
+    "achievements": "Achievements",
+    "cosmetics": "Cosmetics"
   },
   "settings": {
     "title": "Settings",
@@ -928,5 +929,16 @@
       "name": "Fungal Collapse",
       "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer joker slot, no die rerolls, and every boss gains an extra modifier."
     }
+  },
+  "cosmetics": {
+    "title": "Cosmetics",
+    "subtitle": "Card back and table felt",
+    "cardback": "Card back",
+    "felt": "Felt",
+    "equip": "Equip",
+    "equipped": "Equipped",
+    "none": "You don't have cosmetics of this type yet.",
+    "cardback.default": "Classic",
+    "felt.default": "Runic slab"
   }
 }

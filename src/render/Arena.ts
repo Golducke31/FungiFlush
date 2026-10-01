@@ -262,6 +262,13 @@ export interface Arena {
    * `ArtAssets` (el modulo se puede probar sin navegador ni manifiesto).
    */
   applyFloorArt(art?: HTMLImageElement): void;
+  /**
+   * Tapete cosmético (R4b). `art` presente => muestra el fieltro sobre la losa;
+   * `undefined` => lo oculta y queda la losa rúnica (comportamiento de fábrica).
+   * Es un OVERLAY, no toca la losa rúnica: el fieltro puede cambiarse en caliente
+   * sin reconstruir el suelo.
+   */
+  setFelt(art?: HTMLImageElement): void;
 }
 
 /**
@@ -367,12 +374,31 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   floorMesh.name = 'arena-floor';
   group.add(floorMesh);
 
+  // EL TAPETE: overlay cosmético sobre la losa rúnica (R4b). Vive 1 cm por
+  // encima para no pelear en profundidad con la losa, y es MÁS CHICO que la
+  // plataforma (deja un borde de piedra rúnica a la vista). Arranca oculto: la
+  // fábrica no usa fieltro; se enciende solo al equipar uno.
+  const feltGeometry = new THREE.PlaneGeometry(PLATFORM_HALF_X * 2 - 2.2, PLATFORM_HALF_Z * 2 - 1.4);
+  feltGeometry.rotateX(-Math.PI / 2);
+  feltGeometry.translate(0, 0.02, 0);
+  const feltMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const feltMesh = new THREE.Mesh(feltGeometry, feltMaterial);
+  feltMesh.name = 'arena-felt';
+  feltMesh.visible = false;
+  group.add(feltMesh);
+
   const disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = [
     floorGeometry,
     floorMaterial,
     platformGeometry,
     platformMaterial,
     floraMaterial,
+    feltGeometry,
+    feltMaterial,
   ];
 
   if (floraGeometry) {
@@ -437,6 +463,25 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
 
       disposables.push(map, normal);
       floorApplied = 1;
+    },
+    setFelt(art?: HTMLImageElement): void {
+      if (!art || art.naturalWidth === 0) {
+        feltMesh.visible = false;
+        return;
+      }
+      // TEXTURA propia del fieltro (igual que la losa: `THREE.Texture` sobre la
+      // imagen ya decodificada, sin copiar a canvas). Se libera en `dispose`.
+      const map = new THREE.Texture(art);
+      map.needsUpdate = true;
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.anisotropy = 8;
+      // El fieltro se ilumina solo con el mapa (sin emisión): es un paño, no la
+      // losa encendida. El blanco deja que el arte ponga el color.
+      feltMaterial.map = map;
+      feltMaterial.color = new THREE.Color(0xffffff);
+      feltMaterial.needsUpdate = true;
+      disposables.push(map);
+      feltMesh.visible = true;
     },
   };
 }
