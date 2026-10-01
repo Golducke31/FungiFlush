@@ -309,5 +309,94 @@
         "labelKey": "effect.firstLight"
       }
     ]
+  },
+  {
+    "id": "spore_fairycake",
+    "nameKey": "card.spore_fairycake.name",
+    "descKey": "card.spore_fairycake.desc",
+    "element": "spore",
+    "family": "agaricaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 6,
+    "art": { "hue": 40, "hue2": 20, "pattern": "radial", "silhouette": "cluster", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "fairy_ring_bloom",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          {
+            "type": "all",
+            "conds": [
+              { "type": "scored_element_count_gte", "element": "spore", "value": 3 },
+              { "type": "scored_element_count_gte", "element": "crystal", "value": 2 }
+            ]
+          }
+        ],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2.5 }],
+        "labelKey": "effect.fairyRing"
+      }
+    ]
+  },
+  {
+    "id": "mycelium_truffle",
+    "nameKey": "card.mycelium_truffle.name",
+    "descKey": "card.mycelium_truffle.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "rare",
+    "baseSubstrate": 4,
+    "baseSpores": 1,
+    "cost": 7,
+    "art": { "hue": 265, "hue2": 300, "pattern": "fibrous", "silhouette": "truffle", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "truffle_deep_store",
+        "trigger": "ON_CARD_HELD",
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.deepStore"
+      }
+    ]
+  },
+  {
+    "id": "decay_inkcap",
+    "nameKey": "card.decay_inkcap.name",
+    "descKey": "card.decay_inkcap.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "rare",
+    "baseSubstrate": 4,
+    "baseSpores": 1,
+    "cost": 6,
+    "art": { "hue": 20, "hue2": 5, "pattern": "rings", "silhouette": "cap", "glow": 0.2 },
+    "effects": [
+      {
+        "id": "inkcap_release",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SPORES", "value": 4 }],
+        "labelKey": "effect.inkRelease"
+      }
+    ]
+  },
+  {
+    "id": "poison_goldcap",
+    "nameKey": "card.poison_goldcap.name",
+    "descKey": "card.poison_goldcap.desc",
+    "element": "poison",
+    "family": "amanitaceae",
+    "rarity": "rare",
+    "baseSubstrate": 3,
+    "baseSpores": 1,
+    "cost": 7,
+    "art": { "hue": 45, "hue2": 15, "pattern": "blotch", "silhouette": "cap", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "goldcap_gilded",
+        "trigger": "ON_MONEY_GAINED",
+        "actions": [{ "type": "ADD_SPORES", "value": 3 }],
+        "labelKey": "effect.gilded"
+      }
+    ]
   }
 ]

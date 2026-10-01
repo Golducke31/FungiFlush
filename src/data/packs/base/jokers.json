@@ -265,5 +265,57 @@
         "labelKey": "effect.sterile"
       }
     ]
+  },
+  {
+    "id": "joker_midas_hand",
+    "nameKey": "joker.joker_midas_hand.name",
+    "descKey": "joker.joker_midas_hand.desc",
+    "rarity": "uncommon",
+    "cost": 6,
+    "sellValue": 3,
+    "art": { "hue": 48, "hue2": 28, "pattern": "radial", "silhouette": "coral", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "midas_touch_spores",
+        "trigger": "ON_MONEY_GAINED",
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.midasTouch"
+      }
+    ]
+  },
+  {
+    "id": "joker_trametes",
+    "nameKey": "joker.joker_trametes.name",
+    "descKey": "joker.joker_trametes.desc",
+    "rarity": "uncommon",
+    "cost": 5,
+    "sellValue": 3,
+    "art": { "hue": 25, "hue2": 5, "pattern": "rings", "silhouette": "bracket", "glow": 0.25 },
+    "effects": [
+      {
+        "id": "trametes_spent",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SPORES", "value": 3 }],
+        "labelKey": "effect.spentSpores"
+      }
+    ]
+  },
+  {
+    "id": "joker_perpetual",
+    "nameKey": "joker.joker_perpetual.name",
+    "descKey": "joker.joker_perpetual.desc",
+    "rarity": "rare",
+    "cost": 7,
+    "sellValue": 4,
+    "art": { "hue": 200, "hue2": 240, "pattern": "fibrous", "silhouette": "mold", "glow": 0.35 },
+    "effects": [
+      {
+        "id": "perpetual_seed",
+        "trigger": "ON_ROUND_START",
+        "once": "per_round",
+        "actions": [{ "type": "ADD_SPORES", "value": 1 }],
+        "labelKey": "effect.perpetual"
+      }
+    ]
   }
 ]

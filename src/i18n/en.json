@@ -174,7 +174,14 @@
     "synergy": "Synergy",
     "sterile": "Sterile",
     "sporeBloom": "Spore bloom",
-    "decayHarvest": "Harvest"
+    "decayHarvest": "Harvest",
+    "fairyRing": "Fairy ring",
+    "deepStore": "Deep store",
+    "inkRelease": "Ink release",
+    "gilded": "Gilded",
+    "midasTouch": "Midas touch",
+    "spentSpores": "Spent spores",
+    "perpetual": "Perpetual"
   },
   "blind": {
     "current": "Current blind",
@@ -415,6 +422,22 @@
     "decay_ancient_stump": {
       "name": "Ancient Stump",
       "desc": "Still rotting, still paying. +2 money at the start of every blind."
+    },
+    "spore_fairycake": {
+      "name": "Fairy Cake",
+      "desc": "On scoring: if you played 3+ Spore and 2+ Crystal, x2.5 Spores."
+    },
+    "mycelium_truffle": {
+      "name": "Truffle",
+      "desc": "While held at scoring: +2 Spores."
+    },
+    "decay_inkcap": {
+      "name": "Inkcap",
+      "desc": "When a card is discarded: +4 Spores."
+    },
+    "poison_goldcap": {
+      "name": "Goldcap",
+      "desc": "When you gain money: +3 Spores."
     }
   },
   "joker": {
@@ -477,6 +500,18 @@
     "joker_sterile_field": {
       "name": "Sterile Field",
       "desc": "CURSED. At blind start, a random card in hand becomes Sterile."
+    },
+    "joker_midas_hand": {
+      "name": "Midas Hand",
+      "desc": "When you gain money: +2 Spores."
+    },
+    "joker_trametes": {
+      "name": "Trametes",
+      "desc": "When a card is discarded: +3 Spores."
+    },
+    "joker_perpetual": {
+      "name": "Perpetual",
+      "desc": "At round start: +1 Spores (once)."
     }
   },
   "mutation": {

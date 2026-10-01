@@ -38,5 +38,9 @@
   { "cardId": "mycelium_elder_web", "arrows": [2, 4, 0, 3, 0, 3, 0, 4], "power": 2, "defense": 2 },
   { "cardId": "amanita_apex_toxica", "arrows": [4, 3, 2, 0, 0, 0, 0, 3], "power": 1, "defense": 1 },
   { "cardId": "crystal_grand_coral", "arrows": [5, 0, 4, 0, 4, 0, 4, 0], "power": 2, "defense": 2 },
-  { "cardId": "decay_ancient_stump", "arrows": [2, 0, 0, 3, 4, 3, 0, 0], "power": 1, "defense": 1 }
+  { "cardId": "decay_ancient_stump", "arrows": [2, 0, 0, 3, 4, 3, 0, 0], "power": 1, "defense": 1 },
+  { "cardId": "spore_fairycake", "arrows": [1, 0, 2, 0, 2, 0, 3, 0], "power": 1, "defense": 1 },
+  { "cardId": "mycelium_truffle", "arrows": [4, 3, 2, 0, 1, 0, 0, 3], "power": 2, "defense": 2 },
+  { "cardId": "decay_inkcap", "arrows": [3, 2, 2, 0, 3, 3, 0, 0], "power": 2, "defense": 2 },
+  { "cardId": "poison_goldcap", "arrows": [3, 2, 2, 2, 3, 0, 0, 2], "power": 2, "defense": 2 }
 ]

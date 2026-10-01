@@ -182,8 +182,8 @@ test('la tabla de antes es data-driven y extrapola', () => {
 test('el pack base real carga con el contenido esperado', () => {
   const registry = buildRegistry();
   const bundle = registry.toBundle();
-  // 30 cartas base + 5 formas evolucionadas (solo obtenibles evolucionando).
-  assert.equal(bundle.cards.length, 35);
+  // 34 cartas base + 5 formas evolucionadas (solo obtenibles evolucionando).
+  assert.equal(bundle.cards.length, 39);
   assert.equal(bundle.cards.filter((c) => (c.tags ?? []).includes('evolved')).length, 5);
   assert.equal(bundle.blinds.length, 24);
   assert.equal(bundle.upgrades?.length, 1);

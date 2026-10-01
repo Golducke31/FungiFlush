@@ -2190,3 +2190,28 @@ otra ilustración: un ciego sin arte no puede mostrar la cara de una carta.
 - **Por qué el jefe NO siempre ocupa dos columnas:** a 844 px la grilla da 3 columnas y un
   `span 2` deja al jefe solo en una fila con un hueco al lado, que se lee como error de
   layout. El ensanche vive detrás de `@media (min-width: 640px)` y con 2 columnas exactas.
+
+---
+
+## 11. Cartas nuevas R4d (arte propio por carta)
+
+Cuatro cartas nuevas de R4d caían en un par (elemento × rareza) que **ya tenía dueño**,
+así que `validate` marcaría la ilustración como compartida. Se resolvió con el
+mecanismo existente: **arte propio** `art_card_own_<id>.webp` (mismo circuito que
+§0.1, PNG 2:3 en `art-source/` → `npm run art` → 512×744).
+
+Ancla img2img: la carta **common del mismo elemento** (`input_fidelity: medium`),
+porque el nuevo sujeto tiene que heredar el trazo, el charco de musgo elíptico, el
+haz de luz vertical y el fondo casi negro del set.
+
+| id | Par | Ancla | Sujeto |
+| --- | --- | --- | --- |
+| `spore_fairycake` | spore/uncommon | `art_card_spore_common.png` | bejín grande con anillo de setas pálidas alrededor (corro de hadas), esporas doradas |
+| `mycelium_truffle` | mycelium/rare | `art_card_mycelium_common.png` | trufa medio enterrada, filamentos violeta brillando como red |
+| `decay_inkcap` | decay/rare | `art_card_decay_common.png` | coprino con el sombrero disolviéndose en tinta negra que gotea |
+| `poison_goldcap` | poison/rare | `art_card_poison_common.png` | sombrero dorado metálico, esporas como monedas flotando |
+
+**Regla que dejó R4d:** una carta nueva NO puede reusar el arte base de su par si ese
+par ya tiene carta con ese archivo. Antes de autorar, listar los pares en uso
+(`art_card_<elem>_<rar>.webp` con un solo dueño cada uno) y elegir: (a) un par libre,
+o (b) arte propio. Agregar dos cartas del mismo par sin arte propio = `validate` rojo.
