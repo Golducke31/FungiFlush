@@ -6,7 +6,7 @@
 
 import type { Deck } from '../cards/Deck';
 import { ECONOMY, RUN_DEFAULTS } from '../constants';
-import type { JokerInstance, ShopOffer } from '../types';
+import type { DieRoll, JokerInstance, ShopOffer } from '../types';
 
 export type GameStatus =
   | 'menu'
@@ -38,6 +38,13 @@ export interface RunState {
   baseHands: number;
   baseDiscards: number;
   deck: Deck;
+  /**
+   * Tirada del dado multiplicador del blind en curso. `null` en el menu y en
+   * los estados que no son una ronda. Se tira al ELEGIR el ciego.
+   */
+  die: DieRoll | null;
+  /** Cuantas veces se volvio a tirar el dado en el ciego actual (sube el coste). */
+  dieRerolls: number;
   status: GameStatus;
   /** Efectos "once: per_run" ya consumidos. */
   consumedEffects: Set<string>;
@@ -67,6 +74,8 @@ export function createRunState(seed: number, deck: Deck): RunState {
     baseHands: RUN_DEFAULTS.hands,
     baseDiscards: RUN_DEFAULTS.discards,
     deck,
+    die: null,
+    dieRerolls: 0,
     status: 'blind_select',
     consumedEffects: new Set<string>(),
     shop: null,

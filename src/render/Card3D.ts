@@ -19,7 +19,12 @@
 import * as THREE from 'three';
 import type { CardInstance, JokerInstance, Rarity, StatusType } from '@engine/index';
 import { t } from '@i18n/index';
-import type { CardTextureCache } from './CardTexture';
+import {
+  heightMapFor,
+  normalMapFor,
+  type CardTextureCache,
+  type CardTextureSpec,
+} from './CardTexture';
 import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
 import * as anim from './anim';
@@ -38,6 +43,73 @@ const DRAG_SCALE = 1.08;
 const FLIP_DURATION = 0.34;
 
 const CARD_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
+
+/**
+ * ESPESOR de la carta, en unidades del mundo.
+ *
+ * Antes la carta era un plano de espesor cero: cara y dorso eran COPLANARES y
+ * los unicos offsets estaban DENTRO del plano (que es lo unico que evitaba el
+ * z-fighting). Al inclinarla no se veia nada, porque no habia nada que ver.
+ * Con el canto, la carta pasa a ser un objeto: al girarla se ve el borde.
+ */
+const CARD_THICKNESS = 0.07;
+
+/**
+ * Canto de la carta: cuatro quads que unen la cara con el dorso. La geometria
+ * es la misma para todas (el tamano es constante), asi que se comparte y se
+ * libera junto con las otras dos en `disposeSharedGeometry`.
+ */
+function createCardEdgeGeometry(): THREE.BufferGeometry {
+  const w = CARD_WIDTH / 2;
+  const h = CARD_HEIGHT / 2;
+  const t = CARD_THICKNESS / 2;
+  const positions: number[] = [];
+  const normals: number[] = [];
+
+  const quad = (
+    a: [number, number, number],
+    b: [number, number, number],
+    c: [number, number, number],
+    d: [number, number, number],
+    n: [number, number, number],
+  ): void => {
+    positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+    for (let i = 0; i < 6; i += 1) normals.push(...n);
+  };
+
+  // Los cuatro costados. El material es `DoubleSide`, asi que el orden de los
+  // vertices no importa: lo que importa es que la normal mire hacia afuera,
+  // porque de eso depende como lo ilumina la luz de la escena.
+  quad([w, -h, t], [w, h, t], [w, h, -t], [w, -h, -t], [1, 0, 0]);
+  quad([-w, h, t], [-w, -h, t], [-w, -h, -t], [-w, h, -t], [-1, 0, 0]);
+  quad([-w, h, t], [w, h, t], [w, h, -t], [-w, h, -t], [0, 1, 0]);
+  quad([w, -h, t], [-w, -h, t], [-w, -h, -t], [w, -h, -t], [0, -1, 0]);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  return geometry;
+}
+
+const CARD_EDGE_GEO = createCardEdgeGeometry();
+
+/**
+ * Cara SUBDIVIDIDA: es lo que permite el relieve geometrico.
+ *
+ * El dorso sigue con el plano de 1 segmento (no se desplaza), pero la cara
+ * necesita vertices de sobra para que el mapa de altura la levante. 24x36 =
+ * ~1700 triangulos por cara: con ~20 cartas vivas son ~35k, nada para la GPU.
+ */
+const CARD_FACE_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT, 24, 36);
+
+/** Cuanto sobresale el relieve. Menos que el espesor, para que no se lea como un bulto. */
+const CARD_RELIEF = 0.03;
+
+/**
+ * Altura de la capa de TEXTO. Tiene que quedar por delante de los PICOS del
+ * relieve, o el arte atravesaria el texto al levantarse.
+ */
+const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + CARD_RELIEF + 0.02;
 
 /**
  * Escala del quad del halo respecto de la carta.
@@ -134,6 +206,12 @@ export class Card3D {
   private readonly faceMaterial: THREE.MeshStandardMaterial;
   private readonly back: THREE.Mesh;
   private readonly backMaterial: THREE.MeshStandardMaterial;
+  /** Canto: le da ESPESOR a la carta. Sin esto es una calcomania. */
+  private readonly edge: THREE.Mesh;
+  private readonly edgeMaterial: THREE.MeshStandardMaterial;
+  /** Capa de TEXTO que flota sobre el arte: es la que produce el parallax. */
+  private readonly top: THREE.Mesh;
+  private readonly topMaterial: THREE.MeshStandardMaterial;
   private readonly halo: THREE.Mesh;
   private readonly haloMaterial: THREE.ShaderMaterial;
   /** Cuanto foil le corresponde por rareza. 0 = no lleva. */
@@ -152,9 +230,11 @@ export class Card3D {
       emissive: new THREE.Color(0xffffff),
       emissiveIntensity: 0.32,
     });
-    this.face = new THREE.Mesh(CARD_GEO, this.faceMaterial);
+    this.face = new THREE.Mesh(CARD_FACE_GEO, this.faceMaterial);
     this.face.userData['card3d'] = this;
-    this.face.position.y = 0.001;
+    // Media carta hacia ADELANTE (local +Z es la normal del plano, o sea "la
+    // cara de arriba" una vez que el grupo se apoya sobre la mesa).
+    this.face.position.z = CARD_THICKNESS / 2;
 
     // --- Dorso ---
     // Las dos caras son coplanares y miran para lados opuestos: la cara usa
@@ -171,7 +251,21 @@ export class Card3D {
     });
     this.back = new THREE.Mesh(CARD_GEO, this.backMaterial);
     this.back.userData['card3d'] = this;
-    this.back.position.y = 0.001;
+    // Media carta hacia ATRAS: entre las dos caras queda el espesor.
+    this.back.position.z = -CARD_THICKNESS / 2;
+
+    // --- Canto ---
+    // Un gris muy oscuro con un resto de emision del elemento: el borde de una
+    // carta real es el nucleo de papel, y el tinte lo ata a su paleta.
+    this.edgeMaterial = new THREE.MeshStandardMaterial({
+      color: 0x0c1218,
+      roughness: 0.74,
+      metalness: 0.18,
+      emissive: new THREE.Color(element),
+      emissiveIntensity: 0.22,
+      side: THREE.DoubleSide,
+    });
+    this.edge = new THREE.Mesh(CARD_EDGE_GEO, this.edgeMaterial);
 
     // --- Halo: halo + anillo + foil en UN solo mesh ---
     //
@@ -187,9 +281,26 @@ export class Card3D {
       foil: this.foilAmount,
     });
     this.halo = new THREE.Mesh(HALO_GEO, this.haloMaterial);
-    this.halo.position.y = -0.004;
+    // El halo FLOTA delante de la cara, y lo bastante lejos como para que los
+    // picos del relieve (CARD_RELIEF) no lo atraviesen.
+    this.halo.position.z = CARD_TOP_OFFSET + 0.025;
+
+    // --- Capa de TEXTO (parallax) ---
+    // Va por DELANTE de la cara: al inclinar la carta, el texto se corre
+    // respecto al arte de atras. `FrontSide` la oculta sola cuando la carta
+    // esta boca abajo (el dorso queda delante), sin tocar `.visible` por frame.
+    this.topMaterial = new THREE.MeshStandardMaterial({
+      transparent: true,
+      depthWrite: false,
+      roughness: 0.6,
+      metalness: 0.1,
+    });
+    this.top = new THREE.Mesh(CARD_GEO, this.topMaterial);
+    this.top.position.z = CARD_TOP_OFFSET;
 
     this.group.add(this.halo);
+    this.group.add(this.top);
+    this.group.add(this.edge);
     this.group.add(this.face);
     this.group.add(this.back);
 
@@ -221,25 +332,24 @@ export class Card3D {
     // (`card.mycelium_webcap.name`) en vez del texto traducido, eso es lo que
     // aparece en la carta. La cache indexa por idioma, asi que un cambio de
     // idioma fuerza una textura nueva con el texto nuevo.
-    const texture = cache.get(
-      key,
-      {
-        kind: 'card',
-        name: t(card.def.nameKey),
-        desc: t(card.def.descKey),
-        element: card.def.element,
-        family: card.def.family,
-        rarity: card.def.rarity,
-        art: card.def.art,
-        substrate: card.def.baseSubstrate + card.bonusSubstrate,
-        spores: card.def.baseSpores + card.bonusSpores,
-        statuses,
-        level: card.level,
-      },
-      art,
-    );
+    const spec: CardTextureSpec = {
+      kind: 'card',
+      name: t(card.def.nameKey),
+      desc: t(card.def.descKey),
+      element: card.def.element,
+      family: card.def.family,
+      rarity: card.def.rarity,
+      art: card.def.art,
+      substrate: card.def.baseSubstrate + card.bonusSubstrate,
+      spores: card.def.baseSpores + card.bonusSpores,
+      statuses,
+      level: card.level,
+    };
 
-    this.applyTexture(texture, card.def.element);
+    // Dos capas: el ARTE (compartido por archivo) y el TEXTO (por estado). El
+    // parallax sale de que la capa de texto flota por delante de la de arte.
+    const artKey = art?.src ?? `proc|${spec.kind}|${spec.element}|${spec.rarity}`;
+    this.applyTexture(cache.getArt(artKey, spec, art), cache.getTop(key, spec), card.def.element, art);
   }
 
   setJoker(
@@ -255,31 +365,54 @@ export class Card3D {
     const isMutation = (joker.def.tags ?? []).includes('mutation');
     // Mismo razonamiento que en `setCard`: hornear el texto exige traducir
     // primero, no la clave cruda.
-    const texture = cache.get(
-      key,
-      {
-        kind: isMutation ? 'mutation' : 'joker',
-        name: t(joker.def.nameKey),
-        desc: t(joker.def.descKey),
-        element: 'neutral',
-        family: 'agaricaceae',
-        rarity: joker.def.rarity,
-        art: joker.def.art,
-        cost: joker.def.cost,
-      },
-      art,
-    );
+    const spec: CardTextureSpec = {
+      kind: isMutation ? 'mutation' : 'joker',
+      name: t(joker.def.nameKey),
+      desc: t(joker.def.descKey),
+      element: 'neutral',
+      family: 'agaricaceae',
+      rarity: joker.def.rarity,
+      art: joker.def.art,
+      cost: joker.def.cost,
+    };
 
-    this.applyTexture(texture, 'neutral');
+    const artKey = art?.src ?? `proc|${spec.kind}|neutral|${spec.rarity}`;
+    this.applyTexture(cache.getArt(artKey, spec, art), cache.getTop(key, spec), 'neutral', art);
   }
 
   /**
    * Reemplaza solo el color del halo/anillo cuando cambia el elemento.
    * Evita recrear materiales en cada frame.
    */
-  private applyTexture(texture: THREE.Texture, element: string): void {
+  private applyTexture(
+    texture: THREE.Texture,
+    topTexture: THREE.Texture,
+    element: string,
+    art?: HTMLImageElement,
+  ): void {
     this.faceMaterial.map = texture;
     this.faceMaterial.emissiveMap = texture;
+
+    // Capa de TEXTO: transparente salvo el texto y el marco. Va por delante del
+    // arte, asi que al inclinar la carta se corre respecto a el: el parallax.
+    this.topMaterial.map = topTexture;
+    this.topMaterial.emissiveMap = topTexture;
+    this.topMaterial.needsUpdate = true;
+
+    // Relieve de la ILUSTRACION (paso 1): un normal map sacado del propio arte
+    // hace que la cara responda a la luz como si estuviera esculpida. No suma
+    // geometria ni assets, y se comparte por archivo de arte.
+    this.faceMaterial.normalMap = normalMapFor(art);
+    // Por encima de ~1 el arte empieza a leerse como plastico.
+    this.faceMaterial.normalScale.set(0.85, 0.85);
+
+    // RELIEVE (paso 2): la cara subdividida se levanta con la luminancia del
+    // arte, asi que el hongo sale de la carta. Cuesta 0 draw calls: es la misma
+    // cara, con mas vertices y un mapa de altura compartido.
+    this.faceMaterial.displacementMap = heightMapFor(art);
+    this.faceMaterial.displacementScale = CARD_RELIEF;
+    this.faceMaterial.displacementBias = 0;
+
     this.faceMaterial.needsUpdate = true;
 
     const elementColor = ELEMENT_COLOR[element as keyof typeof ELEMENT_COLOR] ?? 0x9aa5b1;
@@ -459,6 +592,11 @@ export class Card3D {
     this.applyTransform();
   }
 
+  /** Escala estructural vigente. La leen el layout y los tests. */
+  get scale(): number {
+    return this.baseScale;
+  }
+
   /** Posicion mundial del centro de la carta (para particulas y flechas). */
   worldPosition(target = new THREE.Vector3()): THREE.Vector3 {
     return this.face.getWorldPosition(target);
@@ -498,6 +636,8 @@ export class Card3D {
     anim.killOf(this.home);
     this.faceMaterial.dispose();
     this.backMaterial.dispose();
+    this.edgeMaterial.dispose();
+    this.topMaterial.dispose();
     this.haloMaterial.dispose();
     this.group.clear();
   }
@@ -506,5 +646,7 @@ export class Card3D {
 /** Libera la geometria compartida (solo al cerrar el juego). */
 export function disposeSharedGeometry(): void {
   CARD_GEO.dispose();
+  CARD_FACE_GEO.dispose();
   HALO_GEO.dispose();
+  CARD_EDGE_GEO.dispose();
 }

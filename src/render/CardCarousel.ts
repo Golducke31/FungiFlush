@@ -28,6 +28,8 @@ export interface CarouselEntryView {
   cardId?: string;
   /** Id de joker del registro a mostrar, si es un joker. */
   jokerId?: string;
+  /** Nivel de la carta (el mazo muestra cartas mejoradas, no la base). */
+  level?: number;
   /** Si el jugador ya la descubrio. Las no descubiertas se muestran de dorso. */
   discovered: boolean;
 }
@@ -45,6 +47,17 @@ export interface CarouselOptions {
   halfSpan?: number;
   /** Altura del centro de la carta. Debe dejarla PARADA sobre el piso. */
   lift?: number;
+  /**
+   * Separacion angular entre slots, en radianes. Por defecto cierra el circulo
+   * (`2π / slots`), que es lo correcto para un anillo. Un valor chico abre un
+   * ARCO suave: es lo que necesita una fila de 3 recompensas.
+   */
+  arcStep?: number;
+  /**
+   * `true` (default): el indice da la vuelta (anillo). `false`: se CLAMPEA a
+   * los extremos, que es lo que quiere una eleccion de una sola vez.
+   */
+  wrap?: boolean;
 }
 
 interface Slot {
@@ -115,6 +128,37 @@ export class CardCarousel {
     this.options.onFocusChange = fn;
   }
 
+  /**
+   * Reconfigura el mismo carrusel para OTRA pantalla (coleccion = anillo;
+   * mazo = anillo; recompensa = arco de 3 sin wrap). Cambiar `halfSpan` obliga
+   * a reconstruir los slots, porque define cuantos hacen falta.
+   */
+  configure(opts: {
+    radius?: number;
+    halfSpan?: number;
+    arcStep?: number;
+    wrap?: boolean;
+    lift?: number;
+  }): void {
+    if (opts.radius !== undefined) this.options.radius = opts.radius;
+    if (opts.arcStep !== undefined) this.options.arcStep = opts.arcStep;
+    if (opts.wrap !== undefined) this.options.wrap = opts.wrap;
+    if (opts.lift !== undefined) this.options.lift = opts.lift;
+    if (opts.halfSpan !== undefined && opts.halfSpan !== this.options.halfSpan) {
+      this.options.halfSpan = opts.halfSpan;
+      this.rebuildSlots();
+    }
+  }
+
+  private rebuildSlots(): void {
+    for (const slot of this.slots) {
+      slot.card.dispose();
+      this.group.remove(slot.card.group);
+    }
+    this.slots.length = 0;
+    this.ensureSlots();
+  }
+
   setVisible(value: boolean): void {
     this.visible = value;
     this.group.visible = value;
@@ -124,7 +168,9 @@ export class CardCarousel {
   /** Scroll continuo (rueda del mouse o arrastre). Positivo = avanza. */
   scrollBy(delta: number): void {
     if (this.entries.length === 0) return;
-    this.target += delta;
+    const next = this.target + delta;
+    // Sin wrap no se puede salir de la lista: es una eleccion, no un anillo.
+    this.target = this.wrapping ? next : Math.max(0, Math.min(this.entries.length - 1, next));
   }
 
   /** Salta a una entrada concreta (tap). */
@@ -138,10 +184,16 @@ export class CardCarousel {
     const n = this.entries.length;
     if (n === 0) return 0;
     const from = this.wrap(Math.round(this.target));
-    let d = this.wrap(index) - from;
+    const to = this.wrap(index);
+    if (!this.wrapping) return to - from;
+    let d = to - from;
     if (d > n / 2) d -= n;
     if (d < -n / 2) d += n;
     return d;
+  }
+
+  private get wrapping(): boolean {
+    return this.options.wrap ?? true;
   }
 
   update(dt: number, time: number): void {
@@ -154,7 +206,9 @@ export class CardCarousel {
 
     const base = Math.round(this.rendered);
     const frac = this.rendered - base;
-    const step = (Math.PI * 2) / this.slots.length;
+    // Por defecto el circulo cierra (2π/slots). Un `arcStep` chico abre un arco
+    // suave, que es lo que necesita una fila de recompensas.
+    const step = this.options.arcStep ?? (Math.PI * 2) / this.slots.length;
     const half = this.options.halfSpan;
     const radius = this.options.radius;
 
@@ -251,6 +305,7 @@ export class CardCarousel {
   private wrap(i: number): number {
     const n = this.entries.length;
     if (n === 0) return 0;
+    if (!this.wrapping) return Math.max(0, Math.min(n - 1, i));
     return ((i % n) + n) % n;
   }
 }

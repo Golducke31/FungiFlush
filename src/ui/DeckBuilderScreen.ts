@@ -82,6 +82,156 @@ function sortCards(cards: CardInstance[], mode: DeckSort): CardInstance[] {
   return copy;
 }
 
+/** Marco DOM del mazo cuando el protagonista es el carrusel 3D. */
+export interface DeckCarouselFrame {
+  panel: HTMLElement;
+  /** Actualiza el detalle con la carta enfocada (la reporta la escena). */
+  setFocus: (index: number) => void;
+}
+
+/**
+ * Mazo sobre el CARRUSEL 3D.
+ *
+ * El marco muestra SOLO la carta enfocada (nombre, meta, stats, nivel) y sus
+ * acciones; el anillo vive en el canvas, asi que el centro del panel queda
+ * libre y sin capturar punteros. Cuando cambia el ORDEN se avisa por
+ * `onSorted` para que el carrusel muestre exactamente la misma lista.
+ */
+export function buildDeckCarouselFrame(
+  state: DeckBuilderState,
+  callbacks: {
+    onPurge: (uid: string) => void;
+    onUpgrade: (uid: string) => void;
+    onEvolve: (uid: string) => void;
+    onClose: () => void;
+    onSorted: (cards: CardInstance[]) => void;
+  },
+): DeckCarouselFrame {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-deck is-carousel-frame';
+
+  const title = document.createElement('h2');
+  title.className = 'panel-title';
+  title.textContent = t('deck.title');
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'panel-subtitle';
+  subtitle.textContent = `${t('deck.size', { count: state.cards.length })} · ${t('hud.money')} ${state.money}`;
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'deck-toolbar is-floating';
+
+  const detail = document.createElement('div');
+  detail.className = 'carousel-detail';
+  const detailName = document.createElement('div');
+  detailName.className = 'carousel-detail-name';
+  const detailMeta = document.createElement('div');
+  detailMeta.className = 'carousel-detail-meta';
+  const detailActions = document.createElement('div');
+  detailActions.className = 'deck-card-actions';
+  detail.append(detailName, detailMeta, detailActions);
+
+  const actions = document.createElement('div');
+  actions.className = 'panel-actions is-floating';
+
+  let sort: DeckSort = 'element';
+  let sorted = sortCards(state.cards, sort);
+
+  const setFocus = (index: number): void => {
+    const card = sorted[index];
+    detailActions.innerHTML = '';
+    if (!card) {
+      detailName.textContent = '';
+      detailMeta.textContent = '';
+      return;
+    }
+    const info = state.info[card.uid];
+    detailName.textContent = t(card.def.nameKey);
+    detailName.style.color = hexToCss(ELEMENT_COLOR[card.def.element] ?? ELEMENT_COLOR.neutral);
+
+    const bits = [
+      t(`element.${card.def.element}`),
+      t(`family.${card.def.family}`),
+      t(`rarity.${card.def.rarity}`),
+      t('deck.level', { level: card.level }),
+    ];
+    if (info?.evolveLabel != null) bits.push(`${card.plays ?? 0}×`);
+    detailMeta.textContent = bits.join(' · ');
+
+    if (info && info.upgradeCost !== null) {
+      const upgrade = document.createElement('button');
+      upgrade.className = 'btn is-small';
+      upgrade.textContent = t('deck.upgrade', { cost: info.upgradeCost });
+      upgrade.dataset['act'] = 'upgrade';
+      upgrade.dataset['uid'] = card.uid;
+      upgrade.disabled = !state.canEdit || state.money < info.upgradeCost;
+      upgrade.addEventListener('click', () => callbacks.onUpgrade(card.uid));
+      detailActions.appendChild(upgrade);
+    } else if (info?.atMaxLevel) {
+      const maxed = document.createElement('span');
+      maxed.className = 'deck-card-maxed';
+      maxed.textContent = t('deck.maxLevel');
+      detailActions.appendChild(maxed);
+    }
+
+    if (info?.evolveLabel != null) {
+      const evolve = document.createElement('button');
+      evolve.className = `btn is-small${info.evolveReady ? ' is-evolve' : ' is-ghost'}`;
+      evolve.textContent = info.evolveLabel;
+      evolve.dataset['act'] = 'evolve';
+      evolve.dataset['uid'] = card.uid;
+      evolve.disabled = !state.canEdit || !info.evolveReady;
+      evolve.addEventListener('click', () => callbacks.onEvolve(card.uid));
+      detailActions.appendChild(evolve);
+    }
+
+    const purge = document.createElement('button');
+    purge.className = 'btn is-ghost is-small';
+    purge.textContent = t('deck.purge', { cost: state.purgeCost });
+    purge.dataset['act'] = 'purge';
+    purge.dataset['uid'] = card.uid;
+    purge.disabled = !state.canEdit || state.money < state.purgeCost;
+    purge.addEventListener('click', () => callbacks.onPurge(card.uid));
+    detailActions.appendChild(purge);
+  };
+
+  const sorts: DeckSort[] = ['element', 'family', 'rarity', 'level'];
+  for (const mode of sorts) {
+    const button = document.createElement('button');
+    button.className = `btn is-ghost is-small${mode === sort ? ' is-current' : ''}`;
+    button.textContent = t(`deck.sort${mode.charAt(0).toUpperCase()}${mode.slice(1)}`);
+    button.dataset['act'] = `sort-${mode}`;
+    button.addEventListener('click', () => {
+      sort = mode;
+      for (const sibling of toolbar.querySelectorAll('button')) {
+        sibling.classList.toggle('is-current', sibling === button);
+      }
+      sorted = sortCards(state.cards, sort);
+      callbacks.onSorted(sorted);
+      setFocus(0);
+    });
+    toolbar.appendChild(button);
+  }
+
+  const close = document.createElement('button');
+  close.className = 'btn is-play';
+  close.textContent = t('ui.close');
+  close.dataset['act'] = 'close';
+  close.addEventListener('click', () => callbacks.onClose());
+  actions.appendChild(close);
+
+  const top = document.createElement('div');
+  top.className = 'carousel-top';
+  top.append(title, subtitle, toolbar);
+  const bottom = document.createElement('div');
+  bottom.className = 'carousel-bottom';
+  bottom.append(detail, actions);
+  panel.append(top, bottom);
+
+  setFocus(0);
+  return { panel, setFocus };
+}
+
 export function buildDeckBuilderPanel(
   state: DeckBuilderState,
   callbacks: DeckBuilderCallbacks,

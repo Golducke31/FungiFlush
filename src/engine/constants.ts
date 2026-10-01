@@ -42,6 +42,41 @@ export const BLIND_TIER_REFERENCE: Record<'small' | 'big' | 'boss', number> = {
   boss: 2.0,
 };
 
+/**
+ * DADO MULTIPLICADOR — tabla de caras.
+ *
+ * Se tira al elegir el ciego. El multiplicador entra al FINAL del puntaje
+ * (sobre el multiplicador de esporas), y las caras altas COBRAN: menos manos o
+ * menos descartes. Esa es la gracia — el azar obliga a DECIDIR, no solo a
+ * esperar.
+ *
+ * Conservador a proposito: el promedio es ~1,19x, asi que el dado mueve la
+ * aguja sin volar los objetivos (referencia de balance: 29,6% de victorias,
+ * ante medio 6,33). Si se suben los valores, hay que volver a correr
+ * `npm run sim:balance`.
+ */
+export const DIE_FACES: ReadonlyArray<{
+  readonly value: number;
+  readonly multiplier: number;
+  readonly hands: number;
+  readonly discards: number;
+}> = [
+  { value: 1, multiplier: 0.8, hands: 0, discards: 0 },
+  { value: 2, multiplier: 1, hands: 0, discards: 0 },
+  { value: 3, multiplier: 1.1, hands: 0, discards: 0 },
+  { value: 4, multiplier: 1.25, hands: 0, discards: -1 },
+  { value: 5, multiplier: 1.4, hands: -1, discards: 0 },
+  { value: 6, multiplier: 1.6, hands: -1, discards: -1 },
+];
+
+/**
+ * Coste de VOLVER A TIRAR el dado: escala con las tiradas ya hechas en el mismo
+ * ciego. La primera cuesta poco y la tercera duele, para que insistir tenga
+ * precio. Se paga con dinero, que es lo que compite con la tienda.
+ */
+export const DIE_REROLL_BASE = 3;
+export const DIE_REROLL_STEP = 3;
+
 /** Valores iniciales de una run. */
 export const RUN_DEFAULTS = {
   money: 4,

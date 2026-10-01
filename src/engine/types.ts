@@ -330,6 +330,24 @@ export interface RoundSnapshot {
   deckRemaining: number;
 }
 
+/**
+ * Resultado de la tirada del dado multiplicador (una por blind).
+ *
+ * Es una mecanica de RUN, no un efecto: por eso no pasa por el TriggerEngine.
+ * El multiplicador entra al final del puntaje y `hands`/`discards` se cobran al
+ * arrancar la ronda.
+ */
+export interface DieRoll {
+  /** Cara 1..6. Es lo que se dibuja en el dado. */
+  face: number;
+  /** Multiplicador que se aplica al total de la mano. */
+  multiplier: number;
+  /** Manos extra de la ronda (negativo = cuesta una). */
+  hands: number;
+  /** Descartes extra de la ronda (negativo = cuesta uno). */
+  discards: number;
+}
+
 export interface ShopOffer {
   id: string;
   kind: 'card' | 'joker' | 'mutation' | 'voucher';
