@@ -840,6 +840,114 @@ console.log('\n--- Tras comprar en la tienda ---');
 console.log(JSON.stringify(shopBuy, null, 2));
 await page.screenshot({ path: join(shotsDir, '08b-shop-vendida.png') });
 
+// ===========================================================================
+// R3 — VOUCHERS (mejoras de run)
+// ===========================================================================
+// Lo que puede romperse sin que el motor se entere: la oferta tiene que DIBUJARSE
+// (etiqueta traducida, precio, cara de carta) y el precio PINTADO tiene que ser
+// el MISMO que cobra `buyOffer` — con voucher de descuento incluido. Dos
+// calculos separados es como se pinta un numero y se cobra otro.
+const voucherShop = await (async () => {
+  const setup = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const reg = ff.engine.registry;
+    const mk = (id, cost) => {
+      const def = reg.getVoucher(id);
+      return {
+        id: `smoke:${id}`,
+        kind: 'voucher',
+        refId: def.id,
+        nameKey: def.nameKey,
+        descKey: def.descKey,
+        cost: cost ?? def.cost,
+        art: def.art,
+        sold: false,
+      };
+    };
+    ff.engine.run.money = 200;
+    // `voucher_bulk_deal` aplica 25% de descuento: el precio pintado tiene que
+    // ser MENOR que el de lista, y el tachado tiene que estar a la vista.
+    ff.engine.run.vouchers = ['voucher_bulk_deal'];
+    ff.engine.run.status = 'shop';
+    ff.engine.run.shop.offers = [mk('voucher_thin_cut', 20), mk('voucher_sixth_slot', 14)];
+    // `refreshPanel` fuerza el redibujado del estado ACTUAL: la tienda ya estaba
+    // abierta, asi que sin esto el DOM seguiria mostrando las ofertas viejas.
+    ff.hud.refreshPanel();
+    return { vouchers: ff.engine.run.vouchers.length };
+  });
+  // Esperar a que el panel termine su animacion de entrada: un click sobre un
+  // panel que todavia se esta abriendo cae en el nodo viejo.
+  await page.waitForSelector('.panel.is-shop .offer.is-voucher button', { timeout: 5000 });
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: join(shotsDir, '19-shop-voucher.png') });
+  const dom = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.panel.is-shop .offer')];
+    return {
+      total: cards.length,
+      vouchers: cards.filter((c) => c.classList.contains('is-voucher')).length,
+      // Tiene que decir "Mejora", NO la clave cruda "VOUCHER".
+      labels: cards.map((c) => c.querySelector('.offer-kind')?.textContent ?? null),
+      // Cada voucher tiene cara compuesta (no un hueco).
+      withArt: cards.filter((c) => c.querySelector('img.offer-art')?.src?.startsWith('data:')).length,
+      prices: cards.map((c) => ({
+        shown: c.querySelector('.offer-price')?.textContent ?? null,
+        was: c.querySelector('.offer-price-was')?.textContent ?? null,
+      })),
+    };
+  });
+
+  // Click REAL sobre el BOTON (no sobre la tarjeta): `buyOffer` se dispara solo
+  // desde ahi, y tocar la tarjeta no compra nada.
+  const button = await page
+    .locator('.panel.is-shop .offer.is-voucher')
+    .first()
+    .locator('button')
+    .boundingBox();
+  if (button) {
+    await page.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
+  }
+  await page.waitForTimeout(800);
+
+  const bought = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const sold = [...document.querySelectorAll('.panel.is-shop .offer')].find((c) =>
+      c.classList.contains('is-sold'),
+    );
+    return {
+      money: ff.engine.run.money,
+      vouchers: [...ff.engine.run.vouchers],
+      banners: [...document.querySelectorAll('.banner')].map((b) => b.textContent),
+      soldIsVoucher: sold?.classList.contains('is-voucher') ?? false,
+      soldButton: sold?.querySelector('button')?.textContent ?? null,
+      multiplier: ff.engine.modifiers.targetMultiplier ?? 1,
+    };
+  });
+  await page.screenshot({ path: join(shotsDir, '19b-shop-voucher-comprado.png') });
+
+  // `priceOf` es la unica fuente del precio pintado Y del cobro.
+  return {
+    ...setup,
+    ...dom,
+    paid: 200 - bought.money,
+    vouchersAfter: bought.vouchers.length,
+    banners: bought.banners,
+    soldIsVoucher: bought.soldIsVoucher,
+    soldButton: bought.soldButton,
+    multiplier: bought.multiplier,
+  };
+})();
+console.log('\n--- R3: vouchers ---');
+console.log(JSON.stringify(voucherShop, null, 2));
+
+// Se vuelve a la tienda de la run para no romper el resto del smoke (el mazo,
+// la coleccion y el cambio de idioma asumen que sigue abierta).
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  ff.engine.enterShop();
+  ff.hud.refreshPanel();
+});
+await page.waitForTimeout(500);
+
 // --- Constructor de mazo: abrir, purgar y cerrar ---
 const deckBuilder = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1208,6 +1316,20 @@ const ok =
   shopBuy?.deshabilitado === true &&
   shopBuy?.sello === true &&
   (shopBuy?.toasts ?? []).length === 0 &&
+  // --- R3: vouchers ---
+  voucherShop?.vouchers === 2 &&
+  voucherShop?.labels?.includes('Mejora') === true &&
+  voucherShop?.labels?.includes('VOUCHER') === false &&
+  voucherShop?.withArt === 2 &&
+  voucherShop?.prices?.length === 2 &&
+  Number(voucherShop?.prices?.[0]?.shown) < Number(voucherShop?.prices?.[0]?.was) &&
+  voucherShop?.prices?.[0]?.was === '20' &&
+  // 20 con 25% de descuento: el mismo numero que `priceOf` y el que se cobra.
+  voucherShop?.paid === 15 &&
+  voucherShop?.vouchersAfter === 2 &&
+  voucherShop?.soldIsVoucher === true &&
+  voucherShop?.soldButton === 'VENDIDO' &&
+  Math.abs((voucherShop?.multiplier ?? 1) - 0.9) < 1e-6 &&
   // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
   jokerChip?.tieneBotonVender === true &&
   jokerChip?.trasTocarElCuerpo === jokerChip?.antes &&

@@ -52,9 +52,11 @@ import {
   type DailyRewardTable,
 } from '@retention/DailyReward';
 import { parseSeason, addXp, claimTier } from '@retention/SeasonTracker';
+import { UnlockTracker, parseUnlockRules, type UnlockDef } from '@meta/UnlockTracker';
 import type { RetentionReward } from '@retention/types';
 import dailyRewardsData from '@data/daily-rewards.json';
 import achievementsData from '@data/achievements.json';
+import unlockRulesData from '@data/unlock-rules.json';
 import seasonsData from '@data/seasons.json';
 import {
   ArtAssets,
@@ -185,16 +187,29 @@ async function boot(): Promise<void> {
   // Los ids ganados por retencion (racha/logro/pase) se pasan como array VIVO:
   // un desbloqueo a mitad de sesion entra al toque en sorteos/drafts y deja de
   // listarse como bloqueado en la Coleccion/Tienda.
-  const gate = new PackGate(entitlements, content.registry, {
-    cards: profile.collection.unlockedCardIds,
-    jokers: profile.collection.unlockedJokerIds,
-  });
+  //
+  // El 4to argumento es el mapa de CONDICIONES pendientes (R2), tambien VIVO:
+  // `UnlockTracker` lo reescribe al arrancar (publica las puertas) y borra cada
+  // entrada al abrirse. Es lo que hace que una carta bloqueada por jugar se
+  // muestre grisada con "ganá un ciego en el ante 6" en vez de un candado mudo.
+  const gate = new PackGate(
+    entitlements,
+    content.registry,
+    {
+      cards: profile.collection.unlockedCardIds,
+      jokers: profile.collection.unlockedJokerIds,
+    },
+    profile.collection.pendingUnlocks,
+  );
 
   // --- Retencion (datos) ---
   // JSON plano, NO packs: asi no pasan por `ContentRegistry.validate` ni por
   // `artCoverage`. Se parsean al entrar y una entrada invalida se descarta.
   const dailyTable: DailyRewardTable = parseDailyTable(dailyRewardsData);
   const achievementDefs: AchievementDef[] = parseAchievements(achievementsData);
+  // R2: puertas de contenido por jugar. Se parsean al arrancar y las condiciones
+  // se publican en el perfil para que la Coleccion sepa explicar cada candado.
+  const unlockDefs: UnlockDef[] = parseUnlockRules(unlockRulesData);
   // P4: temporada unica (Founder). `null` si el JSON no sirve: el paso queda
   // como "proximamente" y no tumba el arranque.
   const seasonDef = parseSeason(seasonsData);
@@ -221,6 +236,11 @@ async function boot(): Promise<void> {
     contentHash: content.registry.contentHash(),
     packIds: content.loadedIds,
     ...(seed !== undefined ? { seed } : {}),
+    // Mazo inicial del perfil. Hasta ahora `starterOverrides` se guardaba pero
+    // nadie lo leia: las copias extra del pase no hacian nada.
+    ...(profile.starterOverrides.length > 0
+      ? { starterOverrides: profile.starterOverrides }
+      : {}),
   });
 
   // --- Audio (no-op, con los ganchos ya conectados) ---
@@ -332,6 +352,11 @@ async function boot(): Promise<void> {
       const packId = content.registry.packOf(id);
       return packId ? content.registry.manifestOf(packId)?.titleKey : undefined;
     };
+    /**
+     * Por que esta bloqueado. Solo tiene sentido para las puertas por jugar: el
+     * candado de un DLC ya lo explica el pack.
+     */
+    const lockReasonOf = (id: string): string | undefined => gate.lockReasonKey(id);
 
     const entries: CollectionEntry[] = [];
     for (const card of content.registry.poolOf('card') as CardDefinition[]) {
@@ -347,6 +372,7 @@ async function boot(): Promise<void> {
           ? { unlockSource: profile.collection.unlockSource[card.id] }
           : {}),
         ...(packTitleOf(card.id) ? { packTitleKey: packTitleOf(card.id) } : {}),
+        ...(lockReasonOf(card.id) ? { lockReasonKey: lockReasonOf(card.id) } : {}),
       });
     }
     for (const joker of content.registry.poolOf('joker') as JokerDefinition[]) {
@@ -362,6 +388,7 @@ async function boot(): Promise<void> {
           ? { unlockSource: profile.collection.unlockSource[joker.id] }
           : {}),
         ...(packTitleOf(joker.id) ? { packTitleKey: packTitleOf(joker.id) } : {}),
+        ...(lockReasonOf(joker.id) ? { lockReasonKey: lockReasonOf(joker.id) } : {}),
       });
     }
 
@@ -605,6 +632,7 @@ async function boot(): Promise<void> {
     // mazo es el MISMO WebP que la carta en la mano.
     cardArt: (def) => scene.cardArt(def),
     jokerArt: (def) => scene.jokerArt(def),
+    blindArt: (art) => scene.blindArt(art),
     appInfo: {
       version: APP_VERSION,
       contentHash: content.registry.contentHash(),
@@ -867,6 +895,36 @@ async function boot(): Promise<void> {
   });
   achievements.start();
 
+  // --------------------------------------------------------------------------
+  // R2: puertas de contenido (desbloqueo por jugar)
+  // --------------------------------------------------------------------------
+  //
+  // Mismo contexto que los logros (es un snapshot, no el estado vivo) pero
+  // DISTINTA responsabilidad: esto no es una medalla, es una PUERTA. Antes de
+  // escuchar hay que PUBLICAR las condiciones en el perfil, porque el
+  // `PackGate` ya se construyo y lee ese mapa para grisar la Coleccion. Si se
+  // publicaran despues, el primer render de la Coleccion mostraria candados sin
+  // motivo.
+  const unlocks = new UnlockTracker({
+    bus,
+    defs: unlockDefs,
+    profile: profileStore,
+    getContext: achievementContext,
+  });
+  unlocks.publishConditions();
+  unlocks.start();
+
+  // El aviso es IN-APP y no opcional: abrir una puerta cambia el pool de
+  // sorteos, y enterarse de que hay contenido nuevo es la recompensa. El banner
+  // es mas prominente que un toast y sobrevive al panel que este abierto.
+  bus.on('unlock:granted', ({ nameKey }) => {
+    bus.emit('banner:show', {
+      key: 'banner.unlock.granted',
+      params: { name: t(nameKey) },
+      kind: 'success',
+    });
+  });
+
   // Un logro se anuncia SIEMPRE in-app (el banner es mas prominente que un
   // toast y no se pierde detras de un boton) y se amplifica con un aviso del
   // sistema si el jugador lo habilito. El banner es el fallback garantizado:
@@ -877,6 +935,20 @@ async function boot(): Promise<void> {
     if (profileStore.current.settings.notifyAchievements) {
       notifier.notify({ title: t('notify.achievement.title'), body: t('notify.achievement.body', { name }) });
     }
+  });
+
+  // Un voucher cambia las REGLAS de la run, no una pieza de la mesa: el jugador
+  // acaba de pagar por algo que no ve en ningun lado (ni en la mano, ni en los
+  // jokers). Sin el aviso, la compra parece no haber hecho nada. El HUD ya
+  // tacha la oferta, pero el banner es lo que dice QUE cambio.
+  bus.on('voucher:bought', ({ voucher }) => {
+    const def = engine.registry.tryGetVoucher(voucher);
+    if (!def) return;
+    bus.emit('banner:show', {
+      key: 'banner.voucher.bought',
+      params: { name: t(def.nameKey) },
+      kind: 'success',
+    });
   });
 
   // La recompensa diaria amplifica el momento con un aviso del sistema: el
@@ -1100,6 +1172,11 @@ async function boot(): Promise<void> {
         profileStore,
         runStore,
         achievements,
+        // Puertas de contenido (R2): el smoke necesita comprobar que una carta
+        // bloqueada por jugar NO entra al pool y que se sabe explicar el motivo.
+        unlocks,
+        gate,
+        collection: buildCollection,
         // El duelo vive en una clausura de `boot()`. Se expone como funcion
         // porque la sesion se reemplaza en cada revancha, y el smoke test
         // necesita leer el estado real (sobre todo para comprobar que la mano

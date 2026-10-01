@@ -25,4 +25,4 @@ export type RetentionReward =
   | { type: 'felt'; id: string };
 
 /** De donde salio un desbloqueo. Se guarda en `collection.unlockSource`. */
-export type RetentionSource = 'daily' | 'achievement' | 'season';
+export type RetentionSource = 'daily' | 'achievement' | 'season' | 'unlock';

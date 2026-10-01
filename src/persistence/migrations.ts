@@ -125,6 +125,10 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // sigue siendo valido, y uno corrupto en una seccion no tumba al resto.
   const settings = { ...fallback.settings, ...((migrated['settings'] as object) ?? {}) };
   const entitlements = { ...fallback.entitlements, ...((migrated['entitlements'] as object) ?? {}) };
+  // `pendingUnlocks` (R2) entra por aca y NO necesita linea propia porque el
+  // spread ya cubre cualquier campo nuevo de `collection`. Se deja el spread a
+  // proposito: enumerar los campos a mano es exactamente la trampa que este
+  // archivo documenta (un campo nuevo se descarta en silencio).
   const collection = { ...fallback.collection, ...((migrated['collection'] as object) ?? {}) };
   const cosmetics = { ...fallback.cosmetics, ...((migrated['cosmetics'] as object) ?? {}) };
   const stats = { ...fallback.stats, ...((migrated['stats'] as object) ?? {}) };

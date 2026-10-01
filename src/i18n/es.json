@@ -27,7 +27,17 @@
     "jokerSlots": "Ranuras",
     "handSize": "Cartas en mano",
     "bestHand": "Mejor mano",
-    "progress": "Progreso"
+    "progress": "Progreso",
+    "anteOf": "Ante {current} de {total}"
+  },
+  "blindCard": {
+    "mult": "Multiplicador",
+    "target": "Objetivo",
+    "reward": "Recompensa",
+    "boss": "Jefe",
+    "cleared": "Superado",
+    "locked": "Se abre en el ante {ante}",
+    "effects": "Efecto de ronda"
   },
   "action": {
     "play": "Jugar Mano",
@@ -72,7 +82,15 @@
     "title": "El Mercado del Micelio",
     "empty": "Todo vendido. No queda nada en la estantería.",
     "rerollCost": "Renovar ({cost})",
-    "sold": "VENDIDO"
+    "sold": "VENDIDO",
+    "voucher": "Mejora",
+    "kind": {
+      "card": "Carta",
+      "joker": "Joker",
+      "mutation": "Mutación",
+      "voucher": "Mejora",
+      "money": "Fungis"
+    }
   },
   "element": {
     "neutral": "Neutro",
@@ -587,7 +605,9 @@
     "tumbling": "Girando…"
   },
   "season": {
-    "founder": { "name": "Temporada Fundador" }
+    "founder": {
+      "name": "Temporada Fundador"
+    }
   },
   "board": {
     "title": "Duelo micelial",
@@ -685,17 +705,50 @@
     "reward": "Recompensa",
     "done": "Desbloqueado",
     "empty": "Todavía no hay logros",
-    "ach_first_hand": { "name": "Primera cosecha", "desc": "Puntuá tu primera mano" },
-    "ach_first_blind": { "name": "Primeras esporas", "desc": "Pasá un ciego" },
-    "ach_ante_3": { "name": "Bajo el sotobosque", "desc": "Llegá al ante 3" },
-    "ach_ante_5": { "name": "Micelio profundo", "desc": "Llegá al ante 5" },
-    "ach_ante_8": { "name": "Bosque viejo", "desc": "Llegá al ante 8" },
-    "ach_big_hand": { "name": "Sustrato rico", "desc": "Hacé 500 puntos en una mano" },
-    "ach_huge_hand": { "name": "Tormenta de esporas", "desc": "Hacé 2000 puntos en una mano" },
-    "ach_joker_hoard": { "name": "Simbiosis", "desc": "Tené 5 jokers a la vez" },
-    "ach_first_evolution": { "name": "Algo nuevo", "desc": "Evolucioná una carta por primera vez" },
-    "ach_cards_100": { "name": "Mano firme", "desc": "Jugá 100 cartas" },
-    "ach_runs_10": { "name": "Diez cosechas", "desc": "Terminá 10 partidas" }
+    "ach_first_hand": {
+      "name": "Primera cosecha",
+      "desc": "Puntuá tu primera mano"
+    },
+    "ach_first_blind": {
+      "name": "Primeras esporas",
+      "desc": "Pasá un ciego"
+    },
+    "ach_ante_3": {
+      "name": "Bajo el sotobosque",
+      "desc": "Llegá al ante 3"
+    },
+    "ach_ante_5": {
+      "name": "Micelio profundo",
+      "desc": "Llegá al ante 5"
+    },
+    "ach_ante_8": {
+      "name": "Bosque viejo",
+      "desc": "Llegá al ante 8"
+    },
+    "ach_big_hand": {
+      "name": "Sustrato rico",
+      "desc": "Hacé 500 puntos en una mano"
+    },
+    "ach_huge_hand": {
+      "name": "Tormenta de esporas",
+      "desc": "Hacé 2000 puntos en una mano"
+    },
+    "ach_joker_hoard": {
+      "name": "Simbiosis",
+      "desc": "Tené 5 jokers a la vez"
+    },
+    "ach_first_evolution": {
+      "name": "Algo nuevo",
+      "desc": "Evolucioná una carta por primera vez"
+    },
+    "ach_cards_100": {
+      "name": "Mano firme",
+      "desc": "Jugá 100 cartas"
+    },
+    "ach_runs_10": {
+      "name": "Diez cosechas",
+      "desc": "Terminá 10 partidas"
+    }
   },
   "notify": {
     "daily": {
@@ -703,10 +756,126 @@
       "body": "Tu recompensa diaria te espera",
       "claimed": "Día {day} reclamado — ¡{name} desbloqueado! Vuelve mañana por el día {next}."
     },
-    "achievement": { "title": "Logro desbloqueado", "body": "{name}" }
+    "achievement": {
+      "title": "Logro desbloqueado",
+      "body": "{name}"
+    }
   },
   "banner": {
-    "daily": { "ready": "Tu recompensa diaria te espera" },
-    "achievement": { "unlocked": "Logro desbloqueado: {name}" }
+    "daily": {
+      "ready": "Tu recompensa diaria te espera"
+    },
+    "achievement": {
+      "unlocked": "Logro desbloqueado: {name}"
+    },
+    "unlock": {
+      "granted": "Contenido desbloqueado: {name}"
+    },
+    "voucher": {
+      "bought": "Mejora aplicada: {name}"
+    }
+  },
+  "unlockRule": {
+    "title": "Pendiente de desbloqueo",
+    "locked": "Bloqueada",
+    "newContent": "¡Contenido nuevo!",
+    "unlocked": "Desbloqueaste: {name}",
+    "unlock_ergot_rye": {
+      "name": "Cornezuelo del Centeno",
+      "desc": "Ganá un ciego en el ante 7"
+    },
+    "unlock_psilocybe_cyanescens": {
+      "name": "Sombrero Azulado",
+      "desc": "Ganá un ciego en el ante 7"
+    },
+    "unlock_death_cap": {
+      "name": "Oronja Verde",
+      "desc": "Ganá un ciego en el ante 8"
+    },
+    "unlock_mycena_lucifer": {
+      "name": "Mycena Lucifer",
+      "desc": "Ganá un ciego en el ante 8"
+    },
+    "unlock_destroying_angel": {
+      "name": "Ángel Destructor",
+      "desc": "Llegá al ante 8 en cualquier partida"
+    },
+    "unlock_joker_sterile_field": {
+      "name": "Campo Estéril",
+      "desc": "Ganá un ciego en el ante 4"
+    },
+    "unlock_joker_substrate_compost": {
+      "name": "Montón de Compost",
+      "desc": "Ganá un ciego en el ante 4"
+    },
+    "unlock_joker_symbiotic_pact": {
+      "name": "Pacto Simbiótico",
+      "desc": "Ganá un ciego en el ante 5"
+    },
+    "unlock_joker_decay_engine": {
+      "name": "Motor de Putrefacción",
+      "desc": "Ganá un ciego en el ante 5"
+    },
+    "unlock_joker_spore_printer": {
+      "name": "Impresora de Esporas",
+      "desc": "Ganá un ciego en el ante 6"
+    },
+    "unlock_joker_poison_bloom": {
+      "name": "Floración Venenosa",
+      "desc": "Ganá un ciego en el ante 6"
+    },
+    "unlock_joker_crystal_lens": {
+      "name": "Lente de Cristal",
+      "desc": "Ganá un ciego en el ante 6"
+    },
+    "unlock_joker_golden_mold": {
+      "name": "Moho Dorado",
+      "desc": "Comprá en la tienda con 25 Fungis en mano"
+    },
+    "unlock_joker_eldritch_ring": {
+      "name": "Anillo Sobrenatural",
+      "desc": "Ganá un ciego en el ante 8"
+    },
+    "unlock_joker_parasitic_drive": {
+      "name": "Impulso Parásito",
+      "desc": "Ganá un ciego con 4 jokers a la vez"
+    },
+    "unlock_joker_double_helix": {
+      "name": "Doble Hélice",
+      "desc": "Ganá una partida"
+    }
+  },
+  "voucher": {
+    "title": "Mejoras",
+    "lockTitle": "Modificadores de partida",
+    "owned": "Ya la tenés",
+    "voucher_extra_hand": {
+      "name": "Mano de repuesto",
+      "desc": "+1 mano por ronda, para siempre en esta partida"
+    },
+    "voucher_extra_discard": {
+      "name": "Filtro fino",
+      "desc": "+1 descarte por ronda, para siempre en esta partida"
+    },
+    "voucher_wide_hand": {
+      "name": "Cesta ancha",
+      "desc": "+1 carta en la mano, para siempre en esta partida"
+    },
+    "voucher_sixth_slot": {
+      "name": "Sexto estante",
+      "desc": "+1 espacio de joker, para siempre en esta partida"
+    },
+    "voucher_cheap_rerolls": {
+      "name": "Trato del mayorista",
+      "desc": "Renovar la tienda cuesta 2 Fungis menos"
+    },
+    "voucher_thin_cut": {
+      "name": "Corte fino",
+      "desc": "El objetivo de cada ciego baja un 10%"
+    },
+    "voucher_bulk_deal": {
+      "name": "Compra al por mayor",
+      "desc": "Todo en la tienda cuesta un 25% menos"
+    }
   }
 }

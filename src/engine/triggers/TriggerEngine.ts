@@ -101,7 +101,15 @@ export class TriggerEngine {
             res.consume(key, onceRule);
           }
 
-          if (source.joker && !res.dryRun) source.joker.firedCount += 1;
+          if (source.joker && !res.dryRun) {
+            source.joker.firedCount += 1;
+            // Señal para la ficha del joker en el HUD: la ficha late cuando su
+            // joker dispara. Va DESPUES de contar, para que quien la escuche lea
+            // el `firedCount` ya actualizado. En dryRun no se emite: una
+            // previsualizacion no es un disparo real y encenderia fichas de
+            // mentira.
+            bus.emit('joker:triggered', { joker: source.joker });
+          }
 
           bus.emit('trigger:fired', {
             effect,

@@ -184,3 +184,65 @@ test('rarityWeights de una opcion se aplica al sorteo', () => {
     assert.equal(offers[0]?.refId, 't_rare');
   }
 });
+
+// ---------------------------------------------------------------------------
+// Seleccion de tabla por ante (R4c)
+// ---------------------------------------------------------------------------
+//
+// Una fase puede declarar VARIAS tablas con ventanas de ante que se solapan.
+// `rollPhase` tiene que elegir la MAS ESPECIFICA que contenga el ante actual: la
+// de ventana mas angosta. Sin esto, la tienda del ante 7 ofrecia lo mismo que la
+// del ante 1 y el late-game no escalaba.
+
+/** Tabla minima de una sola oferta de carta, para aislar la seleccion. */
+function tableWithWindow(id: string, phase: 'shop' | 'reward', minAnte?: number, maxAnte?: number): OfferTable {
+  return {
+    id,
+    phase,
+    groups: [{ count: 1, options: [{ weight: 1, kind: 'card' }] }],
+    ...(minAnte !== undefined ? { minAnte } : {}),
+    ...(maxAnte !== undefined ? { maxAnte } : {}),
+  };
+}
+
+test('rollPhase elige la tabla especifica del ante, no la primera', () => {
+  const general = tableWithWindow('general', 'shop');
+  const late = tableWithWindow('late', 'shop', 5);
+  // A proposito la general va PRIMERO: si la seleccion fuera "la primera", el
+  // test fallaria con el orden natural del contenido.
+  const service = new OfferService(registryFromRealContent(), [general, late]);
+
+  assert.equal(service.tableForPhase('shop', 1)?.id, 'general');
+  assert.equal(service.tableForPhase('shop', 4)?.id, 'general');
+  assert.equal(service.tableForPhase('shop', 5)?.id, 'late');
+  assert.equal(service.tableForPhase('shop', 8)?.id, 'late');
+});
+
+test('gana la ventana mas angosta cuando dos tablas se solapan', () => {
+  const broad = tableWithWindow('broad', 'shop', 1, 8);
+  const narrow = tableWithWindow('narrow', 'shop', 6, 8);
+  const service = new OfferService(registryFromRealContent(), [broad, narrow]);
+
+  assert.equal(service.tableForPhase('shop', 3)?.id, 'broad');
+  assert.equal(service.tableForPhase('shop', 6)?.id, 'narrow');
+  assert.equal(service.tableForPhase('shop', 8)?.id, 'narrow');
+});
+
+test('una fase sin tabla aplicable devuelve null y no explota', () => {
+  const soloLate = tableWithWindow('late_only', 'reward', 5);
+  const service = new OfferService(registryFromRealContent(), [soloLate]);
+
+  assert.equal(service.tableForPhase('reward', 1), null);
+  assert.deepEqual(service.rollPhase('reward', ctx(new RNG(1), 0)), []);
+  assert.equal(service.tableForPhase('shop', 1), null);
+});
+
+test('el contenido real trae una tabla de tienda de late-game', () => {
+  const registry = registryFromRealContent();
+  const service = new OfferService(registry, buildRegistry().toBundle().offers ?? []);
+
+  const early = service.tableForPhase('shop', 1);
+  const late = service.tableForPhase('shop', 7);
+  assert.ok(early && late);
+  assert.notEqual(early.id, late.id, 'el ante 7 no puede usar la tabla del ante 1');
+});

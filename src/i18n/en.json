@@ -27,7 +27,17 @@
     "jokerSlots": "Slots",
     "handSize": "Hand size",
     "bestHand": "Best hand",
-    "progress": "Progress"
+    "progress": "Progress",
+    "anteOf": "Ante {current} of {total}"
+  },
+  "blindCard": {
+    "mult": "Multiplier",
+    "target": "Target",
+    "reward": "Reward",
+    "boss": "Boss",
+    "cleared": "Cleared",
+    "locked": "Opens at ante {ante}",
+    "effects": "Round effect"
   },
   "action": {
     "play": "Play Hand",
@@ -72,7 +82,15 @@
     "title": "The Mycelium Market",
     "empty": "Sold out. Nothing left on the shelf.",
     "rerollCost": "Reroll ({cost})",
-    "sold": "SOLD"
+    "sold": "SOLD",
+    "voucher": "Upgrade",
+    "kind": {
+      "card": "Card",
+      "joker": "Joker",
+      "mutation": "Mutation",
+      "voucher": "Upgrade",
+      "money": "Fungis"
+    }
   },
   "element": {
     "neutral": "Neutral",
@@ -587,7 +605,9 @@
     "tumbling": "Rolling…"
   },
   "season": {
-    "founder": { "name": "Founder Season" }
+    "founder": {
+      "name": "Founder Season"
+    }
   },
   "board": {
     "title": "Mycelial Duel",
@@ -685,17 +705,50 @@
     "reward": "Reward",
     "done": "Unlocked",
     "empty": "No achievements yet",
-    "ach_first_hand": { "name": "First flush", "desc": "Score your first hand" },
-    "ach_first_blind": { "name": "First spores", "desc": "Clear a blind" },
-    "ach_ante_3": { "name": "Into the undergrowth", "desc": "Reach ante 3" },
-    "ach_ante_5": { "name": "Deep mycelium", "desc": "Reach ante 5" },
-    "ach_ante_8": { "name": "Old growth", "desc": "Reach ante 8" },
-    "ach_big_hand": { "name": "Rich substrate", "desc": "Score 500 in a single hand" },
-    "ach_huge_hand": { "name": "Spore storm", "desc": "Score 2000 in a single hand" },
-    "ach_joker_hoard": { "name": "Symbiosis", "desc": "Hold 5 jokers at once" },
-    "ach_first_evolution": { "name": "Something new", "desc": "Evolve a card for the first time" },
-    "ach_cards_100": { "name": "Steady hands", "desc": "Play 100 cards" },
-    "ach_runs_10": { "name": "Ten harvests", "desc": "Finish 10 runs" }
+    "ach_first_hand": {
+      "name": "First flush",
+      "desc": "Score your first hand"
+    },
+    "ach_first_blind": {
+      "name": "First spores",
+      "desc": "Clear a blind"
+    },
+    "ach_ante_3": {
+      "name": "Into the undergrowth",
+      "desc": "Reach ante 3"
+    },
+    "ach_ante_5": {
+      "name": "Deep mycelium",
+      "desc": "Reach ante 5"
+    },
+    "ach_ante_8": {
+      "name": "Old growth",
+      "desc": "Reach ante 8"
+    },
+    "ach_big_hand": {
+      "name": "Rich substrate",
+      "desc": "Score 500 in a single hand"
+    },
+    "ach_huge_hand": {
+      "name": "Spore storm",
+      "desc": "Score 2000 in a single hand"
+    },
+    "ach_joker_hoard": {
+      "name": "Symbiosis",
+      "desc": "Hold 5 jokers at once"
+    },
+    "ach_first_evolution": {
+      "name": "Something new",
+      "desc": "Evolve a card for the first time"
+    },
+    "ach_cards_100": {
+      "name": "Steady hands",
+      "desc": "Play 100 cards"
+    },
+    "ach_runs_10": {
+      "name": "Ten harvests",
+      "desc": "Finish 10 runs"
+    }
   },
   "notify": {
     "daily": {
@@ -703,10 +756,126 @@
       "body": "Your daily reward is waiting",
       "claimed": "Day {day} claimed — {name} unlocked! Come back tomorrow for day {next}."
     },
-    "achievement": { "title": "Achievement unlocked", "body": "{name}" }
+    "achievement": {
+      "title": "Achievement unlocked",
+      "body": "{name}"
+    }
   },
   "banner": {
-    "daily": { "ready": "Your daily reward is waiting" },
-    "achievement": { "unlocked": "Achievement unlocked: {name}" }
+    "daily": {
+      "ready": "Your daily reward is waiting"
+    },
+    "achievement": {
+      "unlocked": "Achievement unlocked: {name}"
+    },
+    "unlock": {
+      "granted": "Content unlocked: {name}"
+    },
+    "voucher": {
+      "bought": "Upgrade applied: {name}"
+    }
+  },
+  "unlockRule": {
+    "title": "Pending unlock",
+    "locked": "Locked",
+    "newContent": "New content!",
+    "unlocked": "You unlocked: {name}",
+    "unlock_ergot_rye": {
+      "name": "Ergot of Rye",
+      "desc": "Win a blind in ante 7"
+    },
+    "unlock_psilocybe_cyanescens": {
+      "name": "Blue-Cap",
+      "desc": "Win a blind in ante 7"
+    },
+    "unlock_death_cap": {
+      "name": "Death Cap",
+      "desc": "Win a blind in ante 8"
+    },
+    "unlock_mycena_lucifer": {
+      "name": "Mycena Lucifer",
+      "desc": "Win a blind in ante 8"
+    },
+    "unlock_destroying_angel": {
+      "name": "Destroying Angel",
+      "desc": "Reach ante 8 in any run"
+    },
+    "unlock_joker_sterile_field": {
+      "name": "Sterile Field",
+      "desc": "Win a blind in ante 4"
+    },
+    "unlock_joker_substrate_compost": {
+      "name": "Compost Heap",
+      "desc": "Win a blind in ante 4"
+    },
+    "unlock_joker_symbiotic_pact": {
+      "name": "Symbiotic Pact",
+      "desc": "Win a blind in ante 5"
+    },
+    "unlock_joker_decay_engine": {
+      "name": "Decay Engine",
+      "desc": "Win a blind in ante 5"
+    },
+    "unlock_joker_spore_printer": {
+      "name": "Spore Printer",
+      "desc": "Win a blind in ante 6"
+    },
+    "unlock_joker_poison_bloom": {
+      "name": "Poison Bloom",
+      "desc": "Win a blind in ante 6"
+    },
+    "unlock_joker_crystal_lens": {
+      "name": "Crystal Lens",
+      "desc": "Win a blind in ante 6"
+    },
+    "unlock_joker_golden_mold": {
+      "name": "Golden Mold",
+      "desc": "Buy in the shop holding 25 Fungis"
+    },
+    "unlock_joker_eldritch_ring": {
+      "name": "Eldritch Ring",
+      "desc": "Win a blind in ante 8"
+    },
+    "unlock_joker_parasitic_drive": {
+      "name": "Parasitic Drive",
+      "desc": "Win a blind with 4 jokers at once"
+    },
+    "unlock_joker_double_helix": {
+      "name": "Double Helix",
+      "desc": "Win a run"
+    }
+  },
+  "voucher": {
+    "title": "Upgrades",
+    "lockTitle": "Run modifiers",
+    "owned": "Already yours",
+    "voucher_extra_hand": {
+      "name": "Spare Hand",
+      "desc": "+1 hand per round, for the rest of this run"
+    },
+    "voucher_extra_discard": {
+      "name": "Fine Filter",
+      "desc": "+1 discard per round, for the rest of this run"
+    },
+    "voucher_wide_hand": {
+      "name": "Wide Basket",
+      "desc": "+1 card in hand, for the rest of this run"
+    },
+    "voucher_sixth_slot": {
+      "name": "Sixth Shelf",
+      "desc": "+1 joker slot, for the rest of this run"
+    },
+    "voucher_cheap_rerolls": {
+      "name": "Wholesaler's Deal",
+      "desc": "Rerolling the shop costs 2 Fungis less"
+    },
+    "voucher_thin_cut": {
+      "name": "Thin Cut",
+      "desc": "Every blind's target is 10% lower"
+    },
+    "voucher_bulk_deal": {
+      "name": "Bulk Deal",
+      "desc": "Everything in the shop costs 25% less"
+    }
   }
 }
