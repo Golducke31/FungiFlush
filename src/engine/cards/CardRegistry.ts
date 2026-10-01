@@ -20,6 +20,7 @@ import type {
   OfferTable,
   Rarity,
   UpgradeTrack,
+  VoucherDefinition,
 } from '../types';
 import { TRIGGER_EVENTS, type TriggerEvent } from '../types';
 import { supportedActions } from '../triggers/actions';
@@ -52,6 +53,8 @@ export interface ContentBundle {
   upgrades?: UpgradeTrack[];
   /** Reglas de evolucion de cartas. */
   evolutions?: EvolutionRule[];
+  /** Modificadores de run (vouchers). Ver `VoucherDefinition`. */
+  vouchers?: VoucherDefinition[];
 }
 
 export interface ValidationIssue {
@@ -69,6 +72,7 @@ export class CardRegistry {
   private readonly cards = new Map<string, CardDefinition>();
   private readonly jokers = new Map<string, JokerDefinition>();
   private readonly blinds = new Map<string, BlindDefinition>();
+  private readonly vouchers = new Map<string, VoucherDefinition>();
   private anteTargets: Record<number, number> | null = null;
 
   private uidCounter = 0;
@@ -77,6 +81,7 @@ export class CardRegistry {
     for (const card of bundle.cards) this.cards.set(card.id, card);
     for (const joker of bundle.jokers) this.jokers.set(joker.id, joker);
     for (const blind of bundle.blinds) this.blinds.set(blind.id, blind);
+    for (const voucher of bundle.vouchers ?? []) this.vouchers.set(voucher.id, voucher);
     this.anteTargets = bundle.anteTargets ?? null;
   }
 
@@ -142,6 +147,42 @@ export class CardRegistry {
     return (def.tags ?? []).includes('mutation');
   }
 
+  // --- Vouchers (modificadores de run) --------------------------------------
+
+  tryGetVoucher(id: string): VoucherDefinition | undefined {
+    return this.vouchers.get(id);
+  }
+
+  getVoucher(id: string): VoucherDefinition {
+    const def = this.vouchers.get(id);
+    if (!def) throw new Error(`[CardRegistry] Voucher desconocido: "${id}"`);
+    return def;
+  }
+
+  allVouchers(): VoucherDefinition[] {
+    return [...this.vouchers.values()];
+  }
+
+  /**
+   * Sortea un voucher. `exclude` es lo ya poseido: sin esto la tienda podria
+   * ofrecer una regla que el jugador ya tiene, que es una oferta muerta.
+   */
+  rollRandomVoucher(
+    rng: RNG,
+    filter?: (v: VoucherDefinition) => boolean,
+    exclude?: readonly string[],
+  ): VoucherDefinition | undefined {
+    const owned = new Set(exclude ?? []);
+    const pool = this.allVouchers().filter((v) => (!filter || filter(v)) && !owned.has(v.id));
+    if (pool.length === 0) return undefined;
+    // Peso uniforme: un voucher no tiene rareza. El coste ya es el dial de
+    // balance, y el filtro de elegibilidad lo pone la tabla de ofertas.
+    return rng.weighted(
+      pool,
+      pool.map(() => 1),
+    );
+  }
+
   blindsForAnte(ante: number): BlindDefinition[] {
     return [...this.blinds.values()]
       .filter((b) => b.ante === ante)
@@ -177,9 +218,31 @@ export class CardRegistry {
    * Construye un mazo inicial: `copies` de cada id indicado.
    * El mazo base del juego son 52 cartas (4 familias x 13 especimenes) para
    * mantener la sensacion de naipe sin perder la tematica de hongos.
+   *
+   * `overrides` permite que un perfil cambie el mazo inicial (una recompensa,
+   * un DLC o un modo). Reemplaza la lista de cartas `starter` por completo: si
+   * el jugador eligio su mazo, no se mezcla con el base, se usa el suyo. Un id
+   * desconocido se ignora en silencio: un guardado viejo no puede tumbar el
+   * arranque de la run.
    */
-  buildStarterDeck(rng: RNG): CardInstance[] {
+  buildStarterDeck(
+    rng: RNG,
+    overrides?: Array<{ cardId: string; copies: number }>,
+  ): CardInstance[] {
     const deck: CardInstance[] = [];
+
+    if (overrides && overrides.length > 0) {
+      for (const entry of overrides) {
+        const def = this.cards.get(entry.cardId);
+        if (!def) continue;
+        const copies = Math.max(1, Math.floor(entry.copies));
+        for (let i = 0; i < copies; i++) deck.push(this.instantiateFrom(def));
+      }
+      // Si NINGUN id del override existia (contenido retirado), no se devuelve
+      // un mazo vacio: se cae al base. Una run sin cartas no es jugable.
+      if (deck.length > 0) return rng.shuffle(deck);
+    }
+
     const pool = this.allCards().filter((c) => (c.tags ?? []).includes('starter'));
     const source = pool.length > 0 ? pool : this.allCards();
     for (const def of source) {

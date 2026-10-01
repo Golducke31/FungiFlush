@@ -24,6 +24,7 @@ import type {
   JokerDefinition,
   OfferTable,
   UpgradeTrack,
+  VoucherDefinition,
 } from '@engine/index';
 // Solo el TIPO: no arrastra `@engine/board` al bundle de contenido. El modo
 // tablero se carga con `await import('@engine/board')` cuando se juega.
@@ -58,6 +59,8 @@ export interface PackContents {
   blinds?: string[];
   offers?: string[];
   evolutions?: string[];
+  /** Modificadores de run (R3). */
+  vouchers?: string[];
   upgrades?: string[];
   board?: string[];
   antes?: string[];
@@ -121,6 +124,8 @@ export interface LoadedPack extends RawPack {
   antes: AnteRow[];
   upgrades: UpgradeTrack[];
   evolutions: EvolutionRule[];
+  /** Modificadores de run. Ver `VoucherDefinition`. */
+  vouchers: VoucherDefinition[];
   /** Flechas del modo tablero. Indexadas por `cardId`, no por posicion. */
   board: BoardCardDef[];
 }

@@ -84,6 +84,7 @@ function main(): void {
   console.log(`packs      ${stats.packs}`);
   console.log(`cartas     ${stats.cards}`);
   console.log(`jokers     ${stats.jokers}`);
+  console.log(`mejorasRun ${stats.vouchers}`);
   console.log(`blinds     ${stats.blinds}`);
   console.log(`antes      ${stats.antes}`);
   console.log(`ofertas    ${stats.offers}`);

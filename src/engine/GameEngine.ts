@@ -37,7 +37,9 @@ import { TriggerEngine } from './triggers/TriggerEngine';
 import { applyAction } from './triggers/actions';
 import { createRoundState, selectedCards, type RoundState } from './state/RoundState';
 import {
+  combineModifiers,
   createRunState,
+  discountedCost,
   jokerSellValue,
   rerollCost,
   type RunState,
@@ -53,6 +55,8 @@ import type {
   RunSnapshot,
   ScoreBreakdown,
   ShopOffer,
+  VoucherDefinition,
+  VoucherRunModifiers,
 } from './types';
 
 const MAX_PLAY_SIZE = MAX_PLAY_SIZE_DEFAULT;
@@ -82,6 +86,12 @@ export interface GameEngineOptions {
   contentHash?: string | null;
   /** Packs activos al arrancar la run. */
   packIds?: string[];
+  /**
+   * Mazo inicial elegido por el perfil. Si esta, REEMPLAZA al mazo `starter`
+   * del contenido. El motor no sabe de donde sale (recompensa, DLC, modo): solo
+   * lo aplica. Ver `CardRegistry.buildStarterDeck`.
+   */
+  starterOverrides?: Array<{ cardId: string; copies: number }>;
 }
 
 export class GameEngine {
@@ -98,6 +108,7 @@ export class GameEngine {
   private readonly jokerFilter?: (def: JokerDefinition) => boolean;
   private readonly contentHash: string | null;
   private readonly packIds: string[];
+  private readonly starterOverrides?: Array<{ cardId: string; copies: number }>;
 
   run!: RunState;
   round: RoundState | null = null;
@@ -118,6 +129,7 @@ export class GameEngine {
     this.jokerFilter = opts.jokerFilter;
     this.contentHash = opts.contentHash ?? null;
     this.packIds = opts.packIds ?? ['base'];
+    this.starterOverrides = opts.starterOverrides;
   }
 
   // ==========================================================================
@@ -143,7 +155,7 @@ export class GameEngine {
   startRun(seed?: number): void {
     const deck = new Deck(seed !== undefined ? new RNG(seed) : this.rng);
     this.run = createRunState(seed ?? this.rng.getSeed(), deck);
-    deck.setCards(this.registry.buildStarterDeck(this.rng));
+    deck.setCards(this.registry.buildStarterDeck(this.rng, this.starterOverrides));
 
     this.dispatchGlobal('ON_RUN_START');
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
@@ -230,7 +242,20 @@ export class GameEngine {
    */
   targetFor(blind: BlindDefinition): number {
     const base = this.registry.anteTarget(this.run.ante) ?? ANTE_BASE_TARGET[this.run.ante] ?? 300;
-    return Math.round(base * blind.scoreMultiplier);
+    const mul = this.modifiers.targetMultiplier ?? 1;
+    return Math.round(base * blind.scoreMultiplier * mul);
+  }
+
+  /**
+   * Modificadores de run activos (vouchers). Se recalcula en cada consulta: son
+   * como mucho una decena de objetos y el coste es despreciable frente a la
+   * alternativa de cachear y tener que invalidar.
+   */
+  get modifiers(): VoucherRunModifiers {
+    const defs = this.run.vouchers
+      .map((id) => this.registry.tryGetVoucher(id))
+      .filter((d): d is VoucherDefinition => d !== undefined);
+    return combineModifiers(defs);
   }
 
   /**
@@ -457,10 +482,15 @@ export class GameEngine {
     this.emitState();
   }
 
+  get rerollPrice(): number {
+    const shop = this.run.shop;
+    return shop ? rerollCost(shop, this.modifiers) : 0;
+  }
+
   rerollShop(): boolean {
     const shop = this.run.shop;
     if (!shop || this.run.status !== 'shop') return false;
-    const cost = rerollCost(shop);
+    const cost = rerollCost(shop, this.modifiers);
     if (this.run.money < cost) return false;
 
     this.setMoney(-cost);
@@ -652,15 +682,39 @@ export class GameEngine {
     return true;
   }
 
+  /**
+   * Precio REAL de una oferta. Es el unico lugar donde se aplica el descuento
+   * de vouchers: la UI muestra este numero y `buyOffer` cobra este numero. Si
+   * fueran dos calculos distintos, el boton diria un precio y cobraria otro.
+   */
+  priceOf(offer: ShopOffer): number {
+    return discountedCost(offer.cost, this.modifiers);
+  }
+
+  /** ¿Puede comprarse esta oferta? Lo consulta la UI para el estado del boton. */
+  canBuyOffer(offer: ShopOffer): boolean {
+    if (offer.sold || this.run.status !== 'shop') return false;
+    if (this.run.money < this.priceOf(offer)) return false;
+    if (offer.kind === 'joker' && this.run.jokers.length >= this.run.jokerSlots) return false;
+    // Un voucher ya poseido no se puede recomprar (salvo que sea repetible).
+    if (offer.kind === 'voucher') {
+      const def = this.registry.tryGetVoucher(offer.refId);
+      if (!def) return false;
+      if (!def.repeatable && this.run.vouchers.includes(offer.refId)) return false;
+    }
+    return true;
+  }
+
   buyOffer(offerId: string): boolean {
     const shop = this.run.shop;
     if (!shop || this.run.status !== 'shop') return false;
 
     const offer = shop.offers.find((o) => o.id === offerId);
-    if (!offer || offer.sold || this.run.money < offer.cost) return false;
+    if (!offer || !this.canBuyOffer(offer)) return false;
+
+    const price = this.priceOf(offer);
 
     if (offer.kind === 'joker') {
-      if (this.run.jokers.length >= this.run.jokerSlots) return false;
       const joker = this.registry.instantiateJoker(offer.refId);
       this.run.jokers.push(joker);
       bus.emit('joker:added', { joker });
@@ -668,6 +722,8 @@ export class GameEngine {
       const card = this.registry.instantiate(offer.refId);
       this.run.deck.insert(card, 'random');
       bus.emit('card:created', { card });
+    } else if (offer.kind === 'voucher') {
+      this.buyVoucher(offer.refId);
     } else {
       // Mutaciones: se aplican al instante y no ocupan slot.
       const def = this.registry.getJoker(offer.refId);
@@ -682,10 +738,33 @@ export class GameEngine {
     // habilitado. Tocar de nuevo daba "no alcanza el dinero", que ademas era
     // mentira. El estado de la oferta y la plata tienen que cambiar juntos.
     offer.sold = true;
-    this.setMoney(-offer.cost);
+    this.setMoney(-price);
     bus.emit('shop:purchase', { offer, money: this.run.money });
     this.emitState();
     return true;
+  }
+
+  /**
+   * Compra un voucher: aplica sus efectos UNA vez y registra la regla.
+   *
+   * Los `runModifiers` NO se aplican aca: se leen del agregado (`this.modifiers`)
+   * en cada consulta, porque no son un suceso sino un cambio permanente en como
+   * se calcula el objetivo, el reroll o el precio. Aplicarlos "una vez" seria
+   * imposible de deshacer y de testear.
+   */
+  private buyVoucher(voucherId: string): void {
+    const def = this.registry.tryGetVoucher(voucherId);
+    if (!def) return;
+
+    // `extraHands`/`extraJokerSlots` y compania son para vouchers PERMANENTES y
+    // hoy no los lee nadie (ver `VoucherRunModifiers`). Lo que SI funciona en
+    // caliente es objetivo, reroll y descuento, que se leen del agregado.
+    if (def.effects && def.effects.length > 0) {
+      this.applyImmediateEffects(def.id, def.effects, def.nameKey);
+    }
+
+    this.run.vouchers.push(def.id);
+    bus.emit('voucher:bought', { voucher: def.id });
   }
 
   sellJoker(uid: string): boolean {
@@ -997,6 +1076,9 @@ export class GameEngine {
       sequence,
       ...(this.contentFilter ? { cardFilter: this.contentFilter } : {}),
       ...(this.jokerFilter ? { jokerFilter: this.jokerFilter } : {}),
+      // Los vouchers ya comprados quedan fuera del sorteo: ofrecer una regla
+      // que el jugador tiene es una oferta muerta que ocupa un lugar.
+      ownedVouchers: this.run.vouchers,
     };
   }
 
@@ -1128,6 +1210,9 @@ export class GameEngine {
       deck: cards,
       stats: { ...this.run.stats },
       consumedEffects: [...this.run.consumedEffects],
+      // Vouchers comprados: una run retomada tiene que seguir con las MISMAS
+      // reglas, o el jugador veria el objetivo cambiar al recargar.
+      vouchers: [...this.run.vouchers],
       // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
       contentHash: this.contentHash,
       packIds: [...this.packIds],
@@ -1164,6 +1249,9 @@ export class GameEngine {
     // guardado migrado, la run sigue siendo jugable.
     this.run.stats = { ...this.run.stats, ...data.stats };
     this.run.consumedEffects = new Set(data.consumedEffects ?? []);
+    // `?? []` y el filtro por existencia: un guardado viejo no tiene el campo, y
+    // un voucher borrado del contenido no puede romper la carga.
+    this.run.vouchers = (data.vouchers ?? []).filter((id) => !!this.registry.tryGetVoucher(id));
 
     // El contenido cambio desde que se guardo: se avisa, pero NO se invalida.
     // Un rebalanceo no deberia borrarle la partida a nadie.
@@ -1227,6 +1315,12 @@ export interface RunSaveData {
     cardsEvolved: number;
   };
   consumedEffects: string[];
+  /**
+   * Vouchers comprados en esta run. OPCIONAL a proposito: los guardados
+   * anteriores a R3 no lo tienen, y `restore` cae a `[]`. No hace falta subir
+   * `SAVE_VERSION` porque el campo es puramente aditivo.
+   */
+  vouchers?: string[];
   /** Hash del contenido con el que se jugo (null = desconocido, ej. save v1). */
   contentHash: string | null;
   /** Packs activos cuando empezo la run. */

@@ -47,6 +47,11 @@ export interface RollContext {
   /** Restringe el pool (por ejemplo: solo contenido habilitado por DLC). */
   cardFilter?: (def: CardDefinition) => boolean;
   jokerFilter?: (def: JokerDefinition) => boolean;
+  /**
+   * Vouchers que el jugador YA tiene en esta run. Sin esto la tienda podria
+   * ofrecer una regla repetida: una oferta muerta que ocupa un lugar.
+   */
+  ownedVouchers?: readonly string[];
 }
 
 export class OfferService {
@@ -97,11 +102,52 @@ export class OfferService {
     return offers;
   }
 
-  /** Sortea la primera tabla de una fase. */
+  /**
+   * Sortea la tabla de una fase que corresponde al ante actual.
+   *
+   * Una fase puede declarar VARIAS tablas con ventanas de ante que se solapan
+   * (una general y una especifica de late-game). Gana la MAS ESPECIFICA, que se
+   * decide en dos pasos: primero cuantos limites declara la tabla (una con
+   * `minAnte` le gana a una sin limites), y despues el ancho de la ventana. Si
+   * empatan, la primera declarada en `offers.json`.
+   *
+   * Sin ventana declarada, la tabla aplica en cualquier ante (comportamiento
+   * historico: la primera de la fase).
+   */
   rollPhase(phase: OfferPhase, ctx: RollContext): ShopOffer[] {
-    const table = this.byPhase.get(phase)?.[0];
+    const table = this.tableForPhase(phase, ctx.ante);
     if (!table) return [];
     return this.roll(table.id, ctx);
+  }
+
+  /** Tabla de la fase que aplica al ante, por especificidad. `null` si ninguna. */
+  tableForPhase(phase: OfferPhase, ante: number): OfferTable | null {
+    const tables = this.byPhase.get(phase);
+    if (!tables || tables.length === 0) return null;
+
+    let best: OfferTable | null = null;
+    let bestBounds = -1;
+    let bestSpan = Number.POSITIVE_INFINITY;
+
+    for (const table of tables) {
+      if (!windowContains(table, ante)) continue;
+
+      // Especificidad = cuantos limites declara la tabla. Uno acotado por un
+      // lado (`minAnte: 5`) es MAS especifico que uno sin limites, aunque su
+      // "ancho" sea infinito en los dos casos. Contar limites primero, y recien
+      // despues desempatar por ancho, es lo que hace que la tabla de late-game
+      // le gane a la general.
+      const bounds = (table.minAnte !== undefined ? 1 : 0) + (table.maxAnte !== undefined ? 1 : 0);
+      const span = windowSpan(table);
+
+      if (best === null || bounds > bestBounds || (bounds === bestBounds && span < bestSpan)) {
+        best = table;
+        bestBounds = bounds;
+        bestSpan = span;
+      }
+    }
+
+    return best;
   }
 
   // -------------------------------------------------------------------------
@@ -189,11 +235,40 @@ export class OfferService {
         };
       }
 
-      case 'voucher':
+      case 'voucher': {
+        // `refId` fijo = voucher concreto (una tabla puede forzarlo). Sin
+        // `refId`, se sortea del pool excluyendo lo ya poseido.
+        let def = picked.refId ? this.registry.tryGetVoucher(picked.refId) : undefined;
+        if (def && !def.repeatable && (ctx.ownedVouchers ?? []).includes(def.id)) {
+          // Un voucher fijo y ya poseido no es una oferta: es una trampa.
+          return undefined;
+        }
+        if (!def) {
+          def = this.registry.rollRandomVoucher(
+            ctx.rng,
+            (v) => table.allowDuplicates || !used.has(`voucher:${v.id}`),
+            ctx.ownedVouchers,
+          );
+        }
+        if (!def) return undefined;
+        return {
+          id,
+          kind: 'voucher',
+          refId: def.id,
+          nameKey: def.nameKey,
+          descKey: def.descKey,
+          cost: def.cost,
+          art: def.art,
+          sold: false,
+        };
+      }
+
       case 'money':
-        // Vouchers y recompensas de dinero todavia no tienen catalogo propio:
-        // llegan con la tienda de la Fase 6. Declararlos en una tabla hoy no
-        // rompe nada, simplemente no producen oferta.
+        // Sigue sin producir oferta a proposito: no hay NINGUNA tabla que
+        // declare `kind: 'money'`, y una recompensa suelta necesita una clave
+        // i18n propia ("+8 Fungis") que todavia no existe. Definir la rama con
+        // textos inventados seria peor que no tenerla. El dia que una tabla la
+        // use, `picked.amount` ya esta declarado en `OfferOption`.
         return undefined;
     }
   }
@@ -225,4 +300,22 @@ export class OfferService {
  */
 function offerId(tableId: string, ctx: RollContext, groupIndex: number, slotIndex: number): string {
   return `offer_${tableId}_${ctx.ante}_${ctx.blindIndex}_${ctx.sequence}_${groupIndex}${slotIndex}`;
+}
+
+/** La ventana de la tabla contiene el ante? Sin limites declarados, siempre si. */
+function windowContains(table: OfferTable, ante: number): boolean {
+  if (table.minAnte !== undefined && ante < table.minAnte) return false;
+  if (table.maxAnte !== undefined && ante > table.maxAnte) return false;
+  return true;
+}
+
+/**
+ * Ancho de la ventana, para elegir la mas especifica. Una tabla sin limites
+ * declarados tiene ancho INFINITO: es la menos especifica y pierde contra
+ * cualquier tabla que si declare una ventana.
+ */
+function windowSpan(table: OfferTable): number {
+  const min = table.minAnte ?? Number.NEGATIVE_INFINITY;
+  const max = table.maxAnte ?? Number.POSITIVE_INFINITY;
+  return max - min;
 }

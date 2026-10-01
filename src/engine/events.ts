@@ -155,6 +155,12 @@ export interface GameEventMap {
   'shop:exit': Record<string, never>;
   'shop:purchase': { offer: ShopOffer; money: number };
   'shop:reroll': { offers: ShopOffer[]; money: number };
+  /**
+   * Se compro un modificador de run (R3). Se emite DESPUES de registrar la
+   * regla: quien escuche y consulte `engine.modifiers` ya ve el efecto.
+   * El id alcanza (no el objeto) porque el catalogo vive en el contenido.
+   */
+  'voucher:bought': { voucher: string };
 
   // --- Deckbuilding y cultivo ---
   'deck:purged': { card: CardInstance; cost: number };
@@ -174,6 +180,14 @@ export interface GameEventMap {
   // UI sin que el motor sepa que existe.
   /** Un logro se desbloqueo por primera vez. */
   'achievement:unlocked': { id: string; nameKey: string; reward?: RetentionReward };
+  /**
+   * Se abrio una PUERTA de contenido por jugar (R2).
+   *
+   * No es lo mismo que un logro: `achievement:unlocked` avisa de una medalla,
+   * esto avisa de que una carta entro al pool de sorteos. El `contentId` es el
+   * dato util — es lo que la Coleccion tiene que dejar de mostrar como candado.
+   */
+  'unlock:granted': { contentId: string; kind: 'card' | 'joker'; nameKey: string };
   /** El jugador reclamo la recompensa diaria de hoy. */
   'daily:claim': { streak: number; reward?: RetentionReward };
   /** Aviso no bloqueante en el HUD (fallback del aviso del sistema). */

@@ -23,6 +23,7 @@ import {
   type EvolutionRule,
   type JokerDefinition,
   type UpgradeTrack,
+  type VoucherDefinition,
 } from '@engine/index';
 // El validador vive en la capa de contenido y solo toma el TIPO del tablero:
 // asi el arranque no arrastra el chunk diferido del duelo.
@@ -39,7 +40,7 @@ import {
   type PackManifest,
 } from './types';
 
-type AnyDefinition = CardDefinition | JokerDefinition | BlindDefinition;
+type AnyDefinition = CardDefinition | JokerDefinition | BlindDefinition | VoucherDefinition;
 
 export interface PackIssue {
   level: 'error' | 'warning';
@@ -50,7 +51,7 @@ export interface PackIssue {
 }
 
 export interface Collision {
-  kind: 'card' | 'joker' | 'blind' | 'ante';
+  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante';
   id: string;
   winner: string;
   loser: string;
@@ -83,6 +84,7 @@ export class ContentRegistry {
   private readonly offers: OfferTable[] = [];
   private readonly upgrades: UpgradeTrack[] = [];
   private readonly evolutions: EvolutionRule[] = [];
+  private readonly vouchers = new Map<string, Tagged<VoucherDefinition>>();
   /** Flechas del modo tablero, indexadas por `cardId`. */
   private readonly board: BoardCardDef[] = [];
 
@@ -117,6 +119,7 @@ export class ContentRegistry {
     this.offers.length = 0;
     this.upgrades.length = 0;
     this.evolutions.length = 0;
+    this.vouchers.clear();
     this.board.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
@@ -150,6 +153,7 @@ export class ContentRegistry {
       this.offers.push(...pack.offers);
       this.upgrades.push(...pack.upgrades);
       this.evolutions.push(...pack.evolutions);
+      for (const def of pack.vouchers) this.insert('voucher', this.vouchers, def.id, def, id, pack.manifest);
       // Mismo criterio que upgrades y evolutions: se acumulan y el validador
       // del tipo detecta duplicados. Un `cardId` repetido entre packs es un
       // error de contenido, no un override silencioso.
@@ -158,7 +162,7 @@ export class ContentRegistry {
   }
 
   private insert<T extends AnyDefinition>(
-    kind: 'card' | 'joker' | 'blind',
+    kind: 'card' | 'joker' | 'blind' | 'voucher',
     map: Map<string, Tagged<T>>,
     key: string,
     def: T,
@@ -230,6 +234,9 @@ export class ContentRegistry {
       ...(this.offers.length > 0 ? { offers: [...this.offers] } : {}),
       ...(this.upgrades.length > 0 ? { upgrades: [...this.upgrades] } : {}),
       ...(this.evolutions.length > 0 ? { evolutions: [...this.evolutions] } : {}),
+      ...(this.vouchers.size > 0
+        ? { vouchers: [...this.vouchers.values()].map(stripPack) as VoucherDefinition[] }
+        : {}),
     };
   }
 
@@ -379,6 +386,35 @@ export class ContentRegistry {
     // --- Evoluciones ---
     const evolvedTargets = new Set<string>();
     const evolutionIds = new Set<string>();
+    for (const voucher of this.vouchers.values()) {
+      if (!voucher.nameKey || !voucher.descKey) {
+        issues.push({
+          level: 'error',
+          where: `voucher:${voucher.id}`,
+          pack: voucher.__pack,
+          message: 'falta nameKey o descKey',
+        });
+      }
+      if (!Number.isFinite(voucher.cost) || voucher.cost < 0) {
+        issues.push({
+          level: 'error',
+          where: `voucher:${voucher.id}`,
+          pack: voucher.__pack,
+          message: 'cost invalido',
+        });
+      }
+      // Un voucher sin efectos NI modificadores no hace nada: es contenido
+      // muerto que ocupa un lugar en la tienda.
+      if ((voucher.effects?.length ?? 0) === 0 && !voucher.runModifiers) {
+        issues.push({
+          level: 'warning',
+          where: `voucher:${voucher.id}`,
+          pack: voucher.__pack,
+          message: 'sin effects ni runModifiers: no hace nada',
+        });
+      }
+    }
+
     for (const rule of this.evolutions) {
       const where = `evolution:${rule.id}`;
       if (evolutionIds.has(rule.id)) {
@@ -480,8 +516,25 @@ export class ContentRegistry {
     return (
       this.cards.get(contentId)?.__pack ??
       this.jokers.get(contentId)?.__pack ??
-      this.blinds.get(contentId)?.__pack
+      this.blinds.get(contentId)?.__pack ??
+      this.vouchers.get(contentId)?.__pack
     );
+  }
+
+  /**
+   * Ids que son DESTINO de una regla de evolucion.
+   *
+   * El gating necesita saberlo: una carta evolucionada se obtiene evolucionando,
+   * asi que su condicion de acceso YA es el requisito de la evolucion. Si
+   * ademas estuviera detras de una puerta, quedaria FUERA del `CardRegistry` y
+   * `EvolutionService.apply()` no podria resolver el destino: la evolucion
+   * devolveria `null` en silencio y el contenido quedaria inalcanzable para
+   * siempre. Es un fallo mudo, de los peores.
+   */
+  evolutionTargets(): Set<string> {
+    const out = new Set<string>();
+    for (const rule of this.evolutions) out.add(rule.to);
+    return out;
   }
 
   manifestOf(packId: string): PackManifest | undefined {
@@ -503,6 +556,7 @@ export class ContentRegistry {
       for (const [key, def] of this.cards) if (def.__pack === id) contentIds.push(key);
       for (const [key, def] of this.jokers) if (def.__pack === id) contentIds.push(key);
       for (const [key, def] of this.blinds) if (def.__pack === id) contentIds.push(key);
+      for (const [key, def] of this.vouchers) if (def.__pack === id) contentIds.push(key);
       return {
         id,
         titleKey: manifest.titleKey,
@@ -520,6 +574,7 @@ export class ContentRegistry {
     packs: number;
     cards: number;
     jokers: number;
+    vouchers: number;
     blinds: number;
     antes: number;
     offers: number;
@@ -531,6 +586,7 @@ export class ContentRegistry {
       packs: this.packs.length,
       cards: this.cards.size,
       jokers: this.jokers.size,
+      vouchers: this.vouchers.size,
       blinds: this.blinds.size,
       antes: this.antes.size,
       offers: this.offers.length,

@@ -1,0 +1,150 @@
+[
+  {
+    "id": "voucher_extra_hand",
+    "nameKey": "voucher.voucher_extra_hand.name",
+    "descKey": "voucher.voucher_extra_hand.desc",
+    "cost": 12,
+    "art": {
+      "hue": 150,
+      "hue2": 178,
+      "pattern": "radial",
+      "silhouette": "cap",
+      "glow": 0.6
+    },
+    "effects": [
+      {
+        "id": "vou_hand",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [
+          {
+            "type": "ADD_HANDS",
+            "value": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "voucher_extra_discard",
+    "nameKey": "voucher.voucher_extra_discard.name",
+    "descKey": "voucher.voucher_extra_discard.desc",
+    "cost": 11,
+    "art": {
+      "hue": 205,
+      "hue2": 232,
+      "pattern": "radial",
+      "silhouette": "gill",
+      "glow": 0.55
+    },
+    "effects": [
+      {
+        "id": "vou_discard",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [
+          {
+            "type": "ADD_DISCARDS",
+            "value": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "voucher_wide_hand",
+    "nameKey": "voucher.voucher_wide_hand.name",
+    "descKey": "voucher.voucher_wide_hand.desc",
+    "cost": 13,
+    "art": {
+      "hue": 262,
+      "hue2": 292,
+      "pattern": "radial",
+      "silhouette": "coral",
+      "glow": 0.5
+    },
+    "effects": [
+      {
+        "id": "vou_handsize",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [
+          {
+            "type": "ADD_HAND_SIZE",
+            "value": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "voucher_sixth_slot",
+    "nameKey": "voucher.voucher_sixth_slot.name",
+    "descKey": "voucher.voucher_sixth_slot.desc",
+    "cost": 14,
+    "art": {
+      "hue": 38,
+      "hue2": 62,
+      "pattern": "radial",
+      "silhouette": "cap",
+      "glow": 0.7
+    },
+    "effects": [
+      {
+        "id": "vou_slot",
+        "trigger": "ON_SHOP_ENTER",
+        "actions": [
+          {
+            "type": "ADD_JOKER_SLOTS",
+            "value": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "voucher_cheap_rerolls",
+    "nameKey": "voucher.voucher_cheap_rerolls.name",
+    "descKey": "voucher.voucher_cheap_rerolls.desc",
+    "cost": 10,
+    "art": {
+      "hue": 118,
+      "hue2": 146,
+      "pattern": "radial",
+      "silhouette": "gill",
+      "glow": 0.45
+    },
+    "runModifiers": {
+      "rerollCostDelta": -2
+    }
+  },
+  {
+    "id": "voucher_thin_cut",
+    "nameKey": "voucher.voucher_thin_cut.name",
+    "descKey": "voucher.voucher_thin_cut.desc",
+    "cost": 15,
+    "art": {
+      "hue": 292,
+      "hue2": 320,
+      "pattern": "radial",
+      "silhouette": "coral",
+      "glow": 0.62
+    },
+    "runModifiers": {
+      "targetMultiplier": 0.9
+    }
+  },
+  {
+    "id": "voucher_bulk_deal",
+    "nameKey": "voucher.voucher_bulk_deal.name",
+    "descKey": "voucher.voucher_bulk_deal.desc",
+    "cost": 16,
+    "art": {
+      "hue": 46,
+      "hue2": 30,
+      "pattern": "radial",
+      "silhouette": "cap",
+      "glow": 0.58
+    },
+    "runModifiers": {
+      "shopDiscount": 0.25
+    }
+  }
+]

@@ -5,18 +5,108 @@
     "groups": [
       {
         "count": 1,
-        "options": [{ "weight": 1, "kind": "card", "excludeTag": "evolved" }]
-      },
-      {
-        "count": 1,
         "options": [
-          { "weight": 1, "kind": "card", "excludeTag": "evolved" },
-          { "weight": 1, "kind": "joker" }
+          {
+            "weight": 1,
+            "kind": "card",
+            "excludeTag": "evolved"
+          }
         ]
       },
       {
         "count": 1,
-        "options": [{ "weight": 1, "kind": "mutation" }]
+        "options": [
+          {
+            "weight": 1,
+            "kind": "card",
+            "excludeTag": "evolved"
+          },
+          {
+            "weight": 1,
+            "kind": "joker"
+          }
+        ]
+      },
+      {
+        "count": 1,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "mutation"
+          }
+        ]
+      },
+      {
+        "chance": 0.55,
+        "count": 1,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "voucher"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "shop_late",
+    "phase": "shop",
+    "minAnte": 5,
+    "groups": [
+      {
+        "count": 1,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "card",
+            "excludeTag": "evolved",
+            "rarityWeights": {
+              "common": 30,
+              "uncommon": 38,
+              "rare": 24,
+              "legendary": 8
+            }
+          }
+        ]
+      },
+      {
+        "count": 2,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "card",
+            "excludeTag": "evolved",
+            "rarityWeights": {
+              "common": 30,
+              "uncommon": 38,
+              "rare": 24,
+              "legendary": 8
+            }
+          },
+          {
+            "weight": 1,
+            "kind": "joker"
+          }
+        ]
+      },
+      {
+        "count": 1,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "mutation"
+          }
+        ]
+      },
+      {
+        "chance": 0.55,
+        "count": 1,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "voucher"
+          }
+        ]
       }
     ]
   },
@@ -31,7 +121,36 @@
             "weight": 1,
             "kind": "card",
             "excludeTag": "evolved",
-            "rarityWeights": { "common": 60, "uncommon": 30, "rare": 10 }
+            "rarityWeights": {
+              "common": 60,
+              "uncommon": 30,
+              "rare": 10
+            }
+          }
+        ]
+      }
+    ],
+    "pick": 1,
+    "allowSkip": true
+  },
+  {
+    "id": "blind_reward_draft_late",
+    "phase": "reward",
+    "minAnte": 6,
+    "groups": [
+      {
+        "count": 3,
+        "options": [
+          {
+            "weight": 1,
+            "kind": "card",
+            "excludeTag": "evolved",
+            "rarityWeights": {
+              "common": 34,
+              "uncommon": 36,
+              "rare": 22,
+              "legendary": 8
+            }
           }
         ]
       }

@@ -258,6 +258,18 @@ export interface JokerDefinition {
   tags?: string[];
 }
 
+/**
+ * Escalafon del ciego. Es una etiqueta de CONTENIDO, no una derivacion: se
+ * declara para que la pantalla pueda agrupar y jerarquizar sin adivinar.
+ *
+ * No se infiere de `scoreMultiplier` ni de `effects.length` por dos razones:
+ * (1) un jefe futuro podria no traer efectos y seguir siendo jefe, y (2) el
+ * orden de la grilla depende de esto — adivinar por multiplicador dejaria dos
+ * ciegos empatados sin criterio. `effects.length` sobrevive como respaldo para
+ * contenido viejo o de terceros que no declare `tier`.
+ */
+export type BlindTier = 'small' | 'big' | 'boss';
+
 export interface BlindDefinition {
   id: string;
   nameKey: string;
@@ -270,6 +282,24 @@ export interface BlindDefinition {
   effects?: EffectDefinition[];
   /** Monedas que otorga al superarlo. */
   reward: number;
+  /**
+   * Escalafon del ciego. Si falta, la UI cae a `effects.length > 0 → boss`
+   * (la convencion vieja). Ver `blindTier()` en la UI.
+   */
+  tier?: BlindTier;
+  /**
+   * Clave de ilustracion propia del ciego, sin prefijo. Se resuelve a
+   * `art_blind_<art>.webp` (`ArtAssets.blindKeysFor`).
+   *
+   * La clave se declara y NO se deriva de `id` a proposito: el id es una clave
+   * de contenido que puede cambiar de nombre, y el archivo de arte es un
+   * contrato de disco. Separándolos, renombrar un ciego no rompe su imagen.
+   *
+   * Sin `art` (o sin el archivo generado) la tarjeta se queda sin ilustracion y
+   * el respaldo es el MATERIAL de la tarjeta, no un dibujo procedural: a
+   * diferencia de las cartas, aca no hay silueta que dibujar.
+   */
+  art?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +378,69 @@ export interface DieRoll {
   discards: number;
 }
 
+/**
+ * MODIFICADORES DE RUN (vouchers).
+ *
+ * Son el tercer eje de mejora, despues de cartas y jokers, y el unico que
+ * funciona SIN ocupar espacio: un voucher no entra al mazo ni ocupa un slot de
+ * joker, cambia una REGLA de la partida para siempre.
+ *
+ * DOS MITADES, Y POR QUE NO PUEDEN SER UNA SOLA
+ * ---------------------------------------------
+ *   - `effects` es lo que ya sabe hacer el motor: mismos triggers y mismas
+ *     acciones que un joker (`ADD_HANDS`, `GAIN_MONEY`...). Se aplica UNA vez,
+ *     al comprar, con `applyImmediateEffects`.
+ *   - `runModifiers` es lo que NO es un evento: "los rerolls cuestan 2 menos"
+ *     no ocurre en ningun momento, es un cambio permanente en como se CALCULA
+ *     algo. Meterlo como efecto obligaria a un trigger por cada consulta.
+ *
+ * Si todo se pudiera hacer con `effects`, `runModifiers` no existiria. Existe
+ * porque hay reglas que no son sucesos.
+ */
+export interface VoucherRunModifiers {
+  /** Suma al coste de cada reroll (negativo = mas barato). Se clampea a >= 0. */
+  rerollCostDelta?: number;
+  /**
+   * Multiplicador aplicado al OBJETIVO de cada ciego (0.9 = 10% menos).
+   * Se clampea para que un voucher no pueda volver el juego trivial ni
+   * imposible.
+   */
+  targetMultiplier?: number;
+  /** Descuento en la tienda, en tanto por uno (0.2 = 20% menos). */
+  shopDiscount?: number;
+  /**
+   * RESERVADOS. Estos campos son para vouchers PERMANENTES (a nivel de perfil,
+   * no de run): "empeza cada partida con una mano extra". Un voucher comprado
+   * en la tienda no puede aplicarlos, porque la run ya empezo.
+   *
+   * Estan declarados para que el tipo no cambie cuando llegue la ascension
+   * (R1), pero HOY el motor no los lee: no hay vouchers permanentes en el
+   * contenido. Un voucher que los declare en `vouchers.json` no hace nada.
+   */
+  extraJokerSlots?: number;
+  extraHands?: number;
+  extraDiscards?: number;
+  extraHandSize?: number;
+  extraMoney?: number;
+}
+
+export interface VoucherDefinition {
+  id: string;
+  nameKey: string;
+  descKey: string;
+  cost: number;
+  art: ArtSpec;
+  /** Efectos aplicados UNA vez al comprar. Mismos triggers/acciones que un joker. */
+  effects?: EffectDefinition[];
+  /** Cambios permanentes en como se CALCULA la run. Ver `VoucherRunModifiers`. */
+  runModifiers?: VoucherRunModifiers;
+  /**
+   * Se puede comprar mas de una vez. Default `false`: repetir una regla no
+   * suele tener sentido, y ofrecerlo confunde.
+   */
+  repeatable?: boolean;
+}
+
 export interface ShopOffer {
   id: string;
   kind: 'card' | 'joker' | 'mutation' | 'voucher';
@@ -422,6 +515,14 @@ export interface OfferTable {
   pick?: number;
   allowSkip?: boolean;
   allowDuplicates?: boolean;
+  /**
+   * Ventana de antes en la que aplica la tabla. Una fase puede tener VARIAS
+   * tablas y `rollPhase` elige la de ventana mas especifica que contenga el
+   * ante actual. Sirve para que la tienda de la Fase 1 no ofrezca lo mismo que
+   * la del ante 7. Sin `minAnte`/`maxAnte`, la tabla aplica en cualquier ante.
+   */
+  minAnte?: number;
+  maxAnte?: number;
 }
 
 // ---------------------------------------------------------------------------
