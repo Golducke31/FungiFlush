@@ -1,21 +1,34 @@
 /**
- * Arena.ts — La Arena del duelo, armada con los assets de Polyfork.
+ * Arena.ts — La Arena del duelo.
  *
  * QUE ES ESTO
  * -----------
- * Antes la mesa era UN plano de 90x64 con una foto pegada. Ahora es una
- * PLATAFORMA de piedra que emerge del agua: la cara superior es un suelo de
- * tiles 3D donde apoyan las cartas, los costados se ven por encima de la linea
- * de agua, y los racimos de hongos 3D crecen en el borde de atras.
+ * Una PLATAFORMA de piedra que emerge del agua: la cara superior es la LOSA
+ * RUNICA (la ilustracion de `art_arena`, con su circulo de invocacion y las
+ * venas de micelio), los costados se ven por encima de la linea de agua, y los
+ * racimos de hongos 3D crecen en el borde de atras.
  *
- * TODO SALE EN DOS DRAW CALLS
- * ---------------------------
- * Los siete assets de Polyfork comparten EXACTAMENTE el mismo material
- * (`vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0`) y
- * todos son geometria no-indexada con los mismos atributos (position, color,
- * normal). Eso permite fusionar las ~56 instancias del suelo en UNA geometria y
- * las ~20 plantas en OTRA, con dos materiales. La arena entera son 2 draw calls,
- * no 76.
+ * POR QUE EL PISO ES UNA IMAGEN Y NO TILES 3D
+ * -------------------------------------------
+ * Antes el piso eran 18 tiles de piedra de Polyfork. Se cambiaron por la losa
+ * dibujada por tres razones:
+ *   1. La losa ya trae la lectura de "piedra tallada" (bloques, grietas,
+ *      musgo). Repetirla con geometria era decorar dos veces lo mismo.
+ *   2. El circulo runico y las venas son el CENTRO visual del juego y no se
+ *      pueden modelar con un tile que se repite.
+ *   3. El relieve no se pierde: se saca de la propia imagen con un NORMAL MAP
+ *      procedural (`createNormalMapCanvas`), asi que las grietas siguen
+ *      respondiendo a la luz sin un solo triangulo de mas.
+ * Lo que si se conserva en 3D es la vegetacion: un hongo modelado se ve desde
+ * cualquier angulo, una calcomania no.
+ *
+ * TODO SALE EN TRES DRAW CALLS
+ * ----------------------------
+ * Bloque (costados), losa (cara superior) y vegetacion. La vegetacion son ~20
+ * instancias de 4 assets de Polyfork que comparten EXACTAMENTE el mismo
+ * material (`vertexColors: true, flatShading: true`) y todos son geometria
+ * no-indexada con los mismos atributos (position, color, normal). Eso permite
+ * fusionarlas en UNA geometria con UN material.
  *
  * POR QUE EL FONDO ES LO QUE IMPORTA
  * ----------------------------------
@@ -37,53 +50,30 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { createAsset as createStoneTile } from './polyfork/stone-path-tile';
+import { createNormalMapCanvas } from './CardTexture';
 import { createAsset as createClusterA } from './polyfork/mushroom-cluster-f2e3ba';
 import { createAsset as createCap } from './polyfork/mushroom-679e55';
 import { createAsset as createPolyp } from './polyfork/ricordea-mushroom-polyp-6d8178';
 import { createAsset as createClusterB } from './polyfork/mushroom-cluster-18dc1d';
 
 // ---------------------------------------------------------------------------
-// Grilla del suelo
+// La plataforma
 // ---------------------------------------------------------------------------
-
-/**
- * CUANTO SUELO HACE FALTA (esto manda sobre todo lo demas)
- * -------------------------------------------------------
- * El encuadre lo fija `CameraRig.fit()` desde la mano y los jokers, no desde el
- * suelo. Resolviendo el frustum con la camara real (fov 40, ~15.5 de alto,
- * mirando ~58 grados abajo) el piso VISIBLE es de unos 36 x 17 unidades: de
- * x -18 a 18 y de z -8.5 a 8. Nada mas alla de eso se ve, y nada mas aca se
- * necesita: dibujar la mesa vieja de 90x64 era pagar triangulos por pixeles que
- * la camara nunca mira.
- *
- * Por eso la grilla es chica y esta ajustada a esa banda, con una fila/columna
- * extra de margen para que el borde del mundo no entre en cuadro cuando la
- * camara respira.
- */
-const TILE = 4;
 
 /**
  * LA ARENA ES UNA PLATAFORMA, NO UN PISO PLANO.
  *
- * El suelo de piedra es la cara SUPERIOR de un bloque que emerge del agua (el
- * "cubo" de la referencia, tematizado): los costados se ven por encima de la
- * linea de agua y el agua lo rodea. Por eso la grilla cubre exactamente la
- * plataforma: fuera de aca no hay piso, hay agua.
+ * El suelo es la cara SUPERIOR de un bloque que emerge del agua (el "cubo" de
+ * la referencia, tematizado): los costados se ven por encima de la linea de
+ * agua y el agua lo rodea. Por eso la losa cubre exactamente la plataforma:
+ * fuera de aca no hay piso, hay agua.
  *
- * x de -14 a 14 (7 columnas de 4) y z de -6 a 6 (3 filas): las cartas llegan a
- * x = +-11.6 (los montones viven en +-10.5) y a z de -4.5 a 4.5, asi que sobra
- * margen. La vegetacion se planta en el borde de atras de la plataforma.
- */
-const COLUMNS = 6;
-const COLUMN_ORIGIN = -10;
-const ROWS = 3;
-const ROW_ORIGIN = -4;
-
-/**
- * Media planta de la plataforma. Debe coincidir con la grilla de arriba.
- * Se mantiene AJUSTADA a lo que ocupan las cartas (los montones viven en
- * x=+-10.5): cuanto mas grande, menos agua se ve alrededor.
+ * x de -12 a 12 y z de -6 a 6: las cartas llegan a x = +-11.6 (los montones
+ * viven en +-10.5) y a z de -4.5 a 4.5, asi que sobra margen. La vegetacion se
+ * planta en el borde de atras de la plataforma.
+ *
+ * La losa es 2:1 (24 x 12), que es EXACTAMENTE la proporcion de `art_arena`:
+ * asi el circulo runico entra sin recorte ni deformacion.
  */
 export const PLATFORM_HALF_X = 12;
 export const PLATFORM_HALF_Z = 6;
@@ -91,6 +81,30 @@ export const PLATFORM_HALF_Z = 6;
 export const PLATFORM_DEPTH = 2.6;
 /** Altura del agua respecto de la cara superior de la plataforma. */
 export const WATER_Y = -1.3;
+
+/** Pendiente del normal map de la losa. Mas alto que una carta: el piso se ve de lejos y en escorzo. */
+const FLOOR_RELIEF = 2.4;
+/** Ancho del normal map de la losa, en px. Ver `createNormalMapCanvas`. */
+const FLOOR_NORMAL_WIDTH = 512;
+/** Color de la losa si el arte no carga: la escena no puede quedar blanca. */
+const FLOOR_FALLBACK_COLOR = 0x5d6357;
+/**
+ * Cuanto emiten las venas de micelio. El mapa de emision es la PROPIA imagen,
+ * asi que el brillo sigue a la luminancia: la piedra oscura casi no emite y las
+ * venas cian/violeta si.
+ *
+ * MEDIDO, no elegido a ojo: con 0.5 la losa quedaba mas brillante que las
+ * cartas y el piso se comia al abanico de la mano —el ojo iba al decorado y no
+ * al juego—. A 0.3 las venas siguen encendidas pero el piso se lee como fondo.
+ */
+const FLOOR_EMISSIVE = 0.3;
+/**
+ * Tinte de la losa. No es blanco puro: el arte viene calibrado para verse como
+ * una ilustracion, y a pantalla completa eso es un piso de piedra DEMASIADO
+ * claro para que encima descansen cartas oscuras. Bajarlo un 12% devuelve el
+ * contraste sin apagar las venas (que van por emision, no por color).
+ */
+const FLOOR_TINT = 0xe0e4e0;
 
 // ---------------------------------------------------------------------------
 // Vegetacion
@@ -177,7 +191,7 @@ function mulberry32(seed: number): () => number {
 interface PropPiece {
   /** Una geometria por mesh del asset, con su transformada local ya cocida. */
   readonly geometries: readonly THREE.BufferGeometry[];
-  /** Ancho del asset tal cual viene, para escalarlo al lado del tile. */
+  /** Ancho del asset tal cual viene, para escalarlo al alto objetivo. */
   readonly width: number;
   readonly height: number;
 }
@@ -227,7 +241,8 @@ function pickWeighted(species: readonly Species[], roll: number): Species {
 // ---------------------------------------------------------------------------
 
 export interface ArenaStats {
-  readonly tiles: number;
+  /** 1 si la losa runica se aplico; 0 si el arte falto y quedo la piedra lisa. */
+  readonly floor: number;
   readonly flora: number;
   readonly triangles: number;
   readonly drawCalls: number;
@@ -235,11 +250,18 @@ export interface ArenaStats {
 
 export interface Arena {
   readonly group: THREE.Group;
-  /** Geometrias y materiales, para que `SceneManager` los libere en su dispose. */
-  readonly disposables: readonly (THREE.BufferGeometry | THREE.Material)[];
+  /** Geometrias, materiales y texturas, para que `SceneManager` los libere. */
+  readonly disposables: readonly (THREE.BufferGeometry | THREE.Material | THREE.Texture)[];
   readonly stats: ArenaStats;
   /** Intensidad del brillo de los hongos. La mueve `syncEnvironment` por tier. */
   setGlow(intensity: number): void;
+  /**
+   * Aplica la losa runica a la cara superior. Se llama UNA vez, con el arte ya
+   * cargado; sin argumento la plataforma queda en piedra lisa y el juego sigue
+   * jugable. No esta en el constructor para que `Arena` no dependa de
+   * `ArtAssets` (el modulo se puede probar sin navegador ni manifiesto).
+   */
+  applyFloorArt(art?: HTMLImageElement): void;
 }
 
 /**
@@ -247,8 +269,6 @@ export interface Arena {
  */
 export function buildArena(seed = 0x5eed1a7e): Arena {
   const random = mulberry32(seed);
-
-  const stone = extractPiece(createStoneTile);
 
   // Las especies se arman aca porque necesitan las piezas ya construidas.
   //
@@ -263,27 +283,8 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
     { piece: extractPiece(createPolyp), height: 1.2, weight: 2 },
   ];
 
-  const ground: THREE.BufferGeometry[] = [];
   const flora: THREE.BufferGeometry[] = [];
-
-  const rotation = new THREE.Matrix4();
-  const scaling = new THREE.Matrix4();
-  const matrix = new THREE.Matrix4();
-
-  let tiles = 0;
   let floraCount = 0;
-
-  // Toda la plataforma es piedra: es la cara superior del bloque que emerge del
-  // agua. El orden de las tiradas de `random` se mantiene estable para que la
-  // arena sea identica en cada arranque (ver la nota de determinismo del header).
-  for (let column = 0; column < COLUMNS; column += 1) {
-    for (let row = 0; row < ROWS; row += 1) {
-      const cx = COLUMN_ORIGIN + column * TILE;
-      const cz = ROW_ORIGIN + row * TILE;
-      appendPiece(ground, stone, TILE / stone.width, cx, cz, random, rotation, scaling, matrix);
-      tiles += 1;
-    }
-  }
 
   // --- Setos de vegetacion (ver la nota de arriba) ---
 
@@ -309,23 +310,14 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
     }
   }
 
-  const groundGeometry = mergeGeometries(ground);
-  if (!groundGeometry) throw new Error('[Arena] no se pudo fusionar el suelo');
   const floraGeometry = flora.length > 0 ? mergeGeometries(flora) : null;
   if (flora.length > 0 && !floraGeometry) throw new Error('[Arena] no se pudo fusionar la vegetacion');
 
   // Las piezas originales ya dieron sus clones: liberarlas ahora evita dejar
-  // ~7 geometrias colgadas por cada arranque de escena.
-  for (const piece of [stone, ...species.map((s) => s.piece)]) {
+  // ~5 geometrias colgadas por cada arranque de escena.
+  for (const piece of species.map((s) => s.piece)) {
     for (const geometry of piece.geometries) geometry.dispose();
   }
-
-  const groundMaterial = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    flatShading: true,
-    roughness: 0.85,
-    metalness: 0,
-  });
 
   const floraMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -339,31 +331,45 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   const group = new THREE.Group();
   group.name = 'arena';
 
-  const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-  groundMesh.name = 'arena-ground';
-  group.add(groundMesh);
-
-  // EL BLOQUE: los costados que emergen del agua. La cara superior queda 1 cm
-  // por debajo de los tiles de piedra, para que no peleen en profundidad.
+  // EL BLOQUE: los costados que emergen del agua. La cara superior queda a y=0
+  // —el piso del mundo— y la tapa la losa, que va 1 cm mas arriba para no
+  // pelear en profundidad contra la cara del bloque.
   const platformGeometry = new THREE.BoxGeometry(
     PLATFORM_HALF_X * 2,
     PLATFORM_DEPTH,
     PLATFORM_HALF_Z * 2,
   );
   const platformMaterial = new THREE.MeshStandardMaterial({
-    color: 0x59604f,
+    // Piedra del mismo tono que la losa: el bloque y la tapa tienen que leerse
+    // como una sola pieza tallada, no como una tapa apoyada sobre una caja.
+    color: 0x3b434c,
     roughness: 0.95,
     metalness: 0,
     flatShading: true,
   });
   const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
   platformMesh.name = 'arena-platform';
-  platformMesh.position.set(0, -PLATFORM_DEPTH / 2 - 0.01, 0);
+  platformMesh.position.set(0, -PLATFORM_DEPTH / 2, 0);
   group.add(platformMesh);
 
-  const disposables: (THREE.BufferGeometry | THREE.Material)[] = [
-    groundGeometry,
-    groundMaterial,
+  // LA LOSA: la cara superior. Plano aparte y no una cara del bloque porque
+  // `BoxGeometry` con un array de materiales se dibuja en SEIS draw calls (una
+  // por grupo), y asi son dos.
+  const floorGeometry = new THREE.PlaneGeometry(PLATFORM_HALF_X * 2, PLATFORM_HALF_Z * 2);
+  floorGeometry.rotateX(-Math.PI / 2);
+  floorGeometry.translate(0, 0.01, 0);
+  const floorMaterial = new THREE.MeshStandardMaterial({
+    color: FLOOR_FALLBACK_COLOR,
+    roughness: 0.92,
+    metalness: 0,
+  });
+  const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+  floorMesh.name = 'arena-floor';
+  group.add(floorMesh);
+
+  const disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = [
+    floorGeometry,
+    floorMaterial,
     platformGeometry,
     platformMaterial,
     floraMaterial,
@@ -377,20 +383,60 @@ export function buildArena(seed = 0x5eed1a7e): Arena {
   }
 
   const triangles =
-    groundGeometry.attributes['position']!.count / 3 +
+    floorGeometry.attributes['position']!.count / 3 +
     (floraGeometry ? floraGeometry.attributes['position']!.count / 3 : 0);
+
+  let floorApplied = 0;
 
   return {
     group,
     disposables,
     stats: {
-      tiles,
+      get floor(): number {
+        return floorApplied;
+      },
       flora: floraCount,
       triangles,
       drawCalls: group.children.length,
     },
     setGlow(intensity: number): void {
       floraMaterial.emissiveIntensity = intensity;
+    },
+    applyFloorArt(art?: HTMLImageElement): void {
+      if (!art || art.naturalWidth === 0) return;
+
+      // `THREE.Texture` sobre la imagen ya decodificada, no un `CanvasTexture`:
+      // copiar 1024x512 a un canvas son 2 MB de RAM que se quedan vivos mientras
+      // viva la textura, y una pasada de `drawImage` al pedo.
+      const map = new THREE.Texture(art);
+      map.needsUpdate = true;
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.anisotropy = 8;
+
+      // El relieve sale de la PROPIA imagen (Sobel sobre la luminancia): las
+      // grietas y el borde de los bloques responden a la luz sin geometria.
+      const normal = new THREE.CanvasTexture(
+        createNormalMapCanvas(art, FLOOR_RELIEF, FLOOR_NORMAL_WIDTH),
+      );
+      // Un normal map no es color: con sRGB la iluminacion sale mal.
+      normal.colorSpace = THREE.NoColorSpace;
+      normal.anisotropy = 4;
+
+      floorMaterial.map = map;
+      floorMaterial.normalMap = normal;
+      // La imagen tambien es el mapa de EMISION: el brillo sigue a la
+      // luminancia, asi que la piedra oscura casi no emite y las venas de
+      // micelio si. Es lo que hace que la losa se vea encendida y no pintada.
+      floorMaterial.emissiveMap = map;
+      floorMaterial.emissive = new THREE.Color(0xffffff);
+      floorMaterial.emissiveIntensity = FLOOR_EMISSIVE;
+      // Sin esto el mapa se multiplica por el gris de respaldo y la losa sale
+      // apagada; con blanco, el color lo pone el arte.
+      floorMaterial.color = new THREE.Color(FLOOR_TINT);
+      floorMaterial.needsUpdate = true;
+
+      disposables.push(map, normal);
+      floorApplied = 1;
     },
   };
 }
@@ -422,27 +468,4 @@ function plant(
     out.push(geometry.clone().applyMatrix4(matrix));
   }
   return 1;
-}
-
-/** Coloca una instancia de una pieza en (cx, cz), girada en cuartos de vuelta. */
-function appendPiece(
-  out: THREE.BufferGeometry[],
-  piece: PropPiece,
-  scale: number,
-  cx: number,
-  cz: number,
-  random: () => number,
-  rotation: THREE.Matrix4,
-  scaling: THREE.Matrix4,
-  matrix: THREE.Matrix4,
-): void {
-  // Los tiles son simetricos, pero rotarlos en cuartos de vuelta corta la
-  // lectura de "grilla perfecta" que delata el copiar-y-pegar.
-  rotation.makeRotationY(Math.floor(random() * 4) * (Math.PI / 2));
-  scaling.makeScale(scale, scale, scale);
-  matrix.copy(rotation).multiply(scaling).setPosition(cx, 0, cz);
-
-  for (const geometry of piece.geometries) {
-    out.push(geometry.clone().applyMatrix4(matrix));
-  }
 }

@@ -19,6 +19,12 @@ TAMANOS POR PREFIJO
 el canvas de la carta, para que entren a sangre sin recorte); el tapete es
 cuadrado y grande; el resto 512x512.
 
+`art_arena` es 2:1 porque es la cara SUPERIOR de la plataforma de la arena, que
+mide 24 x 12 unidades del mundo: la misma proporcion de la losa, para que el
+circulo runico entre sin recorte. 1024x512 son ~43 px por unidad, que es la
+densidad real en pantalla a DPR 1.75; mas resolucion seria texel que el ojo no
+llega a ver sobre un piso en perspectiva.
+
 Uso: python tools/optimize_art.py
      npm run art          (esto + regenerar el indice)
 """
@@ -41,6 +47,7 @@ CARD_TARGET = (512, 744)
 # nombre exacto -> (ancho, alto). Lo que no este aca se resuelve por prefijo.
 TARGETS: dict[str, tuple[int, int]] = {
     "art_cardback": CARD_TARGET,
+    "art_arena": (1024, 512),
     "art_table": (768, 768),
     # Los 7 elementos del catalogo viejo y las dos rarezas altas son cuadrados.
     "art_legendary": (512, 512),

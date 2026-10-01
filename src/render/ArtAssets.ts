@@ -62,13 +62,14 @@ const LEGACY_ELEMENTS = [
 
 /** Clave de una de las 40 ilustraciones nuevas. */
 export type CardArtKey = `card_${ElementType}_${Rarity}`;
-/** Claves del catalogo viejo (11 archivos) mas el dorso y el tapete. */
+/** Claves del catalogo viejo (11 archivos) mas el dorso, el tapete y la arena. */
 export type LegacyArtKey =
   | `art_${(typeof LEGACY_ELEMENTS)[number]}`
   | 'art_legendary'
   | 'art_mythic'
   | 'art_cardback'
-  | 'art_table';
+  | 'art_table'
+  | 'art_arena';
 /**
  * Clave de arte PROPIA de una carta.
  *
@@ -97,6 +98,7 @@ function buildFileMap(): Record<ArtKey, string> {
   map['art_mythic'] = 'art_mythic.webp';
   map['art_cardback'] = 'art_cardback.webp';
   map['art_table'] = 'art_table.webp';
+  map['art_arena'] = 'art_arena.webp';
 
   return map;
 }

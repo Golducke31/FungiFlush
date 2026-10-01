@@ -525,7 +525,20 @@ function drawChip(
 // Composicion de la carta
 // ---------------------------------------------------------------------------
 
-export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement): HTMLCanvasElement {
+/**
+ * Que se hornea en este canvas.
+ *
+ * `full` = la carta entera (fondo + arte + texto), que es el camino de siempre.
+ * `top`  = SOLO el texto y el marco, sobre TRANSPARENTE: es la capa que flota
+ *          por delante de la capa de arte y la que produce el parallax.
+ */
+export type CardLayer = 'full' | 'top';
+
+export function createCardCanvas(
+  spec: CardTextureSpec,
+  art?: HTMLImageElement,
+  layer: CardLayer = 'full',
+): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -537,6 +550,10 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   const border = RARITY_BORDER[spec.rarity];
   const pad = border + 8;
 
+  // Fondo + tinte + arte: SOLO en la capa completa. En la de texto se omite
+  // todo esto a proposito, para que quede transparente y deje ver la capa de
+  // arte que va detras.
+  if (layer === 'full') {
   // --- 1. Fondo con gradiente vertical ---
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#141b24');
@@ -585,6 +602,8 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
       hue2: spec.art.hue2 ?? spec.art.hue + 20,
       glow: spec.art.glow ?? 0.4,
     });
+  }
+
   }
 
   // --- 4. Cabecera: elemento + nombre ---
@@ -742,12 +761,72 @@ export function createCardCanvas(spec: CardTextureSpec, art?: HTMLImageElement):
   return canvas;
 }
 
+/**
+ * Capa de ARTE: fondo + tinte + ilustracion, y nada mas.
+ *
+ * Es la mitad "visual" de la carta. Se cachea por ARCHIVO DE ARTE y no por
+ * carta, porque el arte se indexa por (elemento x rareza): 35 cartas comparten
+ * ~40 ilustraciones, asi que guardarlo por carta seria pagar 35 texturas para
+ * tener 40. Es la pieza que hace que el parallax no cueste el triple.
+ */
+export function createCardArtCanvas(
+  spec: CardTextureSpec,
+  art?: HTMLImageElement,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const elementColor = ELEMENT_COLOR[spec.element];
+
+  // Mismo fondo y mismo tinte que la capa completa: la capa de texto se apoya
+  // encima, asi que el color de base tiene que ser identico.
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#141b24');
+  bg.addColorStop(0.5, '#0e141c');
+  bg.addColorStop(1, '#080c12');
+  ctx.fillStyle = bg;
+  roundRect(ctx, 0, 0, W, H, 30);
+  ctx.fill();
+
+  const tint = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+  tint.addColorStop(0, hexToRgba(elementColor, 0.3));
+  tint.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = tint;
+  roundRect(ctx, 0, 0, W, H, 30);
+  ctx.fill();
+
+  const layout: ArtLayout = { radius: 30, topFade: 0.18, bottomStart: 0.62, innerFrame: false };
+  if (art && art.naturalWidth > 0) {
+    drawArtImage(ctx, art, 0, 0, W, H, spec, layout);
+  } else {
+    drawPattern(ctx, spec, 0, 0, W, H);
+    drawSilhouette(spec, {
+      ctx,
+      cx: W / 2,
+      cy: H * 0.4,
+      s: spec.kind === 'card' ? 118 : 128,
+      hue: spec.art.hue,
+      hue2: spec.art.hue2 ?? spec.art.hue + 20,
+      glow: spec.art.glow ?? 0.4,
+    });
+  }
+
+  return canvas;
+}
+
 // ---------------------------------------------------------------------------
 // Cache de texturas
 // ---------------------------------------------------------------------------
 
 export class CardTextureCache {
   private readonly cache = new Map<string, THREE.CanvasTexture>();
+  /** Capa de arte: COMPARTIDA por archivo de arte. */
+  private readonly artCache = new Map<string, THREE.CanvasTexture>();
+  /** Capa de texto: por estado de carta (lleva el nombre y la descripcion). */
+  private readonly topCache = new Map<string, THREE.CanvasTexture>();
 
   get(key: string, spec: CardTextureSpec, art?: HTMLImageElement): THREE.CanvasTexture {
     const cached = this.cache.get(key);
@@ -761,14 +840,60 @@ export class CardTextureCache {
     return texture;
   }
 
-  /** Al cambiar de idioma hay que redibujar: el texto esta dentro de la textura. */
+  /**
+   * Capa de ARTE, indexada por ARCHIVO de arte.
+   *
+   * El arte se indexa por (elemento x rareza), no por carta: 35 cartas
+   * comparten ~40 ilustraciones. Guardarlo por carta seria pagar 35 texturas
+   * para tener 40, y es justo lo que haria que el parallax costara el triple.
+   */
+  getArt(artKey: string, spec: CardTextureSpec, art?: HTMLImageElement): THREE.CanvasTexture {
+    const cached = this.artCache.get(artKey);
+    if (cached) return cached;
+
+    const texture = new THREE.CanvasTexture(createCardArtCanvas(spec, art));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+    this.artCache.set(artKey, texture);
+    return texture;
+  }
+
+  /** Capa de TEXTO: fondo y arte transparentes, para flotar sobre el arte. */
+  getTop(key: string, spec: CardTextureSpec): THREE.CanvasTexture {
+    const cached = this.topCache.get(key);
+    if (cached) return cached;
+
+    const texture = new THREE.CanvasTexture(createCardCanvas(spec, undefined, 'top'));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+    this.topCache.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Al cambiar de idioma hay que redibujar: el texto esta dentro de la textura.
+   * La capa de ARTE no se toca: no lleva texto.
+   */
   clear(): void {
     for (const texture of this.cache.values()) texture.dispose();
     this.cache.clear();
+    for (const texture of this.topCache.values()) texture.dispose();
+    this.topCache.clear();
   }
 
+  /**
+   * Total de texturas vivas. Cuenta las TRES capas: si solo contara `cache`
+   * reportaria 0, porque el camino normal ya no usa la textura completa.
+   */
   get size(): number {
-    return this.cache.size;
+    return this.cache.size + this.topCache.size + this.artCache.size;
+  }
+
+  /** Cuantas capas de arte vivas hay (para el panel de debug). */
+  get artCount(): number {
+    return this.artCache.size;
   }
 }
 
@@ -784,6 +909,140 @@ export class CardTextureCache {
  * a cambio de un pase de profundidad completo y muestreo en cada fragmento
  * iluminado. Esto cuesta un draw call para TODAS las cartas.
  */
+/**
+ * Normal map PROCEDURAL a partir de la ilustracion.
+ *
+ * La carta es plana, pero la ilustracion no tiene por que serlo: sacando el
+ * gradiente de luminancia (Sobel) y metiendolo como normal en espacio tangente,
+ * el arte empieza a responder a la luz de la escena y al halo. El hongo se lee
+ * esculpido sin agregar un solo triangulo ni un asset nuevo.
+ *
+ * Se hace a 256 px de ancho: un normal map no necesita la resolucion del arte
+ * (es un gradiente, no una imagen) y asi pesa ~1/6.
+ *
+ * `width` es ajustable porque el PISO de la arena es una superficie mucho mas
+ * grande que una carta: a 256 px el relieve de las grietas salia como manchas
+ * de 5 cm. La arena pide 512.
+ */
+export function createNormalMapCanvas(
+  source: HTMLImageElement,
+  strength = 1.7,
+  width = 256,
+): HTMLCanvasElement {
+  const w = width;
+  const h = Math.max(1, Math.round((w * source.naturalHeight) / Math.max(1, source.naturalWidth)));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.drawImage(source, 0, 0, w, h);
+  const src = ctx.getImageData(0, 0, w, h).data;
+
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i += 1) {
+    const o = i * 4;
+    lum[i] = ((src[o] ?? 0) * 0.299 + (src[o + 1] ?? 0) * 0.587 + (src[o + 2] ?? 0) * 0.114) / 255;
+  }
+
+  const at = (x: number, y: number): number => {
+    const cx = x < 0 ? 0 : x >= w ? w - 1 : x;
+    const cy = y < 0 ? 0 : y >= h ? h - 1 : y;
+    return lum[cy * w + cx] ?? 0;
+  };
+
+  const out = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      // En el canvas la V crece hacia ABAJO; el normal map de three espera el
+      // verde hacia arriba, de ahi el signo.
+      const dy = (at(x, y - 1) - at(x, y + 1)) * strength;
+      const len = Math.hypot(dx, dy, 1);
+      const i = (y * w + x) * 4;
+      out.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+      out.data[i + 1] = ((-dy / len) * 0.5 + 0.5) * 255;
+      out.data[i + 2] = (1 / len) * 0.5 * 255 + 127.5;
+      out.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  return canvas;
+}
+
+/**
+ * Cache de normal maps COMPARTIDA por archivo de arte.
+ *
+ * El arte se indexa por (elemento x rareza) y no por carta, asi que 35 cartas
+ * comparten ~40 ilustraciones: generar uno por CARTA seria pagar 35 texturas
+ * para tener 40. Va aparte de `CardTextureCache` a proposito: ese cache se
+ * vacia al cambiar de idioma y el normal map NO depende del idioma.
+ */
+const normalMaps = new Map<string, THREE.CanvasTexture>();
+
+export function normalMapFor(art: HTMLImageElement | undefined): THREE.CanvasTexture | null {
+  if (!art || art.naturalWidth === 0) return null;
+  const key = art.src;
+  const hit = normalMaps.get(key);
+  if (hit) return hit;
+  const texture = new THREE.CanvasTexture(createNormalMapCanvas(art));
+  // Un normal map NO es color: si se le aplica sRGB la iluminacion sale mal.
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 4;
+  normalMaps.set(key, texture);
+  return texture;
+}
+
+/**
+ * MAPA DE ALTURA para el relieve geometrico.
+ *
+ * Es la luminancia del arte en escala de grises, que es lo que three lee como
+ * desplazamiento (canal R). No hace falta una mascara de las bandas de texto:
+ * el propio arte ya trae los degradados superior e inferior, asi que ahi la
+ * luminancia es ~0,07 y el desplazamiento queda casi nulo — el texto no se
+ * ondula.
+ */
+export function createHeightCanvas(source: HTMLImageElement): HTMLCanvasElement {
+  const w = 256;
+  const h = Math.max(1, Math.round((w * source.naturalHeight) / Math.max(1, source.naturalWidth)));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.drawImage(source, 0, 0, w, h);
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < w * h; i += 1) {
+    const o = i * 4;
+    const lum = (d[o] ?? 0) * 0.299 + (d[o + 1] ?? 0) * 0.587 + (d[o + 2] ?? 0) * 0.114;
+    d[o] = lum;
+    d[o + 1] = lum;
+    d[o + 2] = lum;
+    d[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+const heightMaps = new Map<string, THREE.CanvasTexture>();
+
+/** Cache compartida por archivo de arte (mismo criterio que el normal map). */
+export function heightMapFor(art: HTMLImageElement | undefined): THREE.CanvasTexture | null {
+  if (!art || art.naturalWidth === 0) return null;
+  const key = art.src;
+  const hit = heightMaps.get(key);
+  if (hit) return hit;
+  const texture = new THREE.CanvasTexture(createHeightCanvas(art));
+  // Es un dato, no un color.
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 2;
+  heightMaps.set(key, texture);
+  return texture;
+}
+
 export function createShadowCanvas(size = 256): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = size;
