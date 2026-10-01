@@ -564,7 +564,8 @@
     "version": "Versión {version}",
     "daily": "Diaria",
     "achievements": "Logros",
-    "cosmetics": "Cosméticos"
+    "cosmetics": "Cosméticos",
+    "history": "Historial"
   },
   "settings": {
     "title": "Ajustes",
@@ -975,5 +976,13 @@
     "none": "Todavía no tenés cosméticos de este tipo.",
     "cardback.default": "Clásico",
     "felt.default": "Losa rúnica"
+  },
+  "history": {
+    "title": "Historial",
+    "subtitle": "Tus últimas partidas",
+    "empty": "Todavía no jugaste ninguna partida.",
+    "win": "Victoria",
+    "loss": "Derrota",
+    "detail": "Ante {ante} · Semilla {seed}"
   }
 }

@@ -37,6 +37,7 @@ import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
+import { HISTORY_CAP } from '@meta/ProfileState';
 import { notifier } from '@notify/notify';
 import {
   AchievementTracker,
@@ -290,6 +291,21 @@ async function boot(): Promise<void> {
       p.stats.runs += 1;
       if (reason === 'victory') p.stats.wins += 1;
       p.stats.bestAnte = Math.max(p.stats.bestAnte, ante);
+      // R5: historial de la partida. Lo ultimo primero y capeado. Se deduplica
+      // por `seed` porque `game:over` puede reemitirse si el jugador restaura
+      // una run ya terminada (el save se escribe al morir, no al salir).
+      const already = p.history.some((h) => h.seed === engine.run.seed);
+      if (!already) {
+        p.history.unshift({
+          seed: engine.run.seed,
+          ante,
+          ascension: engine.run.ascension,
+          win: reason === 'victory',
+          reason: reason === 'victory' ? 'victory' : 'loss',
+          at: Date.now(),
+        });
+        if (p.history.length > HISTORY_CAP) p.history.length = HISTORY_CAP;
+      }
       // R1: ganar en el nivel N desbloquea N+1 (hasta el maximo del contenido).
       // `highestUnlocked` es MONOTONO: nunca baja, ni siquiera perdiendo A8.
       if (reason === 'victory') {
@@ -671,6 +687,12 @@ async function boot(): Promise<void> {
     scene.setFelt(c.equippedFelt);
   };
 
+  // --- R5: historial ---
+  // Igual que ascensión/cosméticos: el HUD no conoce el perfil, se lo empuja.
+  const syncHistory = (): void => {
+    hud?.setHistoryState(profileStore.current.history.map((h) => ({ ...h })));
+  };
+
   // --- HUD ---
   hud = new HUD({
     engine,
@@ -841,6 +863,8 @@ async function boot(): Promise<void> {
         if (kind === 'cardback') scene.setCardBack(id);
         else if (kind === 'felt') scene.setFelt(id);
       },
+      // --- R5: historial ---
+      onOpenHistory: () => hud?.showHistory(),
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
@@ -1210,6 +1234,7 @@ async function boot(): Promise<void> {
   syncAscension();
   // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.
   syncCosmetics();
+  syncHistory();
 
   savedRun = await runStore.load();
   if (savedRun) {

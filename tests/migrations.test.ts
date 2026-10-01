@@ -108,6 +108,22 @@ test('el perfil preserva lo que conoce y completa lo nuevo', () => {
   assert.deepEqual(migrated.collection.seenCardIds, ['a']);
 });
 
+test('R5: el historial sobrevive la migracion y un perfil viejo arranca vacio', () => {
+  // Guarda de la trampa de merge: sin la linea explicita en el return, el
+  // campo `history` se descartaria en silencio al reconstruir el perfil.
+  const entry = { seed: 123, ante: 5, ascension: 2, win: false, reason: 'loss', at: 111 };
+  const migrated = migrateProfileSave({ version: PROFILE_SAVE_VERSION, history: [entry] });
+  assert.deepEqual(migrated.history, [entry]);
+
+  // Un perfil viejo SIN history cae al default (array vacio), no a undefined.
+  const fresh = migrateProfileSave({ version: PROFILE_SAVE_VERSION });
+  assert.deepEqual(fresh.history, []);
+
+  // Basura en el campo tampoco rompe: se ignora y queda el default.
+  const junk = migrateProfileSave({ version: PROFILE_SAVE_VERSION, history: 'roto' });
+  assert.deepEqual(junk.history, []);
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);

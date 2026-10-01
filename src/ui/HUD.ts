@@ -28,6 +28,7 @@ import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
 import { buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
+import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
@@ -110,6 +111,8 @@ export interface HudCallbacks {
   // --- R4b: cosméticos (dorso de carta / tapete) ---
   onOpenCosmetics: () => void;
   onEquip: (kind: 'cardback' | 'felt', id: string) => void;
+  // --- R5: historial de partidas ---
+  onOpenHistory: () => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -244,6 +247,8 @@ export class HUD {
     owned: ['default'],
     equipped: { cardback: 'default', felt: 'default' },
   };
+  /** Historial (R5): se lo empuja el controlador desde el perfil. */
+  private historyState: HistoryEntryView[] = [];
   /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
   private closeSeq = 0;
   /** Respaldo por si `animationend` no llega (animacion desactivada). */
@@ -1057,6 +1062,7 @@ export class HUD {
         onOpenDaily: () => this.callbacks.onOpenDaily(),
         onOpenAchievements: () => this.callbacks.onOpenAchievements(),
         onOpenCosmetics: () => this.callbacks.onOpenCosmetics(),
+        onOpenHistory: () => this.showHistory(),
       },
     );
     this.openOverlay(panel);
@@ -1110,9 +1116,20 @@ export class HUD {
   }
 
   /**
-   * Habilita el boton de duelo. Lo llama el controlador despues de leer el
-   * contenido, porque el HUD no conoce el registro de packs.
+   * Historial (R5) para el panel. Lo empuja el controlador desde el perfil,
+   * porque el HUD no conoce el estado meta.
    */
+  setHistoryState(entries: HistoryEntryView[]): void {
+    this.historyState = entries;
+  }
+
+  /** Abre el panel de historial de partidas. */
+  showHistory(): void {
+    // Misma trampa que ascension/cosméticos: `openOverlay` limpia el panel.
+    const entries = this.historyState.map((e) => ({ ...e }));
+    const panel = buildHistoryPanel(entries, { onClose: () => this.showMenu() });
+    this.openOverlay(panel);
+  }
   private boardAvailable = false;
 
   setBoardAvailable(available: boolean): void {

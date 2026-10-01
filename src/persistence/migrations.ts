@@ -151,6 +151,13 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // igual, pero asi la UI no muestra un estado imposible.
   ascension.selected = Math.max(0, Math.min(ascension.selected, ascension.highestUnlocked));
 
+  // Historial (R5): array ADITIVO. Igual que `starterOverrides`, sobrevive al
+  // merge sobre el default pero el return de abajo es explícito: sin esta linea
+  // el campo reconstruido lo descartaria (la trampa de siempre).
+  const history = Array.isArray(migrated['history'])
+    ? (migrated['history'] as ProfileSave['history'])
+    : [];
+
   return {
     version: CURRENT_PROFILE_VERSION,
     updatedAt: typeof migrated['updatedAt'] === 'string' ? migrated['updatedAt'] : fallback.updatedAt,
@@ -166,6 +173,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     stats,
     board,
     ascension,
+    history,
   };
 }
 

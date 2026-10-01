@@ -149,6 +149,30 @@ export interface ProfileSave {
     highestUnlocked: number;
     selected: number;
   };
+  /**
+   * Historial de partidas (R5). Lo ultimo primero, capeado por `HISTORY_CAP`.
+   *
+   * `reason` distingue la victoria final (llegar al ante maximo) de una derrota
+   * a mitad de camino; `at` es epoch ms para poder ordenar y agrupar. Es solo
+   * lectura para la pantalla de historial: nada del motor lo consulta.
+   */
+  history: RunHistoryEntry[];
+}
+
+/** Tope de entradas que se conservan en `history` (las mas viejas se descartan). */
+export const HISTORY_CAP = 20;
+
+export interface RunHistoryEntry {
+  seed: number;
+  /** Ante alcanzado (el ultimo jugado). */
+  ante: number;
+  /** Nivel de ascension con el que se jugo. */
+  ascension: number;
+  win: boolean;
+  /** 'victory' = llego al ante maximo; 'loss' = murio en el camino. */
+  reason: 'loss' | 'victory';
+  /** epoch ms. */
+  at: number;
 }
 
 export const DEFAULT_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -187,5 +211,6 @@ export function defaultProfile(): ProfileSave {
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
     ascension: { highestUnlocked: 0, selected: 0 },
+    history: [],
   };
 }

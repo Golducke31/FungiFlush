@@ -564,7 +564,8 @@
     "version": "Version {version}",
     "daily": "Daily",
     "achievements": "Achievements",
-    "cosmetics": "Cosmetics"
+    "cosmetics": "Cosmetics",
+    "history": "History"
   },
   "settings": {
     "title": "Settings",
@@ -975,5 +976,13 @@
     "none": "You don't have cosmetics of this type yet.",
     "cardback.default": "Classic",
     "felt.default": "Runic slab"
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "Your latest runs",
+    "empty": "You haven't played any run yet.",
+    "win": "Victory",
+    "loss": "Defeat",
+    "detail": "Ante {ante} · Seed {seed}"
   }
 }

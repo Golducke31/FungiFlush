@@ -44,6 +44,8 @@ export interface MenuCallbacks {
   onOpenAchievements: () => void;
   /** Cosméticos (R4b): dorso de carta y tapete. */
   onOpenCosmetics: () => void;
+  /** Historial de partidas (R5). */
+  onOpenHistory: () => void;
 }
 
 export interface MenuState {
@@ -224,6 +226,11 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   chips.appendChild(
     chip(t('menu.cosmetics'), 'cosmetics', callbacks.onOpenCosmetics, {
       mod: 'menu-ghost--cosmetics',
+    }),
+  );
+  chips.appendChild(
+    chip(t('menu.history'), 'history', callbacks.onOpenHistory, {
+      mod: 'menu-ghost--history',
     }),
   );
   panel.appendChild(chips);

@@ -1098,6 +1098,62 @@ const cosmeticsPanel = await (async () => {
 console.log('\n--- R4b: cosmeticos ---');
 console.log(JSON.stringify(cosmeticsPanel, null, 2));
 
+// --- R5: historial de partidas ---
+const historyPanel = await (async () => {
+  const setup = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    // Historial de prueba inyectado (no dependemos de runs previas del perfil).
+    ff.profileStore.current.history = [
+      { seed: 4242, ante: 8, ascension: 2, win: true, reason: 'victory', at: 1_700_000_000_000 },
+      { seed: 777, ante: 3, ascension: 0, win: false, reason: 'loss', at: 1_699_000_000_000 },
+    ];
+    ff.hud.setHistoryState(ff.profileStore.current.history.map((h) => ({ ...h })));
+    ff.hud.showMenu();
+    return { seeded: 2 };
+  });
+  await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
+  await page.waitForTimeout(400);
+
+  const chip = await page.evaluate(() => {
+    const el = document.querySelector('.panel.is-menu [data-act="history"]');
+    return { present: Boolean(el), label: el?.textContent ?? null };
+  });
+
+  // Abrir el panel con un click REAL sobre el chip.
+  const chipBox = await page.locator('.panel.is-menu [data-act="history"]').boundingBox();
+  if (chipBox) {
+    await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  }
+  await page.waitForSelector('.panel.is-history .history-row', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(shotsDir, '22-history.png') });
+
+  const rows = await page.evaluate(() => {
+    const list = [...document.querySelectorAll('.panel.is-history .history-row')];
+    return {
+      total: list.length,
+      wins: list.filter((r) => r.classList.contains('is-win')).length,
+      losses: list.filter((r) => r.classList.contains('is-loss')).length,
+      // Ninguna fila debe quedar con una clave i18n sin resolver.
+      rawKeys: list.filter((r) => /t\(['"]/.test(r.textContent ?? '')).length,
+      firstSeed: list[0]?.dataset['seed'] ?? null,
+    };
+  });
+
+  // Cerrar y volver a la tienda para no romper el resto del smoke.
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff.hud.closePanel();
+    ff.engine.enterShop();
+    ff.hud.refreshPanel();
+  });
+  await page.waitForTimeout(400);
+
+  return { ...setup, ...chip, ...rows };
+})();
+console.log('\n--- R5: historial ---');
+console.log(JSON.stringify(historyPanel, null, 2));
+
 
 const deckBuilder = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
