@@ -44,7 +44,8 @@
     "noDiscards": "Sin descartes",
     "noHands": "Sin manos",
     "cantAfford": "Dinero insuficiente",
-    "slotsFull": "Sin ranuras de joker libres"
+    "slotsFull": "Sin ranuras de joker libres",
+    "sellValue": "Vender por {value}"
   },
   "phase": {
     "blind_select": "Elegí tu ciego",
@@ -567,6 +568,23 @@
     "requireXp": "Requiere {xp} XP",
     "lockedPremium": "Senda premium bloqueada",
     "comingSoon": "La primera temporada empieza pronto."
+  },
+  "blindCleared": {
+    "title": "¡Ciego superado!",
+    "score": "{score} / {target}"
+  },
+  "die": {
+    "title": "Dado de esporas",
+    "rolled": "Dado: cara {face} · x{mult}",
+    "reroll": "Tirar de nuevo ({cost} Fungis)",
+    "face1": "Dado: x0.8",
+    "face2": "Dado: x1",
+    "face3": "Dado: x1.1",
+    "face4": "Dado: x1.25 · −1 descarte",
+    "face5": "Dado: x1.4 · −1 mano",
+    "face6": "Dado: x1.6 · −1 mano y descarte",
+    "arm": "Arrastra el dado y suéltalo para tirarlo",
+    "tumbling": "Girando…"
   },
   "season": {
     "founder": { "name": "Temporada Fundador" }

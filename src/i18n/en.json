@@ -44,7 +44,8 @@
     "noDiscards": "No discards left",
     "noHands": "No hands left",
     "cantAfford": "Not enough money",
-    "slotsFull": "No free joker slots"
+    "slotsFull": "No free joker slots",
+    "sellValue": "Sell for {value}"
   },
   "phase": {
     "blind_select": "Choose your blind",
@@ -567,6 +568,23 @@
     "requireXp": "Requires {xp} XP",
     "lockedPremium": "Premium track locked",
     "comingSoon": "The first season starts soon."
+  },
+  "blindCleared": {
+    "title": "Blind cleared!",
+    "score": "{score} / {target}"
+  },
+  "die": {
+    "title": "Spore die",
+    "rolled": "Die: face {face} · x{mult}",
+    "reroll": "Roll again ({cost} Fungis)",
+    "face1": "Die: x0.8",
+    "face2": "Die: x1",
+    "face3": "Die: x1.1",
+    "face4": "Die: x1.25 · −1 discard",
+    "face5": "Die: x1.4 · −1 hand",
+    "face6": "Die: x1.6 · −1 hand and discard",
+    "arm": "Drag the die and release to throw it",
+    "tumbling": "Rolling…"
   },
   "season": {
     "founder": { "name": "Founder Season" }

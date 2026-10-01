@@ -17,11 +17,13 @@
  */
 
 import {
+  DIE_FACES,
   GameEngine,
   MAX_PLAY_SIZE_DEFAULT,
   bus,
   detectCombos,
   type CardDefinition,
+  type CardInstance,
   type ElementType,
   type JokerDefinition,
   type Rarity,
@@ -71,6 +73,7 @@ import {
   type CollectionState,
 } from '@ui/CollectionScreen';
 import type { CarouselEntryView } from '@render/CardCarousel';
+import { buildDeckCarouselFrame, type DeckCarouselFrame } from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
 import type { BoardScreen } from '@ui/BoardScreen';
 import { attachAudioHooks } from '@audio/AudioBus';
@@ -273,6 +276,41 @@ async function boot(): Promise<void> {
     }
   });
 
+  // --- Dado multiplicador ---
+  // La tirada es MANUAL: el cubo aparece sobre la arena y el jugador lo
+  // arrastra y lo suelta (ver `onDieThrown`). El multiplicador entra al final
+  // del puntaje, asi que sale como un paso mas en el ticker.
+
+  // El ciego ya se eligio: el dado se va a su rincon mostrando la cara. Va con
+  // animacion porque viene de estar tirado en medio de la arena.
+  bus.on('blind:selected', () => {
+    const die = engine.run.die;
+    if (die) scene.parkDie(die.face, DIE_FACES);
+  });
+
+  // Al ENTRAR a la seleccion de ciego todavia NO hay tirada: el dado se arma
+  // (agrandado, adelante y al centro) y espera el gesto.
+  //
+  // La condicion es la TRANSICION de estado, no una clave de (ante, ciego): un
+  // mismo ciego puede volver a jugarse (reintento tras perder) y la clave no
+  // cambiaria, dejando el dado sin armar. Una vez tirado, este handler no toca
+  // nada: la animacion manda, y el resultado lo revela `die:settled`.
+  //
+  // Arranca en `null` y NO en `engine.run.status`: el motor todavia no tiene
+  // `run` hasta que `enterMenu()` lo crea, y leerlo aca tiraba el arranque
+  // entero (`Cannot read properties of undefined`).
+  let previousStatus: string | null = null;
+  bus.on('state:changed', () => {
+    const run = engine.run;
+    const entered = run.status === 'blind_select' && previousStatus !== 'blind_select';
+    previousStatus = run.status;
+    if (!entered) return;
+    // Partida retomada: la tirada ya existia, asi que se muestra aparcada y de
+    // una (no hubo gesto que animar).
+    if (run.die) scene.showDie(run.die.face, DIE_FACES);
+    else scene.armDieThrow(DIE_FACES);
+  });
+
   /**
    * Entradas de la coleccion: TODO el contenido del registro (incluido el de
    * DLC sin comprar, que se muestra bloqueado) con su estado y si el jugador
@@ -414,6 +452,23 @@ async function boot(): Promise<void> {
       // es un ajuste de la sesion, y el jugador puede forzarlo en Ajustes.
       onQualityDowngraded: () => hud?.toast(t('settings.quality.downgraded'), 'warn'),
       /**
+       * El jugador LANZO el cubo del dado.
+       *
+       * El render sabe con que fuerza salio (mide la velocidad del dedo); el
+       * motor es el unico que puede sortear la cara, y el render es el unico que
+       * puede animarla. El orden importa: primero se sortea, despues se anima
+       * HACIA ese resultado. Al reves (que la fisica decidiera la cara) el RNG
+       * sembrado dejaria de ser reproducible.
+       */
+      onDieThrown: (impulse) => {
+        const roll = engine.throwDie();
+        if (!roll) return;
+        // Los ciegos quedan bloqueados y el resultado tapado hasta que el cubo
+        // se apoye: ver `HUD.beginDieThrow`.
+        hud?.beginDieThrow();
+        scene.releaseDie(roll.face, impulse, () => bus.emit('die:settled', { face: roll.face }));
+      },
+      /**
        * El jugador arrastro una carta y la solto en una zona.
        *
        * El render solo sabe QUE zona es; el significado vive aca. Los tres
@@ -465,6 +520,73 @@ async function boot(): Promise<void> {
 
   if (params.get('perf') === '1') scene.startPerf();
 
+  // --- Mazo sobre el CARRUSEL 3D ---
+  // El panel DOM de siempre y el anillo comparten estas acciones: el HUD arma
+  // el estado (es el unico que tiene el motor) y aca se decide que se ve.
+  const deckEntries = (cards: CardInstance[]): CarouselEntryView[] =>
+    cards.map((card) => ({
+      uid: card.uid,
+      discovered: true,
+      cardId: card.def.id,
+      level: card.level,
+    }));
+
+  /** El mazo usa el mismo anillo que la coleccion. */
+  const DECK_CAROUSEL = { radius: 9, halfSpan: 5, wrap: true, lift: 1.9 };
+
+  const openDeck = (highlightUid?: string): void => {
+    const state = hud?.deckState(highlightUid);
+    if (!hud || !state) return;
+    let frame: DeckCarouselFrame;
+    const focus = (i: number): void => frame.setFocus(i);
+    frame = buildDeckCarouselFrame(state, {
+      onPurge: doPurge,
+      onUpgrade: doUpgrade,
+      onEvolve: doEvolve,
+      onClose: () => {
+        scene.setCarousel(null);
+        hud?.closePanel();
+      },
+      onSorted: (cards) => scene.setCarousel(deckEntries(cards), focus, DECK_CAROUSEL),
+    });
+    hud.showPanel(frame.panel, { carousel: true });
+    scene.setCarousel(deckEntries(state.cards), focus, DECK_CAROUSEL);
+  };
+
+  const doPurge = (uid: string): void => {
+    if (!engine.purgeCard(uid)) {
+      hud?.toast(
+        engine.canEditDeck() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
+        'warn',
+      );
+      return;
+    }
+    openDeck();
+  };
+
+  const doUpgrade = (uid: string): void => {
+    const card = engine.run.deck.allCards.find((c) => c.uid === uid);
+    if (!engine.upgradeCard(uid)) {
+      hud?.toast(
+        engine.canEditDeck() ? t('deck.cannotUpgrade') : t('deck.onlyBetweenBlinds'),
+        'warn',
+      );
+      return;
+    }
+    if (card) hud?.toast(t('deck.upgraded', { name: t(card.def.nameKey), level: card.level }), 'info');
+    openDeck(uid);
+  };
+
+  const doEvolve = (uid: string): void => {
+    const card = engine.run.deck.allCards.find((c) => c.uid === uid);
+    if (!engine.evolveCard(uid)) {
+      hud?.toast(engine.canEditDeck() ? t('evolve.blocked') : t('deck.onlyBetweenBlinds'), 'warn');
+      return;
+    }
+    if (card) hud?.toast(t('evolve.done', { name: t(card.def.nameKey) }), 'info');
+    openDeck(uid);
+  };
+
   // --- HUD ---
   hud = new HUD({
     engine,
@@ -484,12 +606,29 @@ async function boot(): Promise<void> {
       onDiscard: () => engine.discardSelected(),
       onClear: () => engine.clearSelection(),
       onBuy: (offerId) => {
+        // El motivo del rechazo se calcula ACA, no en el aviso generico: antes
+        // cualquier fallo decia "no alcanza el dinero", incluso cuando la oferta
+        // ya estaba vendida o no quedaba slot de joker. Un aviso que miente
+        // manda al jugador a juntar plata para algo que no puede comprar.
+        const offer = engine.run.shop?.offers.find((o) => o.id === offerId);
+        if (!offer || offer.sold) return;
+        if (offer.kind === 'joker' && engine.run.jokers.length >= engine.run.jokerSlots) {
+          hud?.toast(t('action.slotsFull'), 'warn');
+          return;
+        }
         if (!engine.buyOffer(offerId)) hud?.toast(t('action.cantAfford'), 'warn');
       },
       onReroll: () => {
         if (!engine.rerollShop()) hud?.toast(t('action.cantAfford'), 'warn');
       },
       onSellJoker: (uid) => engine.sellJoker(uid),
+      onFocusJoker: (uid) => scene.flashJoker(uid),
+      /**
+       * Un panel tapa la arena. El dado se esconde: durante la tirada esta al
+       * DOBLE de tamano en el centro, asi que en el mazo o en la coleccion
+       * quedaba flotando delante del carrusel.
+       */
+      onArenaCovered: (covered: boolean) => scene.setDieVisible(!covered),
       onLeaveShop: () => engine.leaveShop(),
       onChooseBlind: (blindId) => engine.chooseBlind(blindId),
       onRestart: () => {
@@ -520,6 +659,11 @@ async function boot(): Promise<void> {
         engine.startRun(seed);
         scene.setMode('run');
       },
+      onPanelOpened: (isCarousel) => {
+        // Un panel que NO monta sobre el carrusel apaga la escena 3D: si no, el
+        // anillo quedaria vivo detras del panel nuevo (p. ej. el mazo DOM).
+        if (!isCarousel) scene.setCarousel(null);
+      },
       onOpenCollection: () => {
         // La Coleccion vive sobre el CARRUSEL 3D: el marco DOM solo manda los
         // filtros y el detalle; el anillo esta en el canvas y recibe el input.
@@ -538,7 +682,7 @@ async function boot(): Promise<void> {
         frame = buildCollectionCarousel(all, {
           onClose: () => {
             scene.setCarousel(null);
-            hud?.hideOverlay();
+            hud?.closePanel();
           },
           onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
           onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
@@ -591,41 +735,20 @@ async function boot(): Promise<void> {
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
       },
-      onOpenDeck: () => hud?.showDeckBuilder(),
-      onPurge: (uid) => {
-        if (!engine.purgeCard(uid)) {
-          hud?.toast(
-            engine.canEditDeck() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
-            'warn',
-          );
-          return;
-        }
-        hud?.showDeckBuilder();
+      onRerollDie: () => {
+        // Se paga y se sortea primero; despues el cubo vuelve a girar y el
+        // resultado se revela recien al apoyarse. Misma fisica que la tirada
+        // manual, solo que el impulso lo inventa el dado.
+        if (!engine.rerollDie()) return;
+        const die = engine.run.die;
+        if (!die) return;
+        hud?.beginDieThrow();
+        scene.tossDie(die.face, () => bus.emit('die:settled', { face: die.face }));
       },
-      onUpgrade: (uid) => {
-        const card = engine.run.deck.allCards.find((c) => c.uid === uid);
-        if (!engine.upgradeCard(uid)) {
-          hud?.toast(
-            engine.canEditDeck() ? t('deck.cannotUpgrade') : t('deck.onlyBetweenBlinds'),
-            'warn',
-          );
-          return;
-        }
-        if (card) hud?.toast(t('deck.upgraded', { name: t(card.def.nameKey), level: card.level }), 'info');
-        hud?.showDeckBuilder(uid);
-      },
-      onEvolve: (uid) => {
-        const card = engine.run.deck.allCards.find((c) => c.uid === uid);
-        if (!engine.evolveCard(uid)) {
-          hud?.toast(
-            engine.canEditDeck() ? t('evolve.blocked') : t('deck.onlyBetweenBlinds'),
-            'warn',
-          );
-          return;
-        }
-        if (card) hud?.toast(t('evolve.done', { name: t(card.def.nameKey) }), 'info');
-        hud?.showDeckBuilder(uid);
-      },
+      onOpenDeck: () => openDeck(),
+      onPurge: doPurge,
+      onUpgrade: doUpgrade,
+      onEvolve: doEvolve,
     },
   });
 

@@ -57,6 +57,7 @@ import { createSkyMaterial } from './Shaders';
 import { TweenManager } from './Tween';
 import { CardCarousel, type CarouselEntryView } from './CardCarousel';
 import { Water, hitHorizontalPlane } from './Water';
+import { Die3D, type DieImpulse } from './Die3D';
 import * as anim from './anim';
 import { ELEMENT_COLOR, UI_COLORS } from './palette';
 
@@ -71,9 +72,20 @@ import { ELEMENT_COLOR, UI_COLORS } from './palette';
 // distancia se gasta en ancho (que sobra) en vez de en alto (que falta).
 const HAND_Y = 0.16;
 const HAND_Z = 3.0;
+/**
+ * Fila de jokers.
+ *
+ * El tope de atras lo pone la fila de cartas JUGADAS (`PLAY_Z` - 0.6 con escala
+ * 0.86): su borde trasero cae en z ~ -1.98. Un joker de 0.66 mide 2.1 de alto,
+ * asi que su centro no puede pasar de -3.0 sin meterse debajo de las jugadas.
+ *
+ * La ESCALA subio de 0.5 a 0.66: a 0.5 el joker quedaba tan chico y tan al fondo
+ * que no se leia, y el jugador terminaba mirando la lista del HUD en vez de la
+ * mesa.
+ */
 const JOKER_Y = 0.16;
-const JOKER_Z = -3.4;
-const JOKER_SCALE = 0.5;
+const JOKER_Z = -3.3;
+const JOKER_SCALE = 0.66;
 // Piles moved outward in X (±10.5, antes ±7.8) and back in Z (1.0, antes 2.4)
 // para dejar de tapar las cartas de los extremos de la mano: con la mano en
 // X hasta ±8.25 y los piles en ±7.8, los montones compartian pantalla con la
@@ -141,13 +153,47 @@ const SHADOW_SPREAD = 1.04;
 /** Mitad de la profundidad de una carta (para calcular el encuadre). */
 const CARD_HALF_DEPTH = CARD_HEIGHT / 2;
 
+// --- Tirada del dado ---
+//
+// El gesto se traduce a un impulso. Los numeros estan elegidos para que una
+// tirada comoda (un dedo que se mueve ~200 px en ~250 ms) cruce media
+// plataforma y de dos o tres vueltas: mas corto y el dado no llega a girar,
+// mas largo y se va contra el borde invisible.
+/** Tope de velocidad del gesto. Un latigazo del dedo no puede mandar el cubo al agua. */
+const MAX_THROW_SPEED = 14;
+/** Piso de velocidad: un toque sin gesto igual tira el dado. */
+const MIN_THROW_SPEED = 3.2;
+/** Cuanto del gesto se convierte en giro. Ver `impulseFrom`. */
+const ROLL_SPIN_GAIN = 1.5;
+/** Empuje vertical base: sin esto la tirada es un deslizamiento por el piso. */
+const THROW_LIFT = 3.6;
+/**
+ * Hasta donde puede llegar el cubo mientras lo sostienen. Coincide con el tope
+ * de la fisica (`Die3D`) para que el gesto no prometa un recorrido que despues
+ * el dado no puede hacer.
+ */
+const DIE_DRAG_LIMIT_X = 8.6;
+const DIE_DRAG_LIMIT_Z_BACK = -1.4;
+const DIE_DRAG_LIMIT_Z_FRONT = 4;
+/** Normal del plano de arrastre (el piso). Constante para no asignar por evento. */
+const DIE_PLANE_NORMAL = new THREE.Vector3(0, 1, 0);
+
 /** El maximo de una perilla de particulas entre todos los tiers. */
 function maxParticles(key: 'ambientSpores' | 'transientSpores'): number {
   return Math.max(...Object.values(TIER_CONFIG).map((config) => config[key]));
 }
 
 /** Cuantos pasos de score se animan. El resto se agrupa para no eternizar la mano. */
-const MAX_ANIMATED_STEPS = 22;
+/**
+ * Cuantos pasos de score se animan como maximo.
+ *
+ * Bajado de 22 a 12 junto con el `stepStagger` mas lento: una mano con muchos
+ * disparos se resolvia en una fraccion de segundo y no se veia nada. Con el tope
+ * mas bajo, los pasos que SI se animan tienen tiempo de leerse, y el total
+ * (que es lo que el jugador necesita) sigue cerrando exacto.
+ */
+const MAX_ANIMATED_STEPS = 12;
+
 
 export interface SceneCallbacks {
   /** El jugador toco/cliqueo una carta de la mano. */
@@ -193,6 +239,12 @@ export interface SceneCallbacks {
    * mostrarlo por toast y si lo persiste.
    */
   onQualityDowngraded?: (tier: QualityTier, from: QualityTier) => void;
+  /**
+   * El jugador LANZO el cubo del dado. El render sabe CON QUE fuerza salio
+   * (mide la velocidad del dedo); el controlador es el unico que puede pedirle
+   * la cara al motor y volver a llamar a `releaseDie()` para animarla.
+   */
+  onDieThrown?: (impulse: DieImpulse) => void;
 }
 
 /** Instantanea de una carta de la mano, para el panel de debug (F3) y los tests. */
@@ -203,6 +255,8 @@ export interface HandCardState {
   faceUp: boolean;
   /** `true` si el dorso tiene textura aplicada. */
   hasBack: boolean;
+  /** Escala efectiva: la mano la baja cuando hay demasiadas cartas. */
+  scale: number;
   selected: boolean;
   /** Posicion en el mundo (XZ) y en pantalla (px, relativa al canvas). */
   x: number;
@@ -248,12 +302,26 @@ export class SceneManager {
 
   /** Indice de paso dentro de la mano actual (se reinicia en cada jugada). */
   private stepIndex = 0;
-  /** Separacion temporal entre pasos de score. */
-  private readonly stepStagger = 0.055;
+  /**
+   * Separacion temporal entre pasos de score.
+   *
+   * Estaba en 0.055 s: con hasta 22 pasos, la mano entera se resolvia en 1,2 s y
+   * era IMPOSIBLE leer que aportaba cada paso. Ahora cada paso dura lo que dura
+   * su animacion (~0.18 s) y ademas se animan MENOS pasos (12), asi que el
+   * total se mantiene parecido pero cada uno se aprecia.
+   */
+  private readonly stepStagger = 0.18;
   /** Timeline de la secuencia de puntuacion de la mano en curso. */
   private scoreTl: ReturnType<typeof anim.sequence> | null = null;
 
   private clock = 0;
+  /**
+   * Ultimo `dt` acotado del bucle. Lo leen los gestos que ocurren FUERA del
+   * bucle (el arrastre del dado llega por eventos de puntero, que no traen
+   * tiempo): sin esto habria que usar `performance.now()` y el suavizado de la
+   * velocidad iria con otro reloj que el resto de la escena.
+   */
+  private lastFrameDt = 1 / 60;
   private frameId = 0;
   private running = false;
   private readonly isTouch: boolean;
@@ -282,6 +350,20 @@ export class SceneManager {
   private readonly waterRay = new THREE.Raycaster();
   private readonly waterNdc = new THREE.Vector2();
   private lastWaterRipple = -1;
+
+  /** Dado multiplicador de la ronda (F-dado). Se crea al elegir el ciego. */
+  private die3d: Die3D | null = null;
+  /**
+   * Arrastre del cubo. Null cuando no hay ningun dedo sobre el dado.
+   * El arrastre NO pasa por `Interaction`: ese modulo resuelve gestos de CARTA
+   * (zonas, tap-to-select, hover) y el dado no es una carta.
+   */
+  private dieDrag: { id: number; planeY: number } | null = null;
+  private readonly dieRay = new THREE.Raycaster();
+  private readonly dieNdc = new THREE.Vector2();
+  private readonly diePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly dieHit = new THREE.Vector3();
+  private dieInputAttached = false;
 
   // --- Calidad grafica ---
   /** Nivel efectivo. Arranca en `low` (el camino de siempre) hasta que se detecte. */
@@ -622,17 +704,19 @@ export class SceneManager {
     this.scene.background = new THREE.Color(UI_COLORS.background);
     this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
 
-    // --- Arena: suelo de tiles 3D + vegetacion ---
+    // --- Arena: losa runica + vegetacion ---
     //
-    // Reemplaza al viejo plano de 90x64 con la foto pegada. El suelo ahora es
-    // geometria de verdad (piedra lisa en la franja de juego, tierra y pasto
-    // alrededor) y los hongos se apiñan en la banda de atras, que es la que la
-    // camara ve. Ver `Arena.ts`: la arena entera sale en DOS draw calls.
+    // La cara superior es la losa de `art_arena` (con normal map y mapa de
+    // emision sacados de la propia imagen) y los hongos se apiñan en la banda de
+    // atras, que es la que la camara ve. Ver `Arena.ts`: la arena entera sale en
+    // TRES draw calls.
     //
-    // No depende de `assets`: los tiles y los hongos son geometria procedural
-    // de Polyfork, no texturas del pack de arte. Por eso aca no hay cadena de
-    // respaldo ni 404 posible.
+    // La losa se aplica DESPUES de construir: `buildArena` no conoce
+    // `ArtAssets` a proposito, y el arte ya esta cargado cuando esto corre (el
+    // arranque espera a `loadAll`). Si faltara, la plataforma queda en piedra
+    // lisa y el juego sigue.
     this.arena = buildArena();
+    this.arena.applyFloorArt(this.assets.get('art_arena'));
     this.scene.add(this.arena.group);
     this.disposables.push(...this.arena.disposables);
 
@@ -857,7 +941,11 @@ export class SceneManager {
    * Entra o sale del modo carrusel. Con entradas, oculta el juego y muestra el
    * anillo; con `null`, restaura lo que corresponda al modo actual.
    */
-  setCarousel(entries: readonly CarouselEntryView[] | null, onFocus?: (index: number) => void): void {
+  setCarousel(
+    entries: readonly CarouselEntryView[] | null,
+    onFocus?: (index: number) => void,
+    opts?: { radius?: number; halfSpan?: number; arcStep?: number; wrap?: boolean; lift?: number },
+  ): void {
     if (!entries) {
       if (!this.carouselActive) return;
       this.carouselActive = false;
@@ -879,6 +967,9 @@ export class SceneManager {
       this.carousel.attachTo(this.scene);
     }
     if (onFocus) this.carousel.setOnFocus(onFocus);
+    // El MISMO carrusel sirve para las tres pantallas: anillo (coleccion y
+    // mazo) o arco suave sin wrap (la fila de recompensas).
+    if (opts) this.carousel.configure(opts);
 
     this.carouselActive = true;
     this.carousel.setEntries(entries);
@@ -906,6 +997,9 @@ export class SceneManager {
       const def = this.engine.registry.tryGetCard(entry.cardId);
       if (def) {
         const inst = this.engine.registry.instantiateFrom(def);
+        // El mazo muestra cartas MEJORADAS: sin esto el carrusel las dibujaria
+        // todas a nivel 1.
+        if (entry.level !== undefined) inst.level = entry.level;
         card3d.setCard(inst, this.textures, this.lang(), this.artForCard(inst));
       }
     }
@@ -1028,9 +1122,225 @@ export class SceneManager {
     water.ripple(hit.x, hit.z, 0.45);
   };
 
+  /**
+   * Prepara la TIRADA manual del dado: el cubo aparece adelante y al centro,
+   * agrandado y girando despacio, esperando que lo arrastren y lo suelten.
+   *
+   * Se llama al entrar a la seleccion de ciego. Antes el dado se tiraba solo y
+   * caia en el rincon: el jugador lo veia, si, pero no hacia nada.
+   */
+  armDieThrow(faces: ReadonlyArray<{ value: number; multiplier: number }>): void {
+    this.ensureDie(faces);
+    this.die3d?.arm();
+    this.attachDieInput();
+  }
+
+  /**
+   * Anima la tirada con la cara que el motor ya sorteo. `onSettled` se dispara
+   * cuando el cubo se apoya, no antes: hasta entonces el resultado es un
+   * secreto.
+   */
+  releaseDie(face: number, impulse: DieImpulse, onSettled?: () => void): void {
+    this.die3d?.release(face, impulse, onSettled);
+  }
+
+  /**
+   * Vuelve a tirar el dado sin arrastre (boton "Tirar de nuevo"): la fisica es
+   * la misma, el impulso lo inventa el propio dado.
+   */
+  tossDie(face: number, onSettled?: () => void): void {
+    const die = this.die3d;
+    if (!die) return;
+    die.release(face, die.autoImpulse(), onSettled);
+  }
+
+  /**
+   * Aparca el dado en su rincon, mostrando la cara sorteada. `faces` hace falta
+   * solo para el caso en que el dado no exista todavia (partida retomada).
+   */
+  parkDie(face: number, faces: ReadonlyArray<{ value: number; multiplier: number }>): void {
+    this.detachDieInput();
+    this.ensureDie(faces);
+    this.die3d?.park(face);
+  }
+
+  /**
+   * Muestra el dado ya aparcado, de una. Para un estado que se resuelve sin
+   * animacion (recarga a mitad de blind, panel reabierto).
+   */
+  showDie(face: number, faces: ReadonlyArray<{ value: number; multiplier: number }>): void {
+    this.ensureDie(faces);
+    this.die3d?.snapToParked(face);
+  }
+
+  private ensureDie(faces: ReadonlyArray<{ value: number; multiplier: number }>): void {
+    if (this.die3d) return;
+    this.die3d = new Die3D();
+    this.die3d.setFaces(faces);
+    this.scene.add(this.die3d.group);
+  }
+
+  /** Estado del dado, para el panel de debug y los tests. */
+  dieState(): { armed: boolean; busy: boolean; visible: boolean } | null {
+    const die = this.die3d;
+    if (!die) return null;
+    return { armed: die.armed, busy: die.busy, visible: die.group.visible };
+  }
+
+  /**
+   * La arena esta tapada por un panel: el dado se esconde sin perder su estado.
+   * Es lo que evita que el cubo (que durante la tirada esta al doble de tamano)
+   * quede flotando delante del carrusel del mazo o de la coleccion.
+   */
+  setDieVisible(visible: boolean): void {
+    this.die3d?.setShown(visible);
+  }
+
   private attachWaterInput(): void {
     this.renderer.domElement.addEventListener('pointermove', this.onWaterPointerMove);
   }
+
+  // ==========================================================================
+  // Tirada del dado (arrastre + suelta)
+  // ==========================================================================
+
+  private attachDieInput(): void {
+    if (this.dieInputAttached) return;
+    this.dieInputAttached = true;
+    const el = this.renderer.domElement;
+    el.addEventListener('pointerdown', this.onDieDown);
+    el.addEventListener('pointermove', this.onDieMove);
+    el.addEventListener('pointerup', this.onDieUp);
+    el.addEventListener('pointercancel', this.onDieCancel);
+  }
+
+  private detachDieInput(): void {
+    if (!this.dieInputAttached) return;
+    this.dieInputAttached = false;
+    const el = this.renderer.domElement;
+    el.removeEventListener('pointerdown', this.onDieDown);
+    el.removeEventListener('pointermove', this.onDieMove);
+    el.removeEventListener('pointerup', this.onDieUp);
+    el.removeEventListener('pointercancel', this.onDieCancel);
+    this.dieDrag = null;
+  }
+
+  /** NDC del puntero dentro del canvas. */
+  private diePointer(event: PointerEvent): void {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    this.dieNdc.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+  }
+
+  /** Punto del plano de arrastre bajo el puntero. Null si el rayo no lo corta. */
+  private diePointOnPlane(planeY: number): THREE.Vector3 | null {
+    this.dieRay.setFromCamera(this.dieNdc, this.rig.camera);
+    this.diePlane.set(DIE_PLANE_NORMAL, -planeY);
+    if (!this.dieRay.ray.intersectPlane(this.diePlane, this.dieHit)) return null;
+    return this.dieHit.clone();
+  }
+
+  private readonly onDieDown = (event: PointerEvent): void => {
+    const die = this.die3d;
+    if (!die?.armed || this.dieDrag) return;
+
+    this.diePointer(event);
+    this.dieRay.setFromCamera(this.dieNdc, this.rig.camera);
+    // Contra los hijos del grupo (nucleo + 6 placas): el cubo es el grupo entero.
+    if (this.dieRay.intersectObjects(die.group.children, false).length === 0) return;
+
+    this.dieDrag = { id: event.pointerId, planeY: die.group.position.y };
+    die.beginDrag();
+    // Captura del puntero: el arrastre sigue aunque el dedo se salga del cubo.
+    try {
+      this.renderer.domElement.setPointerCapture(event.pointerId);
+    } catch {
+      /* algunos navegadores la rechazan si el puntero ya no esta activo */
+    }
+  };
+
+  private readonly onDieMove = (event: PointerEvent): void => {
+    const drag = this.dieDrag;
+    const die = this.die3d;
+    if (!drag || !die || drag.id !== event.pointerId) return;
+
+    this.diePointer(event);
+    const point = this.diePointOnPlane(drag.planeY);
+    if (!point) return;
+    // El cubo no puede salirse de la plataforma ni mientras lo sostienen.
+    die.dragTo(
+      THREE.MathUtils.clamp(point.x, -DIE_DRAG_LIMIT_X, DIE_DRAG_LIMIT_X),
+      THREE.MathUtils.clamp(point.z, DIE_DRAG_LIMIT_Z_BACK, DIE_DRAG_LIMIT_Z_FRONT),
+      this.lastFrameDt,
+    );
+  };
+
+  private readonly onDieUp = (event: PointerEvent): void => {
+    const drag = this.dieDrag;
+    const die = this.die3d;
+    if (!drag || !die || drag.id !== event.pointerId) return;
+    this.releasePointer(event.pointerId);
+
+    // El impulso sale de la VELOCIDAD del dedo, no de donde solto: es lo que
+    // convierte el gesto en una tirada y no en un "poner el dado aca".
+    const velocity = die.dragVelocity;
+    const impulse = this.impulseFrom(velocity);
+    this.dieDrag = null;
+
+    this.callbacks.onDieThrown?.(impulse);
+  };
+
+  private readonly onDieCancel = (): void => {
+    this.dieDrag = null;
+  };
+
+  private releasePointer(id: number): void {
+    try {
+      this.renderer.domElement.releasePointerCapture(id);
+    } catch {
+      /* ya liberada */
+    }
+  }
+
+  /**
+   * Convierte la velocidad del gesto en el impulso de la tirada.
+   *
+   * El giro NO es decorativo: sale de la velocidad angular de un cuerpo que rueda
+   * (`omega = v / r`) sobre el eje perpendicular al movimiento. Asi un tiron
+   * fuerte hace girar rapido y uno suave apenas una vuelta, sin tabla de valores
+   * arbitrarios. Encima va un empujon extra porque un cubo real tumba mas de lo
+   * que "rueda".
+   */
+  private impulseFrom(velocity: THREE.Vector3): DieImpulse {
+    const vx = THREE.MathUtils.clamp(velocity.x, -MAX_THROW_SPEED, MAX_THROW_SPEED);
+    const vz = THREE.MathUtils.clamp(velocity.z, -MAX_THROW_SPEED, MAX_THROW_SPEED);
+    const speed = Math.hypot(vx, vz);
+
+    // Un toque sin gesto igual tira el dado: si no, soltar el cubo quieto lo
+    // dejaba caer como una piedra y no pasaba nada.
+    const rollSpeed = Math.max(speed, MIN_THROW_SPEED);
+    const dirX = speed > 0.01 ? vx / speed : 1;
+    const dirZ = speed > 0.01 ? vz / speed : 0;
+
+    // Eje de rodadura: perpendicular a la direccion, en el plano del piso.
+    const roll = rollSpeed * ROLL_SPIN_GAIN;
+    const extra = 5 + rollSpeed * 0.5;
+
+    return {
+      vx: dirX * rollSpeed,
+      vy: THROW_LIFT + rollSpeed * 0.28,
+      vz: dirZ * rollSpeed * 0.75,
+      // Rodadura (perpendicular) + un extra sobre un eje inclinado, que es lo
+      // que hace que el cubo tambien "cabecee" y no gire como un rodillo.
+      spinX: dirZ * roll + extra * 0.35,
+      spinY: extra * 0.55,
+      spinZ: -dirX * roll + extra * 0.35,
+    };
+  }
+
 
   private buildMenuDecor(): void {
     if (this.reduceMotion || this.menuCards.length > 0) return;
@@ -1116,7 +1426,16 @@ export class SceneManager {
   private subscribe(): void {
     this.unsubscribes.push(
       bus.on('state:changed', ({ round }) => {
-        if (round) this.syncHand(round.hand, this.engine.round?.selected ?? []);
+        // LA MANO SOLO EXISTE JUGANDO.
+        //
+        // El motor no destruye la ronda al ganar el ciego (la necesita para
+        // mostrar `score / target`), asi que entre el ciego y el siguiente
+        // `state:changed` sigue trayendo la mano VIEJA. Dibujarla dejaba cartas
+        // tiradas en la arena durante la seleccion de ciego... justo donde
+        // ahora se tira el dado.
+        const playing = this.engine.run.status === 'playing';
+        if (playing && round) this.syncHand(round.hand, this.engine.round?.selected ?? []);
+        else this.syncHand([], []);
         this.syncJokers(this.engine.run.jokers);
       }),
 
@@ -1423,6 +1742,12 @@ export class SceneManager {
     const spacing = count <= 1 ? 0 : Math.min(2.32, this.handSpread / (count - 1));
     const total = spacing * (count - 1);
 
+    // Si el espaciado no alcanza para el ancho de la CARTA, se ACHICAN en vez de
+    // pisarse. Pasa a partir de 9-10 cartas: a tamano completo no entran en el
+    // abanico, y ensancharlo chocaria con las pilas (x=+-10.5).
+    const fit = spacing > 0 ? Math.min(1, spacing / CARD_WIDTH) : 1;
+    for (const card of cards) card.setBaseScale(fit);
+
     const half = total / 2;
     const pos = (i: number): { x: number; t: number } => {
       const x = -half + i * spacing;
@@ -1639,9 +1964,16 @@ export class SceneManager {
     // sueltos. El paso 0 abre la secuencia de la mano; uno nuevo la cierra.
     if (index === 0 || !this.scoreTl) {
       this.scoreTl?.kill();
-      this.scoreTl = anim.sequence();
+      // `score:settled` es el permiso del HUD para mostrar el panel siguiente.
+      // Sin esto, el motor pasa a `reward` al instante y el panel de recompensa
+      // (o la seleccion de ciego) aparece ENCIMA de la animacion del puntaje.
+      this.scoreTl = anim.sequence({ onComplete: () => bus.emit('score:settled', {}) });
     }
-    this.scoreTl.call(() => this.runScoreStep(step, index), undefined, anim.d(0.42 + index * this.stepStagger));
+    this.scoreTl.call(
+      () => this.runScoreStep(step, index),
+      undefined,
+      anim.d(0.6 + index * this.stepStagger),
+    );
   }
 
   private runScoreStep(step: ScoreStep, index: number): void {
@@ -1693,6 +2025,15 @@ export class SceneManager {
     this.particles.stream(from.position, to.position, this.isMobile ? 10 : 18, to.color, 1.4);
     // Shake mas fuerte cuanto mas profunda la cadena: comunica el combo.
     this.rig.addShake(Math.min(0.16, 0.03 + depth * 0.012));
+  }
+
+  /**
+   * Hace latir un joker. Lo usa el HUD cuando el jugador toca su ficha: la
+   * ficha y la carta en la mesa son lo mismo, y el latido es lo que lo dice.
+   */
+  flashJoker(uid: string): void {
+    const joker = this.jokerCards.get(uid);
+    if (joker) this.pulseJoker(joker, 1);
   }
 
   private pulseJoker(card3d: Card3D, depth: number): void {
@@ -1949,6 +2290,8 @@ export class SceneManager {
         flip: card3d.flip,
         faceUp: card3d.faceUp,
         hasBack: card3d.hasBack,
+        // Escala efectiva: la mano achica las cartas cuando no entran.
+        scale: card3d.scale,
         selected: selected.includes(card3d.uid),
         x: card3d.home.x,
         z: card3d.home.z,
@@ -1995,6 +2338,7 @@ export class SceneManager {
       const dt = Math.min(0.05, Math.max(0, rawDt));
       last = now;
       this.clock += dt;
+      this.lastFrameDt = dt;
 
       this.runFxQueue();
       this.tweens.update(dt);
@@ -2023,6 +2367,9 @@ export class SceneManager {
 
       this.updateShadows();
       this.particles.update(dt);
+      // La fisica del dado va con el MISMO dt acotado: es lo que impide que un
+      // tiron de frames la mande al infinito.
+      this.die3d?.update(dt);
       this.water?.update(this.clock);
       this.rig.update(dt, this.clock);
 
@@ -2221,8 +2568,11 @@ export class SceneManager {
     this.carousel?.dispose();
     this.carousel = null;
     this.renderer.domElement.removeEventListener('pointermove', this.onWaterPointerMove);
+    this.detachDieInput();
     this.water?.dispose();
     this.water = null;
+    this.die3d?.dispose();
+    this.die3d = null;
     for (const unsubscribe of this.unsubscribes) unsubscribe();
     this.unsubscribes.length = 0;
     this.interaction.dispose();

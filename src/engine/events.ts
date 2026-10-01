@@ -112,6 +112,21 @@ export interface GameEventMap {
   'score:step': { step: ScoreStep };
   'score:hand': { breakdown: ScoreBreakdown; total: number };
   'score:changed': { total: number; target: number; progress: number };
+  /**
+   * El RENDER termina de animar la mano. Es la señal que el HUD espera para
+   * mostrar el panel siguiente: el motor ya cambio de estado mucho antes, pero
+   * tapar la animacion con el panel era el bug.
+   */
+  'score:settled': Record<string, never>;
+  /**
+   * El dado TERMINA de rodar y se apoya con la cara que el motor ya sorteo.
+   *
+   * La tirada es manual (se arrastra el cubo y se lo suelta), asi que el motor
+   * conoce el resultado mucho antes de que el dado se detenga. Mostrarlo al
+   * soltar arruinaria la tirada: esta señal es la que habilita el resultado y
+   * la eleccion de quedarsela o volver a tirar.
+   */
+  'die:settled': { face: number };
 
   // --- Disparadores (el render los usa para shake / particulas A->B) ---
   'trigger:fired': {

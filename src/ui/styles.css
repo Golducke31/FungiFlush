@@ -803,7 +803,10 @@ body {
 .score-ticker {
   position: fixed;
   left: 50%;
-  top: 21%;
+  /* ARRIBA de la fila de cartas, no encima: a 40% el numero caia justo sobre el
+     borde superior de las cartas. 24% lo deja en la banda libre entre la barra
+     de progreso y el abanico. */
+  top: 24%;
   transform: translateX(-50%) scale(0.94);
   display: flex;
   flex-direction: column;
@@ -820,6 +823,78 @@ body {
 .score-ticker.is-visible {
   opacity: 1;
   transform: translateX(-50%) scale(1);
+}
+
+/* Dado multiplicador en la seleccion de ciego: se ve ANTES de decidir. */
+.die-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.die-row-info {
+  font-size: 13px;
+  font-weight: 700;
+  color: #9ff0c8;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+/* Aviso de CIEGO SUPERADO: el momento entre la ultima mano y el draft. */
+.panel.is-cleared {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cleared-title {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 5vw, 58px);
+  font-weight: 700;
+  color: #9ff0c8;
+  text-shadow:
+    0 0 34px rgba(79, 209, 139, 0.7),
+    0 3px 14px rgba(0, 0, 0, 0.9);
+  animation: cleared-in 0.42s var(--ease-back);
+}
+
+.cleared-detail {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2.4vw, 30px);
+  color: #eaf6ff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+@keyframes cleared-in {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* El paso FINAL cierra la cuenta: se marca para que el numero quede. */
+.score-ticker.is-final .score-ticker-total {
+  color: #ffffff;
+  text-shadow:
+    0 0 28px rgba(95, 216, 232, 0.8),
+    0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+.score-ticker.is-final .score-ticker-source {
+  opacity: 1;
 }
 
 .score-ticker-line {
@@ -3198,4 +3273,250 @@ body {
   margin-top: 2px;
   font-size: 11px;
   color: var(--frame-dim);
+}
+
+/* --------------------------------------------------------------------------
+   F4 — Profundidad 3D en los paneles DENSOS (ajustes, about, duelo)
+   --------------------------------------------------------------------------
+   Estos paneles son formularios y tableros: reescribirlos en WebGL costaria
+   accesibilidad y hit-testing. La profundidad se logra con CSS 3D — el panel
+   se inclina hacia el puntero y las filas se despegan en Z — sin mover un solo
+   nodo del DOM, asi que el ruteo de eventos y el foco quedan intactos.
+   -------------------------------------------------------------------------- */
+
+#ui-root > .overlay {
+  perspective: 1200px;
+}
+
+.panel.is-settings,
+.panel.is-about,
+.panel.is-board {
+  transform-style: preserve-3d;
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 140ms ease-out;
+  box-shadow:
+    0 26px 64px rgba(0, 0, 0, 0.58),
+    0 6px 0 rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 var(--frame-rim);
+  will-change: transform;
+}
+
+/* Las piezas se despegan del panel: es lo que hace leer "capas". */
+.panel.is-settings .settings-field,
+.panel.is-settings .settings-section,
+.panel.is-about .stat-grid > *,
+.panel.is-board .board-cell,
+.panel.is-board .blind-card {
+  transform: translateZ(22px);
+}
+
+.panel.is-settings .panel-title,
+.panel.is-about .panel-title,
+.panel.is-board .panel-title {
+  transform: translateZ(34px);
+}
+
+/* Con movimiento reducido no se inclina nada: la profundidad queda plana. */
+.reduce-motion .panel.is-settings,
+.reduce-motion .panel.is-about,
+.reduce-motion .panel.is-board {
+  transform: none;
+}
+
+/* ==========================================================================
+   TIRADA MANUAL DEL DADO
+   ==========================================================================
+   Tres estados del panel de ciego, en orden: se tira, el cubo gira, y recien
+   cuando se apoya se puede elegir. Va al FINAL del archivo a proposito: la
+   especificidad alcanza para ganarle a `.panel`, pero dejarlo cerca del resto
+   lo pondria delante de reglas de la misma especificidad declaradas mas abajo
+   (el bloque "Compactado para pantallas bajas" ya se comio un material dos
+   veces).
+
+   OJO con la especificidad del overlay: la regla base es `#ui-root > .overlay`
+   (1,1,0), asi que hay que igualarla con el `#ui-root` delante. */
+
+/* Estado "tira el dado": el canvas tiene que recibir el arrastre del cubo, y el
+   panel se corre para dejar la arena a la vista.
+
+   El `background` y el `backdrop-filter` NO son opcionales: son los del
+   `.overlay` base (velo al 86% + blur de 7px), y sin limpiarlos la arena queda
+   oscura y borrosa justo cuando el dado tiene que ser lo unico que se mira.
+   `pointer-events: none` es lo que deja pasar el gesto al canvas. */
+#ui-root > .overlay.is-throw {
+  pointer-events: none;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.panel.is-blind-select.is-die-armed {
+  border: none;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* Todo el panel se esconde menos la consigna: el dado se tira sobre la ARENA,
+   asi que cualquier caja encima es un estorbo. */
+.panel.is-blind-select.is-die-armed > *:not(.die-hint) {
+  display: none;
+}
+
+/* La consigna va pegada al borde de abajo: el centro de la pantalla es del cubo.
+   `pointer-events: none` para que un arrastre que empiece aca igual llegue al
+   canvas.
+
+   `display: none` por defecto: es `position: fixed`, asi que si no se apagara
+   explicitamente seguiria a la vista cuando el panel vuelve con el resultado. */
+.die-hint {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + var(--safe-b));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--frame-edge);
+  background: var(--frame-body);
+  color: var(--frame-dim);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  animation: die-hint-pulse 1.6s var(--ease-out) infinite;
+}
+
+/* Solo mientras se esta tirando (el panel esta corrido). */
+.panel.is-blind-select.is-die-armed .die-hint {
+  display: block;
+}
+
+@keyframes die-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-3px);
+  }
+}
+
+/* Los ciegos no se pueden elegir hasta que el dado se apoye: elegir antes seria
+   decidir sin saber el multiplicador. */
+.blind-grid.is-locked {
+  pointer-events: none;
+}
+
+.blind-grid.is-locked .blind-card {
+  opacity: 0.4;
+  filter: saturate(0.35);
+}
+
+/* Mientras el cubo gira, la fila del dado avisa que hay algo en el aire. */
+.die-row-info.is-tumbling {
+  color: #cfe6ff;
+  animation: die-tumbling 0.9s var(--ease-out) infinite;
+}
+
+@keyframes die-tumbling {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Con movimiento reducido no late nada: el estado ya se lee por el texto. */
+.reduce-motion .die-hint,
+.reduce-motion .die-row-info.is-tumbling {
+  animation: none;
+}
+
+/* ==========================================================================
+   FICHA DE JOKER: SEÑALAR NO ES VENDER
+   ==========================================================================
+   El cuerpo de la ficha solo hace latir el joker en la mesa. Vender es un boton
+   propio, con el valor a la vista, y pide una confirmacion de un toque mas
+   (`.is-confirming`). Antes la ficha entera vendia: un toque al pasar borraba un
+   joker sin aviso. */
+
+.joker-chip-sell {
+  flex: none;
+  min-width: 20px;
+  border: 1px solid var(--frame-edge);
+  border-radius: 6px;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--frame-dim);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.joker-chip-sell:hover {
+  border-color: rgba(224, 92, 138, 0.7);
+  color: #ffd9e4;
+  background: rgba(224, 92, 138, 0.22);
+}
+
+/* Confirmando: el boton pasa a decir "Vender por N" y se pinta de alarma. Es la
+   unica forma de que el segundo toque sea deliberado y no un rebote. */
+.joker-chip.is-confirming {
+  border-color: rgba(224, 92, 138, 0.75);
+  box-shadow: 0 0 16px rgba(224, 92, 138, 0.32);
+}
+
+.joker-chip.is-confirming .joker-chip-sell {
+  border-color: #e05c8a;
+  background: rgba(224, 92, 138, 0.32);
+  color: #fff;
+}
+
+/* Oferta VENDIDA: no alcanza con bajarle la opacidad, tiene que leerse como
+   vendida de un vistazo. El sello va encima de la tarjeta. */
+.offer.is-sold {
+  opacity: 0.5;
+  filter: grayscale(0.65);
+}
+
+.offer.is-sold .offer-price {
+  text-decoration: line-through;
+}
+
+.offer {
+  position: relative;
+}
+
+/* El sello del texto lo pone el HUD con `t()` (no un `content:` de CSS): asi
+   dice VENDIDO o SOLD segun el idioma, por el mismo camino que el resto. */
+.offer-sold {
+  position: absolute;
+  top: 10px;
+  right: -6px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: rgba(224, 92, 138, 0.9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  transform: rotate(6deg);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }

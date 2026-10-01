@@ -12,6 +12,7 @@
 
 import {
   bus,
+  jokerSellValue,
   type CardDefinition,
   type CardInstance,
   type GameEngine,
@@ -29,13 +30,28 @@ import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
-import { buildDeckBuilderPanel, type DeckCardInfo } from './DeckBuilderScreen';
+import {
+  buildDeckBuilderPanel,
+  type DeckBuilderState,
+  type DeckCardInfo,
+} from './DeckBuilderScreen';
 import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
 import { buildDailyRewardPanel } from './DailyRewardPanel';
 import { buildAchievementsPanel, type AchievementView } from './AchievementsScreen';
 import { BoardScreen, type BoardResolvers, type BoardScreenCallbacks } from './BoardScreen';
 import type { DailyEvaluation, DailyRewardTable } from '../retention/DailyReward';
 import type { RetentionReward } from '../retention/types';
+
+/**
+ * Fase de la tirada del dado dentro del panel de ciego.
+ *
+ *   armed    -> el dado todavia no se tiro: el panel se aparta y queda la
+ *               consigna de abajo, porque el cubo se tira sobre la arena.
+ *   tumbling -> el cubo esta en el aire. El panel ya volvio, pero el resultado
+ *               esta tapado y los ciegos bloqueados.
+ *   ready    -> el dado se apoyo: resultado, "volver a tirar" y ciegos.
+ */
+type DiePhase = 'armed' | 'tumbling' | 'ready';
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -44,6 +60,8 @@ export interface HudCallbacks {
   onBuy: (offerId: string) => void;
   onReroll: () => void;
   onSellJoker: (uid: string) => void;
+  /** El jugador toco la ficha de un joker: la carta late en la mesa. */
+  onFocusJoker: (uid: string) => void;
   onLeaveShop: () => void;
   onChooseBlind: (blindId: string) => void;
   onRestart: () => void;
@@ -63,10 +81,26 @@ export interface HudCallbacks {
   // --- Fase 2: recompensa y deckbuilding ---
   /** `null` = saltar el draft. */
   onPickReward: (offerId: string | null) => void;
+  /**
+   * Se llama al abrir CUALQUIER panel, con si es un panel montado sobre el
+   * carrusel 3D. El controlador lo usa para apagar la escena 3D cuando el panel
+   * nuevo no la usa (si no, el anillo quedaria vivo detras de un panel DOM).
+   */
+  onPanelOpened?: (isCarousel: boolean) => void;
+  /**
+   * El panel abierto TAPA la arena (true) o la deja a la vista (false).
+   *
+   * No es lo mismo que "hay un panel": durante la tirada del dado el panel esta
+   * abierto pero corrido, y la arena tiene que verse entera. El render usa esto
+   * para esconder el dado cuando algo lo tapa.
+   */
+  onArenaCovered?: (covered: boolean) => void;
   onPurge: (uid: string) => void;
   onUpgrade: (uid: string) => void;
   onEvolve: (uid: string) => void;
   onOpenDeck: () => void;
+  /** Volver a tirar el dado multiplicador (paga dinero). */
+  onRerollDie: () => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
   onOpenBoard: () => void;
 }
@@ -145,6 +179,35 @@ export class HUD {
   /** Puntaje final de la mano, para repartir el conteo entre los pasos. */
   private scoreHandTotal = 0;
   private tickerTimer: number | null = null;
+  /** La secuencia de puntaje esta corriendo: ningun panel puede taparla. */
+  private scoreSettling = false;
+  /**
+   * Vencimiento del bloqueo. Red de seguridad: si por lo que sea el aviso de fin
+   * no llega (una timeline matada sin sucesora), el HUD no puede quedarse sin
+   * mostrar NINGUN panel para siempre.
+   */
+  private scoreSettleDeadline = 0;
+  /** Habia un panel esperando a que la secuencia terminara. */
+  private panelPending = false;
+  /** El aviso de "ciego superado" ya se mostro para esta ronda. */
+  private clearedShown = false;
+
+  // --- Dado (tirada manual) ---
+  /** Elementos del panel de ciego que cambian con la fase del dado. */
+  private elBlindPanel: HTMLElement | null = null;
+  private elBlindGrid: HTMLElement | null = null;
+  private elDieRow: HTMLElement | null = null;
+  private elDieHint: HTMLElement | null = null;
+  private diePhase: DiePhase = 'ready';
+  /** Ultimo valor avisado por `syncArenaCovered`. */
+  private arenaCovered = false;
+  /**
+   * Vencimiento del bloqueo por tirada. Misma red de seguridad que la del
+   * puntaje: si el aviso de "el dado se apoyo" no llega, el jugador no puede
+   * quedarse mirando un panel bloqueado para siempre.
+   */
+  private dieDeadline = 0;
+  private dieTimer: number | null = null;
 
   private readonly unsubscribes: Array<() => void> = [];
   private lastStatus: string | null = null;
@@ -312,12 +375,37 @@ export class HUD {
       // contador termina exacto en el puntaje de la mano en vez de quedar cerca.
       bus.on('score:step', () => {
         this.scoreStepCount += 1;
+        // Empezo una secuencia: a partir de aca el estado del motor puede haber
+        // cambiado ya, pero la animacion todavia se esta viendo.
+        this.scoreSettling = true;
+        this.scoreSettleDeadline = performance.now() + 15000;
+      }),
+
+      // El RENDER avisa cuando la secuencia termino. Recien ahi puede aparecer
+      // el panel siguiente (recompensa, tienda o seleccion de ciego).
+      bus.on('score:settled', () => {
+        // La secuencia termino: se libera el bloqueo YA, pero el panel espera un
+        // respiro para que el total final se lea. El respiro vive ACA y no en la
+        // timeline: una cola agregada por paso se apilaba, y si la timeline se
+        // mataba el aviso nunca llegaba y el HUD quedaba sin mostrar paneles.
+        this.scoreSettling = false;
+        if (!this.panelPending) return;
+        window.setTimeout(() => {
+          if (!this.panelPending) return;
+          this.panelPending = false;
+          this.render();
+        }, 1200);
       }),
 
       bus.on('score:hand', ({ total }) => {
         this.scoreHandTotal = total;
         this.elTickerTotal.textContent = '0';
       }),
+
+      // El RENDER avisa que el dado se apoyo. Recien ahi se revela el resultado
+      // y se desbloquean los ciegos: mostrar la cara al soltar el cubo
+      // arruinaria la tirada entera.
+      bus.on('die:settled', () => this.settleDie()),
 
       // Una mano nueva reinicia la cuenta. Va aca y no en `score:hand` porque
       // los pasos llegan ANTES que el total: si se reseteara ahi, el conteo se
@@ -346,6 +434,10 @@ export class HUD {
 
       bus.on('shop:enter', ({ offers }) => this.showShop(offers)),
       bus.on('shop:reroll', ({ offers }) => this.showShop(offers)),
+      // Comprar cambia el estado de la OFERTA (vendida) y el dinero. El refresco
+      // no puede depender solo de `money:changed`: ese evento lo dispara el
+      // cobro, y la oferta tiene que quedar marcada en el mismo refresco.
+      bus.on('shop:purchase', () => this.shopRefresh?.()),
 
       bus.on('round:win', ({ reward }) => {
         this.toast(`${t('result.blindCleared')} +${reward}`, 'info');
@@ -465,6 +557,14 @@ export class HUD {
     }
   }
 
+  /**
+   * Fichas de los jokers.
+   *
+   * La ficha TOCA el joker de la mesa (lo hace latir) y NO lo vende. Antes el
+   * cuerpo entero de la ficha vendia: un toque al pasar borraba un joker sin
+   * aviso y sin vuelta atras. Vender ahora es un boton propio, con su valor a la
+   * vista y una confirmacion de un toque mas.
+   */
   private renderJokers(): void {
     const run = this.engine.run;
     this.elJokers.innerHTML = '';
@@ -483,8 +583,42 @@ export class HUD {
       fires.className = 'joker-chip-fires';
       fires.textContent = `x${joker.firedCount}`;
 
-      chip.append(name, fires);
-      chip.addEventListener('click', () => this.callbacks.onSellJoker(joker.uid));
+      const value = jokerSellValue(joker);
+      const sell = document.createElement('button');
+      sell.className = 'joker-chip-sell';
+      sell.type = 'button';
+      sell.dataset['act'] = 'sell-joker';
+      // Una "x" y no la palabra: la ficha es angosta y el nombre del joker tiene
+      // que entrar. Es seguro porque vender pide SIEMPRE un segundo toque, y en
+      // ese momento el boton se rotula con el precio.
+      sell.textContent = '✕';
+      sell.title = t('action.sellValue', { value });
+      sell.setAttribute('aria-label', t('action.sellValue', { value }));
+
+      /** Confirmacion en dos toques, con vencimiento: un toque no vende nada. */
+      let timer: number | null = null;
+      const reset = (): void => {
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+        chip.classList.remove('is-confirming');
+        sell.textContent = '✕';
+      };
+      sell.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (chip.classList.contains('is-confirming')) {
+          reset();
+          this.callbacks.onSellJoker(joker.uid);
+          return;
+        }
+        chip.classList.add('is-confirming');
+        sell.textContent = t('action.sellValue', { value });
+        timer = window.setTimeout(reset, 3200);
+      });
+
+      // El cuerpo de la ficha solo señala la carta: el joker late en la mesa.
+      chip.addEventListener('click', () => this.callbacks.onFocusJoker(joker.uid));
+
+      chip.append(name, fires, sell);
       this.elJokers.appendChild(chip);
     }
   }
@@ -528,7 +662,26 @@ export class HUD {
     // Solo se reconstruye al CAMBIAR de estado: si no, el overlay se
     // redibujaria en cada evento y se perderia el foco de los botones.
     if (status === this.lastStatus) return;
+
+    // LA ANIMACION MANDA. El motor ya cambio de estado (gano el ciego), pero si
+    // el conteo todavia se esta viendo, el panel siguiente ESPERA. Sin esto, la
+    // recompensa (o la seleccion de ciego) aparecia encima del puntaje: se
+    // saltaba la animacion y no habia ninguna señal de que se habia superado.
+    if (
+      this.scoreSettling &&
+      performance.now() < this.scoreSettleDeadline &&
+      status !== 'playing' &&
+      status !== 'menu'
+    ) {
+      this.panelPending = true;
+      return;
+    }
+    // Vencio el bloqueo (o no habia secuencia): se limpia y se sigue.
+    this.scoreSettling = false;
+
     this.lastStatus = status;
+    // El aviso de superacion se muestra UNA vez por ronda.
+    if (status !== 'reward') this.clearedShown = false;
 
     switch (status) {
       case 'menu':
@@ -538,7 +691,12 @@ export class HUD {
         this.showBlindSelect();
         break;
       case 'reward':
-        this.showReward();
+        // Primero el aviso de superacion, despues el draft: sin esto el panel
+        // aparecia de golpe y no habia NINGUNA señal de que se gano el ciego.
+        if (!this.clearedShown) {
+          this.clearedShown = true;
+          this.showBlindCleared(() => this.showReward());
+        }
         break;
       case 'shop':
         this.showShop(this.engine.run.shop?.offers ?? []);
@@ -554,22 +712,108 @@ export class HUD {
     }
   }
 
+  /**
+   * Aviso de CIEGO SUPERADO: el momento que faltaba entre la ultima mano y el
+   * draft. Muestra el puntaje contra el objetivo y, recien despues, deja pasar.
+   */
+  private showBlindCleared(then: () => void): void {
+    const round = this.engine.round;
+    const panel = document.createElement('div');
+    panel.className = 'panel is-cleared';
+
+    const title = document.createElement('div');
+    title.className = 'cleared-title';
+    // OJO con el nombre: `blind.*` es el namespace de los CIEGOS (vive en el
+    // pack). Meter una clave ahi la pisa y el validador lo caza.
+    title.textContent = t('blindCleared.title');
+
+    const detail = document.createElement('div');
+    detail.className = 'cleared-detail';
+    detail.textContent = t('blindCleared.score', {
+      score: formatNumber(round?.score ?? 0),
+      target: formatNumber(round?.target ?? 0),
+    });
+
+    panel.append(title, detail);
+    this.openOverlay(panel);
+    // Se queda lo justo para leerse, y despues entra el draft.
+    window.setTimeout(() => {
+      if (this.engine.run.status !== 'reward') return;
+      then();
+    }, 1500);
+  }
+
+  /**
+   * F4: inclina el panel denso hacia el puntero (CSS 3D). Solo aplica a los
+   * paneles de formulario/tablero; el resto se deja plano.
+   */
+  private attachDepth(panel: HTMLElement): void {
+    const deep =
+      panel.classList.contains('is-settings') ||
+      panel.classList.contains('is-about') ||
+      panel.classList.contains('is-board');
+    if (!deep) return;
+    if (document.documentElement.classList.contains('reduce-motion')) return;
+
+    const reset = (): void => {
+      panel.style.setProperty('--tilt-y', '0deg');
+      panel.style.setProperty('--tilt-x', '0deg');
+    };
+    panel.addEventListener('pointermove', (event) => {
+      const rect = panel.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const nx = (event.clientX - rect.left) / rect.width - 0.5;
+      const ny = (event.clientY - rect.top) / rect.height - 0.5;
+      panel.style.setProperty('--tilt-y', `${(nx * 6).toFixed(2)}deg`);
+      panel.style.setProperty('--tilt-x', `${(-ny * 6).toFixed(2)}deg`);
+    });
+    panel.addEventListener('pointerleave', reset);
+  }
+
   private openOverlay(content: HTMLElement, carousel = false): void {
     this.cancelPendingClose();
     // El panel anterior deja de existir: su refresco tambien. `showShop` vuelve
     // a asignarlo justo despues de llamar aca.
     this.shopRefresh = null;
+    // Las referencias al panel de ciego son del panel que se esta yendo: si
+    // quedaran vivas, un `die:settled` tardio escribiria sobre un DOM huerfano.
+    this.elBlindPanel = null;
+    this.elBlindGrid = null;
+    this.elDieRow = null;
+    this.clearDieDeadline();
+    // `is-throw` lo vuelve a poner `applyDiePhase()` si el panel que entra es el
+    // de ciego sin tirada. Sin este reset, abrir Ajustes despues dejaria el
+    // overlay sin capturar punteros y el canvas se comeria los clics.
+    this.elOverlay.classList.remove('is-throw');
     this.elOverlay.innerHTML = '';
     // `is-carousel`: overlay TRANSPARENTE y sin capturar punteros, para que la
     // escena 3D (el anillo) quede a la vista y reciba rueda/arrastre/tap. El
     // marco de la coleccion re-habilita `pointer-events` solo en sus controles.
     this.elOverlay.classList.toggle('is-carousel', carousel);
     this.elOverlay.appendChild(content);
+    this.attachDepth(content);
+    this.callbacks.onPanelOpened?.(carousel);
     // Si ya estaba abierto, quitar y volver a poner `is-open` en el mismo
     // frame no reinicia la animacion: hay que forzar un reflow entre medias.
     this.elOverlay.classList.remove('is-open', 'is-closing');
     void this.elOverlay.offsetWidth;
     this.elOverlay.classList.add('is-open');
+    this.syncArenaCovered();
+  }
+
+  /**
+   * Avisa al render si la arena esta tapada. Se recalcula en TODOS los puntos
+   * que cambian el estado del overlay (abrir, cerrar, cambiar de fase el dado)
+   * y solo llama al callback cuando el valor cambia: el render no tiene por que
+   * reaccionar dos veces a lo mismo.
+   */
+  private syncArenaCovered(): void {
+    const covered =
+      this.elOverlay.classList.contains('is-open') &&
+      !this.elOverlay.classList.contains('is-throw');
+    if (covered === this.arenaCovered) return;
+    this.arenaCovered = covered;
+    this.callbacks.onArenaCovered?.(covered);
   }
 
   /**
@@ -580,14 +824,17 @@ export class HUD {
   hideOverlay(): void {
     if (this.elOverlay.classList.contains('is-closing')) return; // ya cerrando
     if (!this.elOverlay.classList.contains('is-open')) {
-      this.elOverlay.classList.remove('is-carousel');
+      this.elOverlay.classList.remove('is-carousel', 'is-throw');
       this.elOverlay.innerHTML = '';
+      this.syncArenaCovered();
       return;
     }
 
     this.cancelPendingClose();
-    this.elOverlay.classList.remove('is-open');
+    this.clearDieDeadline();
+    this.elOverlay.classList.remove('is-open', 'is-throw');
     this.elOverlay.classList.add('is-closing');
+    this.syncArenaCovered();
 
     const seq = ++this.closeSeq;
     const finish = (): void => {
@@ -639,6 +886,27 @@ export class HUD {
   /** Muestra un panel propio (ajustes, acerca de, coleccion...). */
   showPanel(content: HTMLElement, opts?: { carousel?: boolean }): void {
     this.openOverlay(content, opts?.carousel ?? false);
+  }
+
+  /**
+   * Cierra el panel actual y vuelve a la pantalla que corresponda al estado.
+   *
+   * `hideOverlay()` solo esconde: como `openOverlay` VACIA el overlay al abrir
+   * el panel nuevo, si solo se esconde queda la pantalla en blanco. Los paneles
+   * montados sobre el carrusel cierran por aca.
+   */
+  closePanel(): void {
+    this.lastStatus = null;
+    this.render();
+  }
+
+  /**
+   * Fuerza el redibujado del panel del estado ACTUAL. Hace falta cuando algo
+   * cambia sin que cambie el estado: volver a tirar el dado, por ejemplo.
+   */
+  refreshPanel(): void {
+    this.lastStatus = null;
+    this.render();
   }
 
   showMenu(): void {
@@ -769,7 +1037,13 @@ export class HUD {
    * El HUD resuelve aca el coste de mejora y la evolucion disponible de cada
    * carta, para que el panel sea una funcion pura de los datos.
    */
-  showDeckBuilder(highlightUid?: string): void {
+  /**
+   * Estado del mazo YA resuelto (coste de mejora, evolucion disponible, etc.).
+   *
+   * Lo comparten el panel DOM de siempre y el carrusel 3D: el HUD es el unico
+   * que tiene el motor, asi que resolver aca evita duplicar la logica.
+   */
+  deckState(highlightUid?: string): DeckBuilderState {
     const cards = this.engine.run.deck.allCards;
 
     const info: Record<string, DeckCardInfo> = {};
@@ -789,27 +1063,28 @@ export class HUD {
       };
     }
 
+    return {
+      cards,
+      money: this.engine.run.money,
+      purgeCost: this.engine.purgeCost,
+      canEdit: this.engine.canEditDeck(),
+      info,
+      ...(highlightUid ? { highlightUid } : {}),
+      ...(this.cardArt ? { cardArt: this.cardArt } : {}),
+    };
+  }
+
+  showDeckBuilder(highlightUid?: string): void {
     this.showPanel(
-      buildDeckBuilderPanel(
-        {
-          cards,
-          money: this.engine.run.money,
-          purgeCost: this.engine.purgeCost,
-          canEdit: this.engine.canEditDeck(),
-          info,
-          ...(highlightUid ? { highlightUid } : {}),
-          ...(this.cardArt ? { cardArt: this.cardArt } : {}),
+      buildDeckBuilderPanel(this.deckState(highlightUid), {
+        onPurge: (uid) => this.callbacks.onPurge(uid),
+        onUpgrade: (uid) => this.callbacks.onUpgrade(uid),
+        onEvolve: (uid) => this.callbacks.onEvolve(uid),
+        onClose: () => {
+          this.lastStatus = null;
+          this.render();
         },
-        {
-          onPurge: (uid) => this.callbacks.onPurge(uid),
-          onUpgrade: (uid) => this.callbacks.onUpgrade(uid),
-          onEvolve: (uid) => this.callbacks.onEvolve(uid),
-          onClose: () => {
-            this.lastStatus = null;
-            this.render();
-          },
-        },
-      ),
+      }),
     );
   }
 
@@ -883,6 +1158,112 @@ export class HUD {
     );
   }
 
+  // ==========================================================================
+  // Fases del dado
+  // ==========================================================================
+
+  /**
+   * El cubo esta en el aire: el panel vuelve pero con los ciegos bloqueados y
+   * el resultado tapado. Lo llama el controlador al soltar el cubo y al volver
+   * a tirar.
+   */
+  beginDieThrow(): void {
+    if (this.diePhase === 'tumbling') return;
+    this.diePhase = 'tumbling';
+    this.applyDiePhase();
+    this.armDieDeadline();
+  }
+
+  /** El dado se apoya: recien ahora se puede ver el resultado y elegir ciego. */
+  private settleDie(): void {
+    this.clearDieDeadline();
+    if (this.diePhase === 'ready') return;
+    this.diePhase = 'ready';
+    this.applyDiePhase();
+  }
+
+  /**
+   * Red de seguridad. Si el aviso del render no llega, el resultado se muestra
+   * igual: un panel bloqueado para siempre es peor que un dado que no se anima.
+   */
+  private armDieDeadline(): void {
+    this.clearDieDeadline();
+    this.dieDeadline = performance.now() + 12000;
+    this.dieTimer = window.setTimeout(() => {
+      this.dieTimer = null;
+      if (performance.now() < this.dieDeadline) return;
+      this.settleDie();
+    }, 12000);
+  }
+
+  private clearDieDeadline(): void {
+    if (this.dieTimer !== null) {
+      clearTimeout(this.dieTimer);
+      this.dieTimer = null;
+    }
+  }
+
+  /** Vuelca la fase del dado al DOM sin reconstruir el panel. */
+  private applyDiePhase(): void {
+    const panel = this.elBlindPanel;
+    if (!panel) return;
+
+    // El panel se aparta durante TODA la tirada, no solo antes de soltar el
+    // cubo: el dado gira sobre la arena y el panel ocupa media pantalla, asi
+    // que si volviera al soltar, la tirada —que es el evento— quedaria tapada.
+    // Vuelve cuando el dado se apoya, que es cuando hay algo que decidir.
+    const throwing = this.diePhase !== 'ready';
+    panel.classList.toggle('is-die-armed', throwing);
+    this.elOverlay.classList.toggle('is-throw', throwing);
+    if (this.elDieHint) {
+      // Con el dado ya apoyado la consigna desaparece con el resto del panel,
+      // asi que el texto solo tiene que ser correcto en las dos fases de tirada.
+      this.elDieHint.textContent = t(this.diePhase === 'armed' ? 'die.arm' : 'die.tumbling');
+    }
+
+    // Red de seguridad: los ciegos no se pueden elegir hasta que el dado se
+    // apoye. Elegir antes seria decidir sin saber el multiplicador.
+    const locked = throwing;
+    if (this.elBlindGrid) this.elBlindGrid.classList.toggle('is-locked', locked);
+    for (const card of panel.querySelectorAll('.blind-card')) {
+      (card as HTMLElement).setAttribute('aria-disabled', String(locked));
+    }
+
+    if (this.elDieRow) this.fillDieRow(this.elDieRow);
+    this.syncArenaCovered();
+  }
+
+  /** Contenido de la fila del dado segun la fase. */
+  private fillDieRow(row: HTMLElement): void {
+    row.innerHTML = '';
+    const die = this.engine.run.die;
+
+    const info = document.createElement('span');
+    info.className = 'die-row-info';
+
+    if (!die) {
+      info.textContent = t('die.arm');
+      row.appendChild(info);
+      return;
+    }
+    if (this.diePhase !== 'ready') {
+      info.textContent = t('die.tumbling');
+      info.classList.add('is-tumbling');
+      row.appendChild(info);
+      return;
+    }
+
+    info.textContent = t('die.rolled', { face: die.face, mult: die.multiplier });
+    const cost = this.engine.rerollDieCost();
+    const again = document.createElement('button');
+    again.className = 'btn is-ghost is-small';
+    again.textContent = t('die.reroll', { cost });
+    again.dataset['act'] = 'reroll-die';
+    again.disabled = this.engine.run.money < cost;
+    again.addEventListener('click', () => this.callbacks.onRerollDie());
+    row.append(info, again);
+  }
+
   private showBlindSelect(): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
@@ -951,8 +1332,34 @@ export class HUD {
 
     actions.append(deck, newRun, langBtn);
 
-    panel.append(title, subtitle, grid, actions);
+    // --- DADO: hay que TIRARLO a mano antes de poder elegir ---
+    //
+    // Tres fases, y el orden importa:
+    //   armed    -> todavia no se tiro. El panel se aparta y queda la consigna.
+    //   tumbling -> el cubo esta en el aire. El panel ya volvio, pero los ciegos
+    //               estan bloqueados: el resultado no se puede spoilear.
+    //   ready    -> el dado se apoyo. Recien aca aparece el resultado, la opcion
+    //               de volver a tirar y los ciegos.
+    const dieRow = document.createElement('div');
+    dieRow.className = 'die-row';
+
+    const hint = document.createElement('p');
+    hint.className = 'die-hint';
+    hint.textContent = t('die.arm');
+
+    panel.append(title, subtitle, dieRow, grid, actions, hint);
     this.openOverlay(panel);
+
+    // Las referencias se toman DESPUES de `openOverlay`: es quien las limpia
+    // (son del panel que se esta yendo). Tomarlas antes dejaba `elBlindPanel` en
+    // null y `applyDiePhase()` no hacia nada: el panel se quedaba capturando
+    // punteros y el cubo no se podia arrastrar.
+    this.elBlindPanel = panel;
+    this.elBlindGrid = grid;
+    this.elDieRow = dieRow;
+    this.elDieHint = hint;
+    this.diePhase = run.die ? 'ready' : 'armed';
+    this.applyDiePhase();
     // Los ciegos entran en cascada. Es ADITIVO: el panel ya tiene su propia
     // animacion de entrada; esto solo escalona las tarjetas de adentro.
     anim
@@ -996,6 +1403,8 @@ export class HUD {
 
     /** Botones de compra, para poder recalcular su estado sin rehacer el panel. */
     const buyButtons: { offer: ShopOffer; button: HTMLButtonElement; card: HTMLElement }[] = [];
+    /** Sellos de "vendida", en el mismo orden que `offers`. */
+    const soldStamps: HTMLElement[] = [];
 
     for (const offer of offers) {
       const affordable = this.engine.run.money >= offer.cost;
@@ -1046,6 +1455,16 @@ export class HUD {
 
       footer.append(price, buy);
       card.append(kind, name, desc, footer);
+
+      // Sello de vendida. Se agrega y se saca desde `shopRefresh`, porque una
+      // oferta puede venderse con la tienda ya abierta.
+      const stamp = document.createElement('span');
+      stamp.className = 'offer-sold';
+      stamp.textContent = t('shop.sold');
+      stamp.hidden = !offer.sold;
+      card.appendChild(stamp);
+      soldStamps.push(stamp);
+
       grid.appendChild(card);
     }
 
@@ -1090,6 +1509,9 @@ export class HUD {
         entry.button.textContent = entry.offer.sold ? t('shop.sold') : t('action.buy');
         entry.card.classList.toggle('is-sold', entry.offer.sold);
       }
+      soldStamps.forEach((stamp, i) => {
+        stamp.hidden = !offers[i]?.sold;
+      });
       reroll.disabled = money < cost;
     };
   }
@@ -1250,6 +1672,9 @@ export class HUD {
     // El puntaje no se acumula de forma lineal, pero repartirlo entre los pasos
     // da un conteo que se lee bien y que CIERRA exacto en el total real.
     const shown = Math.round((this.scoreHandTotal * (info.index + 1)) / steps);
+    // El ULTIMO paso es el que cierra la cuenta: se marca distinto y se queda
+    // en pantalla mas tiempo, porque es el numero que el jugador se lleva.
+    const isLast = info.index + 1 >= steps;
 
     this.elTickerOp.textContent = info.text;
     this.elTickerOp.style.color = hexToCss(info.color);
@@ -1262,11 +1687,17 @@ export class HUD {
     // con un reflow FORZADO en medio (una lectura sincronica de layout por cada
     // paso de puntuacion). Ahora se anima el transform directo.
     anim.tweenOf(this.elTickerTotal, {
-      keyframes: [
-        { scale: 1.16, duration: anim.d(0.11), ease: anim.EASE.cssBack },
-        { scale: 1, duration: anim.d(0.11), ease: anim.EASE.cssOut },
-      ],
+      keyframes: isLast
+        ? [
+            { scale: 1.38, duration: anim.d(0.18), ease: anim.EASE.cssBack },
+            { scale: 1, duration: anim.d(0.26), ease: anim.EASE.cssOut },
+          ]
+        : [
+            { scale: 1.16, duration: anim.d(0.11), ease: anim.EASE.cssBack },
+            { scale: 1, duration: anim.d(0.11), ease: anim.EASE.cssOut },
+          ],
     });
+    this.elTicker.classList.toggle('is-final', isLast);
 
     // Un paso que RESTA se grafica como daño (veneno) y no como ganancia: es la
     // unica forma de que se vea que la mano esta perdiendo puntos, no sumando.
@@ -1278,7 +1709,7 @@ export class HUD {
     this.tickerTimer = window.setTimeout(() => {
       this.elTicker.classList.remove('is-visible');
       this.tickerTimer = null;
-    }, 1400);
+    }, isLast ? 2600 : 1500);
   }
 
   /**

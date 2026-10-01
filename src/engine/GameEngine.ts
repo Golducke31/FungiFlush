@@ -15,7 +15,15 @@
  *                          -> (loss) game_over
  */
 
-import { ANTE_BASE_TARGET, ECONOMY, MAX_HAND_SIZE, MAX_PLAY_SIZE_DEFAULT } from './constants';
+import {
+  ANTE_BASE_TARGET,
+  DIE_FACES,
+  DIE_REROLL_BASE,
+  DIE_REROLL_STEP,
+  ECONOMY,
+  MAX_HAND_SIZE,
+  MAX_PLAY_SIZE_DEFAULT,
+} from './constants';
 import { bus } from './events';
 import { RNG } from './rng';
 import { ResolutionContext } from './resolution';
@@ -38,6 +46,7 @@ import type {
   BlindDefinition,
   CardDefinition,
   CardInstance,
+  DieRoll,
   JokerDefinition,
   JokerInstance,
   RoundSnapshot,
@@ -140,8 +149,73 @@ export class GameEngine {
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
 
     // No se elige el blind automaticamente: el jugador decide (Blind Select).
+    this.enterBlindSelect();
+  }
+
+  /**
+   * Entra a la pantalla de eleccion de ciego. NO tira el dado.
+   *
+   * Antes lo tiraba aca y el jugador lo veia caer solo. Ahora la tirada es un
+   * GESTO: el cubo se arrastra y se suelta (`throwDie`), y el resultado recien
+   * se revela cuando el dado se apoya. El motor no puede saber cuando termina
+   * una animacion, asi que el orden es: el render avisa que se solto el cubo,
+   * el motor sortea y devuelve la cara, y el render la anima hasta que cae.
+   */
+  private enterBlindSelect(): void {
     this.run.status = 'blind_select';
+    this.run.die = null;
+    this.run.dieRerolls = 0;
     this.emitState();
+  }
+
+  /**
+   * Tira el dado porque el jugador LANZO el cubo. Devuelve la tirada para que
+   * el render la anime, o `null` si no corresponde (fuera de la seleccion de
+   * ciego, o ya tirado).
+   *
+   * El sorteo ocurre ANTES de la animacion a proposito: la fisica del cubo es
+   * puro espectaculo y no puede influir en el resultado, o el RNG sembrado
+   * dejaria de ser reproducible (la tirada dependeria de como la arrastro el
+   * dedo).
+   */
+  throwDie(): DieRoll | null {
+    if (this.run.status !== 'blind_select') return null;
+    if (this.run.die) return this.run.die;
+    this.run.die = this.rollDie();
+    this.emitState();
+    return this.run.die;
+  }
+
+  /** Coste de la proxima tirada. Sube con cada una del mismo ciego. */
+  rerollDieCost(): number {
+    return DIE_REROLL_BASE + this.run.dieRerolls * DIE_REROLL_STEP;
+  }
+
+  /**
+   * Vuelve a tirar el dado pagando. Devuelve `false` si no alcanza el dinero.
+   * El azar deja de ser algo que se sufre y pasa a ser una APUESTA.
+   */
+  rerollDie(): boolean {
+    if (this.run.status !== 'blind_select') return false;
+    const cost = this.rerollDieCost();
+    if (this.run.money < cost) return false;
+    this.run.money -= cost;
+    this.run.dieRerolls += 1;
+    this.run.die = this.rollDie();
+    bus.emit('money:changed', { money: this.run.money, delta: -cost });
+    this.emitState();
+    return true;
+  }
+
+  rollDie(): DieRoll {
+    const face = DIE_FACES[this.rng.int(0, DIE_FACES.length)] ?? DIE_FACES[0];
+    if (!face) throw new Error('[GameEngine] DIE_FACES esta vacio');
+    return {
+      face: face.value,
+      multiplier: face.multiplier,
+      hands: face.hands,
+      discards: face.discards,
+    };
   }
 
   /** Blinds disponibles para el ante actual (los que la UI ofrece elegir). */
@@ -179,12 +253,22 @@ export class GameEngine {
     // progresion avanza igual: elegir el boss primero no saltea el ante.
     const target = this.targetFor(blind);
 
+    // DADO MULTIPLICADOR: se tira aca, con el RNG SEMBRADO. Con `Math.random()`
+    // dos partidas con la misma semilla dejarian de ser iguales, y la
+    // reproducibilidad es un invariante del motor.
+    // La tirada ya se hizo al ENTRAR a la seleccion: aca se usa la que quedo,
+    // que el jugador pudo haber cambiado pagando.
+    const die = this.run.die ?? this.rollDie();
+    this.run.die = die;
+
     this.round = createRoundState(
       blind,
       target,
       this.run.baseHandSize,
-      this.run.baseHands,
-      this.run.baseDiscards,
+      // Las caras altas COBRAN manos o descartes. Los pisos evitan que una
+      // tirada deje la ronda injugable.
+      Math.max(1, this.run.baseHands + die.hands),
+      Math.max(0, this.run.baseDiscards + die.discards),
     );
 
     this.run.deck.shuffle();
@@ -256,6 +340,14 @@ export class GameEngine {
 
     const held = round.hand.filter((c) => !round.selected.includes(c.uid));
     const res = this.scorer.resolveHand(this.handOptions(scored, held));
+
+    // DADO: se aplica al FINAL, sobre el multiplicador de esporas. Asi entra en
+    // el total y sale como un paso mas — el ticker lo muestra — sin tocar el
+    // calculador de puntaje.
+    const die = this.run.die;
+    if (die && die.multiplier !== 1) {
+      res.multiplySpores(die.multiplier, 'die', `die.face${die.face}`, 0);
+    }
 
     // --- Anuncio visual de las cartas jugadas, en orden ---
     scored.forEach((card, index) => bus.emit('card:played', { card, index }));
@@ -582,8 +674,15 @@ export class GameEngine {
       this.applyImmediateEffects(def.id, def.effects, def.nameKey);
     }
 
-    this.setMoney(-offer.cost);
+    // `sold` ANTES de cobrar, no despues.
+    //
+    // `setMoney` emite `money:changed` en el acto, y la tienda se refresca con
+    // ese evento: si la oferta se marcaba vendida un renglon mas abajo, el
+    // refresco la veia todavia disponible y el boton quedaba en "Comprar" y
+    // habilitado. Tocar de nuevo daba "no alcanza el dinero", que ademas era
+    // mentira. El estado de la oferta y la plata tienen que cambiar juntos.
     offer.sold = true;
+    this.setMoney(-offer.cost);
     bus.emit('shop:purchase', { offer, money: this.run.money });
     this.emitState();
     return true;
@@ -624,8 +723,7 @@ export class GameEngine {
     this.decayStatuses();
 
     // Vuelve a la pantalla de eleccion: el jugador decide con que ciego sigue.
-    this.run.status = 'blind_select';
-    this.emitState();
+    this.enterBlindSelect();
   }
 
   // ==========================================================================
@@ -1080,9 +1178,8 @@ export class GameEngine {
     }
 
     this.round = null;
-    this.run.status = 'blind_select';
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
-    this.emitState();
+    this.enterBlindSelect();
     return true;
   }
 }

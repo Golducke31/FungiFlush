@@ -386,6 +386,84 @@ console.log('\n--- Tras "Nueva partida" ---');
 console.log(JSON.stringify(afterStart, null, 2));
 await page.screenshot({ path: join(shotsDir, '03-blind-select.png') });
 
+// ===========================================================================
+// Fase 3b — TIRADA MANUAL DEL DADO (gesto de puntero REAL)
+// ===========================================================================
+// La tirada es un arrastre: hay que probarla con dedo de verdad, no llamando a
+// `engine.throwDie()`. Lo que se afirma:
+//   1. Al entrar al ciego el dado esta ARMADO (agrandado, sobre la arena) y el
+//      panel se corrio para que el canvas reciba el gesto.
+//   2. Mientras el cubo esta en el aire, el resultado NO se ve y los ciegos
+//      estan bloqueados: si se pudiera elegir antes, el dado no seria una
+//      apuesta.
+//   3. Al apoyarse aparecen la cara y el boton de volver a tirar.
+const dieArmed = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const g = ff.scene.die3d?.group;
+  const screen = g ? ff.scene.projectPointToScreen(g.position.x, g.position.y, g.position.z) : null;
+  return {
+    state: ff.scene.dieState(),
+    screen,
+    panelCorrido: document
+      .querySelector('.panel.is-blind-select')
+      ?.classList.contains('is-die-armed'),
+    overlayLibre: document.querySelector('#ui-root > .overlay')?.classList.contains('is-throw'),
+    gridBloqueado: document.querySelector('.blind-grid')?.classList.contains('is-locked'),
+    consigna: document.querySelector('.die-hint')?.textContent ?? null,
+    die: ff.engine.run.die,
+  };
+});
+console.log('\n--- Dado armado ---');
+console.log(JSON.stringify(dieArmed, null, 2));
+
+if (dieArmed.screen) {
+  // Arrastre real: agarrar el cubo, moverlo en varios pasos (para que se mida
+  // la velocidad del gesto) y soltarlo.
+  const { x, y } = dieArmed.screen;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(x + i * 12, y - i * 8);
+    await page.waitForTimeout(16);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(260);
+  await page.screenshot({ path: join(shotsDir, '03b-die-vuelo.png') });
+}
+
+const dieMid = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    fila: document.querySelector('.die-row')?.textContent ?? null,
+    gridBloqueado: document.querySelector('.blind-grid')?.classList.contains('is-locked'),
+    panelCorrido: document
+      .querySelector('.panel.is-blind-select')
+      ?.classList.contains('is-die-armed'),
+    resultadoVisible: Boolean(document.querySelector('[data-act="reroll-die"]')),
+    // Lo que distingue "esta volando" de "nadie lo tiro": el cubo esta en el
+    // aire y el motor ya sorteo (aunque el resultado no se vea).
+    busy: ff.scene.dieState()?.busy === true,
+    yaSorteado: ff.engine.run.die !== null,
+  };
+});
+console.log('\n--- Dado en el aire ---');
+console.log(JSON.stringify(dieMid, null, 2));
+
+await page.waitForTimeout(2600);
+const dieLanded = await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  return {
+    die: ff.engine.run.die,
+    estado: ff.scene.dieState(),
+    fila: document.querySelector('.die-row')?.textContent ?? null,
+    gridBloqueado: document.querySelector('.blind-grid')?.classList.contains('is-locked'),
+    rerollVisible: Boolean(document.querySelector('[data-act="reroll-die"]')),
+  };
+});
+console.log('\n--- Dado apoyado ---');
+console.log(JSON.stringify(dieLanded, null, 2));
+await page.screenshot({ path: join(shotsDir, '03c-dado-apoyado.png') });
+
 // --- Elegir ciego ---
 await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -536,6 +614,57 @@ const afterDragHand = await (async () => {
 console.log('\n--- Fase 4: arrastre dentro de la mano (devuelve) ---');
 console.log(JSON.stringify(afterDragHand, null, 2));
 
+// --- Ficha de joker: señalar NO vende ---
+// Se le da un joker al run a mano para no depender de que la tienda ofrezca uno.
+const jokerChip = await (async () => {
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const ids = ff.engine.registry.allJokers().map((j) => j.id);
+    if (ids[0] && ff.engine.run.jokers.length === 0) {
+      ff.engine.run.jokers.push(ff.engine.registry.instantiateJoker(ids[0]));
+      ff.hud.refreshPanel();
+    }
+  });
+  await page.waitForTimeout(700);
+
+  const chip = await page.locator('.joker-chip').first().boundingBox();
+  const sell = await page.locator('.joker-chip .joker-chip-sell').first().boundingBox();
+  if (!chip) return { skipped: 'sin ficha de joker' };
+
+  const antes = await page.evaluate(() => window.__fungiflush.engine.run.jokers.length);
+  // Toque en el CUERPO de la ficha: 20 px desde el borde izquierdo, bien lejos
+  // del boton de vender (que vive pegado al derecho).
+  await page.mouse.click(chip.x + 20, chip.y + chip.height / 2);
+  await page.waitForTimeout(500);
+
+  const despues = await page.evaluate(() => ({
+    jokers: window.__fungiflush.engine.run.jokers.length,
+    confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
+  }));
+
+  // Primer toque en VENDER: tiene que pedir confirmacion, no vender.
+  let primerToque = null;
+  if (sell) {
+    await page.mouse.click(sell.x + sell.width / 2, sell.y + sell.height / 2);
+    await page.waitForTimeout(450);
+    primerToque = await page.evaluate(() => ({
+      jokers: window.__fungiflush.engine.run.jokers.length,
+      confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
+      etiqueta: document.querySelector('.joker-chip-sell')?.textContent ?? null,
+    }));
+  }
+
+  return {
+    tieneBotonVender: Boolean(sell),
+    antes,
+    trasTocarElCuerpo: despues.jokers,
+    confirmandoTrasElCuerpo: despues.confirmando,
+    primerToqueEnVender: primerToque,
+  };
+})();
+console.log('\n--- Ficha de joker (señalar no vende) ---');
+console.log(JSON.stringify(jokerChip, null, 2));
+
 // --- Flip: el dorso existe y la carta se da vuelta y vuelve ---
 const flipTest = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -590,8 +719,10 @@ if (playButton) {
 } else {
   await page.evaluate(() => window.__fungiflush.engine.playHand());
 }
-// La secuencia de puntuacion anima ~2 s; esperamos a que termine.
-await page.waitForTimeout(3200);
+// La secuencia de puntuacion anima ~3,7 s acotados (~6 s reales con los ~12 FPS
+// de SwiftShader) y despues el aviso de "ciego superado" se queda 1,5 s antes de
+// dejar pasar al draft. Hay que esperar a que TODO eso termine.
+await page.waitForTimeout(10000);
 await page.screenshot({ path: join(shotsDir, '06-after-play.png') });
 
 const afterPlay = await page.evaluate(() => {
@@ -620,7 +751,8 @@ await page.evaluate(() => {
   for (const card of hand.slice(0, 5)) ff.engine.toggleSelect(card.uid);
   ff.engine.playHand();
 });
-await page.waitForTimeout(3000);
+// Mismo motivo que arriba: secuencia de puntaje + aviso antes del panel.
+await page.waitForTimeout(10000);
 
 // OJO: el estado se lee ANTES de clickear. `chooseReward` resuelve el draft y
 // entra a la tienda en el mismo tick, asi que leer despues devolveria "shop".
@@ -654,13 +786,69 @@ console.log('\n--- Tras tomar la recompensa (tienda) ---');
 console.log(JSON.stringify(afterWin, null, 2));
 await page.screenshot({ path: join(shotsDir, '08-shop.png') });
 
+// ===========================================================================
+// Fase 3c — COMPRAR EN LA TIENDA (con click real)
+// ===========================================================================
+// Dos cosas que ya se rompieron una vez y no se ven en el estado del motor:
+//   1. La oferta comprada tiene que quedar marcada VENDIDA en el DOM. El motor
+//      la marcaba DESPUES de cobrar, y el refresco de la tienda lo dispara el
+//      cobro: la tarjeta se quedaba en "Comprar", habilitada, y el segundo toque
+//      avisaba "no alcanza el dinero" (mentira).
+//   2. El dinero tiene que alcanzar para comprar la primera oferta asequible.
+const shopBuy = await (async () => {
+  const before = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    return {
+      money: ff.engine.run.money,
+      offers: ff.engine.run.shop?.offers.length ?? 0,
+      vendidas: ff.engine.run.shop?.offers.filter((o) => o.sold).length ?? 0,
+    };
+  });
+  // Dinero de sobra: lo que se prueba es la MARCA de vendida, no la economia.
+  await page.evaluate(() => {
+    window.__fungiflush.engine.run.money = 40;
+  });
+  await page.waitForTimeout(250);
+
+  const button = await page
+    .locator('.panel.is-shop .offer button:not([disabled])')
+    .first()
+    .boundingBox();
+  if (button) {
+    await page.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
+    await page.waitForTimeout(700);
+  }
+
+  return await page.evaluate((prev) => {
+    const ff = window.__fungiflush;
+    const cards = [...document.querySelectorAll('.panel.is-shop .offer')];
+    const sold = cards.find((c) => c.classList.contains('is-sold'));
+    return {
+      clicked: cards.length > 0,
+      offersBefore: prev.offers,
+      vendidas: ff.engine.run.shop?.offers.filter((o) => o.sold).length ?? 0,
+      // La PRIMERA tarjeta es la que se clickeo (el selector toma la primera
+      // habilitada, y las vendidas quedan deshabilitadas).
+      boton: sold?.querySelector('button')?.textContent ?? null,
+      deshabilitado: sold?.querySelector('button')?.disabled ?? null,
+      sello: sold?.querySelector('.offer-sold')?.hidden === false,
+      toasts: [...document.querySelectorAll('.toast')].map((el) => el.textContent),
+    };
+  }, before);
+})();
+console.log('\n--- Tras comprar en la tienda ---');
+console.log(JSON.stringify(shopBuy, null, 2));
+await page.screenshot({ path: join(shotsDir, '08b-shop-vendida.png') });
+
 // --- Constructor de mazo: abrir, purgar y cerrar ---
 const deckBuilder = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   document.querySelector('.panel.is-shop [data-act="deck"]')?.click();
   await wait(500);
   const opened = Boolean(document.querySelector('.panel.is-deck'));
-  const cards = document.querySelectorAll('.panel.is-deck .deck-card').length;
+  // El mazo ahora vive en el CARRUSEL 3D: las cartas no son nodos DOM, asi que
+  // se cuentan por el estado del carrusel (mismo intento: "el panel lista el mazo").
+  const cards = window.__fungiflush.scene.carouselState()?.count ?? 0;
   const before = window.__fungiflush.engine.run.deck.totalSize;
   document.querySelector('.panel.is-deck [data-act="purge"]')?.click();
   await wait(500);
@@ -976,9 +1164,12 @@ const ok =
   postFx?.gradeMix === 1 &&
   postFx?.drawCalls > 0 &&
   postFx?.drawCallsTotal > postFx?.drawCalls &&
-  // El camino con post-procesamiento NO debe inflar los draw calls de escena:
-  // solo agrega el sky dome (+1). Techo generoso contra el baseline de low tier.
-  fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 4 &&
+  // El camino con post-procesamiento NO debe inflar los draw calls de escena.
+  // El tier alto agrega cosas legitimas sobre el baseline de `low`: el sky dome
+  // (+1), el agua (+1) y las sombras de contacto (+1). Con el techo en +4 la
+  // asercion pasaba por IGUALDAD exacta y el smoke fallaba de forma
+  // intermitente; +8 deja aire sin dejar de detectar una inflacion real.
+  fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 8 &&
   fxPlaying?.status === 'playing' &&
   (fxPlaying?.hand ?? 0) > 0 &&
   fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0) &&
@@ -987,6 +1178,42 @@ const ok =
   afterStart?.status === 'blind_select' &&
   afterStart?.blindSelectVisible === true &&
   afterStart?.hudHidden === false &&
+  // --- Tirada manual del dado ---
+  // 1. Armado: el dado existe, esta esperando el gesto, el panel se corrio y
+  //    los ciegos estan bloqueados (todavia no hay multiplicador).
+  dieArmed?.state?.armed === true &&
+  dieArmed?.state?.visible === true &&
+  dieArmed?.screen !== null &&
+  dieArmed?.panelCorrido === true &&
+  dieArmed?.overlayLibre === true &&
+  dieArmed?.gridBloqueado === true &&
+  dieArmed?.die === null &&
+  // 2. En el aire: el motor YA sorteo la cara, pero el resultado sigue tapado.
+  dieMid?.busy === true &&
+  dieMid?.yaSorteado === true &&
+  dieMid?.panelCorrido === true &&
+  dieMid?.gridBloqueado === true &&
+  dieMid?.resultadoVisible === false &&
+  // 3. Apoyado: aparece la cara y el boton de volver a tirar, y los ciegos se
+  //    desbloquean.
+  dieLanded?.die !== null &&
+  dieLanded?.estado?.busy === false &&
+  dieLanded?.gridBloqueado === false &&
+  dieLanded?.rerollVisible === true &&
+  // --- Tienda: la oferta comprada queda VENDIDA en el DOM ---
+  shopBuy?.clicked === true &&
+  (shopBuy?.offersBefore ?? 0) >= 1 &&
+  shopBuy?.vendidas === 1 &&
+  shopBuy?.boton === 'VENDIDO' &&
+  shopBuy?.deshabilitado === true &&
+  shopBuy?.sello === true &&
+  (shopBuy?.toasts ?? []).length === 0 &&
+  // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
+  jokerChip?.tieneBotonVender === true &&
+  jokerChip?.trasTocarElCuerpo === jokerChip?.antes &&
+  jokerChip?.confirmandoTrasElCuerpo === false &&
+  jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes &&
+  jokerChip?.primerToqueEnVender?.confirmando === true &&
   menuState?.webgl === 'contexto activo' &&
   (afterBlind?.sceneHand ?? 0) > 0 &&
   (afterBlind?.hand ?? 0) > 0 &&
