@@ -18,12 +18,21 @@ export interface RewardCallbacks {
   onSkip: () => void;
 }
 
+/**
+ * Cara ya compuesta de una oferta, como data-URL. Lo inyecta el HUD (que tiene
+ * el motor y las imagenes del render) para que este panel siga siendo una
+ * funcion pura de los datos y no arrastre dependencias.
+ */
+export type RewardArtFor = (offer: ShopOffer) => string | null;
+
 export interface RewardState {
   offers: ShopOffer[];
   pick: number;
   allowSkip: boolean;
   /** Cuantas ya se tomaron (para drafts de mas de una carta). */
   taken: number;
+  /** Compositor opcional de la cara de cada carta. */
+  artFor?: RewardArtFor;
 }
 
 export function buildRewardPanel(state: RewardState, callbacks: RewardCallbacks): HTMLElement {
@@ -44,6 +53,23 @@ export function buildRewardPanel(state: RewardState, callbacks: RewardCallbacks)
   for (const offer of state.offers) {
     const card = document.createElement('div');
     card.className = `reward-card${offer.sold ? ' is-sold' : ''}`;
+
+    // La cara real de la carta arriba de todo: es lo que el jugador va a tener
+    // en la mano. Sin arte (voucher, o render sin la imagen) no se reserva el
+    // hueco: la tarjeta se achica sola.
+    const artUrl = state.artFor?.(offer) ?? null;
+    if (artUrl) {
+      const frame = document.createElement('div');
+      frame.className = 'reward-art';
+      const img = document.createElement('img');
+      img.className = 'reward-art-img';
+      img.src = artUrl;
+      img.alt = t(offer.nameKey);
+      img.loading = 'lazy';
+      img.draggable = false;
+      frame.appendChild(img);
+      card.appendChild(frame);
+    }
 
     const element = document.createElement('div');
     element.className = 'reward-element';

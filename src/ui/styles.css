@@ -303,6 +303,46 @@ body {
   padding: 8px 14px;
 }
 
+/* --- Bloque de ante: numero + riel de progreso --- */
+.hud-ante {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 92px;
+}
+
+.hud-ante-rail {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  height: 5px;
+  margin-top: 2px;
+}
+
+/* Cada punto es un ante del contenido. Apagado = por delante; encendido =
+   superado; el actual late suave para que el ojo caiga ahi. */
+.hud-ante-pip {
+  flex: 1;
+  height: 4px;
+  min-width: 3px;
+  border-radius: 99px;
+  /* Apagado con un gris claro translucido, no negro: sobre la losa oscura un
+     punto negro es invisible, y el riel tiene que leerse aunque este vacio. */
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  transition: background 0.25s, box-shadow 0.25s;
+}
+
+.hud-ante-pip.is-done {
+  background: var(--spores);
+  box-shadow: 0 0 6px rgba(79, 209, 139, 0.55);
+}
+
+.hud-ante-pip.is-now {
+  background: #b9f5d8;
+  box-shadow: 0 0 9px rgba(79, 209, 139, 0.9);
+}
+
 .hud-label {
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -362,6 +402,10 @@ body {
   align-items: baseline;
   justify-content: center;
   gap: 10px;
+  /* El marcador "84 / 300" NUNCA se parte en dos lineas: partido se lee como
+     dos numeros sueltos y arruina la lectura. Si no entra, cede el resto. */
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .hud-score-current {
@@ -522,6 +566,50 @@ body {
   font-size: 10px;
 }
 
+/* El joker acaba de disparar: un latido violeta corto. Es la unica señal de
+   que la ficha "hizo algo" durante la mano; sin esto, un joker que dispara tres
+   veces se ve igual que uno que no disparo nunca. */
+.joker-chip.is-firing {
+  animation: joker-fire 0.42s var(--ease-out);
+}
+
+.joker-chip.is-firing .joker-chip-fires {
+  color: #d9c8ff;
+  text-shadow: 0 0 8px rgba(167, 139, 250, 0.9);
+}
+
+@keyframes joker-fire {
+  0% {
+    transform: translateX(0) scale(1);
+    border-color: var(--violet);
+    box-shadow:
+      inset 0 1px 0 var(--frame-rim),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+      0 0 0 rgba(167, 139, 250, 0);
+  }
+  35% {
+    transform: translateX(4px) scale(1.045);
+    border-color: #c4b0ff;
+    box-shadow:
+      inset 0 1px 0 var(--frame-rim),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+      0 0 22px rgba(167, 139, 250, 0.75);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    border-color: var(--frame-edge);
+    box-shadow:
+      inset 0 1px 0 var(--frame-rim),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+      0 3px 10px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Con movimiento reducido no hay latido: el tinte del contador alcanza. */
+.reduce-motion .joker-chip.is-firing {
+  animation: none;
+}
+
 /* --------------------------------------------------------------------------
    Barra inferior
    -------------------------------------------------------------------------- */
@@ -541,11 +629,33 @@ body {
 }
 
 /* El marco lo pone la regla compartida de `.hud-block, .counter`: aca solo va
-   el tamaño. */
+   el tamaño y la jerarquia entre recursos y estado. */
 .counter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 6px 11px;
-  text-align: center;
   min-width: 62px;
+}
+
+/* Icono tintado por CSS. Los SVG del set usan `stroke: currentColor`, pero un
+   `<img>` no hereda color; con `mask-image` el color lo pone `background-color`
+   y el icono toma el tinte del estado (normal / bajo / agotado) sin duplicar
+   archivos. */
+.counter-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background-color: var(--frame-dim);
+  -webkit-mask-image: var(--icon);
+  mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  transition: background-color 0.2s;
 }
 
 .counter-value {
@@ -553,6 +663,36 @@ body {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* El tope de una capacidad (`/5` de jokers) es contexto, no dato: pesa menos. */
+.counter-cap {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--frame-dim);
+  margin-left: 1px;
+}
+
+/* RECURSOS: lo que se gasta en la ronda. El icono y el numero van a color
+   pleno para que atraigan la mirada antes que el estado. */
+.counter.is-resource .counter-icon {
+  background-color: var(--spores);
+}
+
+.counter.is-resource .counter-value {
+  color: #dff7ec;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* ESTADO: mazo y jokers. Se apagan un paso para no competir con los recursos. */
+.counter:not(.is-resource) {
+  opacity: 0.86;
+}
+
+/* Queda poco: el numero se pone ambar. Es el aviso previo al rojo. */
+.counter-value.is-low {
+  color: var(--warn, #e2a05c);
 }
 
 .counter-value.is-empty {
@@ -1288,46 +1428,272 @@ body {
   margin-bottom: 18px;
 }
 
+/* El material de la tarjeta de ciego lo pone la losa compartida (ver el bloque
+   "Piezas apoyadas en el tablon"). Aca solo queda lo que NO es material:
+   layout, interaccion y jerarquia interna. */
 .blind-card {
-  background: rgba(255, 255, 255, 0.035);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 13px;
-  padding: 15px;
+  padding: 14px 15px 15px;
   cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
   transition:
     border-color var(--dur-base) var(--ease-out),
     transform var(--dur-fast) var(--ease-back),
     box-shadow var(--dur-base) var(--ease-out);
 }
 
+/* --- Ilustracion del ciego ---
+   Va a sangre como fondo y el texto se apoya encima. `z-index: -1` con
+   `isolation: isolate` la manda DETRAS del contenido sin salirse de la tarjeta
+   ni competir con la cinta de "actual" (`::before`), que vive en otra capa.
+   El velo oscuro NO es decoracion: sin el, el texto blanco cae sobre el centro
+   iluminado de la ilustracion y deja de leerse. */
+.blind-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.blind-card:has(.blind-art)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(4, 7, 11, 0.86) 0%,
+    rgba(4, 7, 11, 0.62) 38%,
+    rgba(4, 7, 11, 0.88) 100%
+  );
+}
+
 .blind-card:hover {
-  border-color: var(--border-strong);
+  border-color: rgba(46, 178, 164, 0.62);
   transform: translateY(-3px);
-  box-shadow: var(--shadow-2);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(46, 178, 164, 0.22);
 }
 
 .blind-card.is-current {
   border-color: var(--spores);
-  box-shadow: 0 0 24px rgba(79, 209, 139, 0.22);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 0 24px rgba(79, 209, 139, 0.22);
+}
+
+/* El ciego elegido se marca con una cinta de esporas al costado: se lee de un
+   vistazo cual esta activo sin depender de la posicion en la grilla. */
+.blind-card.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--spores);
+  box-shadow: 0 0 12px rgba(79, 209, 139, 0.6);
+}
+
+/* Los jefes salen del tablon en vez de hundirse: borde calido y un halo apenas
+   visible para que no se confundan con un ciego normal. */
+.blind-card.is-boss {
+  border-color: rgba(226, 132, 92, 0.5);
+}
+
+.blind-card.is-boss:hover {
+  border-color: rgba(226, 132, 92, 0.78);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(226, 132, 92, 0.24);
+}
+
+/* --- Jerarquia por escalafon ---
+   Los tres ciegos del ante tienen el MISMO peso visual hoy, y no lo tienen: el
+   chico es el que se elige cuando estas comodo y el jefe el que te puede matar.
+   El ancho cuenta esa historia antes de leer un numero.
+
+   Solo se ensancha el jefe, y solo donde hay lugar. Un `span 2` a 844 px de
+   ancho parte la grilla en 3 columnas y deja al jefe solo en una fila de 2
+   huecos: el marco desalineado se lee como un error, no como jerarquia. Por eso
+   el ensanche vive detras de un media query, y por debajo el jefe se distingue
+   por borde y por halo. */
+@media (min-width: 640px) {
+  .blind-card.is-boss {
+    grid-column: span 2;
+  }
+}
+
+/* El chico se hunde un poco: es la opcion segura, no la protagonista. */
+.blind-card[data-blind-tier='small'] .blind-name {
+  font-size: 15px;
+  color: #d6e2ec;
+}
+
+.blind-card[data-blind-tier='big'] .blind-name {
+  color: #f0f6fa;
+}
+
+.blind-card[data-blind-tier='boss'] .blind-name {
+  font-size: 18px;
+  color: #ffd9c4;
+  text-shadow: 0 0 18px rgba(226, 132, 92, 0.35);
+}
+
+/* La ilustracion del jefe se mira de frente; la del chico, de reojo. */
+.blind-card[data-blind-tier='boss'] .blind-art {
+  object-position: center 26%;
+  opacity: 1;
+}
+
+.blind-card[data-blind-tier='small']:has(.blind-art)::after {
+  background: linear-gradient(
+    180deg,
+    rgba(4, 7, 11, 0.92) 0%,
+    rgba(4, 7, 11, 0.74) 40%,
+    rgba(4, 7, 11, 0.94) 100%
+  );
+}
+
+.blind-card.is-cleared {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.blind-card.is-cleared:hover {
+  transform: none;
+  border-color: var(--frame-edge);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* --- Cabecera: nombre + chips de tier --- */
+.blind-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .blind-name {
   font-size: 16px;
   font-weight: 800;
-  margin-bottom: 5px;
+  line-height: 1.15;
+}
+
+.blind-tag {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--frame-edge);
+  background: var(--frame-deep-lo);
+  color: var(--frame-dim);
+}
+
+.blind-tag.is-boss {
+  border-color: rgba(226, 132, 92, 0.55);
+  background: rgba(226, 132, 92, 0.14);
+  color: #e2845c;
 }
 
 .blind-desc {
   font-size: 12px;
   color: #b6c6d6;
   line-height: 1.42;
-  margin-bottom: 10px;
 }
 
-.blind-target {
-  font-size: 13px;
+/* --- Fila de metricas: multiplicador + objetivo --- */
+.blind-metrics {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.blind-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.blind-metric-value {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.blind-metric-value.is-target {
   color: var(--spores);
+}
+
+.blind-metric-value.is-mult {
+  color: #e8b95f;
+}
+
+.blind-metric-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* --- Recompensa --- */
+.blind-reward {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 11.5px;
+  color: #b6c6d6;
+}
+
+.blind-reward-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.blind-reward-amount {
+  font-weight: 800;
+  color: #e8dcc0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Bloqueo por ascension / progreso --- */
+.blind-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
   font-weight: 700;
+  color: var(--warn, #e2a05c);
 }
 
 /* --------------------------------------------------------------------------
@@ -1859,6 +2225,25 @@ body {
 
 .reward-card.is-sold {
   opacity: 0.4;
+}
+
+/* Ventana de arte: la cara real de la carta. Se recorta con proporcion fija
+   (2:3, la de la ilustracion) para que todas las tarjetas del draft midan
+   igual aunque falte el arte en alguna. */
+.reward-art {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--frame-deep-lo);
+  box-shadow: inset 0 0 0 1px var(--frame-edge), inset 0 -8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.reward-art-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .reward-element {
@@ -2403,6 +2788,7 @@ body {
 .reward-card,
 .deck-card,
 .collection-card,
+.blind-card,
 .pass-tier,
 .daily-day,
 .daily-focus,
@@ -2512,6 +2898,18 @@ body {
   color: var(--frame-dim);
 }
 
+/* Respaldo cuando una cara no se pudo componer: el hueco mantiene la altura de
+   la fila (si no, la tarjeta se encoge y la fila de precios se sale del panel).
+   Va vacio a proposito: repetir la etiqueta de tipo que ya esta justo debajo
+   seria ruido. */
+.offer-art.is-placeholder {
+  height: 150px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 200, 87, 0.1), rgba(255, 200, 87, 0) 62%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.12));
+  border: 1px solid rgba(255, 200, 87, 0.16);
+}
+
 /* Texto secundario sobre la losa: `--dim` es un gris azulado pensado para fondo
    casi negro y sobre el verde-azulado se ensucia. */
 .panel-subtitle,
@@ -2580,6 +2978,17 @@ body {
   }
   .counter-value {
     font-size: 14px;
+  }
+  .counter-icon {
+    width: 14px;
+    height: 14px;
+  }
+  .hud-ante {
+    min-width: 74px;
+  }
+  .hud-ante-pip {
+    height: 3px;
+    min-width: 2px;
   }
   .hud-jokers {
     max-height: 48vh;
@@ -3519,4 +3928,42 @@ body {
   transform: rotate(6deg);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+}
+
+/* --- Voucher (mejora permanente) en la tienda ---
+   Un voucher NO es una carta: no tiene ilustracion ni rareza, y lo que compra
+   no es una pieza de mazo sino una regla que dura toda la partida. Si se viera
+   igual que un joker, el jugador lo compraria esperando un slot de mesa.
+   Se distingue por el BORDE DE ORO y la etiqueta, sin tocar el layout. */
+.offer.is-voucher {
+  border-color: rgba(255, 200, 87, 0.5);
+}
+
+.offer.is-voucher:hover:not(.is-sold) {
+  border-color: rgba(255, 200, 87, 0.85);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.38),
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(255, 200, 87, 0.24);
+}
+
+.offer.is-voucher .offer-kind {
+  color: rgba(255, 200, 87, 0.85);
+}
+
+/* Precio con descuento: el numero grande es lo que se PAGA y el chico, tachado,
+   lo que costaria sin el voucher. Sin los dos, "12" cuando la carta dice 16 no
+   se explica en ningun lado. */
+.offer-price-was {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--frame-dim);
+  text-decoration: line-through;
+  margin-right: auto;
+  padding-left: 2px;
+}
+
+.offer-price.is-discounted {
+  margin-right: 0;
 }

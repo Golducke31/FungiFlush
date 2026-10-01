@@ -48,7 +48,7 @@ export const CARD_DISPLAY_FONT = "'Gasoek One', 'Fredoka SemiCondensed', system-
 export const CARD_TEXT_FONT = "'Fredoka SemiCondensed', 'Segoe UI', system-ui, sans-serif";
 
 export interface CardTextureSpec {
-  kind: 'card' | 'joker' | 'mutation';
+  kind: 'card' | 'joker' | 'mutation' | 'voucher';
   name: string;
   desc: string;
   element: ElementType;
@@ -550,6 +550,11 @@ export function createCardCanvas(
   const border = RARITY_BORDER[spec.rarity];
   const pad = border + 8;
 
+  // El voucher es la unica pieza que no viene del pool: no es una carta que
+  // juegues ni un joker que ocupa slot, es una REGLA. Se pinta con el acento
+  // dorado para que no se confunda con una carta comun en la tienda.
+  const accent = spec.kind === 'voucher' ? 0xffc857 : elementColor;
+
   // Fondo + tinte + arte: SOLO en la capa completa. En la de texto se omite
   // todo esto a proposito, para que quede transparente y deje ver la capa de
   // arte que va detras.
@@ -610,10 +615,9 @@ export function createCardCanvas(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
 
-  ctx.fillStyle = hexToRgba(elementColor, 0.95);
+  ctx.fillStyle = hexToRgba(accent, 0.95);
   ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
-  ctx.fillText(spec.element.toUpperCase(), W / 2, 30);
-
+  ctx.fillText((spec.kind === 'voucher' ? 'MEJORA' : spec.element).toUpperCase(), W / 2, 30);
   ctx.fillStyle = '#f2f6fb';
   ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
   const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 20, 2);
@@ -640,19 +644,20 @@ export function createCardCanvas(
     drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', String(spec.substrate ?? 0), 0xf2a63b);
     drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b);
   } else {
-    // Jokers y mutaciones: sin stats, solo un rotulo de tipo.
-    const label = spec.kind === 'joker' ? 'JOKER' : 'MUTACION';
+    // Jokers, mutaciones y vouchers: sin stats, solo un rotulo de tipo.
+    const label =
+      spec.kind === 'joker' ? 'JOKER' : spec.kind === 'voucher' ? 'MEJORA' : 'MUTACION';
     const g = ctx.createLinearGradient(0, chipsTop, 0, chipsTop + 52);
-    g.addColorStop(0, hexToRgba(rarityColor, 0.34));
-    g.addColorStop(1, hexToRgba(rarityColor, 0.12));
+    g.addColorStop(0, hexToRgba(accent, 0.34));
+    g.addColorStop(1, hexToRgba(accent, 0.12));
     ctx.fillStyle = g;
     roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
     ctx.fill();
-    ctx.strokeStyle = hexToRgba(rarityColor, 0.75);
+    ctx.strokeStyle = hexToRgba(accent, 0.75);
     ctx.lineWidth = 2.5;
     roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
     ctx.stroke();
-    ctx.fillStyle = hexToCss(rarityColor);
+    ctx.fillStyle = hexToCss(accent);
     ctx.font = `400 24px ${CARD_DISPLAY_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

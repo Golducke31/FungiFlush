@@ -23,9 +23,9 @@ import {
 import type { BoardView } from '@engine/board';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
-import { createCardCanvas, type CardTextureSpec } from '@render/index';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
+import { offerFaceUrl } from './cardArt';
 import { buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
@@ -123,6 +123,14 @@ function formatNumber(value: number): string {
   return Math.round(value).toLocaleString();
 }
 
+/**
+ * Formatea el multiplicador de un ciego: `1` en vez de `1.0`, pero conserva los
+ * decimales utiles (`1.5`, `2.5`) y recorta ruido de coma flotante (`1.10`).
+ */
+function formatMultiplier(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 export class HUD {
   private readonly engine: GameEngine;
   private readonly callbacks: HudCallbacks;
@@ -131,6 +139,8 @@ export class HUD {
   private readonly cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
   /** Ilustracion real de un joker. Ver la nota del constructor. */
   private readonly jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
+  /** Ilustracion real de un ciego, por su clave `art`. Ver el constructor. */
+  private readonly blindArt?: (art: string | undefined) => HTMLImageElement | undefined;
   /**
    * Refresco en vivo del panel de la tienda, o `null` si no hay tienda abierta.
    *
@@ -150,6 +160,9 @@ export class HUD {
   private elTarget = document.createElement('span');
   private elProgress = document.createElement('div');
   private elAnte = document.createElement('span');
+  private elAnteRail = document.createElement('div');
+  /** Total de antenas del contenido, para no reconstruir el riel cada render. */
+  private anteRailTotal = -1;
   private elMoney = document.createElement('span');
   private elBlind = document.createElement('div');
   private elCounters = document.createElement('div');
@@ -231,12 +244,19 @@ export class HUD {
     cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
     /** Igual que `cardArt`, para jokers. */
     jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
+    /**
+     * Igual que `cardArt`, para ciegos. Recibe la clave `BlindDefinition.art`
+     * (no la definicion entera): el mapa de arte se indexa por clave, y asi la
+     * UI no necesita saber cual es el ciego actual.
+     */
+    blindArt?: (art: string | undefined) => HTMLImageElement | undefined;
   }) {
     this.engine = options.engine;
     this.root = options.root;
     this.callbacks = options.callbacks;
     this.cardArt = options.cardArt;
     this.jokerArt = options.jokerArt;
+    this.blindArt = options.blindArt;
     this.appInfo = options.appInfo ?? { version: '0.0.0', contentHash: null, packs: [] };
     this.build();
     this.subscribe();
@@ -255,12 +275,15 @@ export class HUD {
     top.className = 'hud-top';
 
     const anteBlock = document.createElement('div');
-    anteBlock.className = 'hud-block';
+    anteBlock.className = 'hud-block hud-ante';
     const anteLabel = document.createElement('div');
     anteLabel.className = 'hud-label';
     anteLabel.textContent = t('hud.ante');
     this.elAnte.className = 'hud-value';
-    anteBlock.append(anteLabel, this.elAnte);
+    // Riel de antenas: marca en que punto de la carrera estas de un vistazo, sin
+    // tener que leer el numero. `buildAnteRail` lo llena segun el ante total.
+    this.elAnteRail.className = 'hud-ante-rail';
+    anteBlock.append(anteLabel, this.elAnte, this.elAnteRail);
 
     const scoreBlock = document.createElement('div');
     scoreBlock.className = 'hud-block hud-score';
@@ -447,6 +470,24 @@ export class HUD {
         this.toast(t('result.blindFailed'), 'error');
       }),
 
+      // La ficha del joker late cuando su joker dispara. NO se re-renderiza la
+      // lista: eso reconstruiria el DOM y mataria la animacion recien arrancada.
+      // Se busca la ficha por `data-uid` y se le pone el estado un instante.
+      bus.on('joker:triggered', ({ joker }) => {
+        const chip = this.elJokers.querySelector<HTMLElement>(
+          `.joker-chip[data-uid="${joker.uid}"]`,
+        );
+        if (!chip) return;
+        chip.classList.remove('is-firing');
+        // Forzar un reflow hace que la animacion se reinicie aunque la ficha ya
+        // estuviera latiendo (un joker que dispara dos veces seguidas).
+        void chip.offsetWidth;
+        chip.classList.add('is-firing');
+        window.setTimeout(() => chip.classList.remove('is-firing'), 420);
+        const fires = chip.querySelector('.joker-chip-fires');
+        if (fires) fires.textContent = `x${joker.firedCount}`;
+      }),
+
       bus.on('log', ({ level, key, params }) => {
         this.toast(t(key, params), level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info');
       }),
@@ -477,6 +518,7 @@ export class HUD {
     this.root.classList.toggle('in-menu', run.status === 'menu');
 
     this.elAnte.textContent = String(run.ante);
+    this.renderAnteRail(run.ante);
     this.elMoney.textContent = formatNumber(run.money);
 
     if (round) {
@@ -530,29 +572,90 @@ export class HUD {
     this.elPreview.classList.add('is-visible');
   }
 
+  /**
+   * Riel de antenas: un punto por ante del contenido, encendido hasta el actual.
+   * Da la profundidad de la partida de un vistazo; el numero solo no dice si
+   * falta poco o mucho. Se reconstruye solo cuando cambia el total, asi que no
+   * cuesta nada por frame.
+   */
+  private renderAnteRail(ante: number): void {
+    const total = this.engine.registry.maxAnte();
+    if (total !== this.anteRailTotal) {
+      this.anteRailTotal = total;
+      this.elAnteRail.innerHTML = '';
+      for (let i = 1; i <= total; i += 1) {
+        const pip = document.createElement('span');
+        pip.className = 'hud-ante-pip';
+        this.elAnteRail.appendChild(pip);
+      }
+    }
+    this.elAnteRail.title = t('hud.anteOf', { current: ante, total });
+    this.elAnteRail.setAttribute('aria-label', t('hud.anteOf', { current: ante, total }));
+    const pips = this.elAnteRail.children;
+    for (let i = 0; i < pips.length; i += 1) {
+      pips[i]?.classList.toggle('is-done', i < ante);
+      pips[i]?.classList.toggle('is-now', i === ante - 1);
+    }
+  }
+
   private renderCounters(): void {
     const round = this.engine.round;
     const run = this.engine.run;
     this.elCounters.innerHTML = '';
     if (!round) return;
 
-    const entries: Array<[string, string | number, string]> = [
-      [t('hud.hands'), round.handsLeft, round.handsLeft <= 1 ? 'is-empty' : ''],
-      [t('hud.discards'), round.discardsLeft, round.discardsLeft === 0 ? 'is-empty' : ''],
-      [t('hud.deck'), run.deck.remaining, ''],
-      [t('hud.jokers'), `${run.jokers.length}/${run.jokerSlots}`, ''],
+    // Dos grupos con jerarquia distinta, a proposito:
+    //   RECURSOS (manos, descartes) son lo que GASTAS en esta ronda. Si se
+    //     acaban, perdiste: van con icono y se encienden en rojo al agotarse.
+    //   ESTADO (mazo, jokers) es informativo: se puede planear pero no se gasta.
+    // Sin la separacion, los cuatro numeros pesan igual y el jugador no sabe
+    // donde mirar cuando la ronda se pone cuesta arriba.
+    const resources: Array<[string, string, string | number, string]> = [
+      ['ui_icon_hand', t('hud.hands'), round.handsLeft, round.handsLeft <= 1 ? 'is-low' : ''],
+      [
+        'ui_icon_discard',
+        t('hud.discards'),
+        round.discardsLeft,
+        round.discardsLeft === 0 ? 'is-low' : '',
+      ],
+    ];
+    const state: Array<[string, string, string | number, string]> = [
+      ['ui_icon_collection', t('hud.deck'), run.deck.remaining, ''],
+      ['ui_icon_joker_slot', t('hud.jokers'), run.jokers.length, ''],
     ];
 
-    for (const [label, value, extra] of entries) {
+    for (const [icon, label, value, extra] of [...resources, ...state]) {
       const cell = document.createElement('div');
-      cell.className = 'counter';
+      cell.className = `counter${resources.some((r) => r[0] === icon) ? ' is-resource' : ''}`;
+      cell.title = label;
+
+      const iconEl = document.createElement('span');
+      iconEl.className = 'counter-icon';
+      // La URL se resuelve contra `document.baseURI`, NO se escribe relativa en
+      // el CSS: un `url('art/..')` dentro de un `style` inline se resuelve
+      // contra el origen de la hoja (src/ui/) y da 404. Contra `baseURI` anda
+      // igual en el dev server y bajo el `asset://` de Tauri (`base: './'`).
+      iconEl.style.setProperty('--icon', `url("${new URL(`art/${icon}.svg`, document.baseURI).href}")`);
+      iconEl.setAttribute('aria-hidden', 'true');
+
       const valueEl = document.createElement('div');
       valueEl.className = `counter-value ${extra}`.trim();
       valueEl.textContent = String(value);
+
+      // El contador de jokers muestra "3" y el tope aparte: "3/5" junto competia
+      // por la misma linea de base que un numero suelto y se leia peor.
+      if (icon === 'ui_icon_joker_slot') {
+        const cap = document.createElement('span');
+        cap.className = 'counter-cap';
+        cap.textContent = `/${run.jokerSlots}`;
+        valueEl.appendChild(cap);
+      }
+
       const labelEl = document.createElement('div');
       labelEl.className = 'hud-label';
       labelEl.textContent = label;
-      cell.append(valueEl, labelEl);
+
+      cell.append(iconEl, valueEl, labelEl);
       this.elCounters.appendChild(cell);
     }
   }
@@ -574,6 +677,9 @@ export class HUD {
       const chip = document.createElement('div');
       chip.className = 'joker-chip';
       chip.title = `${t(joker.def.nameKey)} — ${t(joker.def.descKey)}`;
+      // Hook para que la ficha se pueda encontrar por uid cuando el joker
+      // dispara (ver la suscripcion a `joker:triggered`).
+      chip.dataset['uid'] = joker.uid;
 
       const name = document.createElement('span');
       name.className = 'joker-chip-name';
@@ -1022,6 +1128,13 @@ export class HUD {
           pick: this.engine.rewardPick,
           allowSkip: this.engine.rewardAllowSkip,
           taken: this.engine.rewardOffers().filter((o) => o.sold).length,
+          // La cara de la carta la compone el HUD: es quien tiene el motor y las
+          // imagenes decodificadas del render.
+          artFor: (offer) =>
+            offerFaceUrl(offer, this.engine, t, {
+              card: this.cardArt,
+              joker: this.jokerArt,
+            }),
         },
         {
           onPick: (offerId) => this.callbacks.onPickReward(offerId),
@@ -1283,23 +1396,116 @@ export class HUD {
     const blinds = this.engine.availableBlinds();
     blinds.forEach((blind, index) => {
       const target = this.engine.targetFor(blind);
+      // Un ciego es JEFE si trae efectos ambientales: es la convencion del
+      // contenido (ver blinds.json: solo los `*_boss` declaran `effects`).
+      const isBoss = (blind.effects?.length ?? 0) > 0;
+      const isCurrent = index === run.blindIndex;
+
       const card = document.createElement('div');
-      card.className = `blind-card${index === run.blindIndex ? ' is-current' : ''}`;
+      card.className = [
+        'blind-card',
+        isCurrent ? 'is-current' : '',
+        isBoss ? 'is-boss' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      // Hooks de test/smoke: id, tier y estado del ciego, sin depender del
+      // orden DOM.
+      card.dataset['act'] = 'blind';
+      card.dataset['blind'] = blind.id;
+      card.dataset['blindBoss'] = isBoss ? '1' : '0';
+      if (blind.tier) card.dataset['blindTier'] = blind.tier;
+      if (isCurrent) card.dataset['blindCurrent'] = '1';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+
+      // --- Ilustracion ---
+      // Va PRIMERO en el DOM y el CSS la pone de fondo: es el mismo patron que
+      // la cara de carta de la tienda, y deja el texto por encima sin capas
+      // extra. Sin arte, la tarjeta se queda con su material.
+      const art = this.blindArt?.(blind.art);
+      if (art?.src) {
+        const artImg = document.createElement('img');
+        artImg.className = 'blind-art';
+        artImg.src = art.src;
+        artImg.alt = '';
+        artImg.setAttribute('aria-hidden', 'true');
+        card.appendChild(artImg);
+      }
+
+      // --- Cabecera: nombre + etiqueta de jefe ---
+      const head = document.createElement('div');
+      head.className = 'blind-head';
 
       const name = document.createElement('div');
       name.className = 'blind-name';
       name.textContent = t(blind.nameKey);
 
+      head.append(name);
+      if (isBoss) {
+        const bossTag = document.createElement('span');
+        bossTag.className = 'blind-tag is-boss';
+        bossTag.textContent = t('blindCard.boss');
+        head.append(bossTag);
+      }
+
       const desc = document.createElement('div');
       desc.className = 'blind-desc';
       desc.textContent = t(blind.descKey);
 
-      const targetEl = document.createElement('div');
-      targetEl.className = 'blind-target';
-      targetEl.textContent = `${t('hud.target')}: ${formatNumber(target)}`;
+      // --- Metricas: multiplicador y objetivo ---
+      const metrics = document.createElement('div');
+      metrics.className = 'blind-metrics';
 
-      card.append(name, desc, targetEl);
-      card.addEventListener('click', () => this.callbacks.onChooseBlind(blind.id));
+      const mult = document.createElement('div');
+      mult.className = 'blind-metric';
+      const multValue = document.createElement('div');
+      multValue.className = 'blind-metric-value is-mult';
+      // `x1` y `x1.5` se leen mejor que `x1.0`: se cae el decimal inutil.
+      multValue.textContent = `×${formatMultiplier(blind.scoreMultiplier)}`;
+      const multLabel = document.createElement('div');
+      multLabel.className = 'blind-metric-label';
+      multLabel.textContent = t('blindCard.mult');
+      mult.append(multValue, multLabel);
+
+      const tgt = document.createElement('div');
+      tgt.className = 'blind-metric';
+      const tgtValue = document.createElement('div');
+      tgtValue.className = 'blind-metric-value is-target';
+      tgtValue.textContent = formatNumber(target);
+      const tgtLabel = document.createElement('div');
+      tgtLabel.className = 'blind-metric-label';
+      tgtLabel.textContent = t('blindCard.target');
+      tgt.append(tgtValue, tgtLabel);
+
+      metrics.append(mult, tgt);
+
+      // --- Recompensa ---
+      const reward = document.createElement('div');
+      reward.className = 'blind-reward';
+      const rewardIcon = document.createElement('img');
+      rewardIcon.className = 'blind-reward-icon';
+      rewardIcon.src = 'ui/fungi.png';
+      rewardIcon.alt = '';
+      rewardIcon.setAttribute('aria-hidden', 'true');
+      const rewardAmount = document.createElement('span');
+      rewardAmount.className = 'blind-reward-amount';
+      rewardAmount.textContent = `+${formatNumber(blind.reward)}`;
+      const rewardLabel = document.createElement('span');
+      rewardLabel.textContent = t('blindCard.reward');
+      reward.append(rewardIcon, rewardAmount, rewardLabel);
+
+      card.append(head, desc, metrics, reward);
+
+      const choose = (): void => this.callbacks.onChooseBlind(blind.id);
+      card.addEventListener('click', choose);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          choose();
+        }
+      });
+
       grid.appendChild(card);
     });
 
@@ -1402,17 +1608,28 @@ export class HUD {
     }
 
     /** Botones de compra, para poder recalcular su estado sin rehacer el panel. */
-    const buyButtons: { offer: ShopOffer; button: HTMLButtonElement; card: HTMLElement }[] = [];
+    const buyButtons: {
+      offer: ShopOffer;
+      button: HTMLButtonElement;
+      card: HTMLElement;
+      priceEl: HTMLElement;
+    }[] = [];
     /** Sellos de "vendida", en el mismo orden que `offers`. */
     const soldStamps: HTMLElement[] = [];
 
     for (const offer of offers) {
-      const affordable = this.engine.run.money >= offer.cost;
+      // El precio REAL lo resuelve el motor (descuentos de vouchers incluidos).
+      // Leer `offer.cost` aca pintaria un numero y cobraria otro.
+      const price = this.engine.priceOf(offer);
       const card = document.createElement('div');
       card.className = `offer${offer.sold ? ' is-sold' : ''}`;
+      if (offer.kind === 'voucher') card.classList.add('is-voucher');
 
       // Miniatura de la carta: misma cara procedural que la carta real.
-      const artUrl = offerArtUrl(offer, this.engine, this.cardArt, this.jokerArt);
+      const artUrl = offerFaceUrl(offer, this.engine, t, {
+        card: this.cardArt,
+        joker: this.jokerArt,
+      });
       if (artUrl) {
         const art = document.createElement('img');
         art.className = 'offer-art';
@@ -1420,11 +1637,21 @@ export class HUD {
         art.alt = t(offer.nameKey);
         art.loading = 'lazy';
         card.appendChild(art);
+      } else {
+        // Respaldo si la cara no se pudo componer: SIN este hueco la tarjeta se
+        // queda mas baja que sus vecinas y la fila de precios se sale del panel.
+        // El arte es lo que le da altura a todas por igual, tenga o no dibujo.
+        const spacer = document.createElement('div');
+        spacer.className = 'offer-art is-placeholder';
+        spacer.setAttribute('aria-hidden', 'true');
+        card.appendChild(spacer);
       }
 
       const kind = document.createElement('div');
       kind.className = 'offer-kind';
-      kind.textContent = offer.kind.toUpperCase();
+      // La etiqueta se traduce: `CARD`/`JOKER`/`VOUCHER` en crudo es la clave
+      // del motor, no un texto para el jugador.
+      kind.textContent = offerLabel(offer.kind);
 
       const name = document.createElement('div');
       name.className = 'offer-name';
@@ -1442,18 +1669,27 @@ export class HUD {
       const footer = document.createElement('div');
       footer.className = 'offer-footer';
 
-      const price = document.createElement('span');
-      price.className = 'offer-price';
-      price.textContent = String(offer.cost);
+      const priceEl = document.createElement('span');
+      priceEl.className = 'offer-price';
+      priceEl.textContent = String(price);
+      // El precio tachado "de lista" solo tiene sentido si hay descuento.
+      if (price !== offer.cost) {
+        priceEl.classList.add('is-discounted');
+        const was = document.createElement('span');
+        was.className = 'offer-price-was';
+        was.textContent = String(offer.cost);
+        footer.append(was);
+        card.dataset['fullPrice'] = String(offer.cost);
+      }
 
       const buy = document.createElement('button');
       buy.className = 'btn is-small';
       buy.textContent = offer.sold ? t('shop.sold') : t('action.buy');
-      buy.disabled = offer.sold || !affordable;
+      buy.disabled = !this.engine.canBuyOffer(offer);
       buy.addEventListener('click', () => this.callbacks.onBuy(offer.id));
-      buyButtons.push({ offer, button: buy, card });
+      buyButtons.push({ offer, button: buy, card, priceEl });
 
-      footer.append(price, buy);
+      footer.append(priceEl, buy);
       card.append(kind, name, desc, footer);
 
       // Sello de vendida. Se agrega y se saca desde `shopRefresh`, porque una
@@ -1484,9 +1720,9 @@ export class HUD {
 
     const reroll = document.createElement('button');
     reroll.className = 'btn';
-    const cost = 5 + (this.engine.run.shop?.rerolls ?? 0);
-    reroll.textContent = t('shop.rerollCost', { cost });
-    reroll.disabled = this.engine.run.money < cost;
+    // El precio del reroll tambien pasa por el motor: un voucher puede bajarlo.
+    reroll.textContent = t('shop.rerollCost', { cost: this.engine.rerollPrice });
+    reroll.disabled = this.engine.run.money < this.engine.rerollPrice;
     reroll.addEventListener('click', () => this.callbacks.onReroll());
 
     const leave = document.createElement('button');
@@ -1505,14 +1741,16 @@ export class HUD {
       const money = this.engine.run.money;
       subtitle.textContent = `${t('hud.money')}: ${formatNumber(money)} · ${t('hud.jokers')} ${this.engine.run.jokers.length}/${this.engine.run.jokerSlots}`;
       for (const entry of buyButtons) {
-        entry.button.disabled = entry.offer.sold || money < entry.offer.cost;
+        // `canBuyOffer` ya sabe de slots de joker y de vouchers ya poseidos: la
+        // UI no replica la regla, la pregunta.
+        entry.button.disabled = !this.engine.canBuyOffer(entry.offer);
         entry.button.textContent = entry.offer.sold ? t('shop.sold') : t('action.buy');
         entry.card.classList.toggle('is-sold', entry.offer.sold);
       }
       soldStamps.forEach((stamp, i) => {
         stamp.hidden = !offers[i]?.sold;
       });
-      reroll.disabled = money < cost;
+      reroll.disabled = money < this.engine.rerollPrice;
     };
   }
 
@@ -1790,7 +2028,21 @@ export class HUD {
   }
 }
 
-/** Rareza de una oferta (para colorear el nombre en la tienda). */
+/**
+ * Etiqueta de la clase de oferta. `kind` es la clave del motor (`card`,
+ * `joker`, `mutation`, `voucher`) y NO se muestra cruda: se traduce, como todo
+ * lo demas. Cae al `kind` en mayusculas si alguna clave faltara, para que una
+ * oferta nueva se vea aunque nadie le haya escrito el texto todavia.
+ */
+function offerLabel(kind: ShopOffer['kind']): string {
+  const key = `shop.kind.${kind}`;
+  const label = t(key);
+  return label === key ? kind.toUpperCase() : label;
+}
+
+/**
+ * Rareza de una oferta (para colorear el nombre en la tienda).
+ */
 function rarityOfOffer(engine: GameEngine, offer: ShopOffer): keyof typeof RARITY_COLOR {
   const def = engine.registry.tryGetCard(offer.refId);
   if (def) return def.rarity;
@@ -1798,72 +2050,5 @@ function rarityOfOffer(engine: GameEngine, offer: ShopOffer): keyof typeof RARIT
     return engine.registry.getJoker(offer.refId).rarity;
   } catch {
     return 'common';
-  }
-}
-
-/**
- * Cara de la carta en la tienda: `createCardCanvas` con el `ArtSpec` de la
- * carta, MAS la ilustracion real si el render la tiene. Con la imagen, el
- * canvas sale igual que la carta en la mano; sin ella cae a la silueta
- * procedural. Voucher no tiene carta, asi que devuelve `null`.
- */
-function offerArtUrl(
-  offer: ShopOffer,
-  engine: GameEngine,
-  cardArt?: (def: CardDefinition) => HTMLImageElement | undefined,
-  jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined,
-): string | null {
-  let spec: CardTextureSpec | null = null;
-  // Ilustracion real, si la hay. `createCardCanvas` la usa como fondo a sangre
-  // y dibuja encima el nombre y los chips: o sea, la cara REAL de la carta.
-  // Sin esto la tienda dibujaba una silueta procedural, distinta de la que el
-  // jugador tiene en la mano.
-  let realArt: HTMLImageElement | undefined;
-  try {
-    if (offer.kind === 'card') {
-      const def = engine.registry.tryGetCard(offer.refId);
-      if (!def) return null;
-      realArt = cardArt?.(def);
-      spec = {
-        kind: 'card',
-        name: t(offer.nameKey),
-        desc: t(offer.descKey),
-        element: def.element,
-        family: def.family,
-        rarity: def.rarity,
-        art: def.art,
-        substrate: def.baseSubstrate,
-        spores: def.baseSpores,
-      };
-    } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
-      const def = engine.registry.tryGetJoker(offer.refId);
-      if (!def) return null;
-      realArt = jokerArt?.(def);
-      spec = {
-        kind: offer.kind === 'mutation' ? 'mutation' : 'joker',
-        name: t(offer.nameKey),
-        desc: t(offer.descKey),
-        element: 'neutral',
-        family: 'agaricaceae',
-        rarity: def.rarity,
-        art: def.art,
-        cost: def.cost,
-      };
-    }
-  } catch {
-    return null;
-  }
-  if (!spec) return null;
-  try {
-    const canvas = createCardCanvas(spec, realArt);
-    try {
-      return canvas.toDataURL('image/webp', 0.85);
-    } catch {
-      // Algun entorno no codifica webp en canvas: caer a png para no perder
-      // la miniatura.
-      return canvas.toDataURL('image/png');
-    }
-  } catch {
-    return null;
   }
 }

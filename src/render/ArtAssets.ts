@@ -83,7 +83,19 @@ export type LegacyArtKey =
  * manifiesto se resuelve por PATRON (ver `keyForFile`).
  */
 export type CardOwnArtKey = `card_own_${string}`;
-export type ArtKey = CardArtKey | LegacyArtKey | CardOwnArtKey;
+/**
+ * Clave de arte de un CIEGO: `art_blind_<clave>.webp`.
+ *
+ * Igual que `CardOwnArtKey`, no se puede enumerar: las claves salen de
+ * `blinds.json`, que es datos. Se resuelve por patron en `keyForFile` y en
+ * `artFileFor`.
+ *
+ * El nombre de archivo NO incluye el ante. Las 24 ilustraciones se nombran por
+ * su CLAVE de contenido (`art_blind_blind_a1_small.webp`), para que mover un
+ * ciego de ante no obligue a renombrar el PNG.
+ */
+export type BlindArtKey = `blind_${string}`;
+export type ArtKey = CardArtKey | LegacyArtKey | CardOwnArtKey | BlindArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -113,17 +125,21 @@ const KEY_BY_FILE = new Map<string, ArtKey>(
 /** `art_card_own_<id>.webp` -> `card_own_<id>`. */
 const CARD_OWN_FILE = /^art_card_own_(.+)\.webp$/;
 
+/** `art_blind_<clave>.webp` -> `blind_<clave>`. */
+const BLIND_FILE = /^art_blind_(.+)\.webp$/;
+
 /**
- * Clave de un archivo del manifiesto. Cubre las 51 fijas por tabla y las de
- * arte propio por patron. Devuelve `undefined` si el archivo no es arte nuestro
- * (una hoja de contactos, un temporal): el llamador lo ignora.
+ * Clave de un archivo del manifiesto. Cubre las fijas por tabla y las de arte
+ * propio (carta y ciego) por patron. Devuelve `undefined` si el archivo no es
+ * arte nuestro (una hoja de contactos, un temporal): el llamador lo ignora.
  */
 function keyForFile(file: string): ArtKey | undefined {
   const known = KEY_BY_FILE.get(file);
   if (known) return known;
   const own = CARD_OWN_FILE.exec(file);
-  const id = own?.[1];
-  return id ? (`card_own_${id}` as ArtKey) : undefined;
+  if (own?.[1]) return `card_own_${own[1]}` as ArtKey;
+  const blind = BLIND_FILE.exec(file);
+  return blind?.[1] ? (`blind_${blind[1]}` as ArtKey) : undefined;
 }
 
 /** Los que siempre existen: es el respaldo si no hay manifiesto. */
@@ -278,14 +294,27 @@ export function artKeysForJoker(element: ElementType, rarity: Rarity): ArtKey[] 
 }
 
 /**
+ * Cadena de arte de un ciego. Un solo eslabon: la ilustracion propia.
+ *
+ * No hay catalogo viejo ni par (elemento x rareza) que compartir, y el respaldo
+ * util (el material de la tarjeta) ya lo pone el CSS. Un ciego sin arte propio
+ * tiene que quedarse SIN imagen, no mostrar la cara de una carta: eso seria
+ * mentir sobre lo que es.
+ */
+export function blindKeysFor(art: string | undefined): ArtKey[] {
+  return art ? [`blind_${art}` as ArtKey] : [];
+}
+
+/**
  * Nombre de archivo de una clave. Lo usan los tests y `genArtIndex`.
  *
- * Las claves de arte propio no estan en `FILES` (no se pueden enumerar: los ids
- * son datos), asi que se resuelven por patron.
+ * Las claves de arte propio y de ciego no estan en `FILES` (no se pueden
+ * enumerar: los ids son datos), asi que se resuelven por patron.
  */
 export function artFileFor(key: ArtKey): string {
   if (key.startsWith('card_own_')) return `art_card_own_${key.slice('card_own_'.length)}.webp`;
-  return FILES[key as Exclude<ArtKey, CardOwnArtKey>];
+  if (key.startsWith('blind_')) return `art_blind_${key.slice('blind_'.length)}.webp`;
+  return FILES[key as Exclude<ArtKey, CardOwnArtKey | BlindArtKey>];
 }
 
 /** Clave del dorso. */

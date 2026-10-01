@@ -19,6 +19,9 @@ TAMANOS POR PREFIJO
 el canvas de la carta, para que entren a sangre sin recorte); el tapete es
 cuadrado y grande; el resto 512x512.
 
+`art_blind_<clave>` tambien es 2:3: la ilustracion del ciego se dibuja en el
+mismo recuadro vertical que una carta, asi que comparte el catalogo de recorte.
+
 `art_arena` es 2:1 porque es la cara SUPERIOR de la plataforma de la arena, que
 mide 24 x 12 unidades del mundo: la misma proporcion de la losa, para que el
 circulo runico entre sin recorte. 1024x512 son ~43 px por unidad, que es la
@@ -62,6 +65,9 @@ def target_for(stem: str) -> tuple[int, int]:
         return TARGETS[stem]
     # `art_card_<elemento>_<rareza>` son 2:3, como la carta.
     if stem.startswith("art_card_"):
+        return CARD_TARGET
+    # Los ciegos comparten el recuadro vertical de una carta.
+    if stem.startswith("art_blind_"):
         return CARD_TARGET
     return DEFAULT_TARGET
 

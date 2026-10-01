@@ -2098,3 +2098,95 @@ iconos.
   también dibuja texto encima. Un estiramiento no se nota en una carta suelta y sí cuando el
   jugador tiene ocho en abanico.
 
+
+---
+
+## 10. Las 24 ilustraciones de CIEGO
+
+El ciego tenía sólo texto. Estas 24 ilustraciones le dan cara a la pantalla de selección, que
+es la pantalla que más se mira por partida (se ve tres veces por ante, ocho antes).
+
+### 10.1 Lo que cambia respecto de las 40 cartas
+
+| | Cartas (§3) | Ciegos (§10) |
+| --- | --- | --- |
+| Rareza | 5 tratamientos distintos | **no existe** — el eje es el escalafón |
+| Encima del arte | nombre + chips + coste (canvas) | nombre, métricas y recompensa (DOM) |
+| Banda útil | 18%–62% | **10%–72%** (ver abajo) |
+| Paleta | acento = elemento | acento = **escalafón** |
+
+**La banda es más alta y más ancha.** En una carta, el arte es *el* contenido y el texto es
+una etiqueta al pie: por eso el sujeto vive cómodo entre el 18% y el 62%. En el ciego es al
+revés — el texto es el contenido (multiplicador, objetivo, recompensa, descripción) y el arte
+es la atmósfera detrás. Necesita más alto para no desaparecer bajo el velo, pero no puede
+llegar al borde superior porque ahí está el nombre.
+
+**El acento lo pone el escalafón**, y reemplaza al acento de rareza:
+
+| Escalafón | Hex | Nombre | Cómo entra |
+| --- | --- | --- | --- |
+| `small` | `#9aa5b1` | gris-azulado | casi sin luz: una sola fuente, mucho silencio |
+| `big` | `#4fd18b` | menta | rim light menta, un foco secundario |
+| `boss` | `#e2845c` | óxido cálido | dos fuentes, partículas, composición densa y hostil |
+
+**Regla de choque cromático (la misma de §1.1):** el elemento del ambiente manda en el sujeto;
+el escalafón manda en la LUZ. Nunca los dos en el mismo plano. Un jefe de veneno es verde con
+luz óxida, no naranja.
+
+### 10.2 Los tres escalafones, literal (esto es el bloque que va en cada prompt)
+
+```text
+small — a quiet, almost empty room. One soft light source, no particles, low contrast, muted
+desaturated palette, a wide empty dark foreground. It should read as "safe, for now".
+
+big — the same space under pressure. A secondary light source, faint drifting spores, richer
+contrast, a few silhouetted shapes at the edges of frame. It should read as "this will cost
+you something".
+
+boss — the space is actively hostile. Two light sources with a hard warm rim, dense airborne
+debris, a heavy dark foreground frame, dramatic chiaroscuro, the environment itself looks
+like it is leaning toward the viewer. It should read as "this is alive and it wants you gone".
+```
+
+### 10.3 El ancla de cada ambiente
+
+Cada ciego se ancló en la carta que **ya define ese ambiente**, no en un `common` cualquiera:
+
+| Ante | Ambiente | Archivo de ancla |
+| --- | --- | --- |
+| 1 | sótano / piedra húmeda | `art_card_decay_common.png` |
+| 2 | tronco y colonia | `art_card_decay_uncommon.png` |
+| 3 | anillo y compost | `art_card_symbiosis_common.png` |
+| 4 | bosque ciego | `art_card_mycelium_common.png` |
+| 5 | agua y osario | `art_card_crystal_common.png` |
+| 6 | ceniza y capilla | `art_card_parasite_common.png` |
+| 7 | salar y campo muerto | `art_card_neutral_common.png` |
+| 8 | mar micelial | `art_card_mycelium_mythic.png` |
+
+Anclar en las cartas en vez de en un ciego ya generado (que no existía) es lo que mantiene
+estos 24 dentro del set: heredan el trazo, el charco de musgo elíptico, el haz de luz vertical
+y el fondo casi negro del resto del juego.
+
+### 10.4 El circuito (idéntico al de §0.1)
+
+1. Generás a `art-source/art_blind_<clave>.png` (2:3, PNG).
+2. `npm run art` → recorta a **512×744** (mismo recuadro que una carta) y regenera el índice.
+3. `node tools/genArtIndex.mjs` mapea el archivo a la clave `blind_<clave>`.
+4. `blinds.json` declara `"art": "<clave>"` y `"tier": "small|big|boss"`.
+5. La UI lo pide por `SceneManager.blindArt(blind.art)`.
+
+Sin el WebP, la tarjeta se queda con su material (el marco compartido) y **no** cae a ninguna
+otra ilustración: un ciego sin arte no puede mostrar la cara de una carta.
+
+### 10.5 Registro de decisiones
+
+- **Por qué el nombre del archivo lleva el id completo** (`art_blind_blind_a1_small.webp` y no
+  `art_blind_a1_small.webp`): la clave en `blinds.json` es libre y es el contrato con el
+  disco. Prefijarla con `blind_` hace que la clave y el id sean el mismo texto, que es más
+  fácil de auditar a ojo que una tabla de equivalencias.
+- **Por qué no hay arte de los íconos del ciego:** no hacen falta. Las métricas (×, objetivo,
+  recompensa) son números y ya tienen color propio en CSS; agregar 24 chapitas sería inflar el
+  set sin agregar información.
+- **Por qué el jefe NO siempre ocupa dos columnas:** a 844 px la grilla da 3 columnas y un
+  `span 2` deja al jefe solo en una fila con un hueco al lado, que se lee como error de
+  layout. El ensanche vive detrás de `@media (min-width: 640px)` y con 2 columnas exactas.

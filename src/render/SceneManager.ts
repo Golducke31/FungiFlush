@@ -26,7 +26,7 @@ import {
   type ScoreStep,
 } from '@engine/index';
 
-import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker } from './ArtAssets';
+import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor } from './ArtAssets';
 import {
   ARENA_GLOW_BASE,
   ARENA_GLOW_ENVIRONMENT,
@@ -1744,10 +1744,21 @@ export class SceneManager {
     return this.jokerArt(joker.def);
   }
 
+  /**
+   * Ilustracion de un ciego. Publico por la misma razon que `cardArt`: la
+   * pantalla de ciego es DOM y no conoce los assets.
+   *
+   * Devuelve `undefined` si el ciego no declara `art` o si el WebP todavia no
+   * se genero. La tarjeta se queda sin imagen y vive de su MATERIAL (el marco
+   * compartido), que es el respaldo correcto para un ciego.
+   */
+  blindArt(art: string | undefined): HTMLImageElement | undefined {
+    return this.assets.getFirst(blindKeysFor(art));
+  }
+
   private lang(): string {
     return document.documentElement.lang || 'en';
   }
-
   // ==========================================================================
   // Layout
   // ==========================================================================
