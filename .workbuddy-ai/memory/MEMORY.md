@@ -95,3 +95,29 @@ Cadena de arte: `public/art/index.json` (npm run art:index) → `ArtAssets` (ren
   `effects?.length > 0`. Hooks: `data-act="blind"`, `data-blind`, `data-blind-boss`,
   `data-blind-current`.
 
+## R4b — Cosméticos (2026-10-01)
+Dorso: `SceneManager.setCardBack(id)` (id→`cardback_<id>`, `default`→`CARD_BACK_KEY`)
+reconstruye el `backTexture` ÚNICO con **dispose del viejo + splice de `disposables`**
+y lo reaplica a `pileMaterials` + `forEachCard`. Fieltro: `Arena.setFelt(art?)` =
+`feltMesh` overlay (visible=false; `default` no lo muestra). `ArtKey` extendido con
+`cardback_<id>`/`felt_<id>` (patrones en `keyForFile`/`artFileFor`).
+UI: `CosmeticsScreen.ts` + chip menú + `main.ts` (`syncCosmetics` boot, `onEquip`).
+Patrón panel: `buildXPanel` + `showX` (snapshot ANTES de `openOverlay`) + `setXState`.
+
+## R4d — Contenido (2026-10-01)
+**TRAMPA de arte**: una carta nueva NO puede caer en un (elemento×rareza) ya ocupado
+→ `artCoverage` de validate la marca compartida. Salida: arte PROPIO
+`art_card_own_<id>.webp`. Generar img2img (ImageGen, `input_fidelity: medium`) anclado
+en `art_card_<elem>_common.png` → PNG 2:3 en `art-source/` → `npm run art` (512×744).
+Prompts en `ART_PROMPTS.md`. Cartas nuevas también necesitan entrada en `board.json`.
+Starters ahora: agresivo (substrato bajo, +spores, cost 3) vs defensivo (substrato
+alto, cost 4). 39 cartas / 24 jokers. Balance 19.6% / ante 6.07. Regla de Emanuel:
+todo arte nuevo es IA img2img; nunca procedural ni SVG (salvo iconos).
+
+## R5 — Historial (2026-10-01)
+`profile.history: RunHistoryEntry[]` (HISTORY_CAP 20, nuevo→viejo), escrito en
+`bus.on('game:over')` **deduplicando por seed**. `HistoryScreen.ts` +
+`setHistoryState`/`showHistory` + `syncHistory` en main.ts + chip menú. i18n
+`history.*`. Trampa de merge: necesita línea propia en el return de
+`migrateProfileSave` (como `starterOverrides`) + test de regresión.
+
