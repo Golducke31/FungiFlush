@@ -9,6 +9,7 @@
  */
 
 import type {
+  AscensionDefinition,
   BlindDefinition,
   CardDefinition,
   CardInstance,
@@ -55,6 +56,13 @@ export interface ContentBundle {
   evolutions?: EvolutionRule[];
   /** Modificadores de run (vouchers). Ver `VoucherDefinition`. */
   vouchers?: VoucherDefinition[];
+  /**
+   * Niveles de dificultad progresiva. Ver `AscensionDefinition`.
+   *
+   * NO van indexados por `id` como el resto: la clave es el NIVEL. Por eso
+   * tienen su propio mapa y no pasan por el camino generico de definiciones.
+   */
+  ascensions?: AscensionDefinition[];
 }
 
 export interface ValidationIssue {
@@ -65,6 +73,20 @@ export interface ValidationIssue {
 
 const VALID_TRIGGERS = new Set<string>(TRIGGER_EVENTS as readonly string[]);
 
+/**
+ * La ascension neutra. A0 no esta declarada en el contenido: es la ausencia de
+ * dificultad anadida. Devolver SIEMPRE un objeto (en vez de `undefined`) deja
+ * que cada punto de uso lea `asc.modifiers.targetMultiplier ?? 1` sin ramas.
+ */
+function identityAscension(level: number): AscensionDefinition {
+  return {
+    level,
+    nameKey: 'ascension.a0.name',
+    descKey: 'ascension.a0.desc',
+    modifiers: {},
+  };
+}
+
 /** Acciones realmente implementadas en el registry de acciones. */
 const KNOWN_ACTIONS = new Set<string>(supportedActions());
 
@@ -73,6 +95,7 @@ export class CardRegistry {
   private readonly jokers = new Map<string, JokerDefinition>();
   private readonly blinds = new Map<string, BlindDefinition>();
   private readonly vouchers = new Map<string, VoucherDefinition>();
+  private readonly ascensions = new Map<number, AscensionDefinition>();
   private anteTargets: Record<number, number> | null = null;
 
   private uidCounter = 0;
@@ -82,6 +105,7 @@ export class CardRegistry {
     for (const joker of bundle.jokers) this.jokers.set(joker.id, joker);
     for (const blind of bundle.blinds) this.blinds.set(blind.id, blind);
     for (const voucher of bundle.vouchers ?? []) this.vouchers.set(voucher.id, voucher);
+    for (const asc of bundle.ascensions ?? []) this.ascensions.set(asc.level, asc);
     this.anteTargets = bundle.anteTargets ?? null;
   }
 
@@ -181,6 +205,32 @@ export class CardRegistry {
       pool,
       pool.map(() => 1),
     );
+  }
+
+  // --- Ascensiones (dificultad progresiva) ----------------------------------
+
+  /** Nivel mas alto declarado por el contenido (0 = solo juego base). */
+  maxAscension(): number {
+    const keys = [...this.ascensions.keys()];
+    return keys.length > 0 ? Math.max(...keys) : 0;
+  }
+
+  /**
+   * Modificadores de un nivel. A0 y los niveles no declarados devuelven la
+   * IDENTIDAD (un objeto vacio), no `undefined`: cada punto de uso tendria que
+   * escribir `?? 1` y alguno se olvidaria.
+   */
+  ascension(level: number): AscensionDefinition {
+    if (level <= 0) return identityAscension(0);
+    const found = this.ascensions.get(level);
+    if (!found) return identityAscension(0);
+    return { ...found, modifiers: { ...found.modifiers } };
+  }
+
+  allAscensions(): AscensionDefinition[] {
+    return [...this.ascensions.values()]
+      .sort((a, b) => a.level - b.level)
+      .map((def) => ({ ...def, modifiers: { ...def.modifiers } }));
   }
 
   blindsForAnte(ante: number): BlindDefinition[] {

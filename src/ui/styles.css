@@ -2793,7 +2793,8 @@ body {
 .daily-day,
 .daily-focus,
 .achievement-card,
-.settings-field {
+.settings-field,
+.ascension-card {
   border-color: var(--frame-edge);
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.4) 0%, rgba(46, 178, 164, 0) 30%),
@@ -3966,4 +3967,217 @@ body {
 
 .offer-price.is-discounted {
   margin-right: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Ascension (R1)
+   --------------------------------------------------------------------------
+   El panel lista TODOS los niveles en una sola columna con scroll: ocho filas
+   con descripcion no entran a lo alto, y scrollear una lista es mas claro que
+   apretar ocho celdas. Las tarjetas toman el material de la losa compartida
+   (`.ascension-card` esta en ese selector); aca solo va layout y los estados.
+   -------------------------------------------------------------------------- */
+
+/* Chip del nivel puesto: el unico dorado del menu, porque es el unico estado
+   del jugador que CAMBIA las reglas de la partida siguiente. */
+.menu-ghost--ascension.is-active {
+  border-color: rgba(255, 200, 87, 0.6);
+  color: var(--money);
+}
+
+.panel.is-ascension {
+  /* Mismo ancho que los paneles de contenido, y el alto lo pone el shell. */
+  align-items: center;
+  justify-content: center;
+}
+
+.ascension-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  padding: clamp(14px, 3vh, 24px);
+}
+
+.ascension-head {
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.ascension-title {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: clamp(18px, 3.2vw, 26px);
+  font-weight: 700;
+  color: #f2fffb;
+  letter-spacing: 0.01em;
+}
+
+.ascension-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.ascension-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* `min-height: 0` es lo que permite que el scroll ocurra DENTRO del flex:
+     sin el, la lista estira al shell y empuja el boton de cerrar fuera. */
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ascension-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: left;
+  color: #e2fbf4;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ascension-card:active:not(.is-locked) {
+  transform: scale(0.985);
+}
+
+/* Bloqueado: se HUNDE en el tablon (misma idea que la losa de contenido
+   bloqueado) y deja de responder. */
+.ascension-card.is-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.5);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.ascension-card.is-selected {
+  border-color: rgba(255, 200, 87, 0.8);
+  box-shadow:
+    inset 0 1px 0 var(--frame-rim),
+    0 0 16px rgba(255, 200, 87, 0.22);
+}
+
+.ascension-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #04211d;
+  background: linear-gradient(180deg, #63e0d0, #2eb2a4);
+}
+
+.ascension-card.is-selected .ascension-badge {
+  background: linear-gradient(180deg, #ffd987, #ffc857);
+}
+
+.ascension-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ascension-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ascension-desc {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--dim);
+}
+
+.ascension-tag {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--frame-moss, #2eb2a4);
+}
+
+.ascension-card.is-locked .ascension-tag {
+  color: var(--frame-dim);
+}
+
+.ascension-card.is-selected .ascension-tag {
+  color: var(--money);
+}
+
+.ascension-max {
+  flex-basis: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--money);
+}
+
+.ascension-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+.ascension-close {
+  min-height: 46px;
+  min-width: 140px;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2fbf4;
+  background: rgba(46, 178, 164, 0.18);
+  border: 1px solid rgba(46, 178, 164, 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ascension-close:hover {
+  background: rgba(46, 178, 164, 0.3);
+  border-color: rgba(46, 178, 164, 0.8);
+}
+
+/* Landscape bajo (844x390, el que usa el smoke): una sola columna con el badge
+   y el texto mas apretados, o las ocho filas no entran ni scrolleando comodo. */
+@media (max-height: 460px) {
+  .ascension-shell {
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .ascension-title {
+    font-size: 16px;
+  }
+  .ascension-subtitle {
+    display: none;
+  }
+  .ascension-card {
+    min-height: 46px;
+    padding: 7px 12px;
+  }
+  .ascension-desc {
+    font-size: 10.5px;
+  }
 }

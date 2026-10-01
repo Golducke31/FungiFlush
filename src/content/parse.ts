@@ -6,6 +6,7 @@
  */
 
 import type {
+  AscensionDefinition,
   BlindDefinition,
   CardDefinition,
   EvolutionRule,
@@ -65,6 +66,11 @@ export function parsePack(pack: RawPack): LoadedPack {
   const vouchers: VoucherDefinition[] = [];
   for (const path of contents.vouchers ?? []) vouchers.push(...read<VoucherDefinition>(pack, path));
 
+  const ascensions: AscensionDefinition[] = [];
+  for (const path of contents.ascensions ?? []) {
+    ascensions.push(...read<AscensionDefinition>(pack, path));
+  }
+
   const board: BoardCardDef[] = [];
   for (const path of contents.board ?? []) board.push(...read<BoardCardDef>(pack, path));
 
@@ -79,6 +85,7 @@ export function parsePack(pack: RawPack): LoadedPack {
     upgrades,
     evolutions,
     vouchers,
+    ascensions,
     board,
   };
 }

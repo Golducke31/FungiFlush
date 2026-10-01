@@ -6,7 +6,13 @@
 
 import type { Deck } from '../cards/Deck';
 import { ECONOMY, RUN_DEFAULTS } from '../constants';
-import type { DieRoll, JokerInstance, ShopOffer, VoucherRunModifiers } from '../types';
+import type {
+  AscensionModifiers,
+  DieRoll,
+  JokerInstance,
+  ShopOffer,
+  VoucherRunModifiers,
+} from '../types';
 
 export type GameStatus =
   | 'menu'
@@ -54,6 +60,14 @@ export interface RunState {
    * retomada tiene que seguir con las mismas reglas.
    */
   vouchers: string[];
+  /**
+   * Nivel de ascension elegido ANTES de empezar. 0 = juego base.
+   *
+   * Se guarda en la run (y se serializa) porque los modificadores NO se aplican
+   * una vez: se leen en cada consulta (objetivo, costes). Una run retomada con
+   * `ascension: 0` tendria otro objetivo que la que el jugador empezo.
+   */
+  ascension: number;
   shop: ShopState | null;
   /** Estadisticas para la pantalla final. */
   stats: {
@@ -68,23 +82,36 @@ export interface RunState {
   };
 }
 
-export function createRunState(seed: number, deck: Deck): RunState {
+/**
+ * Crea el estado inicial de una run.
+ *
+ * `ascension` se aplica ACA, en un solo lugar, y no repartido por el motor: los
+ * deltas que definen la run (manos, descartes, tamano de mano, slots, dinero)
+ * se fijan al nacer y despues los efectos los mueven. Si cada punto de uso
+ * leyera la ascension, bastaria olvidarse de uno para que A5 fuera mas facil
+ * que A4 sin que nadie lo note.
+ */
+export function createRunState(seed: number, deck: Deck, ascension = 0): RunState {
+  const mods = ascensionModifiersFor(ascension);
   return {
     seed,
     ante: RUN_DEFAULTS.ante,
     blindIndex: 0,
-    money: RUN_DEFAULTS.money,
+    // `moneyDelta` es un OVERRIDE del dinero inicial, no un delta: el numero se
+    // escribe entero en el JSON y asi el balance de un nivel se lee de una.
+    money: mods.moneyDelta ?? RUN_DEFAULTS.money,
     jokers: [],
-    jokerSlots: RUN_DEFAULTS.jokerSlots,
-    baseHandSize: RUN_DEFAULTS.handSize,
-    baseHands: RUN_DEFAULTS.hands,
-    baseDiscards: RUN_DEFAULTS.discards,
+    jokerSlots: Math.max(0, RUN_DEFAULTS.jokerSlots + (mods.jokerSlots ?? 0)),
+    baseHandSize: Math.max(1, RUN_DEFAULTS.handSize + (mods.baseHandSize ?? 0)),
+    baseHands: Math.max(1, RUN_DEFAULTS.hands + (mods.baseHands ?? 0)),
+    baseDiscards: Math.max(0, RUN_DEFAULTS.discards + (mods.baseDiscards ?? 0)),
     deck,
     die: null,
     dieRerolls: 0,
     status: 'blind_select',
     consumedEffects: new Set<string>(),
     vouchers: [],
+    ascension,
     shop: null,
     stats: {
       handsPlayed: 0,
@@ -95,6 +122,23 @@ export function createRunState(seed: number, deck: Deck): RunState {
       cardsEvolved: 0,
     },
   };
+}
+
+/**
+ * Modificadores de un nivel de ascension.
+ *
+ * El motor NO conoce el contenido (la tabla vive en el pack), asi que el nivel
+ * se resuelve por una funcion INYECTADA. Sin esto, `createRunState` tendria que
+ * importar el registry y el estado dejaria de ser una funcion pura.
+ */
+let ascensionResolver: (level: number) => AscensionModifiers = () => ({});
+
+export function setAscensionResolver(fn: (level: number) => AscensionModifiers): void {
+  ascensionResolver = fn;
+}
+
+function ascensionModifiersFor(level: number): AscensionModifiers {
+  return ascensionResolver(level);
 }
 
 /** Coste del proximo reroll en tienda (escala con el uso). */

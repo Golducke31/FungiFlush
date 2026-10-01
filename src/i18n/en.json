@@ -773,6 +773,9 @@
     },
     "voucher": {
       "bought": "Upgrade applied: {name}"
+    },
+    "ascension": {
+      "unlocked": "Ascension unlocked: level {level} — {name}"
     }
   },
   "unlockRule": {
@@ -876,6 +879,54 @@
     "voucher_bulk_deal": {
       "name": "Bulk Deal",
       "desc": "Everything in the shop costs 25% less"
+    }
+  },
+  "ascension": {
+    "title": "Ascension",
+    "subtitle": "Stacking difficulty",
+    "off": "No ascension",
+    "locked": "Locked",
+    "active": "Active",
+    "select": "Select",
+    "selected": "Selected",
+    "unlockHint": "Win at level {level} to unlock level {next}",
+    "maxReached": "Highest level reached",
+    "noMods": "No changes",
+    "a0": {
+      "name": "Base",
+      "desc": "The rules as they ship. No surcharges, no penalties."
+    },
+    "a1": {
+      "name": "Colony",
+      "desc": "Every blind's target is 10% higher and the shop charges 10% more."
+    },
+    "a2": {
+      "name": "Dense Mycelium",
+      "desc": "Target +15%, shop +15%, and one fewer hand per round."
+    },
+    "a3": {
+      "name": "Acid Spores",
+      "desc": "Target +20%, shop +20%, one fewer hand, and rerolling the shop costs 2 more Fungis."
+    },
+    "a4": {
+      "name": "Sterile Ground",
+      "desc": "Target +30%, one fewer hand and discard, and rerolls cost 2 more Fungis."
+    },
+    "a5": {
+      "name": "Hard Harvest",
+      "desc": "Target +40%, shop +25%, one fewer hand and discard, rerolls +3, and you start with 2 fewer Fungis."
+    },
+    "a6": {
+      "name": "Hostile Forest",
+      "desc": "Target +50%, shop +25%, one fewer hand, discard, and hand size. You start with 2 fewer Fungis."
+    },
+    "a7": {
+      "name": "Rot",
+      "desc": "Target +60%, shop +35%, fewer hands, discards and hand size, and purging a card costs 2 more Fungis."
+    },
+    "a8": {
+      "name": "Fungal Collapse",
+      "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer joker slot, no die rerolls, and every boss gains an extra modifier."
     }
   }
 }

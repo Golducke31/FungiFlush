@@ -26,7 +26,7 @@ import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
-import { buildMenuPanel } from './MenuScreen';
+import { buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
@@ -78,6 +78,9 @@ export interface HudCallbacks {
   onOpenDaily: () => void;
   onClaimDaily: () => void;
   onOpenAchievements: () => void;
+  // --- R1: ascension ---
+  /** El jugador eligio un nivel de ascension (0 = sin ascension). */
+  onSelectAscension: (level: number) => void;
   // --- Fase 2: recompensa y deckbuilding ---
   /** `null` = saltar el draft. */
   onPickReward: (offerId: string | null) => void;
@@ -226,6 +229,12 @@ export class HUD {
   private lastStatus: string | null = null;
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
+  /** Ascension (R1): se la empuja el controlador desde el perfil. */
+  private ascensionState: { unlocked: number; selected: number; max: number } = {
+    unlocked: 0,
+    selected: 0,
+    max: 0,
+  };
   /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
   private closeSeq = 0;
   /** Respaldo por si `animationend` no llega (animacion desactivada). */
@@ -1024,6 +1033,8 @@ export class HUD {
         // boton que abre un panel vacio es peor que no tener el boton.
         showBoard: this.boardAvailable,
         onOpenBoard: () => this.callbacks.onOpenBoard(),
+        ascension: this.ascensionState,
+        onOpenAscension: () => this.showAscension(),
       },
       {
         onStartRun: () => this.callbacks.onStartRun(),
@@ -1038,6 +1049,26 @@ export class HUD {
         onOpenAchievements: () => this.callbacks.onOpenAchievements(),
       },
     );
+    this.openOverlay(panel);
+  }
+
+  /**
+   * Estado de ascension para el menu. Lo llama el controlador cada vez que el
+   * perfil cambia (y antes de `showMenu`), porque el HUD no conoce el perfil.
+   */
+  setAscensionState(state: { unlocked: number; selected: number; max: number }): void {
+    this.ascensionState = state;
+  }
+
+  /** Abre el panel de seleccion de ascension. */
+  showAscension(): void {
+    // El `openOverlay` limpia las referencias del panel: se toma el estado
+    // ANTES de abrirlo (trampa conocida de este HUD).
+    const state = { ...this.ascensionState };
+    const panel = buildAscensionPanel(state, {
+      onSelect: (level) => this.callbacks.onSelectAscension(level),
+      onClose: () => this.showMenu(),
+    });
     this.openOverlay(panel);
   }
 

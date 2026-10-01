@@ -1,0 +1,102 @@
+[
+  {
+    "level": 1,
+    "nameKey": "ascension.a1.name",
+    "descKey": "ascension.a1.desc",
+    "modifiers": {
+      "targetMultiplier": 1.1,
+      "shopCostMultiplier": 1.1
+    }
+  },
+  {
+    "level": 2,
+    "nameKey": "ascension.a2.name",
+    "descKey": "ascension.a2.desc",
+    "modifiers": {
+      "targetMultiplier": 1.15,
+      "shopCostMultiplier": 1.15,
+      "baseHands": -1
+    }
+  },
+  {
+    "level": 3,
+    "nameKey": "ascension.a3.name",
+    "descKey": "ascension.a3.desc",
+    "modifiers": {
+      "targetMultiplier": 1.2,
+      "shopCostMultiplier": 1.2,
+      "baseHands": -1,
+      "rerollCostDelta": 2
+    }
+  },
+  {
+    "level": 4,
+    "nameKey": "ascension.a4.name",
+    "descKey": "ascension.a4.desc",
+    "modifiers": {
+      "targetMultiplier": 1.3,
+      "shopCostMultiplier": 1.2,
+      "baseHands": -1,
+      "baseDiscards": -1,
+      "rerollCostDelta": 2
+    }
+  },
+  {
+    "level": 5,
+    "nameKey": "ascension.a5.name",
+    "descKey": "ascension.a5.desc",
+    "modifiers": {
+      "targetMultiplier": 1.4,
+      "shopCostMultiplier": 1.25,
+      "baseHands": -1,
+      "baseDiscards": -1,
+      "rerollCostDelta": 3,
+      "moneyDelta": 2
+    }
+  },
+  {
+    "level": 6,
+    "nameKey": "ascension.a6.name",
+    "descKey": "ascension.a6.desc",
+    "modifiers": {
+      "targetMultiplier": 1.5,
+      "shopCostMultiplier": 1.25,
+      "baseHands": -1,
+      "baseDiscards": -1,
+      "baseHandSize": -1,
+      "rerollCostDelta": 3,
+      "moneyDelta": 2
+    }
+  },
+  {
+    "level": 7,
+    "nameKey": "ascension.a7.name",
+    "descKey": "ascension.a7.desc",
+    "modifiers": {
+      "targetMultiplier": 1.6,
+      "shopCostMultiplier": 1.35,
+      "baseHands": -1,
+      "baseDiscards": -1,
+      "baseHandSize": -1,
+      "rerollCostDelta": 3,
+      "moneyDelta": 2,
+      "purgeCostDelta": 2
+    }
+  },
+  {
+    "level": 8,
+    "nameKey": "ascension.a8.name",
+    "descKey": "ascension.a8.desc",
+    "modifiers": {
+      "targetMultiplier": 1.7,
+      "shopCostMultiplier": 1.4,
+      "baseHands": -1,
+      "baseDiscards": -2,
+      "jokerSlots": -1,
+      "rerollCostDelta": 3,
+      "moneyDelta": 2,
+      "purgeCostDelta": 2,
+      "allowDieReroll": false
+    }
+  }
+]

@@ -282,10 +282,24 @@ async function boot(): Promise<void> {
 
   // --- Estadisticas de perfil ---
   bus.on('game:over', ({ reason, ante }) => {
+    // El banner se emite FUERA del patch: `patch` es sincrono y devuelve una
+    // copia nueva, asi que el aviso tiene que esperar a que el guardado real
+    // haya ocurrido para no anunciar un nivel que todavia no existe.
+    let unlockedAscension = 0;
     profileStore.patch((p) => {
       p.stats.runs += 1;
       if (reason === 'victory') p.stats.wins += 1;
       p.stats.bestAnte = Math.max(p.stats.bestAnte, ante);
+      // R1: ganar en el nivel N desbloquea N+1 (hasta el maximo del contenido).
+      // `highestUnlocked` es MONOTONO: nunca baja, ni siquiera perdiendo A8.
+      if (reason === 'victory') {
+        const max = engine.registry.maxAscension();
+        const next = Math.min(engine.run.ascension + 1, max);
+        if (next > p.ascension.highestUnlocked) {
+          p.ascension.highestUnlocked = next;
+          unlockedAscension = next;
+        }
+      }
       // P4: XP de temporada por run (ante * 50, +200 si gana).
       if (seasonDef) addXp(p, seasonDef.id, ante * 50 + (reason === 'victory' ? 200 : 0));
     });
@@ -296,6 +310,13 @@ async function boot(): Promise<void> {
         seasonId: seasonDef.id,
         amount: ante * 50 + (reason === 'victory' ? 200 : 0),
         total,
+      });
+    }
+    if (unlockedAscension > 0) {
+      bus.emit('banner:show', {
+        key: 'banner.ascension.unlocked',
+        params: { level: unlockedAscension, name: t(engine.registry.ascension(unlockedAscension).nameKey) },
+        kind: 'success',
       });
     }
   });
@@ -624,6 +645,19 @@ async function boot(): Promise<void> {
     openDeck(uid);
   };
 
+  // --- R1: ascension ---
+  // El HUD no conoce el perfil, asi que el estado le llega empujado. Se llama
+  // en cada apertura de menu y cada vez que el jugador cambia de nivel; si el
+  // techo del contenido es mayor que lo desbloqueado, el panel ya lo explica.
+  const syncAscension = (): void => {
+    const p = profileStore.current;
+    hud?.setAscensionState({
+      unlocked: p.ascension.highestUnlocked,
+      selected: p.ascension.selected,
+      max: engine.registry.maxAscension(),
+    });
+  };
+
   // --- HUD ---
   hud = new HUD({
     engine,
@@ -694,8 +728,21 @@ async function boot(): Promise<void> {
       // --- Pantalla de inicio ---
       onStartRun: () => {
         void runStore.clear();
-        engine.startRun(seed);
+        // La ascension ELEGIDA viaja al motor aca. `selected` vive en el perfil
+        // (persistente) y `startRun` la recorta al techo del contenido.
+        engine.startRun(seed, profileStore.current.ascension.selected);
         scene.setMode('run');
+      },
+      onSelectAscension: (level) => {
+        // El nivel elegido nunca supera el desbloqueado en el perfil. El panel
+        // ya no ofrece los trabados, pero se valida igual: el perfil es la
+        // fuente de verdad y un estado imposible no debe poder escribirse.
+        profileStore.patch((p) => {
+          p.ascension.selected = Math.max(0, Math.min(level, p.ascension.highestUnlocked));
+        });
+        // El menu se redibuja para que el chip muestre el nivel nuevo.
+        syncAscension();
+        hud?.showAscension();
       },
       onPanelOpened: (isCarousel) => {
         // Un panel que NO monta sobre el carrusel apaga la escena 3D: si no, el
@@ -1134,6 +1181,8 @@ async function boot(): Promise<void> {
   scene.start();
   engine.enterMenu();
   scene.setMode('menu', { reduceMotion: profile.settings.reduceMotion });
+  // Antes de dibujar el menu: el chip de ascension lee este estado.
+  syncAscension();
 
   savedRun = await runStore.load();
   if (savedRun) {

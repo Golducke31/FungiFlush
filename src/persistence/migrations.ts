@@ -138,6 +138,18 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // el objeto reconstruido de abajo los descartaria: el return es explícito.
   const daily = { ...fallback.daily, ...((migrated['daily'] as object) ?? {}) };
   const achievements = { ...fallback.achievements, ...((migrated['achievements'] as object) ?? {}) };
+  // Ascension (R1): OBJETO anidado, no escalar. Un `ascension` que llegara
+  // como numero (formato viejo o edicion a mano) se descarta por el spread:
+  // solo se acepta la forma `{ highestUnlocked, selected }`.
+  const ascRaw = migrated['ascension'];
+  const ascension = {
+    ...fallback.ascension,
+    ...((typeof ascRaw === 'object' && ascRaw !== null ? ascRaw : {}) as object),
+  };
+  // El nivel elegido nunca puede superar el desbloqueado: un perfil editado a
+  // mano podria pedir A8 sin haber ganado nunca, y el motor lo clampearia
+  // igual, pero asi la UI no muestra un estado imposible.
+  ascension.selected = Math.max(0, Math.min(ascension.selected, ascension.highestUnlocked));
 
   return {
     version: CURRENT_PROFILE_VERSION,
@@ -153,6 +165,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
       : [],
     stats,
     board,
+    ascension,
   };
 }
 

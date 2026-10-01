@@ -138,6 +138,17 @@ export interface ProfileSave {
     hotSeatLosses: number;
     lastSeed?: number;
   };
+  /**
+   * Progresion de ascension (R1).
+   *
+   * `highestUnlocked` es el nivel mas alto que el jugador DESBLOQUEO ganando
+   * (A0 siempre esta disponible). `selected` es el que tiene puesto en el menu;
+   * puede ser menor o igual a `highestUnlocked`, nunca mayor.
+   */
+  ascension: {
+    highestUnlocked: number;
+    selected: number;
+  };
 }
 
 export const DEFAULT_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -175,5 +186,6 @@ export function defaultProfile(): ProfileSave {
     starterOverrides: [],
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
+    ascension: { highestUnlocked: 0, selected: 0 },
   };
 }

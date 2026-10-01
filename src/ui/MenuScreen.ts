@@ -53,6 +53,13 @@ export interface MenuState {
   onOpenBoard?: () => void;
   /** Hay recompensa diaria sin reclamar: el chip se marca. */
   dailyPending?: boolean;
+  /**
+   * Ascension (R1). `unlocked` = nivel mas alto ganado; `selected` = el que
+   * esta puesto. `max` es el techo del contenido. Si `max === 0` no hay
+   * contenido de ascension y el chip no se dibuja.
+   */
+  ascension?: { unlocked: number; selected: number; max: number };
+  onOpenAscension?: () => void;
 }
 
 /**
@@ -93,6 +100,16 @@ interface ChipOptions {
   hidden?: boolean;
   title?: string;
   mod: string;
+}
+
+/** Clave i18n del nombre de un nivel de ascension. A0 = base. */
+export function ascensionNameKey(level: number): string {
+  return level > 0 ? `ascension.a${level}.name` : 'ascension.a0.name';
+}
+
+/** Clave i18n de la descripcion de un nivel de ascension. */
+export function ascensionDescKey(level: number): string {
+  return level > 0 ? `ascension.a${level}.desc` : 'ascension.a0.desc';
 }
 
 /** Pill secundario para acciones que NO van sobre uno de los 4 marcos. */
@@ -177,6 +194,20 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
     chips.appendChild(chip(t('board.title'), 'board', state.onOpenBoard, { mod: 'menu-ghost--board' }));
   }
 
+  // Ascension: el chip LLEVA EL NIVEL PUESTO (A3, A0...), porque es un estado
+  // persistente que cambia las reglas. Si no hay contenido de ascension o el
+  // jugador no desbloqueo nada, no aparece: un chip "A0" permanente es ruido.
+  if (state.ascension && state.ascension.max > 0 && state.onOpenAscension) {
+    const lvl = state.ascension.selected;
+    const label = lvl > 0 ? `A${lvl}` : t('ascension.off');
+    chips.appendChild(
+      chip(label, 'ascension', state.onOpenAscension, {
+        mod: `menu-ghost--ascension${lvl > 0 ? ' is-active' : ''}`,
+        ...(lvl > 0 ? { title: t(ascensionNameKey(lvl)) } : { title: t('ascension.title') }),
+      }),
+    );
+  }
+
   chips.appendChild(
     chip(t('menu.daily'), 'daily', callbacks.onOpenDaily, {
       mod: `menu-ghost--daily${state.dailyPending ? ' is-pending' : ''}`,
@@ -196,5 +227,116 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   version.textContent = t('menu.version', { version: state.version });
   panel.appendChild(version);
 
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Panel de ascension (R1)
+// ---------------------------------------------------------------------------
+
+export interface AscensionPanelCallbacks {
+  /** El jugador eligio un nivel. 0 = sin ascension. */
+  onSelect: (level: number) => void;
+  onClose: () => void;
+}
+
+/**
+ * Panel de seleccion de ascension.
+ *
+ * Lista TODOS los niveles (A0..max). Los que superan `unlocked` van bloqueados
+ * con la condicion escrita (`ascension.unlockHint`), no con un candado mudo:
+ * el jugador tiene que saber QUE hacer para abrirlos.
+ */
+export function buildAscensionPanel(
+  state: { unlocked: number; selected: number; max: number },
+  callbacks: AscensionPanelCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-ascension';
+
+  const shell = document.createElement('div');
+  shell.className = 'ascension-shell';
+
+  const head = document.createElement('div');
+  head.className = 'ascension-head';
+  const title = document.createElement('h2');
+  title.className = 'ascension-title';
+  title.textContent = t('ascension.title');
+  const sub = document.createElement('p');
+  sub.className = 'ascension-subtitle';
+  sub.textContent = t('ascension.subtitle');
+  head.append(title, sub);
+
+  const list = document.createElement('div');
+  list.className = 'ascension-list';
+
+  for (let level = 0; level <= state.max; level++) {
+    const unlocked = level <= state.unlocked;
+    const isSelected = level === state.selected;
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'ascension-card';
+    card.dataset['act'] = 'ascension-level';
+    card.dataset['level'] = String(level);
+    if (!unlocked) card.classList.add('is-locked');
+    if (isSelected) card.classList.add('is-selected');
+    card.disabled = !unlocked;
+
+    const badge = document.createElement('span');
+    badge.className = 'ascension-badge';
+    badge.textContent = level > 0 ? `A${level}` : 'A0';
+
+    const body = document.createElement('span');
+    body.className = 'ascension-body';
+    const name = document.createElement('span');
+    name.className = 'ascension-name';
+    name.textContent = t(ascensionNameKey(level));
+    const desc = document.createElement('span');
+    desc.className = 'ascension-desc';
+    // Bloqueado: se explica la condicion. Desbloqueado: se explican las reglas.
+    desc.textContent = unlocked
+      ? t(ascensionDescKey(level))
+      : t('ascension.unlockHint', { level: state.unlocked, next: level });
+    body.append(name, desc);
+
+    const tag = document.createElement('span');
+    tag.className = 'ascension-tag';
+    tag.textContent = !unlocked
+      ? t('ascension.locked')
+      : isSelected
+        ? t('ascension.selected')
+        : t('ascension.select');
+
+    card.append(badge, body, tag);
+    if (unlocked) {
+      card.addEventListener('click', () => callbacks.onSelect(level));
+    } else {
+      // El boton esta `disabled`, pero un `disabled` no dispara click: se deja
+      // sin handler a proposito. Nunca se llama a onSelect con un nivel trabado.
+    }
+
+    if (level === state.max && level <= state.unlocked) {
+      const maxNote = document.createElement('span');
+      maxNote.className = 'ascension-max';
+      maxNote.textContent = t('ascension.maxReached');
+      card.appendChild(maxNote);
+    }
+
+    list.appendChild(card);
+  }
+
+  const footer = document.createElement('div');
+  footer.className = 'ascension-footer';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'ascension-close';
+  close.dataset['act'] = 'ascension-close';
+  close.textContent = t('ui.close');
+  close.addEventListener('click', callbacks.onClose);
+  footer.appendChild(close);
+
+  shell.append(head, list, footer);
+  panel.appendChild(shell);
   return panel;
 }

@@ -42,9 +42,11 @@ import {
   discountedCost,
   jokerSellValue,
   rerollCost,
+  setAscensionResolver,
   type RunState,
 } from './state/RunState';
 import type {
+  AscensionDefinition,
   BlindDefinition,
   CardDefinition,
   CardInstance,
@@ -130,6 +132,12 @@ export class GameEngine {
     this.contentHash = opts.contentHash ?? null;
     this.packIds = opts.packIds ?? ['base'];
     this.starterOverrides = opts.starterOverrides;
+
+    // El estado de la run es puro y no conoce el contenido, asi que la tabla de
+    // ascensiones se le INYECTA. Se hace en el constructor y no al arrancar la
+    // run: `createRunState` la consulta, y dejar la inyeccion para despues
+    // significaria que el primer `startRun` corre sin tabla.
+    setAscensionResolver((level) => this.registry.ascension(level).modifiers);
   }
 
   // ==========================================================================
@@ -152,9 +160,15 @@ export class GameEngine {
   // Ciclo de vida de la run
   // ==========================================================================
 
-  startRun(seed?: number): void {
+  /**
+   * Arranca una run. `ascension` es el nivel de dificultad elegido en el menu
+   * (0 = base). Se clampea al maximo que declare el contenido: un nivel que no
+   * existe no puede aplicarse "de memoria", o el balance seria inventado.
+   */
+  startRun(seed?: number, ascension = 0): void {
+    const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
     const deck = new Deck(seed !== undefined ? new RNG(seed) : this.rng);
-    this.run = createRunState(seed ?? this.rng.getSeed(), deck);
+    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level);
     deck.setCards(this.registry.buildStarterDeck(this.rng, this.starterOverrides));
 
     this.dispatchGlobal('ON_RUN_START');
@@ -162,6 +176,14 @@ export class GameEngine {
 
     // No se elige el blind automaticamente: el jugador decide (Blind Select).
     this.enterBlindSelect();
+  }
+
+  /**
+   * Modificadores de la ascension en curso. Se leen de la run, no de una copia
+   * cacheada: una run retomada de un guardado tiene que aplicar SU nivel.
+   */
+  get ascension(): AscensionDefinition {
+    return this.registry.ascension(this.run.ascension);
   }
 
   /**
@@ -206,9 +228,14 @@ export class GameEngine {
   /**
    * Vuelve a tirar el dado pagando. Devuelve `false` si no alcanza el dinero.
    * El azar deja de ser algo que se sufre y pasa a ser una APUESTA.
+   *
+   * En A8 y superiores la tirada es UNICA: el dado deja de ser una apuesta y
+   * pasa a ser parte del ciego, que es exactamente lo que hace que el nivel se
+   * sienta distinto y no solo mas caro.
    */
   rerollDie(): boolean {
     if (this.run.status !== 'blind_select') return false;
+    if (this.ascension.modifiers.allowDieReroll === false) return false;
     const cost = this.rerollDieCost();
     if (this.run.money < cost) return false;
     this.run.money -= cost;
@@ -217,6 +244,11 @@ export class GameEngine {
     bus.emit('money:changed', { money: this.run.money, delta: -cost });
     this.emitState();
     return true;
+  }
+
+  /** ¿El jugador puede volver a tirar el dado? Lo consulta el HUD. */
+  get canRerollDie(): boolean {
+    return this.ascension.modifiers.allowDieReroll !== false;
   }
 
   rollDie(): DieRoll {
@@ -242,8 +274,12 @@ export class GameEngine {
    */
   targetFor(blind: BlindDefinition): number {
     const base = this.registry.anteTarget(this.run.ante) ?? ANTE_BASE_TARGET[this.run.ante] ?? 300;
+    // Los dos multiplicadores se COMPONEN: un voucher de "objetivo -10%" en A5
+    // tiene que notarse sobre el objetivo ya subido por la ascension, no sobre
+    // el base pelado (que seria un descuento del 10% de nada).
     const mul = this.modifiers.targetMultiplier ?? 1;
-    return Math.round(base * blind.scoreMultiplier * mul);
+    const asc = this.ascension.modifiers.targetMultiplier ?? 1;
+    return Math.round(base * blind.scoreMultiplier * mul * asc);
   }
 
   /**
@@ -278,6 +314,15 @@ export class GameEngine {
     // progresion avanza igual: elegir el boss primero no saltea el ante.
     const target = this.targetFor(blind);
 
+    // ASCENSION: los niveles altos suman efectos EXTRA al jefe. Un jefe es un
+    // ciego con efectos propios, asi que el gate es `effects.length > 0`.
+    // Se concatenan sobre una copia: la definicion del contenido es inmutable
+    // y no puede quedar contaminada entre runs.
+    const extraBoss = this.ascension.modifiers.extraBossEffects;
+    const blindOut: BlindDefinition = blind.effects?.length && extraBoss?.length
+      ? { ...blind, effects: [...blind.effects, ...extraBoss] }
+      : blind;
+
     // DADO MULTIPLICADOR: se tira aca, con el RNG SEMBRADO. Con `Math.random()`
     // dos partidas con la misma semilla dejarian de ser iguales, y la
     // reproducibilidad es un invariante del motor.
@@ -287,7 +332,7 @@ export class GameEngine {
     this.run.die = die;
 
     this.round = createRoundState(
-      blind,
+      blindOut,
       target,
       this.run.baseHandSize,
       // Las caras altas COBRAN manos o descartes. Los pisos evitan que una
@@ -299,7 +344,7 @@ export class GameEngine {
     this.run.deck.shuffle();
     this.fillHand();
 
-    bus.emit('blind:selected', { blind, target });
+    bus.emit('blind:selected', { blind: blindOut, target });
     this.dispatchGlobal('ON_BLIND_SELECTED');
     this.dispatchGlobal('ON_ROUND_START');
 
@@ -484,7 +529,9 @@ export class GameEngine {
 
   get rerollPrice(): number {
     const shop = this.run.shop;
-    return shop ? rerollCost(shop, this.modifiers) : 0;
+    if (!shop) return 0;
+    const ascDelta = this.ascension.modifiers.rerollCostDelta ?? 0;
+    return Math.max(0, rerollCost(shop, this.modifiers) + ascDelta);
   }
 
   rerollShop(): boolean {
@@ -565,7 +612,7 @@ export class GameEngine {
 
   /** Coste de purgar (eliminar) una carta del mazo. */
   get purgeCost(): number {
-    return ECONOMY.purgeCost;
+    return Math.max(0, ECONOMY.purgeCost + (this.ascension.modifiers.purgeCostDelta ?? 0));
   }
 
   /**
@@ -667,7 +714,11 @@ export class GameEngine {
    */
   purgeCard(uid: string): boolean {
     if (!this.canPurge()) return false;
-    if (this.run.money < ECONOMY.purgeCost) return false;
+    // El coste sale del GETTER, nunca de la constante: en A7+ purgar cuesta mas
+    // y leer `ECONOMY.purgeCost` cobraria de menos en silencio (el boton diria
+    // un precio y se descontaria otro).
+    const cost = this.purgeCost;
+    if (this.run.money < cost) return false;
 
     const card = this.run.deck.allCards.find((c) => c.uid === uid);
     if (!card) return false;
@@ -676,8 +727,8 @@ export class GameEngine {
     if (this.round) this.round.hand = this.round.hand.filter((c) => c.uid !== uid);
     if (this.round) this.round.selected = this.round.selected.filter((id) => id !== uid);
 
-    this.setMoney(-ECONOMY.purgeCost);
-    bus.emit('deck:purged', { card, cost: ECONOMY.purgeCost });
+    this.setMoney(-cost);
+    bus.emit('deck:purged', { card, cost });
     this.emitState();
     return true;
   }
@@ -688,7 +739,11 @@ export class GameEngine {
    * fueran dos calculos distintos, el boton diria un precio y cobraria otro.
    */
   priceOf(offer: ShopOffer): number {
-    return discountedCost(offer.cost, this.modifiers);
+    // Orden: primero el recargo de la ascension (sube el precio de LISTA) y
+    // despues el descuento del voucher. Al reves, un voucher del 25% en A8
+    // borraria el recargo del 40% y el nivel se abarataria solo.
+    const inflado = Math.round(offer.cost * (this.ascension.modifiers.shopCostMultiplier ?? 1));
+    return discountedCost(inflado, this.modifiers);
   }
 
   /** ¿Puede comprarse esta oferta? Lo consulta la UI para el estado del boton. */
@@ -1213,6 +1268,9 @@ export class GameEngine {
       // Vouchers comprados: una run retomada tiene que seguir con las MISMAS
       // reglas, o el jugador veria el objetivo cambiar al recargar.
       vouchers: [...this.run.vouchers],
+      // Nivel de dificultad elegido: sin esto, recargar una run A5 la
+      // devolveria a A0 y el objetivo bajaría solo. Mismo motivo que vouchers.
+      ascension: this.run.ascension,
       // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
       contentHash: this.contentHash,
       packIds: [...this.packIds],
@@ -1237,7 +1295,12 @@ export class GameEngine {
     const deck = new Deck(this.rng);
     deck.setCards(restoredCards);
 
-    this.run = createRunState(data.seed, deck);
+    // El estado se crea CON la ascension guardada: los deltas de esa dificultad
+    // (manos, descartes, slots, dinero) tienen que nacer aplicados. Si se
+    // creara en A0, los valores de abajo (que pueden venir de un voucher o de
+    // una recompensa) se medirian contra una base equivocada.
+    const savedAscension = typeof data.ascension === 'number' ? data.ascension : 0;
+    this.run = createRunState(data.seed, deck, savedAscension);
     this.run.ante = data.ante;
     this.run.blindIndex = data.blindIndex;
     this.run.money = data.money;
@@ -1321,6 +1384,12 @@ export interface RunSaveData {
    * `SAVE_VERSION` porque el campo es puramente aditivo.
    */
   vouchers?: string[];
+  /**
+   * Nivel de ascension con el que se arranco la run. OPCIONAL por la misma
+   * razon que `vouchers`: los guardados previos a R1 no lo tienen y `restore`
+   * cae a 0 (sin ascension). Al ser aditivo NO hace falta subir `SAVE_VERSION`.
+   */
+  ascension?: number;
   /** Hash del contenido con el que se jugo (null = desconocido, ej. save v1). */
   contentHash: string | null;
   /** Packs activos cuando empezo la run. */

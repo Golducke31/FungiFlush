@@ -21,6 +21,7 @@
     "upgrades": ["upgrades.json"],
     "evolutions": ["evolutions.json"],
     "vouchers": ["vouchers.json"],
+    "ascensions": ["ascensions.json"],
     "board": ["board.json"]
   }
 }

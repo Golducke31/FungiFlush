@@ -441,6 +441,56 @@ export interface VoucherDefinition {
   repeatable?: boolean;
 }
 
+/**
+ * Modificadores de un nivel de ascension.
+ *
+ * A diferencia de `VoucherRunModifiers` (que se COMPRAN con dinero durante una
+ * run), estos son el contrato de una DIFICULTAD: el jugador los elige ANTES de
+ * empezar y valen toda la partida. Por eso hay campos que un voucher no puede
+ * tocar — los que se fijan al crear la run (`baseHands`, `moneyDelta`).
+ *
+ * Un nivel de ascension NO se "construye" sumando los anteriores: cada nivel
+ * declara sus deltas COMPLETOS. Asi el balance de A7 se lee en una sola linea
+ * del JSON, sin tener que sumar mentalmente siete archivos para saber cuanto
+ * duele.
+ */
+export interface AscensionModifiers {
+  /** Multiplicador del OBJETIVO de cada ciego (1.1 = 10% mas). */
+  targetMultiplier?: number;
+  /** Manos por ronda, sumado a las base. */
+  baseHands?: number;
+  /** Descartes por ronda, sumado a los base. */
+  baseDiscards?: number;
+  /** Cartas en la mano, sumado al base. */
+  baseHandSize?: number;
+  /** Espacios de joker, sumado al base. */
+  jokerSlots?: number;
+  /** Override del dinero inicial (NO delta: el numero final). */
+  moneyDelta?: number;
+  /** Suma al coste de purgar. */
+  purgeCostDelta?: number;
+  /** Multiplicador del coste de TODO lo de la tienda (1.25 = 25% mas caro). */
+  shopCostMultiplier?: number;
+  /** Suma al coste de reroll. */
+  rerollCostDelta?: number;
+  /** Se permite o no volver a tirar el dado del ciego. `false` = tirada unica. */
+  allowDieReroll?: boolean;
+  /**
+   * Efectos EXTRA que se concatenan a los del boss cuando el ciego elegido es
+   * boss. Usa el mismo `EffectDefinition` que un joker/blind.
+   */
+  extraBossEffects?: EffectDefinition[];
+}
+
+/** Un nivel de dificultad progresiva. Ver `AscensionModifiers`. */
+export interface AscensionDefinition {
+  /** 0 = juego base (nunca se declara: A0 es la ausencia de modificadores). */
+  level: number;
+  nameKey: string;
+  descKey: string;
+  modifiers: AscensionModifiers;
+}
+
 export interface ShopOffer {
   id: string;
   kind: 'card' | 'joker' | 'mutation' | 'voucher';

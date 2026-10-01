@@ -39,6 +39,12 @@ const QUIET = has('quiet');
 const STRESS = has('stress');
 const SHOW = Number(flag('show', '0')) || 0;
 const SEED = Number(flag('seed', '20260927')) || 20260927;
+/**
+ * Nivel de ascension a simular (R1). `--ascension 5` mide el balance de A5 sin
+ * tocar el contenido: es la unica forma de saber si un nivel es justo antes de
+ * publicarlo. Sin el flag, corre A0 (la curva base de siempre).
+ */
+const ASCENSION = Number(flag('ascension', '0')) || 0;
 
 const C = {
   reset: '\x1b[0m',
@@ -172,7 +178,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   let rewardsOffered = 0;
   let rewardsTaken = 0;
   let upgradesBought = 0;
-  engine.startRun(seed);
+  engine.startRun(seed, ASCENSION);
 
   const track = (label: string, res: ResolutionContext | null) => {
     if (!res) return;
@@ -541,6 +547,9 @@ if (STRESS) {
 
 // --- 3. Partidas simuladas ---
 console.log(`\n${C.bold}2. Simulacion de ${RUNS} partidas completas${C.reset}`);
+if (ASCENSION > 0) {
+  console.log(`${C.yellow}   Ascension: A${ASCENSION}${C.reset}`);
+}
 const t0 = Date.now();
 const results: RunResult[] = [];
 

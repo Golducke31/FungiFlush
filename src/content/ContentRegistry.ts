@@ -17,6 +17,7 @@
 
 import {
   CardRegistry,
+  type AscensionDefinition,
   type BlindDefinition,
   type CardDefinition,
   type ContentBundle,
@@ -40,6 +41,9 @@ import {
   type PackManifest,
 } from './types';
 
+// Solo las definiciones que se indexan por `id` y pasan por `insert()`. Una
+// ascension se indexa por NIVEL y tiene su propio camino: meterla aca rompería
+// `poolOf()` y el gating, que asumen `.id`.
 type AnyDefinition = CardDefinition | JokerDefinition | BlindDefinition | VoucherDefinition;
 
 export interface PackIssue {
@@ -51,7 +55,7 @@ export interface PackIssue {
 }
 
 export interface Collision {
-  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante';
+  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante' | 'ascension';
   id: string;
   winner: string;
   loser: string;
@@ -85,6 +89,13 @@ export class ContentRegistry {
   private readonly upgrades: UpgradeTrack[] = [];
   private readonly evolutions: EvolutionRule[] = [];
   private readonly vouchers = new Map<string, Tagged<VoucherDefinition>>();
+  /**
+   * Niveles de ascension, indexados por nivel. Se guarda el `__pack` de quien
+   * los aporto para poder reportar un duplicado: dos packs con el MISMO nivel
+   * es un error de contenido (A5 tiene que significar lo mismo siempre), no un
+   * override silencioso.
+   */
+  private readonly ascensions = new Map<number, Tagged<AscensionDefinition>>();
   /** Flechas del modo tablero, indexadas por `cardId`. */
   private readonly board: BoardCardDef[] = [];
 
@@ -120,6 +131,7 @@ export class ContentRegistry {
     this.upgrades.length = 0;
     this.evolutions.length = 0;
     this.vouchers.clear();
+    this.ascensions.clear();
     this.board.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
@@ -154,6 +166,7 @@ export class ContentRegistry {
       this.upgrades.push(...pack.upgrades);
       this.evolutions.push(...pack.evolutions);
       for (const def of pack.vouchers) this.insert('voucher', this.vouchers, def.id, def, id, pack.manifest);
+      for (const def of pack.ascensions) this.insertAscension(def, id, pack.manifest);
       // Mismo criterio que upgrades y evolutions: se acumulan y el validador
       // del tipo detecta duplicados. Un `cardId` repetido entre packs es un
       // error de contenido, no un override silencioso.
@@ -205,6 +218,40 @@ export class ContentRegistry {
     this.collisions.push({ kind: 'ante', id: String(row.ante), winner: owner, loser: packId });
   }
 
+  private insertAscension(
+    def: AscensionDefinition,
+    packId: string,
+    manifest: PackManifest,
+  ): void {
+    // Mismo criterio que `insertAnte`: la clave es numerica, no un id, asi que
+    // no entra en el `insert` generico. Un nivel repetido es colision.
+    const incumbent = this.ascensions.get(def.level);
+    if (!incumbent) {
+      this.ascensions.set(def.level, { ...def, __pack: packId });
+      return;
+    }
+    const canOverride =
+      manifest.gating?.allowOverride === true &&
+      manifest.version > (this.versionOf(incumbent.__pack) ?? 0);
+
+    if (canOverride) {
+      this.ascensions.set(def.level, { ...def, __pack: packId });
+      this.collisions.push({
+        kind: 'ascension',
+        id: String(def.level),
+        winner: packId,
+        loser: incumbent.__pack,
+      });
+      return;
+    }
+    this.collisions.push({
+      kind: 'ascension',
+      id: String(def.level),
+      winner: incumbent.__pack,
+      loser: packId,
+    });
+  }
+
   private versionOf(packId: string): number | undefined {
     return this.packs.find((p) => p.manifest.id === packId)?.manifest.version;
   }
@@ -237,7 +284,38 @@ export class ContentRegistry {
       ...(this.vouchers.size > 0
         ? { vouchers: [...this.vouchers.values()].map(stripPack) as VoucherDefinition[] }
         : {}),
+      ...(this.ascensions.size > 0
+        ? { ascensions: this.ascensionList() }
+        : {}),
     };
+  }
+
+  /** Niveles de ascension definidos, ordenados por nivel. */
+  ascensionList(): AscensionDefinition[] {
+    return [...this.ascensions.values()]
+      .sort((a, b) => a.level - b.level)
+      .map((def) => stripPack(def) as AscensionDefinition);
+  }
+
+  /**
+   * Modificadores de un nivel. A0 SIEMPRE existe y siempre es la identidad: es
+   * la ausencia de dificultad anadida, no un archivo que pueda faltar. Devolver
+   * `undefined` para A0 obligaria a cada punto de uso a escribir el `?? 1`.
+   */
+  ascension(level: number): AscensionDefinition {
+    if (level <= 0) {
+      return { level: 0, nameKey: 'ascension.a0.name', descKey: 'ascension.a0.desc', modifiers: {} };
+    }
+    const found = this.ascensions.get(level);
+    return found
+      ? (stripPack(found) as AscensionDefinition)
+      : { level: 0, nameKey: 'ascension.a0.name', descKey: 'ascension.a0.desc', modifiers: {} };
+  }
+
+  /** Nivel mas alto declarado por el contenido (0 si no hay ninguno). */
+  maxAscension(): number {
+    const keys = [...this.ascensions.keys()];
+    return keys.length > 0 ? Math.max(...keys) : 0;
   }
 
   /** Pool estable para sorteos: ordenado por id, inmune al orden de carga. */
@@ -383,9 +461,7 @@ export class ContentRegistry {
       }
     }
 
-    // --- Evoluciones ---
-    const evolvedTargets = new Set<string>();
-    const evolutionIds = new Set<string>();
+    // --- Vouchers (mejoras de run) ---
     for (const voucher of this.vouchers.values()) {
       if (!voucher.nameKey || !voucher.descKey) {
         issues.push({
@@ -415,6 +491,66 @@ export class ContentRegistry {
       }
     }
 
+    // --- Ascensiones (dificultad progresiva) ---
+    //
+    // El nivel 0 NUNCA se declara: es la ausencia de modificadores, no un
+    // archivo. Declararlo seria content que dice "no pasa nada" y confundiria
+    // al que lea el pack buscando donde empieza la dificultad.
+    for (const asc of this.ascensions.values()) {
+      const where = `ascension:A${asc.level}`;
+      if (!Number.isInteger(asc.level) || asc.level < 1) {
+        issues.push({
+          level: 'error',
+          pack: asc.__pack,
+          where,
+          message: 'level debe ser un entero >= 1 (A0 no se declara)',
+        });
+      }
+      if (!asc.nameKey || !asc.descKey) {
+        issues.push({ level: 'error', pack: asc.__pack, where, message: 'falta nameKey o descKey' });
+      }
+      const mods = asc.modifiers;
+      if (!mods || typeof mods !== 'object') {
+        issues.push({ level: 'error', pack: asc.__pack, where, message: 'falta modifiers' });
+        continue;
+      }
+      // Un nivel sin NINGUN modificador es una mentira: se llama A3 y no cambia
+      // nada. Es la misma trampa que un voucher vacio.
+      const declarados = Object.entries(mods).filter(
+        ([key, value]) =>
+          key !== 'extraBossEffects' &&
+          typeof value === 'number' &&
+          value !== 0 &&
+          // `targetMultiplier` y `shopCostMultiplier` valen 1 = sin cambio.
+          !((key === 'targetMultiplier' || key === 'shopCostMultiplier') && value === 1),
+      );
+      const hasBossEffects = (mods.extraBossEffects?.length ?? 0) > 0;
+      if (declarados.length === 0 && !hasBossEffects) {
+        issues.push({ level: 'warning', pack: asc.__pack, where, message: 'no modifica nada' });
+      }
+      if (mods.targetMultiplier !== undefined && mods.targetMultiplier < 1) {
+        issues.push({
+          level: 'warning',
+          pack: asc.__pack,
+          where,
+          message: 'targetMultiplier < 1 hace el juego mas FACIL; una ascension deberia endurecer',
+        });
+      }
+      // Cadena sin huecos: un A4 alcanzable sin un A3 definido deja al jugador
+      // saltando de dificultad sin saber que esperar.
+      if (asc.level > 1 && !this.ascensions.has(asc.level - 1)) {
+        issues.push({
+          level: 'error',
+          pack: asc.__pack,
+          where,
+          message: `falta el nivel A${asc.level - 1}: la cadena de ascension no puede tener huecos`,
+        });
+      }
+    }
+
+    // --- Evoluciones ---
+    const evolvedTargets = new Set<string>();
+    const evolutionIds = new Set<string>();
     for (const rule of this.evolutions) {
       const where = `evolution:${rule.id}`;
       if (evolutionIds.has(rule.id)) {
@@ -490,6 +626,9 @@ export class ContentRegistry {
     for (const def of this.cards.values()) keys.push(def.nameKey, def.descKey);
     for (const def of this.jokers.values()) keys.push(def.nameKey, def.descKey);
     for (const def of this.blinds.values()) keys.push(def.nameKey, def.descKey);
+    // Los niveles de ascension tambien se traducen y vienen del contenido: sin
+    // esta linea, un `ascension.a3.desc` sin traducir no lo detecta el validador.
+    for (const def of this.ascensions.values()) keys.push(def.nameKey, def.descKey);
     return keys;
   }
 
@@ -557,6 +696,9 @@ export class ContentRegistry {
       for (const [key, def] of this.jokers) if (def.__pack === id) contentIds.push(key);
       for (const [key, def] of this.blinds) if (def.__pack === id) contentIds.push(key);
       for (const [key, def] of this.vouchers) if (def.__pack === id) contentIds.push(key);
+      // Las ascensiones se indexan por nivel, no por id: se empuja el nivel como
+      // string para que el gating pueda listarlas igual que el resto.
+      for (const [level, def] of this.ascensions) if (def.__pack === id) contentIds.push(`a${level}`);
       return {
         id,
         titleKey: manifest.titleKey,
@@ -575,6 +717,7 @@ export class ContentRegistry {
     cards: number;
     jokers: number;
     vouchers: number;
+    ascensions: number;
     blinds: number;
     antes: number;
     offers: number;
@@ -587,6 +730,7 @@ export class ContentRegistry {
       cards: this.cards.size,
       jokers: this.jokers.size,
       vouchers: this.vouchers.size,
+      ascensions: this.ascensions.size,
       blinds: this.blinds.size,
       antes: this.antes.size,
       offers: this.offers.length,

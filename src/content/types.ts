@@ -18,6 +18,7 @@
  */
 
 import type {
+  AscensionDefinition,
   BlindDefinition,
   CardDefinition,
   EvolutionRule,
@@ -61,6 +62,8 @@ export interface PackContents {
   evolutions?: string[];
   /** Modificadores de run (R3). */
   vouchers?: string[];
+  /** Niveles de dificultad progresiva (R1). */
+  ascensions?: string[];
   upgrades?: string[];
   board?: string[];
   antes?: string[];
@@ -126,6 +129,8 @@ export interface LoadedPack extends RawPack {
   evolutions: EvolutionRule[];
   /** Modificadores de run. Ver `VoucherDefinition`. */
   vouchers: VoucherDefinition[];
+  /** Niveles de ascension (dificultad progresiva). Ver `AscensionDefinition`. */
+  ascensions: AscensionDefinition[];
   /** Flechas del modo tablero. Indexadas por `cardId`, no por posicion. */
   board: BoardCardDef[];
 }

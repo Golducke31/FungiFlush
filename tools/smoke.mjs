@@ -948,7 +948,89 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(500);
 
-// --- Constructor de mazo: abrir, purgar y cerrar ---
+// --- R1: ascension ---
+// El panel de ascension vive en el MENU, asi que se abre desde ahi. Se prueba:
+//   1. que el chip del menu aparece y refleja el nivel elegido,
+//   2. que el panel dibuja TODOS los niveles del contenido (A0..A(max)),
+//   3. que los niveles por encima del desbloqueado van bloqueados,
+//   4. que elegir un nivel desbloqueado lo persiste en el perfil y el chip cambia.
+const ascensionPanel = await (async () => {
+  const setup = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const max = ff.engine.registry.maxAscension();
+    // El perfil se fuerza para no depender del progreso previo del navegador.
+    ff.profileStore.current.ascension.highestUnlocked = Math.min(3, max);
+    ff.profileStore.current.ascension.selected = 0;
+    // El menu lee la ascension de un estado que se le EMPUJA: sin este sync el
+    // chip no se dibujaria (el HUD no conoce el perfil).
+    ff.hud.setAscensionState({
+      unlocked: ff.profileStore.current.ascension.highestUnlocked,
+      selected: 0,
+      max,
+    });
+    ff.hud.showMenu();
+    return { max, unlocked: Math.min(3, max) };
+  });
+  await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
+  await page.waitForTimeout(600);
+
+  const chip = await page.evaluate(() => {
+    const el = document.querySelector('.panel.is-menu [data-act="ascension"]');
+    return {
+      present: Boolean(el),
+      label: el?.textContent ?? null,
+      active: el?.classList.contains('is-active') ?? false,
+    };
+  });
+
+  // Abrir el panel con un click REAL sobre el chip.
+  const chipBox = await page.locator('.panel.is-menu [data-act="ascension"]').boundingBox();
+  if (chipBox) {
+    await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  }
+  await page.waitForSelector('.panel.is-ascension .ascension-card', { timeout: 5000 });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: join(shotsDir, '20-ascension.png') });
+
+  const list = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.panel.is-ascension .ascension-card')];
+    return {
+      levels: cards.map((c) => Number(c.dataset.level)),
+      locked: cards.filter((c) => c.classList.contains('is-locked')).length,
+      // El texto de los bloqueados tiene que EXPLICAR la condicion, no quedar mudo.
+      lockedHelp: cards
+        .filter((c) => c.classList.contains('is-locked'))
+        .every((c) => (c.querySelector('.ascension-desc')?.textContent ?? '').length > 8),
+    };
+  });
+
+  // Elegir A2 (desbloqueado) con click real.
+  const a2Box = await page
+    .locator('.panel.is-ascension .ascension-card[data-level="2"]')
+    .boundingBox();
+  if (a2Box) {
+    await page.mouse.click(a2Box.x + a2Box.width / 2, a2Box.y + a2Box.height / 2);
+  }
+  await page.waitForTimeout(600);
+  const afterPick = await page.evaluate(() => ({
+    selected: window.__fungiflush.profileStore.current.ascension.selected,
+  }));
+
+  // Cerrar y volver a la tienda para no romper el resto del smoke.
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff.hud.closePanel();
+    ff.engine.enterShop();
+    ff.hud.refreshPanel();
+  });
+  await page.waitForTimeout(500);
+
+  return { ...setup, ...chip, ...list, selected: afterPick.selected };
+})();
+console.log('\n--- R1: ascension ---');
+console.log(JSON.stringify(ascensionPanel, null, 2));
+
+
 const deckBuilder = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   document.querySelector('.panel.is-shop [data-act="deck"]')?.click();
@@ -1330,6 +1412,19 @@ const ok =
   voucherShop?.soldIsVoucher === true &&
   voucherShop?.soldButton === 'VENDIDO' &&
   Math.abs((voucherShop?.multiplier ?? 1) - 0.9) < 1e-6 &&
+  // --- R1: ascension ---
+  // Chip visible y sin marcar (el nivel puesto es A0 al arrancar el bloque).
+  ascensionPanel?.present === true &&
+  ascensionPanel?.active === false &&
+  // El panel lista TODOS los niveles del contenido: A0..A(max).
+  ascensionPanel?.levels?.length === ascensionPanel?.max + 1 &&
+  ascensionPanel?.levels?.[0] === 0 &&
+  // Con 3 desbloqueados: A0..A3 libres y el resto bloqueados.
+  ascensionPanel?.locked === ascensionPanel?.max - ascensionPanel?.unlocked &&
+  // Los bloqueados EXPLICAN la condicion (no un candado mudo).
+  ascensionPanel?.lockedHelp === true &&
+  // Elegir A2 lo persiste en el perfil.
+  ascensionPanel?.selected === 2 &&
   // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
   jokerChip?.tieneBotonVender === true &&
   jokerChip?.trasTocarElCuerpo === jokerChip?.antes &&

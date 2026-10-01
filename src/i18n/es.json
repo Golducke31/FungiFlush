@@ -773,6 +773,9 @@
     },
     "voucher": {
       "bought": "Mejora aplicada: {name}"
+    },
+    "ascension": {
+      "unlocked": "Ascensión desbloqueada: nivel {level} — {name}"
     }
   },
   "unlockRule": {
@@ -876,6 +879,54 @@
     "voucher_bulk_deal": {
       "name": "Compra al por mayor",
       "desc": "Todo en la tienda cuesta un 25% menos"
+    }
+  },
+  "ascension": {
+    "title": "Ascensión",
+    "subtitle": "Dificultad acumulativa",
+    "off": "Sin ascensión",
+    "locked": "Bloqueada",
+    "active": "Activa",
+    "select": "Elegir",
+    "selected": "Elegida",
+    "unlockHint": "Ganá en el nivel {level} para desbloquear el {next}",
+    "maxReached": "Nivel máximo alcanzado",
+    "noMods": "Sin cambios",
+    "a0": {
+      "name": "Base",
+      "desc": "Las reglas tal como vienen de fábrica. Sin recargos ni castigos."
+    },
+    "a1": {
+      "name": "Colonia",
+      "desc": "El objetivo de cada ciego sube un 10% y la tienda cobra un 10% más."
+    },
+    "a2": {
+      "name": "Micelio denso",
+      "desc": "Objetivo +15%, tienda +15% y una mano menos por ronda."
+    },
+    "a3": {
+      "name": "Esporas ácidas",
+      "desc": "Objetivo +20%, tienda +20%, una mano menos y renovar la tienda cuesta 2 Fungis más."
+    },
+    "a4": {
+      "name": "Suelo estéril",
+      "desc": "Objetivo +30%, una mano y un descarte menos, y renovar cuesta 2 Fungis más."
+    },
+    "a5": {
+      "name": "Cosecha dura",
+      "desc": "Objetivo +40%, tienda +25%, una mano y un descarte menos, renovar +3 y arrancás con 2 Fungis menos."
+    },
+    "a6": {
+      "name": "Bosque hostil",
+      "desc": "Objetivo +50%, tienda +25%, una mano, un descarte y una carta de mano menos. Arrancás con 2 Fungis menos."
+    },
+    "a7": {
+      "name": "Putrefacción",
+      "desc": "Objetivo +60%, tienda +35%, menos mano, descarte y tamaño de mano, y purgar una carta cuesta 2 Fungis más."
+    },
+    "a8": {
+      "name": "Colapso fúngico",
+      "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de joker menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
     }
   }
 }
