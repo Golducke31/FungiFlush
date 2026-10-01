@@ -113,6 +113,11 @@ export class CardCarousel {
     return this.wrap(Math.round(this.rendered));
   }
 
+  /** Las entradas actuales (solo lectura). Para verificacion/debug. */
+  get currentEntries(): readonly CarouselEntryView[] {
+    return this.entries;
+  }
+
   setEntries(entries: readonly CarouselEntryView[]): void {
     this.entries = [...entries];
     this.ensureSlots();

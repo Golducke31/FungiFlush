@@ -73,7 +73,11 @@ import {
   type CollectionState,
 } from '@ui/CollectionScreen';
 import type { CarouselEntryView } from '@render/CardCarousel';
-import { buildDeckCarouselFrame, type DeckCarouselFrame } from '@ui/DeckBuilderScreen';
+import {
+  buildDeckCarouselFrame,
+  sortCards,
+  type DeckCarouselFrame,
+} from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
 import type { BoardScreen } from '@ui/BoardScreen';
 import { attachAudioHooks } from '@audio/AudioBus';
@@ -520,17 +524,6 @@ async function boot(): Promise<void> {
 
   if (params.get('perf') === '1') scene.startPerf();
 
-  // --- Mazo sobre el CARRUSEL 3D ---
-  // El panel DOM de siempre y el anillo comparten estas acciones: el HUD arma
-  // el estado (es el unico que tiene el motor) y aca se decide que se ve.
-  const deckEntries = (cards: CardInstance[]): CarouselEntryView[] =>
-    cards.map((card) => ({
-      uid: card.uid,
-      discovered: true,
-      cardId: card.def.id,
-      level: card.level,
-    }));
-
   /** El mazo usa el mismo anillo que la coleccion. */
   const DECK_CAROUSEL = { radius: 9, halfSpan: 5, wrap: true, lift: 1.9 };
 
@@ -539,6 +532,15 @@ async function boot(): Promise<void> {
     if (!hud || !state) return;
     let frame: DeckCarouselFrame;
     const focus = (i: number): void => frame.setFocus(i);
+    // EL CARRUSEL Y EL FRAME tienen que compartir el mismo orden de cartas.
+    // El frame ordena segun el filtro (elemento/estado/...) y el preview lee
+    // por indice; si el carrusel renderiza en el orden del mazo, el indice
+    // apunta a OTRA carta y el detalle no coincide con la carta enfocada.
+    // Por eso: ordenamos aca, le pasamos el array al frame, y cada cambio de
+    // orden se aplica a los dos a la vez.
+    const sorted = sortCards(state.cards, 'element');
+    const toEntries = (cards: CardInstance[]): CarouselEntryView[] =>
+      cards.map((card) => ({ uid: card.uid, discovered: true, cardId: card.def.id, level: card.level }));
     frame = buildDeckCarouselFrame(state, {
       onPurge: doPurge,
       onUpgrade: doUpgrade,
@@ -547,10 +549,18 @@ async function boot(): Promise<void> {
         scene.setCarousel(null);
         hud?.closePanel();
       },
-      onSorted: (cards) => scene.setCarousel(deckEntries(cards), focus, DECK_CAROUSEL),
+      onSorted: (cards) => {
+        scene.setCarousel(toEntries(cards), focus, DECK_CAROUSEL);
+        frame.setSorted(cards);
+      },
     });
+    // El frame ya ordeno internamente con `sortCards(..., 'element')` al
+    // arrancar, pero no compartia ese orden con el carrusel (que recibia
+    // `state.cards` en el orden del mazo). Se lo damos nosotros para que el
+    // indice del preview y el del anillo apunten a la misma carta.
+    frame.setSorted(sorted);
     hud.showPanel(frame.panel, { carousel: true });
-    scene.setCarousel(deckEntries(state.cards), focus, DECK_CAROUSEL);
+    scene.setCarousel(toEntries(sorted), focus, DECK_CAROUSEL);
   };
 
   const doPurge = (uid: string): void => {
@@ -1098,6 +1108,9 @@ async function boot(): Promise<void> {
         // Calidad y medicion: el smoke y el panel F3 leen de aca.
         quality: () => scene.quality(),
         perf: () => scene.perfReport(),
+        // i18n para tests: traducir nameKeys y verificar que el preview
+        // del carrusel coincide con la carta enfocada.
+        t,
       },
     });
   }

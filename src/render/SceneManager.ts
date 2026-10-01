@@ -364,6 +364,12 @@ export class SceneManager {
   private readonly diePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly dieHit = new THREE.Vector3();
   private dieInputAttached = false;
+  /**
+   * Base de la camara al momento de abrir el carrusel. Se restaura al cerrarlo:
+   * el carrusel reescribe `rig.setBase(...)` con su encuadre frontal y, si no se
+   * devuelve, la partida queda apuntando hacia donde apuntaba el anillo.
+   */
+  private savedRigBase: { position: THREE.Vector3; target: THREE.Vector3 } | null = null;
 
   // --- Calidad grafica ---
   /** Nivel efectivo. Arranca en `low` (el camino de siempre) hasta que se detecte. */
@@ -949,6 +955,14 @@ export class SceneManager {
     if (!entries) {
       if (!this.carouselActive) return;
       this.carouselActive = false;
+      // El carrusel tomo `rig.setBase(...)` para su encuadre propio. `rig.fit`
+      // conserva la direccion de vista al reencuadrar, asi que si no se
+      // devuelve la base, la camara queda mirando hacia donde apuntaba el anillo
+      // (mas bajo y mas cerca) y la partida se ve mal al volver.
+      if (this.savedRigBase) {
+        this.rig.restoreBase(this.savedRigBase);
+        this.savedRigBase = null;
+      }
       this.carousel?.setVisible(false);
       this.detachCarouselInput();
       this.applyRunVisibility();
@@ -970,6 +984,10 @@ export class SceneManager {
     // El MISMO carrusel sirve para las tres pantallas: anillo (coleccion y
     // mazo) o arco suave sin wrap (la fila de recompensas).
     if (opts) this.carousel.configure(opts);
+
+    // Guarda la base de la camara ANTES de que el carrusel la cambie, para
+    // poder restaurarla al cerrar.
+    if (!this.savedRigBase) this.savedRigBase = this.rig.snapshotBase();
 
     this.carouselActive = true;
     this.carousel.setEntries(entries);
@@ -2605,6 +2623,12 @@ export class SceneManager {
       focus: this.carousel.focusedIndex,
       visible: this.carousel.visibleSlots,
     };
+  }
+
+  /** Las entradas actuales del carrusel (solo lectura). Para verificacion/debug. */
+  carouselEntries(): readonly CarouselEntryView[] | null {
+    if (!this.carouselActive || !this.carousel) return null;
+    return this.carousel.currentEntries;
   }
 
   /** Resumen para el panel de debug. */

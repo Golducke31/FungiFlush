@@ -672,11 +672,11 @@ const flipTest = await page.evaluate(async () => {
   const uid = ff.engine.round.hand[0].uid;
 
   const accepted = ff.scene.setCardFaceUp(uid, false);
-  await wait(700);
+  await wait(1500);
   const down = ff.scene.handState().find((c) => c.uid === uid);
 
   ff.scene.setCardFaceUp(uid, true);
-  await wait(700);
+  await wait(1500);
   const up = ff.scene.handState().find((c) => c.uid === uid);
 
   return {

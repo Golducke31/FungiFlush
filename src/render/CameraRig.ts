@@ -37,6 +37,25 @@ export class CameraRig {
     this.baseTarget.copy(target);
   }
 
+  /**
+   * `setBase` cambia la direccion de vista: el `fit` la conserva al reencuadrar,
+   * solo corre la camara a lo largo de la recta. Por eso el carrusel puede
+   * tomar la base para su encuadre frontal: al cerrar hay que DEVOLVERLA.
+   * `snapshotBase`/`restoreBase` guardan y restablecen la base sin que el
+   * caller tenga que conocer la posicion ni el objetivo.
+   */
+  snapshotBase(): { position: THREE.Vector3; target: THREE.Vector3 } {
+    return {
+      position: this.basePosition.clone(),
+      target: this.baseTarget.clone(),
+    };
+  }
+
+  restoreBase(snapshot: { position: THREE.Vector3; target: THREE.Vector3 }): void {
+    this.basePosition.copy(snapshot.position);
+    this.baseTarget.copy(snapshot.target);
+  }
+
   /** `intensity` ~0.05 sutil, ~0.4 impacto fuerte. */
   addShake(intensity: number): void {
     this.shakeAmplitude = Math.min(0.85, this.shakeAmplitude + intensity);

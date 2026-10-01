@@ -17,6 +17,7 @@ import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import { createCardCanvas, type CardTextureSpec } from '@render/index';
 
+/** Orden disponible para los filtros del mazo. */
 export type DeckSort = 'element' | 'family' | 'rarity' | 'level';
 
 export interface DeckBuilderCallbacks {
@@ -65,7 +66,10 @@ const RARITY_RANK: Record<Rarity, number> = {
   mythic: 4,
 };
 
-function sortCards(cards: CardInstance[], mode: DeckSort): CardInstance[] {
+/** Ordena el mazo segun el modo elegido. El carrusel y el preview lo llaman
+ *  a la vez para que el indice de la carta enfocada apunte siempre al mismo
+ *  card: el orden visual del anillo es el mismo que el orden del detalle. */
+export function sortCards(cards: CardInstance[], mode: DeckSort): CardInstance[] {
   const copy = [...cards];
   copy.sort((a, b) => {
     switch (mode) {
@@ -87,6 +91,12 @@ export interface DeckCarouselFrame {
   panel: HTMLElement;
   /** Actualiza el detalle con la carta enfocada (la reporta la escena). */
   setFocus: (index: number) => void;
+  /**
+   * Sincroniza el orden del DOM con el del carrusel: cuando se cambia el
+   * orden hay que volver a llamar al preview con la carta enfocada, porque el
+   * indice de la escena ya no apunta a la misma carta que antes.
+   */
+  setSorted: (cards: CardInstance[]) => void;
 }
 
 /**
@@ -135,7 +145,12 @@ export function buildDeckCarouselFrame(
   actions.className = 'panel-actions is-floating';
 
   let sort: DeckSort = 'element';
-  let sorted = sortCards(state.cards, sort);
+  let sorted: CardInstance[] = sortCards(state.cards, sort);
+
+  const setSorted = (cards: CardInstance[]): void => {
+    sorted = cards;
+    setFocus(0);
+  };
 
   const setFocus = (index: number): void => {
     const card = sorted[index];
@@ -229,7 +244,7 @@ export function buildDeckCarouselFrame(
   panel.append(top, bottom);
 
   setFocus(0);
-  return { panel, setFocus };
+  return { panel, setFocus, setSorted };
 }
 
 export function buildDeckBuilderPanel(
