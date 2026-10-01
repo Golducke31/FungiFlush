@@ -95,11 +95,25 @@ export interface ProfileSave {
     unlockedCardIds: string[];
     unlockedJokerIds: string[];
     /**
-     * De donde salio cada desbloqueo: id -> 'daily' | 'achievement' | 'season'.
+     * De donde salio cada desbloqueo: id -> 'daily' | 'achievement' | 'season' | 'unlock'.
      * Es lo que permite que la Coleccion diga "la ganaste con la racha diaria"
      * en vez de mostrar un candado generico.
      */
     unlockSource: Record<string, string>;
+    /**
+     * Condiciones de desbloqueo PUBLICADAS por `UnlockTracker`, id -> clave i18n.
+     *
+     * Existe porque el candado necesita EXPLICARSE y el `PackGate` no puede
+     * saberlo solo: un pack bloqueado se describe con el titulo del pack, pero
+     * una carta bloqueada por jugar necesita decir "ganá 3 veces". Esa frase la
+     * conoce el tracker (que tiene la condicion), no el gate.
+     *
+     * Es una COPIA de solo lectura del JSON de reglas, no el estado del
+     * jugador: se reescribe entera en cada arranque. Que el jugador la edite no
+     * rompe nada — la condicion real se evalua siempre contra el evento, y el
+     * desbloqueo se escribe en `unlockedCardIds`.
+     */
+    pendingUnlocks: Record<string, string>;
   };
   /** Recompensa diaria y racha. Ver `DailyState`. */
   daily: DailyState;
@@ -153,6 +167,7 @@ export function defaultProfile(): ProfileSave {
       unlockedCardIds: [],
       unlockedJokerIds: [],
       unlockSource: {},
+      pendingUnlocks: {},
     },
     daily: { lastClaimDate: null, lastClaimTs: 0, streak: 0, bestStreak: 0, history: [] },
     achievements: { unlockedIds: [], progress: {} },

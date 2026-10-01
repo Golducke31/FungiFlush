@@ -28,6 +28,12 @@ export interface CollectionEntry {
   state: CollectionState;
   /** Clave i18n del pack que aporta el contenido (para el rotulo de bloqueo). */
   packTitleKey?: string;
+  /**
+   * Clave i18n que EXPLICA el candado cuando el motivo es ganarselo jugando
+   * (R2). Gana sobre `packTitleKey`: decirle "Pack base" a una carta que se
+   * abre ganando en el ante 6 es una mentira, aunque el pack sea correcto.
+   */
+  lockReasonKey?: string;
   /** Origen del desbloqueo de retencion ('daily' | 'achievement' | 'season'). */
   unlockSource?: string;
   /** El jugador ya la vio en una partida. */
@@ -43,6 +49,19 @@ export interface CollectionCallbacks {
 }
 
 type Filter = 'all' | 'cards' | 'jokers' | 'locked' | 'unlocked';
+
+/**
+ * Rotulo de un candado. El ORDEN importa: una puerta por jugar se explica con
+ * su condicion ("ganá un ciego en el ante 6") y no con el pack, porque el pack
+ * SI esta comprado. Mostrar "Pack base" ahi seria una mentira y ademas no le
+ * dice al jugador que hacer.
+ */
+function lockLabel(entry: CollectionEntry): string {
+  if (entry.lockReasonKey) return t(entry.lockReasonKey);
+  return t('collection.locked', {
+    pack: entry.packTitleKey ? t(entry.packTitleKey) : entry.id,
+  });
+}
 
 /** Marco DOM de la coleccion cuando el protagonista es el carrusel 3D. */
 export interface CollectionCarouselFrame {
@@ -126,7 +145,7 @@ export function buildCollectionCarousel(
     const kind = entry.kind === 'joker' ? t('collection.jokers') : t('collection.cards');
     const state =
       entry.state === 'locked'
-        ? t('collection.locked', { pack: entry.packTitleKey ? t(entry.packTitleKey) : entry.id })
+        ? lockLabel(entry)
         : entry.state === 'unlocked' && entry.unlockSource
           ? `${t('collection.unlocked')} · ${t(`collection.unlockSource.${entry.unlockSource}`)}`
           : '';
@@ -262,9 +281,7 @@ export function buildCollectionPanel(
       if (locked) {
         const badge = document.createElement('span');
         badge.className = 'collection-lock';
-        badge.textContent = t('collection.locked', {
-          pack: entry.packTitleKey ? t(entry.packTitleKey) : entry.id,
-        });
+        badge.textContent = lockLabel(entry);
         cell.appendChild(badge);
         if (callbacks.onOpenStore) {
           cell.addEventListener('click', () => callbacks.onOpenStore?.());

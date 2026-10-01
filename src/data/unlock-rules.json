@@ -1,0 +1,210 @@
+[
+  {
+    "id": "unlock_ergot_rye",
+    "contentId": "ergot_rye",
+    "kind": "card",
+    "nameKey": "unlockRule.unlock_ergot_rye.name",
+    "descKey": "unlockRule.unlock_ergot_rye.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 7
+    }
+  },
+  {
+    "id": "unlock_psilocybe_cyanescens",
+    "contentId": "psilocybe_cyanescens",
+    "kind": "card",
+    "nameKey": "unlockRule.unlock_psilocybe_cyanescens.name",
+    "descKey": "unlockRule.unlock_psilocybe_cyanescens.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 7
+    }
+  },
+  {
+    "id": "unlock_death_cap",
+    "contentId": "death_cap",
+    "kind": "card",
+    "nameKey": "unlockRule.unlock_death_cap.name",
+    "descKey": "unlockRule.unlock_death_cap.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 8
+    }
+  },
+  {
+    "id": "unlock_mycena_lucifer",
+    "contentId": "mycena_lucifer",
+    "kind": "card",
+    "nameKey": "unlockRule.unlock_mycena_lucifer.name",
+    "descKey": "unlockRule.unlock_mycena_lucifer.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 8
+    }
+  },
+  {
+    "id": "unlock_destroying_angel",
+    "contentId": "destroying_angel",
+    "kind": "card",
+    "nameKey": "unlockRule.unlock_destroying_angel.name",
+    "descKey": "unlockRule.unlock_destroying_angel.desc",
+    "event": "game:over",
+    "when": {
+      "op": "gte",
+      "path": "ctx.bestAnte",
+      "value": 8
+    }
+  },
+  {
+    "id": "unlock_joker_sterile_field",
+    "contentId": "joker_sterile_field",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_sterile_field.name",
+    "descKey": "unlockRule.unlock_joker_sterile_field.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 4
+    }
+  },
+  {
+    "id": "unlock_joker_substrate_compost",
+    "contentId": "joker_substrate_compost",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_substrate_compost.name",
+    "descKey": "unlockRule.unlock_joker_substrate_compost.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 4
+    }
+  },
+  {
+    "id": "unlock_joker_symbiotic_pact",
+    "contentId": "joker_symbiotic_pact",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_symbiotic_pact.name",
+    "descKey": "unlockRule.unlock_joker_symbiotic_pact.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 5
+    }
+  },
+  {
+    "id": "unlock_joker_decay_engine",
+    "contentId": "joker_decay_engine",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_decay_engine.name",
+    "descKey": "unlockRule.unlock_joker_decay_engine.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 5
+    }
+  },
+  {
+    "id": "unlock_joker_spore_printer",
+    "contentId": "joker_spore_printer",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_spore_printer.name",
+    "descKey": "unlockRule.unlock_joker_spore_printer.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 6
+    }
+  },
+  {
+    "id": "unlock_joker_poison_bloom",
+    "contentId": "joker_poison_bloom",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_poison_bloom.name",
+    "descKey": "unlockRule.unlock_joker_poison_bloom.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 6
+    }
+  },
+  {
+    "id": "unlock_joker_crystal_lens",
+    "contentId": "joker_crystal_lens",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_crystal_lens.name",
+    "descKey": "unlockRule.unlock_joker_crystal_lens.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 6
+    }
+  },
+  {
+    "id": "unlock_joker_golden_mold",
+    "contentId": "joker_golden_mold",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_golden_mold.name",
+    "descKey": "unlockRule.unlock_joker_golden_mold.desc",
+    "event": "shop:purchase",
+    "when": {
+      "op": "gte",
+      "path": "ctx.money",
+      "value": 25
+    }
+  },
+  {
+    "id": "unlock_joker_eldritch_ring",
+    "contentId": "joker_eldritch_ring",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_eldritch_ring.name",
+    "descKey": "unlockRule.unlock_joker_eldritch_ring.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 8
+    }
+  },
+  {
+    "id": "unlock_joker_parasitic_drive",
+    "contentId": "joker_parasitic_drive",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_parasitic_drive.name",
+    "descKey": "unlockRule.unlock_joker_parasitic_drive.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.jokerCount",
+      "value": 4
+    }
+  },
+  {
+    "id": "unlock_joker_double_helix",
+    "contentId": "joker_double_helix",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_double_helix.name",
+    "descKey": "unlockRule.unlock_joker_double_helix.desc",
+    "event": "game:over",
+    "when": {
+      "op": "gte",
+      "path": "ctx.wins",
+      "value": 1
+    }
+  }
+]
