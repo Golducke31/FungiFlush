@@ -1212,6 +1212,26 @@ body {
   border-color: rgba(46, 178, 164, 0.5);
 }
 
+/* Salida al MENU: mismo tablon que fantasma, pero con tinte ambar. Es la unica
+   accion de SISTEMA de la barra superior (la otras son de partida), y el ambar
+   la separa del verde de juego sin convertirla en un boton de peligro rojo, que
+   quedaria alarmante al lado de los contadores. */
+.btn.is-quit {
+  color: #f0d9a8;
+  border-color: rgba(224, 178, 92, 0.42);
+  background:
+    linear-gradient(180deg, rgba(224, 178, 92, 0.18) 0%, rgba(224, 178, 92, 0) 34%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
+.btn.is-quit:hover:not(:disabled) {
+  color: #ffeec4;
+  border-color: rgba(224, 178, 92, 0.72);
+  background:
+    linear-gradient(180deg, rgba(224, 178, 92, 0.34) 0%, rgba(224, 178, 92, 0.04) 42%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
 /* Pestaña activa: la unica que lleva la luz de musgo al maximo.
    La del constructor de mazo tiene su propia regla mas abajo en el archivo (mas
    especifica), asi que se edito alla y no aca: una regla puesta en este punto
@@ -1370,6 +1390,23 @@ body {
   font-weight: 700;
   color: #9ff0c8;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+/* Confirmacion de salida al menu: misma caja que un panel normal, pero mas
+   angosta. Es una decision de dos botones, no una pantalla de contenido. */
+.panel.is-confirm {
+  max-width: 380px;
+  width: min(380px, 100%);
+  text-align: center;
+}
+
+.panel.is-confirm .panel-subtitle {
+  margin-bottom: 22px;
+  line-height: 1.45;
+}
+
+.panel.is-confirm .panel-actions {
+  justify-content: center;
 }
 
 /* Aviso de CIEGO SUPERADO: el momento entre la ultima mano y el draft. */
@@ -3699,6 +3736,15 @@ body {
   .hud-block {
     padding: 6px 11px;
   }
+  /* La barra superior ahora lleva TRES piezas a la derecha (dinero, idioma,
+     menu). En alto chico (.btn.is-small gana por especificidad a la regla
+     generica de .btn de mas abajo) los dos botones se compactan juntos para
+     que la fila siga entrando sin empujar nada fuera de pantalla. */
+  .btn.is-small {
+    padding: 6px 10px;
+    font-size: 11px;
+    min-height: 32px;
+  }
   .btn {
     padding: 9px 15px;
     font-size: 12.5px;
@@ -3792,6 +3838,12 @@ body {
     padding: 8px 12px;
     font-size: 11.5px;
     min-height: 36px;
+  }
+  /* Top bar al minimo: dinero + idioma + menu en una sola fila a 390px de alto. */
+  .btn.is-small {
+    padding: 5px 9px;
+    font-size: 10.5px;
+    min-height: 30px;
   }
 }
 

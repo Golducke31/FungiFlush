@@ -1012,7 +1012,11 @@ export class SceneManager {
    * primera carta mientras el detalle mostraba otra.
    */
   focusCarousel(index: number): void {
-    this.carousel?.focus(index);
+    // `focusAbs` y no `focus`: al abrir el panel el anillo tiene que quedar
+    // parado SIEMPRE en esa carta. `focus` calcula el camino mas corto desde el
+    // objetivo previo, asi que el resultado dependia de como quedo el carrusel
+    // la ultima vez ("en algunas cartas se actualiza el carrusel").
+    this.carousel?.focusAbs(index);
   }
 
   /** Aplica una entrada del carrusel a un slot: cara (o dorso) y snap. */
@@ -1032,8 +1036,11 @@ export class SceneManager {
       if (def) {
         const inst = this.engine.registry.instantiateFrom(def);
         // El mazo muestra cartas MEJORADAS: sin esto el carrusel las dibujaria
-        // todas a nivel 1.
+        // todas a nivel 1, y al subir de nivel el detalle del panel cambiaba
+        // pero la carta del anillo se quedaba con los numeros viejos.
         if (entry.level !== undefined) inst.level = entry.level;
+        if (entry.bonusSubstrate !== undefined) inst.bonusSubstrate = entry.bonusSubstrate;
+        if (entry.bonusSpores !== undefined) inst.bonusSpores = entry.bonusSpores;
         card3d.setCard(inst, this.textures, this.lang(), this.artForCard(inst));
       }
     }
@@ -1638,6 +1645,16 @@ export class SceneManager {
       card3d.setSelected(selectedUids.includes(card.uid));
     }
 
+    // REORDENAR EL MAP SEGUN EL MOTOR.
+    //
+    // `layoutHand()` recorre `handCards` para decidir la posicion de cada carta,
+    // y un `Map` de JS preserva el orden de INSERCION, no el orden en que se lo
+    // consulta. Como al ordenar la mano los uid ya existen, el bucle de arriba
+    // no los vuelve a insertar: el Map se quedaba con el orden viejo y el
+    // abanico no se movia. El motor cambiaba `round.hand` y la mesa no lo
+    // reflejaba — el bug de "Ordenar no hace nada".
+    this.reorderHandCards(cards);
+
     // Si la carta que se estaba arrastrando salio de la mano (el motor la
     // descarto, la jugo o se transformo), el gesto queda colgado: se aborta.
     if (this.dragUid !== null && !this.handCards.has(this.dragUid)) {
@@ -1674,6 +1691,38 @@ export class SceneManager {
       });
     }
     this.refreshTargets();
+  }
+
+  /**
+   * Reconstruye `handCards` en el MISMO orden que `cards` (que es `round.hand`).
+   *
+   * No crea ni destruye nada: reinserta los `Card3D` existentes. Es lo unico
+   * que hace que `layoutHand()` (que itera el Map) refleje el orden del motor
+   * despues de un `reorderHand()`. Sin esto el Map conservaba el orden de
+   * insercion y el abanico no se movia.
+   */
+  private reorderHandCards(cards: readonly CardInstance[]): void {
+    // Atajo: si ya coincide, no se toca (evita reconstruir en cada frame).
+    let same = this.handCards.size === cards.length;
+    if (same) {
+      let i = 0;
+      for (const uid of this.handCards.keys()) {
+        if (uid !== cards[i]?.uid) {
+          same = false;
+          break;
+        }
+        i += 1;
+      }
+    }
+    if (same) return;
+
+    const ordered: Array<[string, Card3D]> = [];
+    for (const card of cards) {
+      const card3d = this.handCards.get(card.uid);
+      if (card3d) ordered.push([card.uid, card3d]);
+    }
+    this.handCards.clear();
+    for (const [uid, card3d] of ordered) this.handCards.set(uid, card3d);
   }
 
   private syncJokers(jokers: readonly JokerInstance[]): void {

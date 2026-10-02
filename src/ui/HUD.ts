@@ -73,6 +73,14 @@ export interface HudCallbacks {
   onLeaveShop: () => void;
   onChooseBlind: (blindId: string) => void;
   onRestart: () => void;
+  /**
+   * Abandonar la run y volver al MENU PRINCIPAL (boton "Menu" del HUD).
+   *
+   * Distinto de `onRestart`, que arranca otra run de inmediato: aca el jugador
+   * sale al menu. El controlador se encarga de borrar el guardado, o al recargar
+   * le ofreceria "Continuar" una run que acaba de abandonar.
+   */
+  onQuitToMenu: () => void;
   onToggleLanguage: () => void;
   onContinueRun: () => void;
   // --- Pantalla de inicio ---
@@ -417,7 +425,18 @@ export class HUD {
     langButton.textContent = t('ui.language');
     langButton.addEventListener('click', () => this.callbacks.onToggleLanguage());
 
-    rightGroup.append(moneyBlock, langButton);
+    // Salida al MENU PRINCIPAL. Vive en la barra superior (junto a idioma) y no
+    // en la barra de acciones de abajo: alli compite con Jugar/Descartar, que
+    // son los botones de la partida. Es una accion de SISTEMA, no de juego.
+    // Pide confirmacion: abandonar la run es irreversible (el guardado se borra).
+    const menuButton = document.createElement('button');
+    menuButton.className = 'btn is-ghost is-small is-quit';
+    menuButton.dataset['act'] = 'quit-to-menu';
+    menuButton.textContent = t('ui.menu');
+    menuButton.title = t('menu.quitTitle');
+    menuButton.addEventListener('click', () => this.confirmQuitToMenu());
+
+    rightGroup.append(moneyBlock, langButton, menuButton);
     top.append(anteBlock, scoreBlock, rightGroup);
 
     // --- Jokers (izquierda) ---
@@ -944,21 +963,30 @@ export class HUD {
         round.discardsLeft === 0 ? 'is-low' : '',
       ],
     ];
-    // El chip dice "MAZO": es el TAMANO COMPLETO del mazo (robo + descarte +
-    // mano), no lo que queda por robar. Antes mostraba `deck.remaining`, asi
-    // que el numero bajaba a medida que robabas y al reciclar el descarte
-    // volvia a subir: el jugador que contaba sus 40 cartas al empezar veia
-    // "32" y creia que habia perdido 8. `deckSize` es la fuente unica de ese
-    // numero (la misma que usa el panel del mazo).
+    // El chip dice "MAZO" y muestra DOS numeros: "por robar / total".
+    //
+    // Antes mostraba UNO solo — el total (`deckSize`) —, asi que el numero
+    // quedaba clavado durante toda la mano y parecia que las cartas jugadas o
+    // descartadas no se descontaban (el bug reportado: "42" con 8 en la mano).
+    // Con el par, el primero BAJA al robar (es lo que el jugador sigue) y el
+    // segundo le dice cuanto mide su mazo de verdad. Mismo patron que el chip
+    // de jokers, que ya usa "/max" como contexto.
     const state: Array<[string, string, string | number, string]> = [
-      ['ui_icon_collection', t('hud.deck'), this.engine.deckSize, ''],
+      ['ui_icon_collection', t('hud.deck'), this.engine.deckDraw, ''],
       ['ui_icon_joker_slot', t('hud.jokers'), run.jokers.length, ''],
     ];
+    /** Tope del chip de mazo (el total). Se reusa `counter-cap`, el mismo del de jokers. */
+    const deckTotal = this.engine.deckSize;
 
     for (const [icon, label, value, extra] of [...resources, ...state]) {
       const cell = document.createElement('div');
       cell.className = `counter${resources.some((r) => r[0] === icon) ? ' is-resource' : ''}`;
       cell.title = label;
+      // El chip de mazo muestra DOS numeros ("12/42"): se los explica en el
+      // aria-label para que el lector de pantalla no lea una fraccion suelta.
+      if (icon === 'ui_icon_collection') {
+        cell.setAttribute('aria-label', t('hud.deckFull', { remaining: this.engine.deckDraw, total: deckTotal }));
+      }
 
       const iconEl = document.createElement('span');
       iconEl.className = 'counter-icon';
@@ -974,11 +1002,15 @@ export class HUD {
       valueEl.textContent = String(value);
 
       // El contador de jokers muestra "3" y el tope aparte: "3/5" junto competia
-      // por la misma linea de base que un numero suelto y se leia peor.
+      // por la misma linea de base que un numero suelto y se leia peor. El de
+      // mazo sigue el mismo patron: "12/42" = por robar / total.
+      const cap = document.createElement('span');
+      cap.className = 'counter-cap';
       if (icon === 'ui_icon_joker_slot') {
-        const cap = document.createElement('span');
-        cap.className = 'counter-cap';
         cap.textContent = `/${run.jokerSlots}`;
+        valueEl.appendChild(cap);
+      } else if (icon === 'ui_icon_collection') {
+        cap.textContent = `/${deckTotal}`;
         valueEl.appendChild(cap);
       }
 
@@ -1568,6 +1600,49 @@ export class HUD {
     // Se confirma SIEMPRE, aunque la mano ya estuviera en ese orden: el jugador
     // pulso el criterio y espera una respuesta, no silencio.
     this.toast(message, 'info');
+  }
+
+  /**
+   * Salida al MENU PRINCIPAL desde la partida, con un panel de confirmacion.
+   *
+   * Se usa un panel y no el "dos toques" del boton de vender joker: abandonar la
+   * run borra el guardado y no tiene vuelta atras, asi que merece una decision
+   * explicita con las DOS opciones a la vista, no un boton que cambia de texto.
+   */
+  private confirmQuitToMenu(): void {
+    const panel = document.createElement('div');
+    panel.className = 'panel is-confirm';
+
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t('menu.quitTitle');
+
+    const body = document.createElement('p');
+    body.className = 'panel-subtitle';
+    body.textContent = t('menu.quitBody');
+
+    const actions = document.createElement('div');
+    actions.className = 'panel-actions';
+
+    const cancel = document.createElement('button');
+    cancel.className = 'btn is-ghost';
+    cancel.dataset['act'] = 'quit-cancel';
+    cancel.textContent = t('ui.cancel');
+    cancel.addEventListener('click', () => this.closePanel());
+
+    const confirm = document.createElement('button');
+    confirm.className = 'btn is-play';
+    confirm.dataset['act'] = 'quit-confirm';
+    confirm.textContent = t('menu.quitConfirm');
+    confirm.addEventListener('click', () => {
+      this.closePanel();
+      this.callbacks.onQuitToMenu();
+    });
+
+    actions.append(cancel, confirm);
+    panel.append(title, body, actions);
+    // Sin `carousel`: es un panel DOM normal y tiene que tapar la escena.
+    this.openOverlay(panel);
   }
 
   // ==========================================================================

@@ -30,6 +30,14 @@ export interface CarouselEntryView {
   jokerId?: string;
   /** Nivel de la carta (el mazo muestra cartas mejoradas, no la base). */
   level?: number;
+  /**
+   * Bonus de mejoras sobre la base. El carrusel del mazo muestra la carta REAL
+   * de la run, no la definicion de catalogo: sin esto, subir una carta de nivel
+   * actualizaba el detalle del panel pero la carta 3D del anillo seguia
+   * dibujando los numeros del nivel 1 (el bug reportado).
+   */
+  bonusSubstrate?: number;
+  bonusSpores?: number;
   /** Si el jugador ya la descubrio. Las no descubiertas se muestran de dorso. */
   discovered: boolean;
 }
@@ -123,6 +131,12 @@ export class CardCarousel {
     this.ensureSlots();
     // Al cambiar de set, todo slot queda "sucio" para re-aplicar.
     for (const slot of this.slots) slot.entryIndex = -1;
+    // `rendered` tiene que volver a 0 JUNTO con `target`. Antes solo se reseteaba
+    // `target`, asi que el anillo seguia animandose desde donde habia quedado la
+    // apertura anterior: al abrir el mazo de nuevo el giro salia de un punto
+    // arbitrario y `focus(n)` —que parte de `target`— terminaba girando de mas o
+    // de menos segun la sesion. Es el "en algunas cartas se actualiza el
+    // carrusel" reportado: el resultado dependia del estado previo.
     this.rendered = 0;
     this.target = 0;
     this.lastFocus = -1;
@@ -182,6 +196,32 @@ export class CardCarousel {
   focus(index: number): void {
     if (this.entries.length === 0) return;
     this.target = Math.round(this.target) + this.shortestDelta(index);
+  }
+
+  /**
+   * Ancla el anillo en una entrada concreta SIN depender del estado previo.
+   *
+   * Es distinto de `focus()`: aquel calcula el camino mas corto desde el
+   * objetivo actual, lo que da el giro bonito al tocar una carta vecina pero
+   * hace que el resultado dependa de donde estaba el anillo. Al ABRIR un panel
+   * (el mazo, tras mejorar una carta) no hay "estado previo" que valga: el
+   * anillo tiene que quedar parado en la carta pedida, siempre igual. Lo usa
+   * `SceneManager.focusCarousel`.
+   */
+  focusAbs(index: number): void {
+    const n = this.entries.length;
+    if (n === 0) return;
+    const to = this.wrap(index);
+    // Se toma la vuelta que deja `rendered` mas cerca de `to` sin salir del
+    // rango [0, n): asi el tween no recorre el anillo entero.
+    const from = this.wrap(Math.round(this.rendered));
+    let delta = to - from;
+    if (this.wrapping) {
+      if (delta > n / 2) delta -= n;
+      if (delta < -n / 2) delta += n;
+    }
+    this.target = from + delta;
+    this.rendered = from + delta;
   }
 
   /** Delta con signo mas corto para llegar de la entrada actual a `index`. */

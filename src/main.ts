@@ -619,7 +619,17 @@ async function boot(): Promise<void> {
       ? Math.max(0, sorted.findIndex((c) => c.uid === highlightUid))
       : 0;
     const toEntries = (cards: CardInstance[]): CarouselEntryView[] =>
-      cards.map((card) => ({ uid: card.uid, discovered: true, cardId: card.def.id, level: card.level }));
+      cards.map((card) => ({
+        uid: card.uid,
+        discovered: true,
+        cardId: card.def.id,
+        level: card.level,
+        // El anillo tiene que dibujar la carta REAL de la run, con sus mejoras:
+        // con solo el nivel, los numeros del sustrato/esporas se quedaban en los
+        // del nivel 1 aunque el detalle del panel ya mostrara los nuevos.
+        bonusSubstrate: card.bonusSubstrate,
+        bonusSpores: card.bonusSpores,
+      }));
     frame = buildDeckCarouselFrame(state, {
       onPurge: doPurge,
       onUpgrade: doUpgrade,
@@ -742,7 +752,15 @@ async function boot(): Promise<void> {
         const round = engine.round;
         if (!round) return;
         const ordered = sortHand(round.hand, mode);
-        if (engine.reorderHand(ordered.map((c) => c.uid))) hud?.applySortMode(mode);
+        const before = round.hand.map((c) => c.uid).join(',');
+        const after = ordered.map((c) => c.uid).join(',');
+        if (!engine.reorderHand(ordered.map((c) => c.uid))) return;
+        hud?.applySortMode(mode);
+        // El motor emite `state:changed` y el RENDER reordena `handCards` desde
+        // ahi, asi que el abanico se mueve solo. Si la mano ya estaba en ese
+        // orden, no hay nada que mover y se avisa: sin esto el boton parecia
+        // roto en una mano de 2 cartas iguales.
+        if (before === after && mode !== 'default') hud?.toast(t('sort.alreadySorted'), 'info');
       },
       onBuy: (offerId) => {
         // El motivo del rechazo se calcula ACA, no en el aviso generico: antes
@@ -785,6 +803,23 @@ async function boot(): Promise<void> {
         void runStore.clear();
         engine.startRun();
         scene.setMode('run');
+      },
+      /**
+       * Salir al MENU PRINCIPAL desde la partida.
+       *
+       * Tres cosas que NO son opcionales:
+       *   1. El guardado se BORRA. Si sobreviviera, al volver al menu el chip
+       *      "Continuar" ofreceria retomar una run que el jugador acaba de
+       *      abandonar.
+       *   2. `savedRun` se limpia para que el chip no reaparezca en memoria.
+       *   3. La escena vuelve a modo menu (decorado + sin arena de juego).
+       */
+      onQuitToMenu: () => {
+        savedRun = null;
+        hud?.setContinueAvailable(null);
+        void runStore.clear();
+        engine.enterMenu();
+        scene.setMode('menu', { reduceMotion: profileStore.current.settings.reduceMotion });
       },
       onContinueRun: () => {
         if (!savedRun) return;
@@ -1021,7 +1056,8 @@ async function boot(): Promise<void> {
       ante: run?.ante ?? 0,
       money: run?.money ?? 0,
       jokerCount: run?.jokers.length ?? 0,
-      deckSize: run?.deck.totalSize ?? 0,
+      // El mazo que Cuenta el jugador: incluye lo que tiene en la mano.
+      deckSize: engine.deckSize,
       runs: profileStore.current.stats.runs,
       wins: profileStore.current.stats.wins,
       bestAnte: profileStore.current.stats.bestAnte,

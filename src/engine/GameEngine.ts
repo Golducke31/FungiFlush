@@ -747,6 +747,36 @@ export class GameEngine {
     return this.run.deck.totalSize + (this.round?.hand.length ?? 0);
   }
 
+  /**
+   * Cartas del mazo que aun NO entraron a la ronda: la pila de robo mas todo
+   * lo que el descarte de rondas anteriores todavia puede reciclar.
+   *
+   * Es la mitad del par que muestra el chip "MAZO": este numero BAJA a medida
+   * que la ronda avanza (que es lo que el jugador espera ver) y `deckSize` (el
+   * total real, mano incluida) es el tope que se muestra al lado.
+   *
+   * POR QUE NO ES `deck.remaining`. La pila de robo se rellena sola: al jugar
+   * una mano, las cartas van al descarte y el motor ROBA de nuevo hasta
+   * completar el tamano de mano. Con `remaining` el numero no se movia nunca
+   * durante la mano — subia y bajaba en el mismo evento — y el jugador lo veia
+   * "estatico en el total" aunque hubiera jugado 8 cartas. Lo que se cuenta es
+   * lo CONSUMIDO: cada carta jugada o descartada deja de estar disponible hasta
+   * que la ronda cierra, asi que el numero es monotono decreciente dentro del
+   * ciego y se resetea al empezar el siguiente. Es exactamente la cuenta que
+   * hace el jugador: "me quedan N cartas por ver".
+   */
+  get deckDraw(): number {
+    const round = this.round;
+    if (!round) return this.run.deck.totalSize;
+    const consumed =
+      Math.max(0, round.cardsPlayedThisRound) + Math.max(0, round.cardsDiscardedThisRound);
+    // Base `deckSize` (pilas + mano): al abrir el ciego el chip marca el mazo
+    // ENTERO y cada carta jugada o descartada lo baja en uno. Usar `totalSize`
+    // daria un numero que arranca ya descontada la mano y el jugador no
+    // reconoceria el total de su mazo.
+    return Math.max(0, this.deckSize - consumed);
+  }
+
   /** Compat: la purga es una de las operaciones de edicion de mazo. */
   canPurge(): boolean {
     return this.canEditDeck();
@@ -1526,7 +1556,10 @@ export class GameEngine {
         ante: this.run.ante,
         jokerCount: this.run.jokers.length,
         money: this.run.money,
-        deckSize: this.run.deck.totalSize,
+        // Total del mazo CON la mano: `run.deck.totalSize` solo cuenta las dos
+        // pilas, asi que a mitad de mano daria menos y una mision del tipo
+        // "llega a N cartas" se cumpliria a destiempo.
+        deckSize: this.deckSize,
       },
     };
     const { next, completed } = advanceMissions(
@@ -1585,7 +1618,10 @@ export class GameEngine {
       money: this.run.money,
       jokers: this.run.jokers,
       jokerSlots: this.run.jokerSlots,
-      deckSize: this.run.deck.totalSize,
+      // Fuente UNICA del tamano de mazo que ve la UI: incluye la mano. Con
+      // `totalSize` a secas, cualquier consumidor del snapshot (logros, debug,
+      // tests) media menos cartas de las que el jugador tiene.
+      deckSize: this.deckSize,
       handSize: this.run.baseHandSize,
       hands: this.run.baseHands,
       discards: this.run.baseDiscards,

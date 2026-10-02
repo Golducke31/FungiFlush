@@ -518,10 +518,13 @@ const afterBlind = await page.evaluate(() => {
     target: ff.engine.round?.target,
     hand: ff.engine.round?.hand.length ?? 0,
     sceneHand: ff.scene.stats().hand,
-    // FIX chip MAZO: al REPARTIR la mano el total no puede bajar: las cartas
-    // pasan de la pila a la mano, pero siguen en el mazo.
+    // FIX chip MAZO: ahora muestra DOS numeros "por robar / total". Al REPARTIR
+    // la mano el robo baja (8 cartas salieron de la pila) pero el TOTAL no se
+    // mueve: 32/40, no 40.
     chipDeck: chips['Mazo'] ?? null,
+    chipDeckTotal: chips['Mazo']?.split('/')[1] ?? null,
     deckSize: ff.engine.deckSize,
+    deckDraw: ff.engine.deckDraw,
     deckRemaining: ff.engine.run.deck.remaining,
     // Baseline de draw calls de ESCENA en el tier bajo (sin composer, sin sky):
     // es el "camino de siempre". El camino con post-procesamiento solo suma el
@@ -778,12 +781,23 @@ await page.screenshot({ path: join(shotsDir, '06-after-play.png') });
 
 const afterPlay = await page.evaluate(() => {
   const ff = window.__fungiflush;
+  const chips = {};
+  for (const c of document.querySelectorAll('.counter')) {
+    chips[c.title] = c.querySelector('.counter-value')?.textContent;
+  }
   return {
     status: ff.engine.run.status,
     score: ff.engine.round?.score ?? null,
     target: ff.engine.round?.target ?? null,
     handsLeft: ff.engine.round?.handsLeft ?? null,
     hand: ff.engine.round?.hand.length ?? 0,
+    // FIX chip MAZO: tras jugar 3 cartas el disponible tiene que haber bajado
+    // EXACTAMENTE en 3 (o mas si ademas se descarto), nunca quedarse clavado.
+    chipDeck: chips['Mazo'] ?? null,
+    deckDraw: ff.engine.deckDraw,
+    deckSize: ff.engine.deckSize,
+    cardsPlayed: ff.engine.round?.cardsPlayedThisRound ?? 0,
+    cardsDiscarded: ff.engine.round?.cardsDiscardedThisRound ?? 0,
     stats: ff.scene.stats(),
   };
 });
@@ -1503,6 +1517,46 @@ console.log(`FPS con post-procesamiento: ${fpsHigh} (baseline sin el: ${fps})`);
 // disparo, NO como estimacion del costo en un celular.
 console.log(`Costo relativo del composer (solo informativo, render por software): ${(fps / Math.max(1, fpsHigh)).toFixed(2)}x`);
 
+// ===========================================================================
+// Fase — SALIDA AL MENU desde la partida (con confirmacion)
+// ===========================================================================
+// El boton vive en la barra superior. Se prueba el ciclo COMPLETO: abrir el
+// panel, cancelar (no debe salir) y confirmar (debe volver al menu). Sin el
+// paso de cancelar, un bug donde "Cancelar" sale igual pasaria desapercibido.
+const quitButtonExists = await page.evaluate(
+  () => document.querySelector('[data-act="quit-to-menu"]') !== null,
+);
+
+// 1) Abrir el panel de confirmacion.
+await page.evaluate(() => document.querySelector('[data-act="quit-to-menu"]')?.click());
+await page.waitForTimeout(400);
+const quitPanel = await page.evaluate(() => ({
+  status: window.__fungiflush.engine.run.status,
+  panel: document.querySelector('.panel.is-confirm') !== null,
+  cancel: document.querySelector('[data-act="quit-cancel"]') !== null,
+  confirm: document.querySelector('[data-act="quit-confirm"]') !== null,
+}));
+
+// 2) Cancelar: la partida sigue viva y el panel se cierra.
+await page.evaluate(() => document.querySelector('[data-act="quit-cancel"]')?.click());
+await page.waitForTimeout(400);
+const afterCancel = await page.evaluate(() => ({
+  status: window.__fungiflush.engine.run.status,
+  panel: document.querySelector('.panel.is-confirm') !== null,
+}));
+
+// 3) Confirmar: vuelve al menu principal.
+await page.evaluate(() => document.querySelector('[data-act="quit-to-menu"]')?.click());
+await page.waitForTimeout(400);
+await page.evaluate(() => document.querySelector('[data-act="quit-confirm"]')?.click());
+await page.waitForTimeout(800);
+const afterQuit = await page.evaluate(() => ({
+  status: window.__fungiflush.engine.run.status,
+  menuPanel: document.querySelector('.panel.is-menu') !== null,
+}));
+console.log('\n--- Salida al menu ---');
+console.log(JSON.stringify({ quitButtonExists, quitPanel, afterCancel, afterQuit }, null, 2));
+
 // --- Reporte ---
 console.log('\n================ REPORTE ================');
 const realErrors = consoleErrors.filter((e) => !e.includes('favicon'));
@@ -1678,8 +1732,12 @@ const ok =
   chk("menuState?.webgl === 'contexto activo'", menuState?.webgl === 'contexto activo') &&
   chk('(afterBlind?.sceneHand ?? 0) > 0', (afterBlind?.sceneHand ?? 0) > 0) &&
   chk('(afterBlind?.hand ?? 0) > 0', (afterBlind?.hand ?? 0) > 0) &&
-  chk("afterBlind?.chipDeck === '40'", afterBlind?.chipDeck === '40') &&
+  // El chip MAZO ahora es "disponible / total": al empezar el ciego nada se
+  // consumio todavia, asi que arranca en el total (40/40) y baja al jugar.
+  chk("afterBlind?.chipDeckTotal === '40'", afterBlind?.chipDeckTotal === '40') &&
+  chk("afterBlind?.chipDeck === '40/40'", afterBlind?.chipDeck === '40/40') &&
   chk('afterBlind?.deckSize === 40', afterBlind?.deckSize === 40) &&
+  chk('afterBlind?.deckDraw === 40', afterBlind?.deckDraw === 40) &&
   // --- Fase 4: tap, arrastre y flip ---
   chk('afterTap?.selected === true', afterTap?.selected === true) &&
   chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&
@@ -1701,6 +1759,27 @@ const ok =
   chk('(flipTest?.front?.flip ?? 1) < 0.1', (flipTest?.front?.flip ?? 1) < 0.1) &&
   chk('flipTest?.front?.faceUp === true', flipTest?.front?.faceUp === true) &&
   chk('afterPlay?.score > 0', afterPlay?.score > 0) &&
+  // FIX chip MAZO: el numero visible baja con lo que la ronda consumio. Sin el
+  // fix quedaba en 40 pese a haber jugado 3 cartas.
+  chk(
+    'afterPlay?.chipDeck (disponible) = 40 - jugadas',
+    afterPlay?.chipDeck?.split('/')[0] ===
+      String(40 - (afterPlay?.cardsPlayed ?? 0) - (afterPlay?.cardsDiscarded ?? 0)),
+  ) &&
+  chk(
+    'afterPlay?.deckDraw = 40 - consumidas',
+    afterPlay?.deckDraw === 40 - (afterPlay?.cardsPlayed ?? 0) - (afterPlay?.cardsDiscarded ?? 0),
+  ) &&
+  chk('afterPlay?.deckSize sigue en 40', afterPlay?.deckSize === 40) &&
+  // --- Salida al menu ---
+  chk('quitButtonExists', quitButtonExists === true) &&
+  chk('quitPanel.panel (panel de confirmacion abierto)', quitPanel?.panel === true) &&
+  chk('quitPanel.cancel/confirm presentes', quitPanel?.cancel === true && quitPanel?.confirm === true) &&
+  chk('quitPanel.status sigue en partida', quitPanel?.status !== 'menu') &&
+  chk('afterCancel no salio (status != menu)', afterCancel?.status !== 'menu') &&
+  chk('afterCancel panel cerrado', afterCancel?.panel === false) &&
+  chk("afterQuit.status === 'menu'", afterQuit?.status === 'menu') &&
+  chk('afterQuit menuPanel visible', afterQuit?.menuPanel === true) &&
   chk("afterWin?.status === 'shop'", afterWin?.status === 'shop') &&
   chk('realErrors.length === 0', realErrors.length === 0) &&
   chk('pageErrors.length === 0', pageErrors.length === 0);

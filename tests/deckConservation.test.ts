@@ -65,7 +65,11 @@ function bundle(extra: CardDefinition[] = []): ContentBundle {
 }
 
 /** Acceso a la pila real: `deck.allCards` es la vista de solo lectura publica. */
-function deckOf(engine: GameEngine): { allCards: ReadonlyArray<{ uid: string; def: { id: string } }> } {
+function deckOf(engine: GameEngine): {
+  allCards: ReadonlyArray<{ uid: string; def: { id: string } }>;
+  totalSize: number;
+  remaining: number;
+} {
   return (engine as unknown as { run: { deck: never } }).run.deck;
 }
 
@@ -218,4 +222,52 @@ test('una carta comprada en la tienda sobrevive al siguiente ciego', () => {
   for (const uid of boughtUids) {
     assert.ok(final.has(uid), 'la carta comprada desaparecio al cerrar el siguiente ciego');
   }
+});
+
+// ---------------------------------------------------------------------------
+// Chip MAZO: los DOS numeros que ve el jugador
+// ---------------------------------------------------------------------------
+
+test('el chip MAZO separa "por robar" del TOTAL y el total incluye la mano', () => {
+  const engine = new GameEngine({ seed: 5, bundle: bundle() });
+  engine.startRun(5);
+
+  // Fuera de la ronda (seleccion de ciego) no hay mano: el total es el mazo
+  // entero y no queda nada por robar de una ronda anterior.
+  const atSelect = engine.deckSize;
+  assert.ok(atSelect > 10, 'el mazo inicial deberia tener cartas');
+  assert.equal(engine.deckDraw, deckOf(engine).totalSize, 'sin ronda, todo el mazo esta disponible');
+
+  engine.chooseBlind('b1');
+  const hand = engine.roundSnapshot().hand.length;
+  assert.ok(hand > 0, 'el ciego reparte una mano');
+
+  // EL BUG REPORTADO: `totalSize` cae a (mazo - mano) al repartir, pero el
+  // numero que el jugador llama "mi mazo" NO se mueve. `deckSize` lo cubre.
+  assert.equal(engine.deckSize, atSelect, 'el total no cambia al repartir: las cartas siguen siendo del mazo');
+  // Al repartir todavia no se consumio nada: el disponible sigue siendo el mazo.
+  assert.equal(engine.deckDraw, atSelect, 'nada se consumio todavia: disponible = mazo entero');
+
+  // Y al jugar una mano, el disponible BAJA. La clave es que la pila de robo se
+  // rellena sola, asi que `deck.remaining` no lo refleja; lo que baja es lo que
+  // la ronda consumio.
+  const beforeDraw = engine.deckDraw;
+  playTopOfHand(engine, 5);
+  assert.ok(engine.deckDraw < beforeDraw, 'jugar cartas debe descontar del mazo disponible');
+  assert.equal(engine.deckSize, atSelect, 'el total del mazo sigue intacto durante la mano');
+});
+
+test('el snapshot publico (`runSnapshot().deckSize`) coincide con el total real', () => {
+  const engine = new GameEngine({ seed: 5, bundle: bundle() });
+  engine.startRun(5);
+  engine.chooseBlind('b1');
+
+  // Antes el snapshot traia `deck.totalSize`, que durante la mano daba MENOS
+  // que el mazo: logros y debug median un mazo encogido.
+  assert.equal(engine.runSnapshot().deckSize, engine.deckSize);
+  assert.equal(
+    engine.runSnapshot().deckSize,
+    deckOf(engine).totalSize + engine.roundSnapshot().hand.length,
+    'el total del snapshot = pilas + mano',
+  );
 });

@@ -9,7 +9,9 @@
     "loading": "Growing mycelium...",
     "continue": "Continue",
     "next": "Next",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel",
+    "menu": "Menu"
   },
   "hud": {
     "ante": "Ante",
@@ -23,6 +25,7 @@
     "hands": "Hands",
     "discards": "Discards",
     "deck": "Deck",
+    "deckFull": "Deck: {remaining} cards left of {total}",
     "jokers": "Jokers",
     "jokerSlots": "Slots",
     "handSize": "Hand size",
@@ -597,7 +600,10 @@
     "daily": "Daily",
     "achievements": "Achievements",
     "cosmetics": "Cosmetics",
-    "history": "History"
+    "history": "History",
+    "quitTitle": "Back to menu",
+    "quitBody": "You are about to abandon this run. Run progress will be lost.",
+    "quitConfirm": "Abandon and exit"
   },
   "settings": {
     "title": "Settings",
@@ -1067,7 +1073,8 @@
     "default": "Default",
     "recommended": "Recommended order",
     "confirm": "Sorted by {criterion}",
-    "confirmDefault": "Original order restored"
+    "confirmDefault": "Original order restored",
+    "alreadySorted": "The hand was already in that order"
   },
   "deckstate": {
     "conservedTitle": "Deck kept",
