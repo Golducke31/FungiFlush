@@ -45,6 +45,7 @@ import {
   type AchievementContext,
   type AchievementDef,
 } from '@retention/AchievementTracker';
+import { parseMissions, MISSION_EVENTS, type GameEventName } from '@engine/index';
 import {
   claimDaily,
   evaluateDaily,
@@ -57,6 +58,7 @@ import { UnlockTracker, parseUnlockRules, type UnlockDef } from '@meta/UnlockTra
 import type { RetentionReward } from '@retention/types';
 import dailyRewardsData from '@data/daily-rewards.json';
 import achievementsData from '@data/achievements.json';
+import missionsData from '@data/missions.json';
 import unlockRulesData from '@data/unlock-rules.json';
 import seasonsData from '@data/seasons.json';
 import {
@@ -69,6 +71,7 @@ import {
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
+import { sortHand } from '@ui/handSort';
 import {
   buildCollectionCarousel,
   type CollectionCarouselFrame,
@@ -214,6 +217,9 @@ async function boot(): Promise<void> {
   // P4: temporada unica (Founder). `null` si el JSON no sirve: el paso queda
   // como "proximamente" y no tumba el arranque.
   const seasonDef = parseSeason(seasonsData);
+  // P2.6: misiones de run. Igual que el resto de `src/data/*.json`, plano y sin
+  // pasar por el validador de packs. Una mision rota se descarta sola.
+  const missionDefs = parseMissions(missionsData);
 
   // El aviso del sistema se detecta al arrancar (barato y sin efectos); el
   // PERMISO se pide recien en contexto, ver `onClaimDaily`.
@@ -242,6 +248,8 @@ async function boot(): Promise<void> {
     ...(profile.starterOverrides.length > 0
       ? { starterOverrides: profile.starterOverrides }
       : {}),
+    // P2.6: misiones de run. El motor no conoce el archivo; se le inyectan.
+    missions: missionDefs,
   });
 
   // --- Audio (no-op, con los ganchos ya conectados) ---
@@ -603,6 +611,13 @@ async function boot(): Promise<void> {
     // Por eso: ordenamos aca, le pasamos el array al frame, y cada cambio de
     // orden se aplica a los dos a la vez.
     const sorted = sortCards(state.cards, 'element');
+    // La carta resaltada (p. ej. la que se acaba de mejorar) define el foco
+    // inicial. Antes el foco caia siempre en el indice 0 y la carta mejorada
+    // "se iba" del centro del anillo: el jugador la mejoraba y la perdia de
+    // vista. Ahora el anillo se para en ELLA y el detalle la muestra.
+    const focusIndex = highlightUid
+      ? Math.max(0, sorted.findIndex((c) => c.uid === highlightUid))
+      : 0;
     const toEntries = (cards: CardInstance[]): CarouselEntryView[] =>
       cards.map((card) => ({ uid: card.uid, discovered: true, cardId: card.def.id, level: card.level }));
     frame = buildDeckCarouselFrame(state, {
@@ -622,9 +637,12 @@ async function boot(): Promise<void> {
     // arrancar, pero no compartia ese orden con el carrusel (que recibia
     // `state.cards` en el orden del mazo). Se lo damos nosotros para que el
     // indice del preview y el del anillo apunten a la misma carta.
-    frame.setSorted(sorted);
+    frame.setSorted(sorted, highlightUid);
     hud.showPanel(frame.panel, { carousel: true });
     scene.setCarousel(toEntries(sorted), focus, DECK_CAROUSEL);
+    // El anillo arranca dibujando la entrada 0 (setEntries resetea el giro).
+    // Se lo gira a la carta enfocada para que el anillo y el detalle coincidan.
+    if (focusIndex > 0) scene.focusCarousel(focusIndex);
   };
 
   const doPurge = (uid: string): void => {
@@ -712,6 +730,20 @@ async function boot(): Promise<void> {
       onPlay: () => engine.playHand(),
       onDiscard: () => engine.discardSelected(),
       onClear: () => engine.clearSelection(),
+      /**
+       * Orden de la mano (P1.3/P1.4/P2.1).
+       *
+       * El criterio lo resuelve `sortHand()` (puro, en `ui/handSort.ts`) y el
+       * motor lo aplica con `reorderHand()`, que valida que la lista sea una
+       * permutacion exacta de la mano: si no, no toca nada. Ordenar nunca
+       * consume recursos ni cambia cartas.
+       */
+      onSortHand: (mode) => {
+        const round = engine.round;
+        if (!round) return;
+        const ordered = sortHand(round.hand, mode);
+        if (engine.reorderHand(ordered.map((c) => c.uid))) hud?.applySortMode(mode);
+      },
       onBuy: (offerId) => {
         // El motivo del rechazo se calcula ACA, no en el aviso generico: antes
         // cualquier fallo decia "no alcanza el dinero", incluso cuando la oferta
@@ -738,6 +770,15 @@ async function boot(): Promise<void> {
       onArenaCovered: (covered: boolean) => scene.setDieVisible(!covered),
       onLeaveShop: () => engine.leaveShop(),
       onChooseBlind: (blindId) => engine.chooseBlind(blindId),
+      // P2.4 — El HUD dibuja la decision; el MOTOR aplica los efectos. Si la
+      // opcion no se puede pagar, `chooseInterlude` devuelve false y el panel
+      // se queda abierto (el boton ya esta deshabilitado, pero esto cubre el
+      // caso de que el estado cambie bajo los pies del jugador).
+      onChooseInterlude: (choiceId) => {
+        if (!engine.chooseInterlude(choiceId)) {
+          hud?.toast(t('interlude.cantAfford'), 'warn');
+        }
+      },
       onRestart: () => {
         savedRun = null;
         hud?.setContinueAvailable(null);
@@ -767,6 +808,10 @@ async function boot(): Promise<void> {
         // (persistente) y `startRun` la recorta al techo del contenido.
         engine.startRun(seed, profileStore.current.ascension.selected);
         scene.setMode('run');
+        // P0.3 — Tutorial jugable de la primera partida. Se ofrece UNA vez por
+        // run, sobre el panel de seleccion de ciego (que ya esta dibujado
+        // debajo). El jugador lo cierra y sigue con el flujo normal.
+        window.setTimeout(() => hud?.showTutorial(), 420);
       },
       onSelectAscension: (level) => {
         // El nivel elegido nunca supera el desbloqueado en el perfil. El panel
@@ -990,6 +1035,28 @@ async function boot(): Promise<void> {
     getContext: achievementContext,
   });
   achievements.start();
+
+  // --------------------------------------------------------------------------
+  // P2.6: misiones de run
+  // --------------------------------------------------------------------------
+  //
+  // El motor NO se auto-escucha: el controlador reenvia cada evento relevante a
+  // `advanceMissionsOn`. Asi el motor no necesita saber la forma exacta de los
+  // payloads y la lista de eventos queda en un solo lugar (`MISSION_EVENTS`).
+  for (const event of MISSION_EVENTS) {
+    bus.on(event as GameEventName, (payload) => {
+      engine.advanceMissionsOn(event, payload);
+    });
+  }
+
+  // El aviso de mision cumplida lo pide quien la detecta: el banner sobrevive a
+  // los paneles abiertos, y una mision se puede cumplir en plena tienda.
+  bus.on('mission:completed', ({ nameKey, reward }) => {
+    bus.emit('banner:show', {
+      key: 'banner.mission.completed',
+      params: { name: t(nameKey), reward: String(reward) },
+    });
+  });
 
   // --------------------------------------------------------------------------
   // R2: puertas de contenido (desbloqueo por jugar)

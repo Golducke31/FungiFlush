@@ -22,6 +22,7 @@ import type {
   BlindDefinition,
   CardDefinition,
   EvolutionRule,
+  InterludeDefinition,
   JokerDefinition,
   OfferTable,
   UpgradeTrack,
@@ -64,6 +65,8 @@ export interface PackContents {
   vouchers?: string[];
   /** Niveles de dificultad progresiva (R1). */
   ascensions?: string[];
+  /** Eventos entre Ciegos (P2.4). */
+  interludes?: string[];
   upgrades?: string[];
   board?: string[];
   antes?: string[];
@@ -131,6 +134,8 @@ export interface LoadedPack extends RawPack {
   vouchers: VoucherDefinition[];
   /** Niveles de ascension (dificultad progresiva). Ver `AscensionDefinition`. */
   ascensions: AscensionDefinition[];
+  /** Eventos entre Ciegos (P2.4). Ver `InterludeDefinition`. */
+  interludes: InterludeDefinition[];
   /** Flechas del modo tablero. Indexadas por `cardId`, no por posicion. */
   board: BoardCardDef[];
 }

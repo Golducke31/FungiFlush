@@ -28,7 +28,12 @@
     "handSize": "Hand size",
     "bestHand": "Best hand",
     "progress": "Progress",
-    "anteOf": "Ante {current} of {total}"
+    "anteOf": "Ante {current} of {total}",
+    "objective": "Goal",
+    "sort": "Sort",
+    "deckState": "Deck state",
+    "remaining": "Remaining: {hands} hands · {discards} discards",
+    "remainingPrefix": "Remaining:"
   },
   "blindCard": {
     "mult": "Multiplier",
@@ -37,7 +42,11 @@
     "boss": "Boss",
     "cleared": "Cleared",
     "locked": "Opens at ante {ante}",
-    "effects": "Round effect"
+    "effects": "Round effect",
+    "hands": "Hands",
+    "discards": "Discards",
+    "objective": "Goal",
+    "objectiveValue": "{count} points"
   },
   "action": {
     "play": "Play Hand",
@@ -55,7 +64,9 @@
     "noHands": "No hands left",
     "cantAfford": "Not enough money",
     "slotsFull": "No free joker slots",
-    "sellValue": "Sell for {value}"
+    "sellValue": "Sell for {value}",
+    "sort": "Sort",
+    "viewDeck": "View deck"
   },
   "phase": {
     "blind_select": "Choose your blind",
@@ -90,7 +101,28 @@
       "mutation": "Mutation",
       "voucher": "Upgrade",
       "money": "Fungis"
-    }
+    },
+    "impactTitle": "What it adds",
+    "impactSubstrate": "+{value} base Substrate",
+    "impactSpores": "+{value} base Spores",
+    "impactAbility": "Brings an Ability",
+    "impactNoAbility": "No ability: flat points",
+    "impactJoker": "Changes how you score",
+    "impactVoucher": "Changes the run rules",
+    "impactOwned": "Already owned",
+    "impactSlots": "Takes a joker slot",
+    "improves": "Improves your deck",
+    "impactMoneyGain": "+{value} Fungis",
+    "impactMoneyCost": "-{value} Fungis",
+    "impactJokerSlot": "+{value} joker slot",
+    "impactJokerSlotNeg": "{value} joker slot",
+    "impactHands": "{value} hand per Blind",
+    "impactHandsPlus": "+{value} hand per Blind",
+    "impactHandSize": "+{value} card in hand",
+    "impactHandSizeNeg": "{value} card in hand",
+    "impactCardCount": "+{value} card to the deck",
+    "impactPurge": "Destroys {value} random card",
+    "impactUpgrade": "Upgrades {value} random card"
   },
   "element": {
     "neutral": "Neutral",
@@ -706,6 +738,9 @@
     "cannotUpgrade": "Not enough money to upgrade",
     "noUpgrades": "This deck cannot be upgraded",
     "level": "Lv {level}",
+    "substrate": "Substrate",
+    "spores": "Spores",
+    "statBonus": "+{value} from upgrades",
     "readyBadge": "Evolution ready"
   },
   "evolve": {
@@ -813,6 +848,9 @@
     },
     "ascension": {
       "unlocked": "Ascension unlocked: level {level} — {name}"
+    },
+    "mission": {
+      "completed": "Mission complete: {name} — +{reward} Fungis"
     }
   },
   "unlockRule": {
@@ -984,5 +1022,169 @@
     "win": "Victory",
     "loss": "Defeat",
     "detail": "Ante {ante} · Seed {seed}"
+  },
+  "guide": {
+    "intro": "Build mushroom hands to overcome challenges.",
+    "intro2": "Reach the goal before you run out of hands.",
+    "startTutorial": "Start tutorial",
+    "goalTitle": "GOAL",
+    "handsTitle": "HANDS",
+    "discardsTitle": "DISCARDS",
+    "rewardTitle": "REWARD",
+    "whatIsBlind": "A Blind is this round's challenge. Beat it to move on and earn a reward.",
+    "selectHint": "Select cards to build a hand.",
+    "selectedOne": "1 selected",
+    "selectedMany": "{count} selected",
+    "sharedFamily": "Shares a Family with other cards",
+    "tutorialStep1": "Pick a challenge",
+    "tutorialStep2": "Select cards",
+    "tutorialStep3": "Play the hand",
+    "tutorialStep4": "Use your discards",
+    "tutorialSelect": "Tap up to {count} cards to build a hand.",
+    "tutorialPlay": "Press Play Hand to score what you selected.",
+    "tutorialDiscard": "Discarding spends 1 discard but draws new cards. Use it to hunt a better combo.",
+    "tutorialSort": "You can also sort your hand by Family or Substrate.",
+    "barNotice": "The bar only advances when you play a hand.",
+    "breakdownTitle": "How it was scored",
+    "breakdownHand": "Hand: {count} cards",
+    "breakdownCombo": "Combo",
+    "breakdownBase": "Base",
+    "breakdownBonus": "Bonuses",
+    "breakdownMult": "Multiplier",
+    "breakdownTotal": "Total",
+    "abilityTag": "ABILITY",
+    "abilityActivated": "{name} activated",
+    "substrateBonus": "Substrate bonus",
+    "firstBlindTitle": "Your first Blind"
+  },
+  "sort": {
+    "title": "Sort",
+    "by": "Sort by:",
+    "family": "Family",
+    "substrate": "Substrate",
+    "value": "Value",
+    "ability": "Ability",
+    "default": "Default",
+    "recommended": "Recommended order",
+    "confirm": "Sorted by {criterion}",
+    "confirmDefault": "Original order restored"
+  },
+  "deckstate": {
+    "conservedTitle": "Deck kept",
+    "conserved": "Deck kept: {count} cards",
+    "gained": "+{count} card gained",
+    "gainedMany": "+{count} cards gained",
+    "destroyed": "-{count} card destroyed by an ability",
+    "destroyedMany": "-{count} cards destroyed by an ability",
+    "byFamily": "By Family",
+    "bySubstrate": "By Substrate",
+    "total": "Total",
+    "newCards": "New",
+    "destroyedCards": "Destroyed",
+    "evolvedCards": "Transformed",
+    "none": "No deck changes"
+  },
+  "interlude": {
+    "title": "Event",
+    "subtitle": "A stop between Blinds",
+    "accept": "Accept",
+    "decline": "Move on",
+    "effectLabel": "Effect",
+    "costLabel": "Cost",
+    "targetUp": "The target of the next Blinds rises by {pct}%",
+    "targetDown": "The target of the next Blinds drops by {pct}%",
+    "cantAfford": "You cannot afford it",
+    "declined": "You moved on",
+    "accepted": "You took the deal",
+    "spore_trade": {
+      "name": "Spore trade",
+      "desc": "A spore trader offers you money up front. The substrate will demand more in return.",
+      "accept": "Take the money",
+      "acceptDetail": "+6 Fungis, but the next Blinds ask for 15% more",
+      "decline": "Refuse"
+    },
+    "rich_soil": {
+      "name": "Rich soil",
+      "desc": "A patch of unusually fertile ground. You can pull a new spore, but it costs a hand.",
+      "accept": "Take the spore",
+      "acceptDetail": "Adds an uncommon card to the deck, -1 hand per Blind",
+      "decline": "Let it grow"
+    },
+    "cracked_jar": {
+      "name": "Cracked jar",
+      "desc": "A broken jar with room for one more spore. Someone sells it cheap.",
+      "accept": "Buy the jar",
+      "acceptDetail": "Costs 5 Fungis, +1 joker slot",
+      "decline": "Leave it"
+    },
+    "sacrifice": {
+      "name": "Sacrifice",
+      "desc": "The mycelium asks for two spores to purify the substrate. In exchange, the path clears.",
+      "accept": "Offer two spores",
+      "acceptDetail": "Destroys 2 random cards, the target drops 15%",
+      "decline": "Keep the deck"
+    },
+    "spore_bloom": {
+      "name": "Spore bloom",
+      "desc": "A cloud of ripe spores can grow what you already own. It charges up front.",
+      "accept": "Pay the bloom",
+      "acceptDetail": "-4 Fungis, upgrades 2 random cards",
+      "decline": "Wait"
+    },
+    "mycelial_bargain": {
+      "name": "Mycelial bargain",
+      "desc": "The network offers more hand space, in exchange for a harder challenge.",
+      "accept": "Take the bargain",
+      "acceptDetail": "+1 card in hand, but the next Blinds ask for 20% more",
+      "decline": "Refuse the bargain"
+    }
+  },
+  "common": {
+    "declineDetail": "No cost. You keep your deck and target as they are."
+  },
+  "mission": {
+    "title": "MISSIONS",
+    "reward": "+{value}",
+    "completed": "Complete",
+    "hand_500": {
+      "name": "Strong hand",
+      "desc": "Play a hand of 500 or more"
+    },
+    "hand_2000": {
+      "name": "Brutal hand",
+      "desc": "Play a hand of 2000 or more"
+    },
+    "discard_3": {
+      "name": "Cleanup",
+      "desc": "Discard 6 cards"
+    },
+    "jokers_3": {
+      "name": "Symbiosis",
+      "desc": "Hold 3 jokers at once"
+    },
+    "upgrade_3": {
+      "name": "Cultivation",
+      "desc": "Upgrade 3 cards"
+    },
+    "blind_no_loss": {
+      "name": "No hand lost",
+      "desc": "Win a Blind without spending a hand"
+    },
+    "evolve_1": {
+      "name": "Evolution",
+      "desc": "Evolve a card"
+    },
+    "spend_30": {
+      "name": "Shopper",
+      "desc": "Buy 3 things in the shop"
+    },
+    "ante_reach": {
+      "name": "Explorer",
+      "desc": "Reach ante 5"
+    },
+    "destroy_2": {
+      "name": "Purge",
+      "desc": "Destroy 2 cards"
+    }
   }
 }

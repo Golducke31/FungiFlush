@@ -13,19 +13,25 @@
 import {
   bus,
   jokerSellValue,
+  MAX_PLAY_SIZE,
   type CardDefinition,
   type CardInstance,
   type GameEngine,
+  type InterludeChoice,
+  type InterludeEffect,
   type JokerDefinition,
   type RunSnapshot,
+  type ScoreBreakdown,
   type ShopOffer,
 } from '@engine/index';
 import type { BoardView } from '@engine/board';
+import type { RoundState } from '@engine/state/RoundState';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
+import { SORT_LABEL_KEY, SORT_MODES, type SortMode } from './handSort';
 import { buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
@@ -106,6 +112,13 @@ export interface HudCallbacks {
   onOpenDeck: () => void;
   /** Volver a tirar el dado multiplicador (paga dinero). */
   onRerollDie: () => void;
+  /**
+   * Reordenar la mano (P1.3/P1.4). El criterio lo resuelve el controlador con
+   * `sortHand()`, que es puro; aca solo se avisa QUE criterio se pidio.
+   */
+  onSortHand: (mode: SortMode) => void;
+  /** El jugador eligio una opcion del interludio (P2.4). */
+  onChooseInterlude: (choiceId: string) => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
   onOpenBoard: () => void;
   // --- R4b: cosméticos (dorso de carta / tapete) ---
@@ -192,6 +205,21 @@ export class HUD {
    */
   private elBanner = document.createElement('div');
   private elPreview = document.createElement('div');
+  /**
+   * Franja de OBJETIVO de la ronda (P0.1): "OBJETIVO 300 puntos · MANOS 4 ·
+   * DESCARTES 3". Va pegada a la barra de progreso, que es donde el jugador
+   * mira para saber si va ganando.
+   */
+  private elObjective = document.createElement('div');
+  /** Aviso de que la barra avanza solo al jugar (P0.2). Se muestra y se apaga. */
+  private elBarNotice = document.createElement('div');
+  /** Guia de seleccion sobre la mano (P0.3). */
+  private elSelectHint = document.createElement('div');
+  /**
+   * Franja de MISIONES de la run (P2.6). Va debajo de los jokers: es la lista
+   * de objetivos cortos que dan direccion entre ciego y ciego.
+   */
+  private elMissions = document.createElement('div');
   /** Contador grande: aparece durante la secuencia y suma en vivo. */
   private elTicker = document.createElement('div');
   private elTickerOp = document.createElement('span');
@@ -214,6 +242,23 @@ export class HUD {
   private panelPending = false;
   /** El aviso de "ciego superado" ya se mostro para esta ronda. */
   private clearedShown = false;
+  /**
+   * El termino "Ciego" ya se explico en esta run (P1.6). Se muestra UNA vez:
+   * repetirlo cada ante lo vuelve ruido y deja de leerse.
+   */
+  private blindExplained = false;
+  /** El tutorial de la primera partida ya se ofrecio (P0.3). */
+  private tutorialOffered = false;
+  /** Estado del mazo de la ultima transicion (P1.5), para la linea post-ciego. */
+  private lastDeckDelta: { conserved: number; gained: number; destroyed: number } | null = null;
+  /** Desglose de la ultima mano jugada (P0.4), para mostrarlo al cerrar el ciego. */
+  private lastBreakdown: {
+    breakdown: ScoreBreakdown;
+    total: number;
+    handSize: number;
+  } | null = null;
+  /** Criterio de orden activo en la mano (P1.3/P1.4). 'default' = orden del mazo. */
+  private sortMode: SortMode = 'default';
 
   // --- Dado (tirada manual) ---
   /** Elementos del panel de ciego que cambian con la fase del dado. */
@@ -321,9 +366,24 @@ export class HUD {
     const progressFill = document.createElement('div');
     progressFill.className = 'hud-progress-fill';
     this.elProgress.appendChild(progressFill);
+    // P0.2 — La barra SOLO avanza al jugar una mano. Este aviso vive pegado a
+    // ella porque es exactamente el malentendido que el plan detecta: el
+    // jugador mira la barra, ve que no se mueve al seleccionar y necesita saber
+    // que eso es correcto, no un bug.
+    this.elBarNotice.className = 'hud-bar-notice';
+    this.elBarNotice.textContent = t('guide.barNotice');
+    // P0.1 — Objetivo/manos/descartes bajo la barra.
+    this.elObjective.className = 'hud-objective';
     this.elBlind.className = 'hud-blind-name';
     this.elPreview.className = 'hud-preview';
-    scoreBlock.append(scoreMain, this.elProgress, this.elBlind, this.elPreview);
+    scoreBlock.append(
+      scoreMain,
+      this.elProgress,
+      this.elBarNotice,
+      this.elObjective,
+      this.elBlind,
+      this.elPreview,
+    );
 
     const rightGroup = document.createElement('div');
     rightGroup.style.display = 'flex';
@@ -388,10 +448,22 @@ export class HUD {
     tickerLine.append(this.elTickerOp, this.elTickerTotal);
     this.elTicker.append(tickerLine, this.elTickerSource);
 
+    // P0.3 — Guia de seleccion: flota sobre la mano, en la franja libre entre
+    // las cartas y los botones. No intercepta punteros (va en la capa de HUD).
+    this.elSelectHint.className = 'hud-select-hint';
+    this.elSelectHint.dataset['act'] = 'select-hint';
+
+    // P2.6 — Misiones: van entre los jokers y los controles, sin capturar
+    // punteros (viven en la capa de HUD, que es pointer-events:none).
+    this.elMissions.className = 'hud-missions';
+    this.elMissions.dataset['act'] = 'missions';
+
     this.root.append(
       top,
       this.elJokers,
+      this.elMissions,
       bottom,
+      this.elSelectHint,
       this.elTicker,
       this.elPopups,
       this.elBanner,
@@ -408,6 +480,15 @@ export class HUD {
   private subscribe(): void {
     this.unsubscribes.push(
       bus.on('state:changed', () => this.render()),
+
+      // P1.5 — El motor avisa que devolvio cartas al mazo al cerrar el ciego.
+      // El HUD acumula el delta para poder decir que paso con el mazo; el
+      // contador se limpia al empezar la ronda siguiente.
+      bus.on('deck:conserved', ({ returned }) => {
+        const delta = this.lastDeckDelta ?? { conserved: 0, gained: 0, destroyed: 0 };
+        delta.conserved += returned;
+        this.lastDeckDelta = delta;
+      }),
 
       bus.on('score:changed', ({ total, target }) => {
         this.elScore.textContent = formatNumber(total);
@@ -443,8 +524,14 @@ export class HUD {
         }, 1200);
       }),
 
-      bus.on('score:hand', ({ total }) => {
+      bus.on('score:hand', ({ breakdown, total }) => {
         this.scoreHandTotal = total;
+        // P0.4 — Se guarda el desglose de la ULTIMA mano para poder mostrarlo
+        // entero al cerrar el ciego. El plan pide un desglose explicito
+        // (Mano / Combinacion / Base / Bonificaciones / Multiplicador / Total):
+        // el ticker lo cuenta en vivo, pero al terminar ya no esta y el jugador
+        // no tiene donde volver a mirarlo.
+        this.lastBreakdown = { breakdown, total, handSize: this.engine.round?.selected.length ?? 0 };
         this.elTickerTotal.textContent = '0';
       }),
 
@@ -479,7 +566,16 @@ export class HUD {
       }),
 
       bus.on('shop:enter', ({ offers }) => this.showShop(offers)),
-      bus.on('shop:reroll', ({ offers }) => this.showShop(offers)),
+      // P2.4 — Interludio: el motor avisa que hay un evento y el HUD abre el
+      // panel con las opciones. El motor NO aplica nada hasta que el jugador
+      // elige; aca solo se dibuja la decision.
+      bus.on('interlude:enter', () => this.showInterlude()),
+      bus.on('interlude:choose', ({ choice }) => {
+        // La opcion sin efectos es "seguir de largo": el aviso lo dice para que
+        // el jugador sepa que la decision quedo registrada.
+        const tookDeal = (choice.effects?.length ?? 0) > 0;
+        this.toast(t(tookDeal ? 'interlude.accepted' : 'interlude.declined'), 'info');
+      }),      bus.on('shop:reroll', ({ offers }) => this.showShop(offers)),
       // Comprar cambia el estado de la OFERTA (vendida) y el dinero. El refresco
       // no puede depender solo de `money:changed`: ese evento lo dispara el
       // cobro, y la oferta tiene que quedar marcada en el mismo refresco.
@@ -513,6 +609,29 @@ export class HUD {
 
       bus.on('log', ({ level, key, params }) => {
         this.toast(t(key, params), level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info');
+      }),
+
+      // P1.5 — Deltas del mazo durante la ronda. Se cuentan para poder decirle
+      // al jugador, al cerrar el ciego, que entro y que se perdio. Sin esto la
+      // unica forma de saberlo seria comparar dos manos a ojo.
+      bus.on('card:destroyed', () => {
+        const delta = this.lastDeckDelta ?? { conserved: 0, gained: 0, destroyed: 0 };
+        delta.destroyed += 1;
+        this.lastDeckDelta = delta;
+      }),
+
+      bus.on('card:created', () => {
+        const delta = this.lastDeckDelta ?? { conserved: 0, gained: 0, destroyed: 0 };
+        delta.gained += 1;
+        this.lastDeckDelta = delta;
+      }),
+
+      // Al arrancar una ronda nueva se reinician los acumuladores: el estado
+      // que se muestra al cerrar un ciego es el de ESE ciego, no el de toda la
+      // partida.
+      bus.on('round:start', () => {
+        this.lastDeckDelta = null;
+        this.lastBreakdown = null;
       }),
 
       bus.on('i18n:changed', () => {
@@ -551,17 +670,128 @@ export class HUD {
       const fill = this.elProgress.firstElementChild as HTMLElement | null;
       if (fill) fill.style.width = `${Math.min(100, (round.score / Math.max(1, round.target)) * 100)}%`;
       this.elBlind.textContent = t(round.blind.nameKey);
+      this.renderObjective(round);
     } else {
       this.elScore.textContent = '0';
       this.elTarget.textContent = '/ 0';
       this.elBlind.textContent = '';
+      this.elObjective.classList.remove('is-visible');
     }
 
     this.renderCounters();
     this.renderJokers();
+    this.renderMissions();
     this.renderActions();
     this.renderPreview();
+    this.renderSelectHint();
     this.renderOverlay(run.status);
+  }
+
+  /**
+   * P2.6 — Franja de MISIONES activas. Solo se dibuja dentro de una run (en el
+   * menu no hay misiones) y se apaga sola si no hay ninguna.
+   */
+  private renderMissions(): void {
+    this.elMissions.innerHTML = '';
+    const hasRun =
+      this.engine.run.status !== 'menu' && this.engine.run.status !== 'game_over';
+    const missions = hasRun ? this.engine.activeMissions() : [];
+
+    if (missions.length === 0) {
+      this.elMissions.classList.remove('is-visible');
+      return;
+    }
+
+    const title = document.createElement('div');
+    title.className = 'hud-missions-title';
+    title.textContent = t('mission.title');
+    this.elMissions.appendChild(title);
+
+    for (const { def, state } of missions) {
+      const chip = document.createElement('div');
+      chip.className = `mission-chip${state.completed ? ' is-done' : ''}`;
+      chip.dataset['act'] = 'mission';
+      chip.dataset['mission'] = def.id;
+      if (state.completed) chip.dataset['missionDone'] = '1';
+
+      const name = document.createElement('div');
+      name.className = 'mission-chip-name';
+      name.textContent = t(def.nameKey);
+
+      const desc = document.createElement('div');
+      desc.className = 'mission-chip-desc';
+      // Progreso visible para las incrementales: "3/6". Sin esto una mision de
+      // contar no da ninguna señal de que avanza.
+      if (def.incremental) {
+        const max = def.incremental.max;
+        desc.textContent = `${t(def.descKey)} · ${state.progress}/${max}`;
+      } else {
+        desc.textContent = t(def.descKey);
+      }
+
+      const reward = document.createElement('div');
+      reward.className = 'mission-chip-reward';
+      reward.textContent = state.completed ? t('mission.completed') : t('mission.reward', { value: def.reward });
+
+      chip.append(name, desc, reward);
+      this.elMissions.appendChild(chip);
+    }
+    this.elMissions.classList.add('is-visible');
+  }
+
+  /**
+   * P0.1 — Objetivo / Manos / Descartes durante la partida.
+   *
+   * El plan pide que, mientras se juega, la informacion principal se lea asi:
+   *   "180 / 300 puntos  ·  Te quedan: 3 manos · 2 descartes"
+   * Los manos/descartes ya estaban en los contadores de abajo, pero en el
+   * borde inferior del HUD: lejos del objetivo, que es el numero que el jugador
+   * persigue. Aca se juntan en una sola linea, al lado de la barra.
+   */
+  private renderObjective(round: RoundState): void {
+    this.elObjective.innerHTML = '';
+
+    const goal = document.createElement('span');
+    goal.className = 'hud-objective-goal';
+    goal.textContent = `${formatNumber(round.score)} / ${formatNumber(round.target)} ${t('hud.score')}`;
+
+    const sep = document.createElement('span');
+    sep.className = 'hud-objective-sep';
+    sep.setAttribute('aria-hidden', 'true');
+    sep.textContent = '·';
+
+    const left = document.createElement('span');
+    left.className = 'hud-objective-left';
+    left.textContent = t('hud.remaining', {
+      hands: round.handsLeft,
+      discards: round.discardsLeft,
+    });
+    const handsSpan = document.createElement('span');
+    handsSpan.className = `hud-objective-num${round.handsLeft <= 1 ? ' is-low' : ''}`;
+    handsSpan.textContent = String(round.handsLeft);
+    const discardSpan = document.createElement('span');
+    discardSpan.className = `hud-objective-num${round.discardsLeft === 0 ? ' is-low' : ''}`;
+    discardSpan.textContent = String(round.discardsLeft);
+
+    // Se compone la linea a mano para poder pintar los numeros criticos en
+    // rojo: un `textContent` con interpolacion perderia esa jerarquia.
+    left.textContent = '';
+    left.append(
+      document.createTextNode(`${t('hud.remainingPrefix')} `),
+      handsSpan,
+      document.createTextNode(` ${t('hud.hands')} `),
+      sep.cloneNode(true) as HTMLElement,
+      document.createTextNode(' '),
+      discardSpan,
+      document.createTextNode(` ${t('hud.discards')}`),
+    );
+
+    this.elObjective.append(goal, left);
+    this.elObjective.classList.add('is-visible');
+
+    // P0.2 — El aviso de "la barra avanza solo al jugar" se apaga solo tras
+    // la primera mano jugada: cumplio su funcion y repetirlo seria ruido.
+    this.elBarNotice.classList.toggle('is-visible', round.cardsPlayedThisRound === 0);
   }
 
   /**
@@ -593,6 +823,78 @@ export class HUD {
 
     this.elPreview.append(arrow, total, detail);
     this.elPreview.classList.add('is-visible');
+  }
+
+  /**
+   * P0.3 — Guia de seleccion sobre la mano.
+   *
+   * El plan pide que la PRIMERA interaccion explique que hace seleccionar: que
+   * NO llena la barra y que NO es puntuar todavia. Se muestran dos datos:
+   *   - el contador ("2 seleccionadas"), que da feedback inmediato;
+   *   - si las cartas elegidas comparten Familia, que es la pista de sinergia
+   *     que el plan pide (P1/P2.2) y que el jugador no puede ver de otro modo.
+   *
+   * QUE DESAPARECE Y QUE NO
+   * -----------------------
+   * El TEXTO de tutorial ("Toca hasta 5 cartas...") sale solo ANTES de jugar la
+   * primera mano: una vez que el jugador jugo una, ya sabe que hace seleccionar.
+   * El CONTADOR ("3 seleccionadas"), en cambio, se muestra SIEMPRE que haya al
+   * menos una carta elegida, en toda la run: es el feedback de cuantas cartas
+   * vas a jugar y desaparecerlo hacia que el jugador perdiera la cuenta (el bug
+   * reportado: "a veces no aparece"). Solo se apaga cuando no hay seleccion y ya
+   * paso la primera mano, o cuando no estas jugando.
+   */
+  private renderSelectHint(): void {
+    const round = this.engine.round;
+    const run = this.engine.run;
+    const selected = round?.selected.length ?? 0;
+
+    // Fuera de la fase de juego no hay nada que mostrar.
+    if (!run || !round || run.status !== 'playing') {
+      this.elSelectHint.classList.remove('is-visible');
+      return;
+    }
+
+    const firstHand = round.cardsPlayedThisRound === 0;
+
+    // Sin seleccion: solo el texto de tutorial, y solo la primera mano.
+    if (selected === 0) {
+      if (!firstHand) {
+        this.elSelectHint.classList.remove('is-visible');
+        return;
+      }
+      this.elSelectHint.innerHTML = '';
+      const hint = document.createElement('span');
+      hint.className = 'hud-select-hint-text';
+      hint.textContent = t('guide.tutorialSelect', { count: MAX_PLAY_SIZE });
+      this.elSelectHint.appendChild(hint);
+      this.elSelectHint.classList.add('is-visible');
+      return;
+    }
+
+    // Con seleccion: el contador SIEMPRE (toda la run), con la pista de familia.
+    this.elSelectHint.innerHTML = '';
+
+    const count = document.createElement('span');
+    count.className = 'hud-select-hint-count';
+    count.textContent =
+      selected === 1 ? t('guide.selectedOne') : t('guide.selectedMany', { count: selected });
+
+    // Sinergia de Familia entre las cartas elegidas. Se compara contra la
+    // Familia de la primera seleccionada: es la lectura mas simple ("estas
+    // cartas son de la misma familia") y la que el plan describe.
+    const chosen = round.hand.filter((c) => round.selected.includes(c.uid));
+    const families = new Set(chosen.map((c) => c.def.family));
+    const sameFamily = families.size === 1 && chosen.length > 1;
+
+    const family = document.createElement('span');
+    family.className = `hud-select-hint-family${sameFamily ? ' is-shared' : ''}`;
+    if (sameFamily) {
+      family.textContent = `${t('family.' + chosen[0]!.def.family)} · ${t('guide.sharedFamily')}`;
+    }
+
+    this.elSelectHint.append(count, family);
+    this.elSelectHint.classList.add('is-visible');
   }
 
   /**
@@ -642,8 +944,14 @@ export class HUD {
         round.discardsLeft === 0 ? 'is-low' : '',
       ],
     ];
+    // El chip dice "MAZO": es el TAMANO COMPLETO del mazo (robo + descarte +
+    // mano), no lo que queda por robar. Antes mostraba `deck.remaining`, asi
+    // que el numero bajaba a medida que robabas y al reciclar el descarte
+    // volvia a subir: el jugador que contaba sus 40 cartas al empezar veia
+    // "32" y creia que habia perdido 8. `deckSize` es la fuente unica de ese
+    // numero (la misma que usa el panel del mazo).
     const state: Array<[string, string, string | number, string]> = [
-      ['ui_icon_collection', t('hud.deck'), run.deck.remaining, ''],
+      ['ui_icon_collection', t('hud.deck'), this.engine.deckSize, ''],
       ['ui_icon_joker_slot', t('hud.jokers'), run.jokers.length, ''],
     ];
 
@@ -768,19 +1076,119 @@ export class HUD {
     clear.disabled = selected === 0;
     clear.addEventListener('click', () => this.callbacks.onClear());
 
+    // P1.3 / P1.4 — Ordenar. NO reorganiza sola: abre un menu y el jugador
+    // elige. El plan es explicito en que el orden automatico debe ser
+    // opcional, y que el boton no puede tapar la mano.
+    const sort = document.createElement('button');
+    sort.className = 'btn is-ghost is-sort';
+    sort.dataset['act'] = 'sort';
+    sort.textContent = t('action.sort');
+    sort.setAttribute('aria-haspopup', 'menu');
+    sort.setAttribute('aria-expanded', 'false');
+    sort.disabled = round.hand.length < 2;
+    const sortMenu = this.buildSortMenu();
+    sort.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.toggleSortMenu(sort, sortMenu);
+    });
+
     const discard = document.createElement('button');
     discard.className = 'btn is-discard';
     discard.textContent = t('action.discard');
+    // P0.3 — El boton explica el recurso en su propio texto: "Descartar · 3".
+    // El plan pide que quede claro que descartar CONSUME: un numero pegado al
+    // verbo lo dice sin necesitar una leyenda aparte.
+    discard.dataset['act'] = 'discard';
     discard.disabled = selected === 0 || round.discardsLeft <= 0;
     discard.addEventListener('click', () => this.callbacks.onDiscard());
 
     const play = document.createElement('button');
     play.className = 'btn is-play';
+    play.dataset['act'] = 'play';
     play.textContent = selected > 0 ? `${t('action.play')} (${selected})` : t('action.play');
     play.disabled = selected === 0 || round.handsLeft <= 0;
     play.addEventListener('click', () => this.callbacks.onPlay());
 
-    this.elActions.append(clear, discard, play);
+    this.elActions.append(clear, sort, discard, play);
+  }
+
+  /**
+   * Menu emergente de criterios de orden (P1.3/P1.4/P2.1).
+   *
+   * Vive dentro de `elActions` y se posiciona con CSS por encima de la barra:
+   * en movil la fila de botones esta al borde inferior, asi que un menu
+   * desplegado hacia arriba es lo unico que no tapa la mano.
+   */
+  private buildSortMenu(): HTMLElement {
+    const menu = document.createElement('div');
+    menu.className = 'sort-menu';
+    menu.dataset['act'] = 'sort-menu';
+    menu.setAttribute('role', 'menu');
+
+    const title = document.createElement('div');
+    title.className = 'sort-menu-title';
+    title.textContent = t('sort.by');
+    menu.appendChild(title);
+
+    for (const mode of SORT_MODES) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'sort-menu-item';
+      item.dataset['sortMode'] = mode;
+      item.setAttribute('role', 'menuitemradio');
+      item.textContent = t(SORT_LABEL_KEY[mode]);
+      const isActive = mode === this.sortMode;
+      item.classList.toggle('is-active', isActive);
+      item.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      item.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.callbacks.onSortHand(mode);
+        this.closeSortMenu();
+      });
+      menu.appendChild(item);
+    }
+
+    return menu;
+  }
+
+  private toggleSortMenu(anchor: HTMLElement, menu: HTMLElement): void {
+    const open = this.elActions.querySelector('.sort-menu');
+    if (open === menu) {
+      this.closeSortMenu();
+      return;
+    }
+    this.closeSortMenu();
+    anchor.setAttribute('aria-expanded', 'true');
+    // El menu se cuelga del contenedor de acciones: el ancla puede morir en
+    // cada `renderActions()` (que limpia el innerHTML), y con ella el menu.
+    this.elActions.appendChild(menu);
+    menu.classList.add('is-open');
+    // Cerrar al tocar fuera. `{ once: true }` y el chequeo de contencion evitan
+    // que el propio click de apertura lo cierre al instante.
+    const onDocClick = (event: MouseEvent): void => {
+      if (!menu.contains(event.target as Node)) this.closeSortMenu();
+    };
+    window.setTimeout(() => document.addEventListener('click', onDocClick, { once: true }), 0);
+  }
+
+  private closeSortMenu(): void {
+    const open = this.elActions.querySelector('.sort-menu');
+    if (!open) return;
+    open.remove();
+    const anchor = this.elActions.querySelector('.is-sort');
+    anchor?.setAttribute('aria-expanded', 'false');
+  }
+
+  /** Sincroniza el criterio activo y refresca el menu si esta abierto. */
+  private setSortMode(mode: SortMode): void {
+    this.sortMode = mode;
+    const open = this.elActions.querySelector('.sort-menu');
+    if (!open) return;
+    for (const item of Array.from(open.querySelectorAll('.sort-menu-item'))) {
+      const isActive = item.getAttribute('data-sort-mode') === mode;
+      item.classList.toggle('is-active', isActive);
+      item.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    }
   }
 
   // ==========================================================================
@@ -818,6 +1226,11 @@ export class HUD {
         break;
       case 'blind_select':
         this.showBlindSelect();
+        break;
+      case 'interlude':
+        // P2.4 — El interludio ya abrio su panel por `interlude:enter`; si el
+        // HUD llega a este estado sin panel (ej. recarga), se muestra igual.
+        if (!this.elOverlay?.querySelector('.panel.is-interlude')) this.showInterlude();
         break;
       case 'reward':
         // Primero el aviso de superacion, despues el draft: sin esto el panel
@@ -864,12 +1277,143 @@ export class HUD {
     });
 
     panel.append(title, detail);
+
+    // P0.4 — Desglose de la mano que cerro el ciego. Se arma con el ULTIMO
+    // `score:hand`, que es el que efectivamente supero el objetivo.
+    const breakdown = this.buildBreakdown();
+    if (breakdown) panel.appendChild(breakdown);
+
+    // P1.5 — Estado del mazo: "Mazo conservado: 40 cartas / +1 carta obtenida".
+    // Es la respuesta VISIBLE a la pregunta que el plan detecta como central:
+    // "que paso con mis cartas despues de superar el Ciego".
+    const deckLine = this.buildDeckStateLine();
+    if (deckLine) panel.appendChild(deckLine);
+
     this.openOverlay(panel);
     // Se queda lo justo para leerse, y despues entra el draft.
     window.setTimeout(() => {
       if (this.engine.run.status !== 'reward') return;
       then();
-    }, 1500);
+    }, this.lastBreakdown ? 2400 : 1500);
+  }
+
+  /**
+   * P0.4 — Desglose de puntuacion.
+   *
+   * El plan lo describe asi:
+   *   Mano: 5 cartas · Combinacion: Bosque micelial · Base: 80
+   *   Bonificaciones: +40 · Multiplicador: x1.5 · Total: 180 / 300
+   * El ultimo renglon (Total) se pinta destacado porque es el numero que el
+   * jugador compara contra el objetivo.
+   */
+  private buildBreakdown(): HTMLElement | null {
+    const data = this.lastBreakdown;
+    if (!data) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'score-breakdown';
+    wrap.dataset['act'] = 'breakdown';
+
+    const heading = document.createElement('div');
+    heading.className = 'score-breakdown-title';
+    heading.textContent = t('guide.breakdownTitle');
+    wrap.appendChild(heading);
+
+    const substrate = data.breakdown.baseSubstrate + data.breakdown.addedSubstrate;
+    const spores = data.breakdown.baseSpores + data.breakdown.addedSpores;
+    const bonus =
+      data.breakdown.addedSubstrate + data.breakdown.addedSpores * data.breakdown.multipliedSpores;
+
+    const rows: Array<[string, string, string]> = [
+      [t('guide.breakdownCombo'), `${formatNumber(data.handSize)} ${t('hud.deck')}`, ''],
+      [t('guide.breakdownBase'), `${formatNumber(data.breakdown.baseSubstrate)} × ${formatNumber(data.breakdown.baseSpores)}`, ''],
+      [
+        t('guide.breakdownBonus'),
+        `${bonus >= 0 ? '+' : ''}${formatNumber(spores)} ${t('hud.spores')}`,
+        bonus > 0 ? 'is-positive' : '',
+      ],
+      [
+        t('guide.breakdownMult'),
+        `×${(data.breakdown.multipliedSpores || 1).toFixed(1)}`,
+        data.breakdown.multipliedSpores > 1 ? 'is-positive' : '',
+      ],
+    ];
+
+    // Se omite la fila "Base" en crudo si coincide con el sustrato: el jugador
+    // solo necesita ver lo que APORTA cada parte, no la aritmetica interna.
+    void substrate;
+
+    for (const [label, value, kind] of rows) {
+      const row = document.createElement('div');
+      row.className = `score-breakdown-row${kind ? ` ${kind}` : ''}`;
+      const labelEl = document.createElement('span');
+      labelEl.className = 'score-breakdown-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'score-breakdown-value';
+      valueEl.textContent = value;
+      row.append(labelEl, valueEl);
+      wrap.appendChild(row);
+    }
+
+    const total = document.createElement('div');
+    total.className = 'score-breakdown-row is-total';
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'score-breakdown-label';
+    totalLabel.textContent = t('guide.breakdownTotal');
+    const totalValue = document.createElement('span');
+    totalValue.className = 'score-breakdown-value';
+    totalValue.textContent = `${formatNumber(this.scoreHandTotal)} / ${formatNumber(this.engine.round?.target ?? 0)}`;
+    total.append(totalLabel, totalValue);
+    wrap.appendChild(total);
+
+    return wrap;
+  }
+
+  /**
+   * P1.5 — Estado del mazo al cerrar el ciego.
+   *
+   * Se calcula comparando el mazo AHORA contra lo que el motor aviso por
+   * `deck:conserved` (cartas devueltas) y contando lo que entro o salio durante
+   * la ronda. El objetivo es que el jugador NUNCA tenga que deducir que paso
+   * mirando la mano siguiente.
+   */
+  private buildDeckStateLine(): HTMLElement | null {
+    const run = this.engine.run;
+    if (!run) return null;
+
+    const line = document.createElement('div');
+    line.className = 'deck-state-line';
+    line.dataset['act'] = 'deck-state';
+
+    const total = document.createElement('span');
+    total.className = 'deck-state-total';
+    total.textContent = t('deckstate.conserved', { count: formatNumber(run.deck.totalSize) });
+    line.appendChild(total);
+
+    const delta = this.lastDeckDelta;
+    if (delta) {
+      if (delta.gained > 0) {
+        const gained = document.createElement('span');
+        gained.className = 'deck-state-delta is-gained';
+        gained.textContent =
+          delta.gained === 1
+            ? t('deckstate.gained', { count: 1 })
+            : t('deckstate.gainedMany', { count: delta.gained });
+        line.appendChild(gained);
+      }
+      if (delta.destroyed > 0) {
+        const destroyed = document.createElement('span');
+        destroyed.className = 'deck-state-delta is-lost';
+        destroyed.textContent =
+          delta.destroyed === 1
+            ? t('deckstate.destroyed', { count: 1 })
+            : t('deckstate.destroyedMany', { count: delta.destroyed });
+        line.appendChild(destroyed);
+      }
+    }
+
+    return line;
   }
 
   /**
@@ -1008,6 +1552,24 @@ export class HUD {
     this.render();
   }
 
+  /**
+   * Aplica el resultado de ordenar la mano (P1.3/P1.4).
+   *
+   * El controlador ya reordeno el motor con `reorderHand()`; aca solo se
+   * refleja el criterio activo y se confirma con un toast corto, que es lo que
+   * el plan pide ("mostrar una pequeña confirmacion: Ordenado por Familia").
+   */
+  applySortMode(mode: SortMode): void {
+    this.setSortMode(mode);
+    const message =
+      mode === 'default'
+        ? t('sort.confirmDefault')
+        : t('sort.confirm', { criterion: t(SORT_LABEL_KEY[mode]) });
+    // Se confirma SIEMPRE, aunque la mano ya estuviera en ese orden: el jugador
+    // pulso el criterio y espera una respuesta, no silencio.
+    this.toast(message, 'info');
+  }
+
   // ==========================================================================
   // Pantalla de inicio
   // ==========================================================================
@@ -1074,6 +1636,100 @@ export class HUD {
    */
   setAscensionState(state: { unlocked: number; selected: number; max: number }): void {
     this.ascensionState = state;
+  }
+
+  /**
+   * P0.3 — Tutorial jugable de 30 segundos.
+   *
+   * El plan es explicito: "No conviene comenzar con una explicacion extensa. La
+   * primera partida debe ensenar mediante acciones guiadas". Este panel es el
+   * PRIMER paso: presenta el objetivo, las manos, los descartes y la recompensa
+   * del primer ciego, y deja elegir. Los pasos siguientes los enseña la propia
+   * partida (la guia de seleccion sobre la mano, el aviso de la barra y el
+   * boton de orden), no mas pantallas.
+   *
+   * Se muestra UNA vez por run (`tutorialOffered`), y solo cuando la run
+   * empieza de cero. El boton lleva al flujo normal de seleccion de ciego.
+   */
+  showTutorial(): void {
+    if (this.tutorialOffered) return;
+    this.tutorialOffered = true;
+
+    const panel = document.createElement('div');
+    panel.className = 'panel is-tutorial';
+    panel.dataset['act'] = 'tutorial';
+
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t('guide.firstBlindTitle');
+
+    const intro = document.createElement('p');
+    intro.className = 'panel-subtitle';
+    intro.textContent = t('guide.intro');
+
+    const intro2 = document.createElement('p');
+    intro2.className = 'tutorial-line';
+    intro2.textContent = t('guide.intro2');
+
+    // Los cuatro datos del primer desafio, con la misma jerarquia que el plan
+    // dibuja: objetivo / manos / descartes / recompensa.
+    const stats = document.createElement('div');
+    stats.className = 'tutorial-stats';
+    const die = this.engine.run?.die;
+    const hands = Math.max(1, (this.engine.run?.baseHands ?? 0) + (die?.hands ?? 0));
+    const discards = Math.max(0, (this.engine.run?.baseDiscards ?? 0) + (die?.discards ?? 0));
+    const firstBlind = this.engine.availableBlinds()[this.engine.run?.blindIndex ?? 0];
+    const target = firstBlind ? this.engine.targetFor(firstBlind) : 0;
+    const reward = firstBlind?.reward ?? 0;
+
+    const entries: Array<[string, string]> = [
+      [t('guide.goalTitle'), t('blindCard.objectiveValue', { count: formatNumber(target) })],
+      [t('guide.handsTitle'), String(hands)],
+      [t('guide.discardsTitle'), String(discards)],
+      [t('guide.rewardTitle'), `+${formatNumber(reward)}`],
+    ];
+    for (const [label, value] of entries) {
+      const cell = document.createElement('div');
+      cell.className = 'tutorial-stat';
+      const labelEl = document.createElement('span');
+      labelEl.className = 'tutorial-stat-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'tutorial-stat-value';
+      valueEl.textContent = value;
+      cell.append(labelEl, valueEl);
+      stats.appendChild(cell);
+    }
+
+    const steps = document.createElement('ol');
+    steps.className = 'tutorial-steps';
+    for (const key of ['tutorialStep1', 'tutorialStep2', 'tutorialStep3', 'tutorialStep4']) {
+      const item = document.createElement('li');
+      item.textContent = t(`guide.${key}`);
+      steps.appendChild(item);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'panel-actions';
+    const close = document.createElement('button');
+    close.className = 'btn is-play';
+    close.dataset['act'] = 'tutorial-close';
+    close.textContent = t('action.play');
+    close.addEventListener('click', () => {
+      // `lastStatus = null` fuerza a redibujar el panel del estado actual
+      // (blind_select), que es el que estaba tapado por el tutorial.
+      this.lastStatus = null;
+      this.closePanel();
+    });
+    actions.appendChild(close);
+
+    panel.append(title, intro, intro2, stats, steps, actions);
+    this.openOverlay(panel);
+  }
+
+  /** Marca el tutorial como ya ofrecido (el controlador lo llama al arrancar la run). */
+  markTutorialOffered(): void {
+    this.tutorialOffered = true;
   }
 
   /** Abre el panel de seleccion de ascension. */
@@ -1462,6 +2118,193 @@ export class HUD {
     row.append(info, again);
   }
 
+  /**
+   * P2.3 / P2.4 — Panel de un EVENTO entre Ciegos.
+   *
+   * El plan pide "decisiones de riesgo/recompensa entre desafios" y "eventos
+   * entre Ciegos". Las dos cosas son la misma pantalla: un trato con una
+   * ventaja y un coste, y una opcion de seguir de largo.
+   *
+   * Cada opcion muestra su EFECTO en texto generado desde los `effects` reales
+   * (no desde un texto escrito a mano en el JSON): asi el numero que se lee es
+   * el que el motor va a aplicar. Un `detailKey` acompaña, pero la linea de
+   * datos es la fuente de verdad.
+   */
+  private showInterlude(): void {
+    const def = this.engine.currentInterlude;
+    if (!def) return;
+
+    const panel = document.createElement('div');
+    panel.className = 'panel is-interlude';
+
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t(def.nameKey);
+    title.dataset['act'] = 'interlude-title';
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'panel-subtitle';
+    subtitle.textContent = t('interlude.subtitle');
+
+    const desc = document.createElement('p');
+    desc.className = 'panel-desc';
+    desc.textContent = t(def.descKey);
+
+    // --- Cabecera con arte (reutiliza el pool de arte de ciegos) ---
+    const head = document.createElement('div');
+    head.className = 'interlude-head';
+    const art = this.blindArt?.(def.art);
+    if (art?.src) {
+      const artImg = document.createElement('img');
+      artImg.className = 'interlude-art';
+      artImg.src = art.src;
+      artImg.alt = '';
+      artImg.setAttribute('aria-hidden', 'true');
+      head.appendChild(artImg);
+    }
+    head.append(title, subtitle);
+
+    const choices = document.createElement('div');
+    choices.className = 'interlude-choices';
+
+    for (const choice of def.choices) {
+      choices.appendChild(this.buildInterludeChoice(choice));
+    }
+
+    panel.append(head, desc, choices);
+    this.openOverlay(panel);
+    // La arena ya no esta en juego entre ciegos: se corta el render de fondo.
+    this.callbacks.onArenaCovered?.(true);
+
+    anim
+      .sequence()
+      .fromTo(
+        choices.querySelectorAll('.interlude-choice'),
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: anim.d(0.28),
+          ease: anim.EASE.cssOut,
+          stagger: { amount: anim.d(0.14) },
+        },
+      );
+  }
+
+  /** Una opcion del interludio: etiqueta, efecto en datos y boton de elegir. */
+  private buildInterludeChoice(choice: InterludeChoice): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'interlude-choice';
+    card.dataset['act'] = 'interlude-choice';
+    card.dataset['choice'] = choice.id;
+
+    const label = document.createElement('div');
+    label.className = 'interlude-choice-label';
+    label.textContent = t(choice.labelKey);
+
+    const detail = document.createElement('div');
+    detail.className = 'interlude-choice-detail';
+    detail.textContent = t(choice.detailKey);
+
+    card.append(label, detail);
+
+    const effects = choice.effects ?? [];
+    if (effects.length > 0) {
+      const lines = document.createElement('ul');
+      lines.className = 'interlude-effects';
+      for (const line of this.describeInterludeEffects(effects)) {
+        const item = document.createElement('li');
+        item.textContent = line;
+        lines.appendChild(item);
+      }
+      card.appendChild(lines);
+    }
+
+    const isDecline = effects.length === 0;
+    card.classList.toggle('is-decline', isDecline);
+
+    const affordable = this.canAffordInterlude(effects);
+    const button = document.createElement('button');
+    button.className = `btn ${isDecline ? 'is-ghost' : 'is-play'}`;
+    button.textContent = t(isDecline ? 'interlude.decline' : 'interlude.accept');
+    button.disabled = !affordable;
+    if (!affordable) button.title = t('interlude.cantAfford');
+    button.addEventListener('click', () => this.callbacks.onChooseInterlude(choice.id));
+    card.appendChild(button);
+
+    return card;
+  }
+
+  /**
+   * Traduce los efectos a lineas legibles. Es la fuente de verdad de lo que se
+   * muestra: si el efecto cambia en el JSON, el texto cambia solo.
+   */
+  private describeInterludeEffects(effects: readonly InterludeEffect[]): string[] {
+    const out: string[] = [];
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'MONEY':
+          out.push(
+            effect.value >= 0
+              ? t('shop.impactMoneyGain', { value: formatNumber(effect.value) })
+              : t('shop.impactMoneyCost', { value: formatNumber(Math.abs(effect.value)) }),
+          );
+          break;
+        case 'TARGET_MULTIPLIER': {
+          const pct = Math.round(Math.abs(effect.value - 1) * 100);
+          out.push(
+            effect.value >= 1
+              ? t('interlude.targetUp', { pct })
+              : t('interlude.targetDown', { pct }),
+          );
+          break;
+        }
+        case 'JOKER_SLOT':
+          out.push(
+            effect.value >= 0
+              ? t('shop.impactJokerSlot', { value: effect.value })
+              : t('shop.impactJokerSlotNeg', { value: effect.value }),
+          );
+          break;
+        case 'HANDS_DELTA':
+          out.push(
+            effect.value >= 0
+              ? t('shop.impactHandsPlus', { value: effect.value })
+              : t('shop.impactHands', { value: effect.value }),
+          );
+          break;
+        case 'HAND_SIZE':
+          out.push(
+            effect.value >= 0
+              ? t('shop.impactHandSize', { value: effect.value })
+              : t('shop.impactHandSizeNeg', { value: effect.value }),
+          );
+          break;
+        case 'CARD':
+          out.push(t('shop.impactCardCount', { value: effect.count ?? 1 }));
+          break;
+        case 'PURGE_RANDOM':
+          out.push(t('shop.impactPurge', { value: effect.count ?? 1 }));
+          break;
+        case 'UPGRADE_RANDOM':
+          out.push(t('shop.impactUpgrade', { value: effect.count ?? 1 }));
+          break;
+        default:
+          break;
+      }
+    }
+    return out;
+  }
+
+  /** Puede pagar el coste en dinero de esta opcion? (Solo se chequea MONEY.) */
+  private canAffordInterlude(effects: readonly InterludeEffect[]): boolean {
+    let money = this.engine.run.money;
+    for (const effect of effects) {
+      if (effect.type === 'MONEY') money += effect.value;
+    }
+    return money >= 0;
+  }
+
   private showBlindSelect(): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
@@ -1474,6 +2317,49 @@ export class HUD {
     const subtitle = document.createElement('p');
     subtitle.className = 'panel-subtitle';
     subtitle.textContent = `${t('hud.ante')} ${run.ante} · ${t('hud.money')} ${formatNumber(run.money)}`;
+
+    // P1.6 — Explicar "Ciego" la PRIMERA vez que aparece.
+    //
+    // "Ciego" es jerga de roguelite y no se deduce mirando la pantalla. Se
+    // explica UNA sola vez por run (`blindExplained`), en el mismo lugar donde
+    // el jugador tiene que elegir: si se repite cada vez se vuelve ruido, y si
+    // nunca aparece el jugador adivina que es un enemigo o un castigo.
+    let blindHelp: HTMLElement | null = null;
+    if (!this.blindExplained) {
+      this.blindExplained = true;
+      blindHelp = document.createElement('p');
+      blindHelp.className = 'blind-help';
+      blindHelp.dataset['act'] = 'blind-help';
+      const helpTag = document.createElement('span');
+      helpTag.className = 'blind-help-tag';
+      helpTag.textContent = t('hud.blind');
+      const helpText = document.createElement('span');
+      helpText.className = 'blind-help-text';
+      helpText.textContent = t('guide.whatIsBlind');
+      blindHelp.append(helpTag, helpText);
+    }
+
+    // P2.3 — Aviso de que el objetivo esta alterado por un interludio. Sin
+    // esto, un jugador que acepto "+15% de objetivo" veria un numero distinto
+    // al del contenido y no sabria por que.
+    const interludeMul = run.interludeModifiers?.targetMultiplier ?? 1;
+    let interludeNotice: HTMLElement | null = null;
+    if (Math.abs(interludeMul - 1) > 0.001) {
+      interludeNotice = document.createElement('p');
+      interludeNotice.className = 'blind-help is-interlude';
+      interludeNotice.dataset['act'] = 'blind-interlude-notice';
+      const noticeTag = document.createElement('span');
+      noticeTag.className = 'blind-help-tag';
+      noticeTag.textContent = t('interlude.title');
+      const noticeText = document.createElement('span');
+      noticeText.className = 'blind-help-text';
+      const pct = Math.round(Math.abs(interludeMul - 1) * 100);
+      noticeText.textContent = t(
+        interludeMul >= 1 ? 'interlude.targetUp' : 'interlude.targetDown',
+        { pct },
+      );
+      interludeNotice.append(noticeTag, noticeText);
+    }
 
     const grid = document.createElement('div');
     grid.className = 'blind-grid';
@@ -1538,6 +2424,56 @@ export class HUD {
       desc.className = 'blind-desc';
       desc.textContent = t(blind.descKey);
 
+      // --- Objetivo / Manos / Descartes / Recompensa (P0.1) ---
+      //
+      // El plan pide que el jugador vea DE UN GOLPE las cuatro cosas que
+      // definen el desafio: cuanto tiene que conseguir, con cuantas manos,
+      // cuantos descartes y que gana. Antes solo habia multiplicador y
+      // objetivo: "manos" y "descartes" recien aparecian al entrar al ciego,
+      // asi que la decision de QUE ciego elegir se tomaba a ciegas.
+      //
+      // Las manos y descartes son los del DADO del ante actual: es lo que el
+      // jugador va a recibir de verdad, no el valor base del contenido. Si el
+      // dado todavia no se tiro, `run.die` es null y se cae al valor base.
+      const die = run.die;
+      const handsForBlind = Math.max(1, run.baseHands + (die?.hands ?? 0));
+      const discardsForBlind = Math.max(0, run.baseDiscards + (die?.discards ?? 0));
+
+      const objective = document.createElement('div');
+      objective.className = 'blind-objective';
+
+      const objectiveLine = document.createElement('div');
+      objectiveLine.className = 'blind-objective-line';
+      const objectiveLabel = document.createElement('span');
+      objectiveLabel.className = 'blind-objective-label';
+      objectiveLabel.textContent = t('guide.goalTitle');
+      const objectiveValue = document.createElement('span');
+      objectiveValue.className = 'blind-objective-value';
+      objectiveValue.textContent = t('blindCard.objectiveValue', { count: formatNumber(target) });
+      objectiveLine.append(objectiveLabel, objectiveValue);
+      objective.appendChild(objectiveLine);
+
+      const resources = document.createElement('div');
+      resources.className = 'blind-resources';
+      const resourceCells: Array<[string, string, number]> = [
+        ['hands', t('guide.handsTitle'), handsForBlind],
+        ['discards', t('guide.discardsTitle'), discardsForBlind],
+      ];
+      for (const [kind, label, value] of resourceCells) {
+        const cell = document.createElement('div');
+        cell.className = `blind-resource is-${kind}`;
+        cell.dataset['blindResource'] = kind;
+        const cellValue = document.createElement('span');
+        cellValue.className = 'blind-resource-value';
+        cellValue.textContent = formatNumber(value);
+        const cellLabel = document.createElement('span');
+        cellLabel.className = 'blind-resource-label';
+        cellLabel.textContent = label;
+        cell.append(cellValue, cellLabel);
+        resources.appendChild(cell);
+      }
+      objective.appendChild(resources);
+
       // --- Metricas: multiplicador y objetivo ---
       const metrics = document.createElement('div');
       metrics.className = 'blind-metrics';
@@ -1580,7 +2516,7 @@ export class HUD {
       rewardLabel.textContent = t('blindCard.reward');
       reward.append(rewardIcon, rewardAmount, rewardLabel);
 
-      card.append(head, desc, metrics, reward);
+      card.append(head, desc, objective, metrics, reward);
 
       const choose = (): void => this.callbacks.onChooseBlind(blind.id);
       card.addEventListener('click', choose);
@@ -1638,7 +2574,10 @@ export class HUD {
     hint.className = 'die-hint';
     hint.textContent = t('die.arm');
 
-    panel.append(title, subtitle, dieRow, grid, actions, hint);
+    panel.append(title, subtitle);
+    if (blindHelp) panel.appendChild(blindHelp);
+    if (interludeNotice) panel.appendChild(interludeNotice);
+    panel.append(dieRow, grid, actions, hint);
     this.openOverlay(panel);
 
     // Las referencias se toman DESPUES de `openOverlay`: es quien las limpia
@@ -1666,6 +2605,55 @@ export class HUD {
           stagger: { amount: anim.d(0.18) },
         },
       );
+  }
+
+  /**
+   * P2.5 — Resumen numerico de lo que una oferta agrega al mazo.
+   *
+   * La tienda ya muestra el efecto en prosa; esto lo traduce a datos
+   * comparables (sustrato, esporas, si trae habilidad). Sin esto, elegir entre
+   * dos cartas obliga a leer las dos descripciones y recordarlas.
+   *
+   * Devuelve null para lo que no se puede resumir (dinero), y asi la tarjeta no
+   * muestra un bloque vacio.
+   */
+  private buildOfferImpact(offer: ShopOffer): HTMLElement | null {
+    const lines: string[] = [];
+
+    if (offer.kind === 'card') {
+      const def = this.engine.registry.tryGetCard(offer.refId);
+      if (!def) return null;
+      lines.push(t('shop.impactSubstrate', { value: def.baseSubstrate }));
+      lines.push(t('shop.impactSpores', { value: def.baseSpores }));
+      lines.push(
+        (def.effects?.length ?? 0) > 0 ? t('shop.impactAbility') : t('shop.impactNoAbility'),
+      );
+    } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
+      lines.push(t('shop.impactJoker'));
+      // Se avisa solo si NO hay ranura libre: es la advertencia que hace falta
+      // en el momento de decidir, no un recordatorio permanente.
+      if (this.engine.run.jokers.length >= this.engine.run.jokerSlots) {
+        lines.push(t('shop.impactSlots'));
+      }
+    } else if (offer.kind === 'voucher') {
+      const def = this.engine.registry.tryGetVoucher(offer.refId);
+      lines.push(t('shop.impactVoucher'));
+      if (def && !def.repeatable && this.engine.run.vouchers.includes(offer.refId)) {
+        lines.push(t('shop.impactOwned'));
+      }
+    } else {
+      return null;
+    }
+
+    const wrap = document.createElement('ul');
+    wrap.className = 'offer-impact';
+    wrap.dataset['act'] = 'offer-impact';
+    for (const line of lines) {
+      const item = document.createElement('li');
+      item.textContent = line;
+      wrap.appendChild(item);
+    }
+    return wrap;
   }
 
   private showShop(offers: ShopOffer[]): void {
@@ -1750,6 +2738,13 @@ export class HUD {
       const desc = document.createElement('div');
       desc.className = 'offer-desc';
       desc.textContent = t(offer.descKey);
+
+      // P2.5 — "Que aporta": el plan pide que las mejoras de la tienda sean mas
+      // VISIBLES. `offer.descKey` describe el efecto en prosa, pero comparar dos
+      // ofertas obliga a leer y traducir mentalmente. Esta lista dice en
+      // numeros lo que la compra agrega al mazo, que es lo que se decide.
+      const impact = this.buildOfferImpact(offer);
+      if (impact) card.appendChild(impact);
 
       const footer = document.createElement('div');
       footer.className = 'offer-footer';

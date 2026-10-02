@@ -61,6 +61,20 @@ export interface CardTextureSpec {
   cost?: number;
   statuses?: StatusType[];
   level?: number;
+  /**
+   * La carta tiene HABILIDAD (P1.1/P1.2).
+   *
+   * `desc` es un solo campo para las dos cosas: el texto de sabor de una carta
+   * comun y la descripcion de una habilidad. El plan pide que se distingan, y
+   * el dato que las separa es justamente si la carta declara `effects`. El
+   * render no puede leer el contenido (la spec es plana a proposito), asi que
+   * el booleano lo resuelve quien arma la spec.
+   *
+   * Cuando es `true`, la descripcion lleva:
+   *   - la etiqueta "✦ HABILIDAD" arriba del texto (no depende del color);
+   *   - color lila-ambar propio en la etiqueta y el texto.
+   */
+  hasAbility?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -670,13 +684,44 @@ export function createCardCanvas(
   // borde), asi que el panel no esta para dar contraste sino para AGRUPAR: sin
   // el, el texto queda flotando suelto y se lee como un pie de foto en vez de
   // como las reglas de la carta.
-  ctx.fillStyle = 'rgba(6, 10, 16, 0.55)';
+  //
+  // P1.1/P1.2 — Si la carta tiene HABILIDAD, el panel cambia de color y suma
+  // una etiqueta. Es la jerarquia que pide el plan:
+  //   nombre             -> blanco
+  //   Familia/Sustrato   -> ya lo dice el elemento de la cabecera
+  //   puntuacion         -> dorado (los chips)
+  //   HABILIDAD          -> lila + etiqueta "✦ HABILIDAD"
+  // La etiqueta es lo importante para accesibilidad: el color solo refuerza.
+  const hasAbility = spec.hasAbility === true;
+  const abilityColor = 0xc4a8ff;
+  const panelBorder = hasAbility ? abilityColor : elementColor;
+
+  ctx.fillStyle = hasAbility ? 'rgba(26, 18, 42, 0.62)' : 'rgba(6, 10, 16, 0.55)';
   roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
   ctx.fill();
-  ctx.strokeStyle = hexToRgba(elementColor, 0.38);
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = hexToRgba(panelBorder, hasAbility ? 0.8 : 0.38);
+  ctx.lineWidth = hasAbility ? 3 : 2;
   roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
   ctx.stroke();
+
+  // Etiqueta "✦ HABILIDAD": banda propia arriba del panel de texto. Va con
+  // FORMA (el glifo ✦ y la banda), no solo color, para no depender del color.
+  let abilityBodyTop = descTop;
+  let abilityBodyHeight = descHeight;
+  if (hasAbility) {
+    const tagHeight = 34;
+    ctx.fillStyle = hexToRgba(abilityColor, 0.3);
+    roundRect(ctx, pad, descTop, W - pad * 2, tagHeight, 12);
+    ctx.fill();
+    ctx.fillStyle = hexToCss(abilityColor);
+    ctx.font = `400 19px ${CARD_DISPLAY_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✦ HABILIDAD', W / 2, descTop + tagHeight / 2 + 1);
+    ctx.textBaseline = 'top';
+    abilityBodyTop = descTop + tagHeight + 4;
+    abilityBodyHeight = descHeight - tagHeight - 4;
+  }
 
   // `drawChip` deja `textAlign` en 'right' y NUNCA lo restaura. La descripcion
   // se dibujaba con `fillText(line, W / 2, ...)`, asi que con `right` cada
@@ -684,14 +729,15 @@ export function createCardCanvas(
   // la mitad izquierda de la carta y se veia apretado contra el medio. Ese era
   // el "mal distribuida". Hay que reponer el centrado antes de dibujar.
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(233, 241, 249, 0.97)';
+  ctx.fillStyle = hasAbility ? hexToCss(abilityColor) : 'rgba(233, 241, 249, 0.97)';
   ctx.font = `700 25px ${CARD_TEXT_FONT}`;
-  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, 3);
+  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, hasAbility ? 2 : 3);
   // El bloque se centra VERTICALMENTE en el panel: una descripcion de una sola
   // linea queda al medio en vez de pegada al borde de arriba.
   const descLineHeight = 32;
   const descBlockHeight = descLines.length * descLineHeight;
-  const descFirstLineY = descTop + descHeight / 2 - descBlockHeight / 2 + descLineHeight / 2;
+  const descFirstLineY =
+    abilityBodyTop + abilityBodyHeight / 2 - descBlockHeight / 2 + descLineHeight / 2;
   ctx.textBaseline = 'middle';
   descLines.forEach((line, i) => ctx.fillText(line, W / 2, descFirstLineY + i * descLineHeight));
   ctx.textBaseline = 'top';

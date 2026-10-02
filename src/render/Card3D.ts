@@ -327,6 +327,12 @@ export class Card3D {
       card.bonusSpores,
     ].join('|');
 
+    // P1.1/P1.2 — Una carta "tiene habilidad" si declara efectos propios. Es el
+    // dato que distingue la descripcion de sabor de la descripcion de una
+    // habilidad, y lo que hace que la carta dibuje la etiqueta "✦ HABILIDAD" y
+    // el panel lila en vez del panel neutro.
+    const hasAbility = (card.def.effects?.length ?? 0) > 0;
+
     // El nombre y la descripcion van HORNEADOS en la textura (el canvas 2D
     // dibuja el texto con `fillText`). Si se manda la clave i18n cruda
     // (`card.mycelium_webcap.name`) en vez del texto traducido, eso es lo que
@@ -344,6 +350,7 @@ export class Card3D {
       spores: card.def.baseSpores + card.bonusSpores,
       statuses,
       level: card.level,
+      hasAbility,
     };
 
     // Dos capas: el ARTE (compartido por archivo) y el TEXTO (por estado). El

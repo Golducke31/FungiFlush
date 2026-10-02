@@ -28,7 +28,12 @@
     "handSize": "Cartas en mano",
     "bestHand": "Mejor mano",
     "progress": "Progreso",
-    "anteOf": "Ante {current} de {total}"
+    "anteOf": "Ante {current} de {total}",
+    "objective": "Objetivo",
+    "sort": "Ordenar",
+    "deckState": "Estado del mazo",
+    "remaining": "Te quedan: {hands} manos · {discards} descartes",
+    "remainingPrefix": "Te quedan:"
   },
   "blindCard": {
     "mult": "Multiplicador",
@@ -37,7 +42,11 @@
     "boss": "Jefe",
     "cleared": "Superado",
     "locked": "Se abre en el ante {ante}",
-    "effects": "Efecto de ronda"
+    "effects": "Efecto de ronda",
+    "hands": "Manos",
+    "discards": "Descartes",
+    "objective": "Objetivo",
+    "objectiveValue": "{count} puntos"
   },
   "action": {
     "play": "Jugar Mano",
@@ -55,7 +64,9 @@
     "noHands": "Sin manos",
     "cantAfford": "Dinero insuficiente",
     "slotsFull": "Sin ranuras de joker libres",
-    "sellValue": "Vender por {value}"
+    "sellValue": "Vender por {value}",
+    "sort": "Ordenar",
+    "viewDeck": "Ver mazo"
   },
   "phase": {
     "blind_select": "Elegí tu ciego",
@@ -90,7 +101,28 @@
       "mutation": "Mutación",
       "voucher": "Mejora",
       "money": "Fungis"
-    }
+    },
+    "impactTitle": "Qué aporta",
+    "impactSubstrate": "+{value} Sustrato base",
+    "impactSpores": "+{value} Esporas base",
+    "impactAbility": "Trae una Habilidad",
+    "impactNoAbility": "Sin habilidad: suma puntos llanos",
+    "impactJoker": "Modifica cómo puntúas",
+    "impactVoucher": "Cambia las reglas de la partida",
+    "impactOwned": "Ya lo tenés",
+    "impactSlots": "Ocupa una ranura de joker",
+    "improves": "Mejora tu mazo",
+    "impactMoneyGain": "+{value} Fungis",
+    "impactMoneyCost": "-{value} Fungis",
+    "impactJokerSlot": "+{value} ranura de joker",
+    "impactJokerSlotNeg": "{value} ranura de joker",
+    "impactHands": "{value} mano por Ciego",
+    "impactHandsPlus": "+{value} mano por Ciego",
+    "impactHandSize": "+{value} carta en mano",
+    "impactHandSizeNeg": "{value} carta en mano",
+    "impactCardCount": "+{value} carta al mazo",
+    "impactPurge": "Destruye {value} carta al azar",
+    "impactUpgrade": "Mejora {value} carta al azar"
   },
   "element": {
     "neutral": "Neutro",
@@ -706,6 +738,9 @@
     "cannotUpgrade": "No te alcanza el dinero para mejorar",
     "noUpgrades": "Este mazo no se puede mejorar",
     "level": "Nv {level}",
+    "substrate": "Sustrato",
+    "spores": "Esporas",
+    "statBonus": "+{value} por mejoras",
     "readyBadge": "Evolución lista"
   },
   "evolve": {
@@ -813,6 +848,9 @@
     },
     "ascension": {
       "unlocked": "Ascensión desbloqueada: nivel {level} — {name}"
+    },
+    "mission": {
+      "completed": "Mision cumplida: {name} — +{reward} Fungis"
     }
   },
   "unlockRule": {
@@ -984,5 +1022,169 @@
     "win": "Victoria",
     "loss": "Derrota",
     "detail": "Ante {ante} · Semilla {seed}"
+  },
+  "guide": {
+    "intro": "Construí manos de hongos para superar desafíos.",
+    "intro2": "Llegá al objetivo antes de quedarte sin manos.",
+    "startTutorial": "Comenzar tutorial",
+    "goalTitle": "OBJETIVO",
+    "handsTitle": "MANOS",
+    "discardsTitle": "DESCARTES",
+    "rewardTitle": "RECOMPENSA",
+    "whatIsBlind": "Un Ciego es el desafío de esta ronda. Superalo para avanzar y recibir una recompensa.",
+    "selectHint": "Seleccioná cartas para formar una mano.",
+    "selectedOne": "1 seleccionada",
+    "selectedMany": "{count} seleccionadas",
+    "sharedFamily": "Comparte Familia con otras cartas",
+    "tutorialStep1": "Elegí un desafío",
+    "tutorialStep2": "Seleccioná cartas",
+    "tutorialStep3": "Jugá la mano",
+    "tutorialStep4": "Usá los descartes",
+    "tutorialSelect": "Tocá hasta {count} cartas para formar una mano.",
+    "tutorialPlay": "Pulsá Jugar Mano para puntuar lo que seleccionaste.",
+    "tutorialDiscard": "Descartar consume 1 descarte, pero roba cartas nuevas. Usalo para buscar una combinación mejor.",
+    "tutorialSort": "También podés ordenar tu mano por Familia o Sustrato.",
+    "barNotice": "La barra avanza solo al jugar una mano.",
+    "breakdownTitle": "Cómo se calculó",
+    "breakdownHand": "Mano: {count} cartas",
+    "breakdownCombo": "Combinación",
+    "breakdownBase": "Base",
+    "breakdownBonus": "Bonificaciones",
+    "breakdownMult": "Multiplicador",
+    "breakdownTotal": "Total",
+    "abilityTag": "HABILIDAD",
+    "abilityActivated": "{name} activado",
+    "substrateBonus": "Bonificación de Sustrato",
+    "firstBlindTitle": "Tu primer Ciego"
+  },
+  "sort": {
+    "title": "Ordenar",
+    "by": "Ordenar por:",
+    "family": "Familia",
+    "substrate": "Sustrato",
+    "value": "Valor",
+    "ability": "Habilidad",
+    "default": "Predeterminado",
+    "recommended": "Orden recomendado",
+    "confirm": "Ordenado por {criterion}",
+    "confirmDefault": "Orden original restaurado"
+  },
+  "deckstate": {
+    "conservedTitle": "Mazo conservado",
+    "conserved": "Mazo conservado: {count} cartas",
+    "gained": "+{count} carta obtenida",
+    "gainedMany": "+{count} cartas obtenidas",
+    "destroyed": "-{count} carta destruida por una habilidad",
+    "destroyedMany": "-{count} cartas destruidas por una habilidad",
+    "byFamily": "Por Familia",
+    "bySubstrate": "Por Sustrato",
+    "total": "Total",
+    "newCards": "Nuevas",
+    "destroyedCards": "Destruidas",
+    "evolvedCards": "Transformadas",
+    "none": "Sin cambios en el mazo"
+  },
+  "interlude": {
+    "title": "Evento",
+    "subtitle": "Una parada entre Ciegos",
+    "accept": "Aceptar",
+    "decline": "Seguir de largo",
+    "effectLabel": "Efecto",
+    "costLabel": "Coste",
+    "targetUp": "El objetivo de los proximos Ciegos sube un {pct}%",
+    "targetDown": "El objetivo de los proximos Ciegos baja un {pct}%",
+    "cantAfford": "No te alcanza el dinero",
+    "declined": "Seguiste de largo",
+    "accepted": "Aceptaste el trato",
+    "spore_trade": {
+      "name": "Trato de esporas",
+      "desc": "Un comerciante de esporas te ofrece dinero por adelantado. El sustrato se volvera mas exigente.",
+      "accept": "Aceptar el dinero",
+      "acceptDetail": "+6 Fungis, pero los proximos Ciegos piden un 15% mas",
+      "decline": "Rechazar"
+    },
+    "rich_soil": {
+      "name": "Sustrato rico",
+      "desc": "Un parche de tierra inusualmente fertil. Podes sacar una espora nueva, pero cuesta una mano.",
+      "accept": "Tomar la espora",
+      "acceptDetail": "Agrega una carta poco comun al mazo, -1 mano por Ciego",
+      "decline": "Dejarlo crecer"
+    },
+    "cracked_jar": {
+      "name": "Frasco rajado",
+      "desc": "Un frasco roto con espacio para una espora mas. Alguien te lo vende barato.",
+      "accept": "Comprar el frasco",
+      "acceptDetail": "+5 Fungis de coste, +1 ranura de joker",
+      "decline": "Dejarlo"
+    },
+    "sacrifice": {
+      "name": "Sacrificio",
+      "desc": "El micelio pide dos esporas para purificar el sustrato. A cambio, el camino se allana.",
+      "accept": "Ofrecer dos esporas",
+      "acceptDetail": "Destruye 2 cartas al azar, el objetivo baja un 15%",
+      "decline": "Conservar el mazo"
+    },
+    "spore_bloom": {
+      "name": "Floracion",
+      "desc": "Una nube de esporas madura puede hacer crecer lo que ya tenes. Cobra por adelantado.",
+      "accept": "Pagar la floracion",
+      "acceptDetail": "-4 Fungis, mejora 2 cartas al azar",
+      "decline": "Esperar"
+    },
+    "mycelial_bargain": {
+      "name": "Pacto micelial",
+      "desc": "La red te ofrece mas espacio en la mano, a cambio de un desafio mas duro.",
+      "accept": "Aceptar el pacto",
+      "acceptDetail": "+1 carta en mano, pero los proximos Ciegos piden un 20% mas",
+      "decline": "Rechazar el pacto"
+    }
+  },
+  "common": {
+    "declineDetail": "Sin coste. Seguis con tu mazo y tu objetivo tal como estan."
+  },
+  "mission": {
+    "title": "MISIONES",
+    "reward": "+{value}",
+    "completed": "Cumplida",
+    "hand_500": {
+      "name": "Mano fuerte",
+      "desc": "Juga una mano de 500 o mas"
+    },
+    "hand_2000": {
+      "name": "Mano brutal",
+      "desc": "Juga una mano de 2000 o mas"
+    },
+    "discard_3": {
+      "name": "Limpieza",
+      "desc": "Descarta 6 cartas"
+    },
+    "jokers_3": {
+      "name": "Simbiosis",
+      "desc": "Reuni 3 jokers a la vez"
+    },
+    "upgrade_3": {
+      "name": "Cultivo",
+      "desc": "Mejora 3 cartas"
+    },
+    "blind_no_loss": {
+      "name": "Sin perder una mano",
+      "desc": "Gana un Ciego sin gastar manos"
+    },
+    "evolve_1": {
+      "name": "Evolucion",
+      "desc": "Hace evolucionar una carta"
+    },
+    "spend_30": {
+      "name": "Comprador",
+      "desc": "Compra 3 cosas en la tienda"
+    },
+    "ante_reach": {
+      "name": "Explorador",
+      "desc": "Llega al ante 5"
+    },
+    "destroy_2": {
+      "name": "Purga",
+      "desc": "Destruye 2 cartas"
+    }
   }
 }

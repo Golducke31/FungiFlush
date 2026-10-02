@@ -1,0 +1,146 @@
+[
+  {
+    "id": "interlude_spore_trade",
+    "nameKey": "interlude.spore_trade.name",
+    "descKey": "interlude.spore_trade.desc",
+    "art": "blind_a2_small",
+    "minAnte": 1,
+    "weight": 10,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.spore_trade.accept",
+        "detailKey": "interlude.spore_trade.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": 6 },
+          { "type": "TARGET_MULTIPLIER", "value": 1.15 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.spore_trade.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_rich_soil",
+    "nameKey": "interlude.rich_soil.name",
+    "descKey": "interlude.rich_soil.desc",
+    "art": "blind_a3_small",
+    "minAnte": 2,
+    "weight": 8,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.rich_soil.accept",
+        "detailKey": "interlude.rich_soil.acceptDetail",
+        "effects": [
+          { "type": "CARD", "rarity": "uncommon" },
+          { "type": "HANDS_DELTA", "value": -1 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.rich_soil.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_cracked_jar",
+    "nameKey": "interlude.cracked_jar.name",
+    "descKey": "interlude.cracked_jar.desc",
+    "art": "blind_a4_small",
+    "minAnte": 3,
+    "weight": 8,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.cracked_jar.accept",
+        "detailKey": "interlude.cracked_jar.acceptDetail",
+        "effects": [
+          { "type": "JOKER_SLOT", "value": 1 },
+          { "type": "MONEY", "value": -5 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.cracked_jar.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_sacrifice",
+    "nameKey": "interlude.sacrifice.name",
+    "descKey": "interlude.sacrifice.desc",
+    "art": "blind_a5_small",
+    "minAnte": 4,
+    "weight": 7,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.sacrifice.accept",
+        "detailKey": "interlude.sacrifice.acceptDetail",
+        "effects": [
+          { "type": "PURGE_RANDOM", "count": 2 },
+          { "type": "TARGET_MULTIPLIER", "value": 0.85 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.sacrifice.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_spore_bloom",
+    "nameKey": "interlude.spore_bloom.name",
+    "descKey": "interlude.spore_bloom.desc",
+    "art": "blind_a6_small",
+    "minAnte": 5,
+    "weight": 7,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.spore_bloom.accept",
+        "detailKey": "interlude.spore_bloom.acceptDetail",
+        "effects": [
+          { "type": "UPGRADE_RANDOM", "count": 2 },
+          { "type": "MONEY", "value": -4 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.spore_bloom.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_mycelial_bargain",
+    "nameKey": "interlude.mycelial_bargain.name",
+    "descKey": "interlude.mycelial_bargain.desc",
+    "art": "blind_a7_boss",
+    "minAnte": 6,
+    "weight": 6,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.mycelial_bargain.accept",
+        "detailKey": "interlude.mycelial_bargain.acceptDetail",
+        "effects": [
+          { "type": "HAND_SIZE", "value": 1 },
+          { "type": "TARGET_MULTIPLIER", "value": 1.2 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.mycelial_bargain.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  }
+]

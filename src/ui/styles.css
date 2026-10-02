@@ -86,6 +86,26 @@
   --violet: #a78bfa;
 
   /* -------------------------------------------------------------------------
+     Jerarquia de lectura de una carta (P1.1 / P1.2).
+     El plan pide que el jugador distinga de un vistazo, sobre el fondo oscuro:
+       informacion basica  -> blanco/gris muy claro (--text / --dim)
+       Familia / Sustrato  -> turquesa   (--tag-taxonomy)
+       puntuacion          -> dorado     (--tag-score)
+       HABILIDAD           -> lila       (--tag-ability)
+       penalizacion        -> rojo suave (--tag-penalty)
+       efecto temporal +   -> verde claro(--tag-buff)
+     NO se colorea todo el texto de la carta: se colorean las ETIQUETAS y la
+     descripcion de la habilidad. Ademas de la etiqueta "✦ HABILIDAD" (que no
+     depende del color), esto cubre daltonismo: la forma lleva la informacion y
+     el color solo la refuerza.
+     ------------------------------------------------------------------------- */
+  --tag-taxonomy: #5fd8e8;
+  --tag-score: #ffd479;
+  --tag-ability: #c4a8ff;
+  --tag-penalty: #f28fae;
+  --tag-buff: #7ee6a8;
+
+  /* -------------------------------------------------------------------------
      Marco de madera y musgo del HUD.
      Los colores NO estan elegidos a ojo: estan muestreados de
      `public/menu-btn-play.png`, que es el recorte de un marco del menu
@@ -493,6 +513,221 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   Objetivo de la ronda (P0.1) + aviso de la barra (P0.2)
+
+   Va debajo de la barra de progreso, en la misma columna del marcador: el
+   objetivo, las manos y los descartes que quedan son la respuesta a "como voy",
+   y esa pregunta se responde mirando la barra. Tenerlos en el borde inferior
+   (contadores) obligaba a barrer la pantalla con la vista.
+   -------------------------------------------------------------------------- */
+
+.hud-bar-notice {
+  display: none;
+  margin-top: 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--frame-dim);
+  text-align: center;
+}
+
+.hud-bar-notice.is-visible {
+  display: block;
+}
+
+.hud-objective {
+  display: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.hud-objective.is-visible {
+  display: flex;
+}
+
+.hud-objective-goal {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--tag-score);
+}
+
+.hud-objective-left {
+  color: var(--frame-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-objective-num {
+  font-weight: 900;
+  color: var(--text);
+}
+
+/* Un recurso agotado (o la ultima mano) se pinta en rojo: es la senal de que
+   la ronda se esta por cerrar. Solo el numero, no toda la frase. */
+.hud-objective-num.is-low {
+  color: var(--tag-penalty);
+}
+
+.hud-objective-sep {
+  color: var(--frame-dim);
+}
+
+/* --------------------------------------------------------------------------
+   Guia de seleccion sobre la mano (P0.3)
+
+   Flota entre las cartas y la fila de botones. En la capa de HUD, sin capturar
+   punteros: tiene que poder tocarse una carta A TRAVES del aviso.
+   -------------------------------------------------------------------------- */
+
+.hud-select-hint {
+  position: fixed;
+  left: 50%;
+  /* Justo encima de la fila de acciones, que es el hueco libre de la mesa. */
+  bottom: calc(126px + var(--safe-b, 0px));
+  transform: translate(-50%, 8px);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  max-width: min(88vw, 640px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(6, 20, 20, 0.72);
+  border: 1px solid var(--frame-rim);
+  box-shadow: var(--shadow-2);
+  font-size: 12.5px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--dur-2, 180ms) var(--ease-out, ease),
+    transform var(--dur-2, 180ms) var(--ease-out, ease);
+}
+
+.hud-select-hint.is-visible {
+  display: flex;
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.hud-select-hint-text {
+  color: var(--text);
+}
+
+.hud-select-hint-count {
+  font-weight: 900;
+  color: var(--tag-score);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-select-hint-family {
+  color: var(--frame-dim);
+  font-size: 11.5px;
+}
+
+/* Aviso de sinergia: solo aparece cuando las cartas elegidas comparten
+   Familia. Es la pista que el plan pide para que el jugador vea la combinacion
+   antes de jugarla. */
+.hud-select-hint-family.is-shared {
+  color: var(--tag-taxonomy);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Desglose de puntuacion (P0.4)
+   -------------------------------------------------------------------------- */
+
+.score-breakdown {
+  width: 100%;
+  max-width: 340px;
+  margin: 12px auto 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(4, 16, 16, 0.6);
+  border: 1px solid var(--frame-rim);
+  text-align: left;
+}
+
+.score-breakdown-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--frame-dim);
+  margin-bottom: 6px;
+}
+
+.score-breakdown-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.score-breakdown-label {
+  color: var(--frame-dim);
+}
+
+.score-breakdown-value {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.score-breakdown-row.is-positive .score-breakdown-value {
+  color: var(--tag-buff);
+}
+
+.score-breakdown-row.is-total {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--frame-rim);
+  font-size: 15px;
+}
+
+.score-breakdown-row.is-total .score-breakdown-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.score-breakdown-row.is-total .score-breakdown-value {
+  color: var(--tag-score);
+  font-size: 17px;
+}
+
+/* --------------------------------------------------------------------------
+   Estado del mazo tras cerrar el ciego (P1.5)
+   -------------------------------------------------------------------------- */
+
+.deck-state-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 10px;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.deck-state-total {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.deck-state-delta.is-gained {
+  color: var(--tag-buff);
+  font-weight: 600;
+}
+
+.deck-state-delta.is-lost {
+  color: var(--tag-penalty);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
    Columna de jokers (izquierda)
    -------------------------------------------------------------------------- */
 
@@ -512,6 +747,77 @@ body {
 
 .hud-jokers::-webkit-scrollbar {
   display: none;
+}
+
+/* --------------------------------------------------------------------------
+   P2.6 — Misiones de run
+   Franja bajo los jokers: objetivos cortos de la run. Apagada por defecto
+   (no ocupa lugar si no hay misiones) y pointer-events:none, como el resto del
+   cromo del HUD.
+   -------------------------------------------------------------------------- */
+
+.hud-missions {
+  position: fixed;
+  top: calc(50% + 130px);
+  left: calc(10px + var(--safe-l));
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 190px;
+  pointer-events: none;
+}
+
+.hud-missions.is-visible {
+  display: flex;
+}
+
+.hud-missions-title {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--frame-dim);
+  padding-left: 2px;
+}
+
+.mission-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(18, 27, 38, 0.9), rgba(13, 19, 27, 0.86));
+  border: 1px solid var(--frame-rim);
+  border-left: 3px solid var(--tag-score);
+  box-shadow: var(--shadow-inset);
+}
+
+/* La mision cumplida queda apagada y con el borde en verde: se lee "ya esta"
+   sin que ocupe atencion. */
+.mission-chip.is-done {
+  border-left-color: var(--tag-buff);
+  opacity: 0.6;
+}
+
+.mission-chip-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.mission-chip-desc {
+  font-size: 10px;
+  line-height: 1.3;
+  color: #a7b8c8;
+}
+
+.mission-chip-reward {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--tag-score);
+}
+
+.mission-chip.is-done .mission-chip-reward {
+  color: var(--tag-buff);
 }
 
 .joker-chip {
@@ -703,6 +1009,90 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
+  /* Ancla del menu de orden: se despliega HACIA ARRIBA desde la fila de
+     botones, que en movil esta al borde inferior de la pantalla. */
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------
+   Menu de orden de la mano (P1.3 / P1.4 / P2.1)
+   -------------------------------------------------------------------------- */
+
+.sort-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-popup, 60);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 190px;
+  padding: 8px;
+  border-radius: var(--radius);
+  /* Mismo material que las losas del HUD: no es un panel nuevo, es una pieza
+     mas del mismo marco. */
+  background: linear-gradient(180deg, var(--frame-body-hi), var(--frame-body-lo));
+  border: 1px solid var(--frame-edge);
+  box-shadow: var(--shadow-3);
+  animation: sort-menu-in var(--dur-2, 180ms) var(--ease-out, ease);
+}
+
+.sort-menu.is-open {
+  display: flex;
+}
+
+@keyframes sort-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.sort-menu-title {
+  padding: 2px 8px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--frame-dim);
+}
+
+.sort-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-menu-item:hover {
+  background: rgba(120, 240, 214, 0.14);
+}
+
+/* El criterio activo lleva marca ADEMAS del color: un punto a la izquierda.
+   El plan insiste en no depender solo del color. */
+.sort-menu-item.is-active {
+  background: rgba(120, 240, 214, 0.2);
+  color: var(--tag-buff);
+}
+
+.sort-menu-item.is-active::before {
+  content: '●';
+  margin-right: 7px;
+  font-size: 9px;
+}
+
+.sort-menu-item:not(.is-active)::before {
+  content: '';
+  margin-right: 7px;
+  width: 9px;
 }
 
 .btn {
@@ -1393,6 +1783,220 @@ body {
   flex-wrap: wrap;
 }
 
+/* --------------------------------------------------------------------------
+   P2.5 — "Que aporta" en la tienda
+   El plan pide que las mejoras de la tienda sean mas VISIBLES: la descripcion
+   en prosa ya estaba, esto agrega los numeros comparables (sustrato, esporas,
+   habilidad) para poder decidir entre dos ofertas sin memorizar textos.
+   -------------------------------------------------------------------------- */
+
+.offer-impact {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.offer-impact li {
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--tag-score);
+  padding-left: 12px;
+  position: relative;
+}
+
+.offer-impact li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.5em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--tag-score);
+}
+
+/* La ranura llena es una advertencia, no un dato: cambia de color para que se
+   lea ANTES de gastar el dinero. */
+.offer-impact li:last-child:not(:first-child) {
+  color: var(--tag-penalty);
+}
+
+.offer-impact li:last-child:not(:first-child)::before {
+  background: var(--tag-penalty);
+}
+
+/* --------------------------------------------------------------------------
+   Tutorial de la primera partida (P0.3)
+   -------------------------------------------------------------------------- */
+
+.tutorial-line {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--frame-dim);
+}
+
+.tutorial-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tutorial-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(4, 16, 16, 0.5);
+  border: 1px solid var(--frame-rim);
+}
+
+.tutorial-stat-label {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--frame-dim);
+}
+
+.tutorial-stat-value {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--tag-score);
+  line-height: 1.1;
+}
+
+.tutorial-steps {
+  margin: 0 0 20px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--text);
+}
+
+.tutorial-steps li::marker {
+  color: var(--tag-taxonomy);
+  font-weight: 900;
+}
+
+/* --------------------------------------------------------------------------
+   P2.3 / P2.4 — Evento entre Ciegos (interludio)
+   Un panel de DECISION: cada opcion muestra etiqueta, detalle y el efecto en
+   datos. El que declina va apagado (es la linea base), el que acepta va con el
+   material de play.
+   -------------------------------------------------------------------------- */
+
+.interlude-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.interlude-art {
+  width: 100%;
+  max-height: 130px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow-inset);
+  opacity: 0.92;
+}
+
+.panel.is-interlude .panel-desc {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--frame-dim);
+}
+
+.interlude-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.interlude-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(8, 20, 22, 0.72);
+  border: 1px solid var(--frame-rim);
+  box-shadow: var(--shadow-inset);
+}
+
+/* La opcion "seguir de largo" es la linea base: no compite visualmente con el
+   trato, pero sigue siendo tan clickeable como la otra. */
+.interlude-choice.is-decline {
+  background: rgba(8, 20, 22, 0.4);
+  border-style: dashed;
+}
+
+.interlude-choice-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tag-score);
+}
+
+.interlude-choice.is-decline .interlude-choice-label {
+  color: var(--frame-dim);
+}
+
+.interlude-choice-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #b6c6d6;
+}
+
+.interlude-effects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.interlude-effects li {
+  position: relative;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--tag-ability);
+  padding-left: 13px;
+}
+
+.interlude-effects li::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.55em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--tag-ability);
+}
+
+.interlude-choice .btn {
+  margin-top: auto;
+  width: 100%;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -1622,6 +2226,121 @@ body {
   font-size: 12px;
   color: #b6c6d6;
   line-height: 1.42;
+}
+
+/* --- Objetivo / Manos / Descartes (P0.1) ---
+   Va PRIMERO entre las metricas: es la informacion con la que se decide QUE
+   ciego elegir (cuanto hay que conseguir, con cuantos recursos). El
+   multiplicador y la recompensa son contexto. */
+.blind-objective {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(4, 16, 16, 0.42);
+  border: 1px solid var(--frame-rim);
+}
+
+.blind-objective-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.blind-objective-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--frame-dim);
+}
+
+.blind-objective-value {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--tag-score);
+  line-height: 1.1;
+}
+
+.blind-resources {
+  display: flex;
+  gap: 8px;
+}
+
+.blind-resource {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(120, 240, 214, 0.09);
+}
+
+.blind-resource-value {
+  font-weight: 900;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.blind-resource-label {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--frame-dim);
+}
+
+/* Los descartes son los que "se gastan primero": tinte propio para separarlos
+   de las manos al barrer la tarjeta con la vista. */
+.blind-resource.is-discards {
+  background: rgba(255, 200, 87, 0.1);
+}
+
+/* --- Explicacion de "Ciego" (P1.6) --- */
+.blind-help {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto 16px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: rgba(95, 216, 232, 0.08);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+/* P2.3 — Aviso de objetivo alterado por un interludio: tinte propio (lila) para
+   que no se confunda con la explicacion de "Ciego". */
+.blind-help.is-interlude {
+  background: rgba(196, 168, 255, 0.1);
+  border-color: rgba(196, 168, 255, 0.35);
+}
+
+.blind-help.is-interlude .blind-help-tag {
+  color: var(--tag-ability);
+}
+
+.blind-help-tag {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(95, 216, 232, 0.18);
+  color: var(--tag-taxonomy);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.blind-help-text {
+  color: var(--text);
 }
 
 /* --- Fila de metricas: multiplicador + objetivo --- */
@@ -2356,6 +3075,16 @@ body {
   font-weight: 700;
 }
 
+/* El "+n" que aportaron las mejoras, al lado del total. Sin esto la celda del
+   mazo mostraba el total pero no hacia evidente QUE cambio al mejorar. */
+.deck-card-stat-bonus {
+  font-style: normal;
+  margin-left: 2px;
+  font-size: 9.5px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
 .deck-card-level {
   position: absolute;
   top: 6px;
@@ -3012,6 +3741,36 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 9px;
   }
+  /* P2.5 — En pantallas bajas (landscape de celular, ~390px) la miniatura y la
+     lista de "que aporta" empujaban el boton de compra FUERA del viewport: el
+     smoke clickeaba una coordenada por debajo del pliegue y la compra no
+     ocurria. La tienda tiene que caber entera, asi que en este alto la
+     miniatura se achica y la lista se limita a una linea con elipsis. */
+  .offer-art {
+    height: 88px;
+  }
+  .offer {
+    padding: 10px;
+    gap: 6px;
+  }
+  .offer-name {
+    font-size: 13.5px;
+  }
+  .offer-desc {
+    font-size: 11px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .offer-impact {
+    gap: 1px;
+  }
+  .offer-impact li {
+    font-size: 10px;
+    line-height: 1.25;
+  }
   /* Con ~360px de alto la lista de logros tiene que ceder antes que los
      botones: dos filas alcanzan para ver el progreso y el resto scrollea. */
   .achievement-grid {
@@ -3050,6 +3809,26 @@ body {
   }
   .settings-field {
     padding: 7px 10px;
+  }
+  /* P2.5 — A 390px de alto (landscape de celular) la tienda tiene que caber
+     ENTERA: si el boton de compra queda debajo del pliegue, no se puede
+     comprar. La miniatura se achica al minimo y la lista de "que aporta" se
+     recorta a lo esencial. */
+  .offer-art {
+    height: 64px;
+  }
+  .offer-impact li {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .panel.is-shop .panel-title {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+  .panel.is-shop .panel-subtitle {
+    font-size: 11px;
+    margin-bottom: 8px;
   }
 }
 
@@ -3684,6 +4463,45 @@ body {
 .carousel-detail-meta {
   margin-top: 2px;
   font-size: 11px;
+  color: var(--frame-dim);
+}
+
+/* Substrato / Esporas del detalle del mazo (carrusel).
+   El detalle antes solo traia elemento/familia/rareza/nivel: al mejorar una
+   carta sus numeros reales (sustrato y esporas) no se veian por ningun lado y
+   parecia que "la carta quedaba igual". Cada stat muestra el TOTAL y, si hay
+   mejoras, el "+n" que aportaron. */
+.carousel-detail-stats {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.carousel-detail-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.carousel-detail-stat strong {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.carousel-detail-stat-bonus {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--tag-score);
+}
+
+.carousel-detail-stat-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--frame-dim);
 }
 

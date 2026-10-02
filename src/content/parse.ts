@@ -14,6 +14,7 @@ import type {
   UpgradeTrack,
   VoucherDefinition,
 } from '@engine/index';
+import { parseInterludes } from '@engine/index';
 import type { BoardCardDef } from '@engine/board/types';
 
 import type { AnteRow, LoadedPack, OfferTable, RawPack } from './types';
@@ -71,6 +72,15 @@ export function parsePack(pack: RawPack): LoadedPack {
     ascensions.push(...read<AscensionDefinition>(pack, path));
   }
 
+  // Interludios (P2.4): se leen crudos y se validan con `parseInterludes`, que
+  // descarta en silencio las entradas mal formadas (contenido roto no puede
+  // impedir jugar). Sin tabla, la run no tiene paradas intermedias.
+  const interludesRaw: unknown[] = [];
+  for (const path of contents.interludes ?? []) {
+    interludesRaw.push(...read<unknown>(pack, path));
+  }
+  const interludes = parseInterludes(interludesRaw);
+
   const board: BoardCardDef[] = [];
   for (const path of contents.board ?? []) board.push(...read<BoardCardDef>(pack, path));
 
@@ -86,6 +96,7 @@ export function parsePack(pack: RawPack): LoadedPack {
     evolutions,
     vouchers,
     ascensions,
+    interludes,
     board,
   };
 }

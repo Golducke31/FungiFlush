@@ -659,6 +659,7 @@ export interface RunSnapshot {
     | 'playing'
     | 'scoring'
     | 'reward'
+    | 'interlude'
     | 'shop'
     | 'game_over'
     | 'victory';

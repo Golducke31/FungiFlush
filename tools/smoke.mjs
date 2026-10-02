@@ -373,13 +373,46 @@ if (newButton) {
 }
 await page.waitForTimeout(1600);
 
+// --- P0.3: tutorial de la primera partida ---
+// El tutorial se ofrece UNA vez por run, sobre el panel de seleccion de ciego.
+// Como `openOverlay` REEMPLAZA el contenido del overlay, mientras el tutorial
+// esta abierto el `.blind-grid` NO existe: el jugador lo cierra y RECIEN ahi
+// aparece la seleccion. El smoke hace lo mismo que el jugador (click real) y
+// comprueba que la puerta de salida lleva al panel correcto.
+const tutorialStep = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-tutorial');
+  return {
+    shown: Boolean(panel),
+    hasClose: Boolean(panel?.querySelector('[data-act="tutorial-close"]')),
+    steps: document.querySelectorAll('.tutorial-steps li').length,
+    stats: document.querySelectorAll('.tutorial-stat').length,
+  };
+});
+console.log('\n--- Tutorial (P0.3) ---');
+console.log(JSON.stringify(tutorialStep, null, 2));
+
+if (tutorialStep.shown) {
+  const closeBox = await page.locator('[data-act="tutorial-close"]').boundingBox();
+  if (closeBox) {
+    await page.mouse.click(closeBox.x + closeBox.width / 2, closeBox.y + closeBox.height / 2);
+  } else {
+    await page.evaluate(() => document.querySelector('[data-act="tutorial-close"]')?.click());
+  }
+  await page.waitForTimeout(900);
+}
+
 const afterStart = await page.evaluate(() => {
   const ff = window.__fungiflush;
   return {
     status: ff.engine.run.status,
     blindSelectVisible: Boolean(document.querySelector('.blind-grid')),
+    tutorialDismissed: !document.querySelector('.panel.is-tutorial'),
     hudHidden: document.getElementById('ui-root')?.classList.contains('in-menu') ?? false,
     deckSize: ff.engine.run.deck.totalSize,
+    // El total REAL del mazo (pilas + mano). OJO: en `blind_select` los
+    // contadores del HUD aun no existen (solo se pintan en `playing`), asi que
+    // la comprobacion del chip va en `afterBlind`, no aca.
+    engineDeckSize: ff.engine.deckSize,
   };
 });
 console.log('\n--- Tras "Nueva partida" ---');
@@ -475,12 +508,21 @@ await page.screenshot({ path: join(shotsDir, '04-playing.png') });
 
 const afterBlind = await page.evaluate(() => {
   const ff = window.__fungiflush;
+  const chips = {};
+  for (const c of document.querySelectorAll('.counter')) {
+    chips[c.title] = c.querySelector('.counter-value')?.textContent;
+  }
   return {
     status: ff.engine.run.status,
     blind: ff.engine.round?.blind.id,
     target: ff.engine.round?.target,
     hand: ff.engine.round?.hand.length ?? 0,
     sceneHand: ff.scene.stats().hand,
+    // FIX chip MAZO: al REPARTIR la mano el total no puede bajar: las cartas
+    // pasan de la pila a la mano, pero siguen en el mazo.
+    chipDeck: chips['Mazo'] ?? null,
+    deckSize: ff.engine.deckSize,
+    deckRemaining: ff.engine.run.deck.remaining,
     // Baseline de draw calls de ESCENA en el tier bajo (sin composer, sin sky):
     // es el "camino de siempre". El camino con post-procesamiento solo suma el
     // sky dome (+1), asi que el alta no debe pasar de este valor + 4.
@@ -518,7 +560,16 @@ await page.waitForTimeout(420);
 const afterTap = await page.evaluate((uid) => {
   const ff = window.__fungiflush;
   const card = ff.scene.handState().find((c) => c.uid === uid);
-  return { selected: Boolean(card?.selected), count: ff.engine.round.selected.length };
+  // FIX badge "N seleccionadas": el contador tiene que APARECER en cuanto hay
+  // una carta seleccionada, no solo durante la primera mano. Antes se ocultaba
+  // despues de la primera mano jugada y el jugador perdia la cuenta.
+  const hint = document.querySelector('[data-act="select-hint"]');
+  return {
+    selected: Boolean(card?.selected),
+    count: ff.engine.round.selected.length,
+    hintVisible: hint ? hint.classList.contains('is-visible') : false,
+    hintText: (hint?.textContent ?? '').trim(),
+  };
 }, tapCard.uid);
 console.log('\n--- Fase 4: tap-to-select ---');
 console.log(JSON.stringify(afterTap, null, 2));
@@ -1174,28 +1225,85 @@ console.log(JSON.stringify(deckBuilder, null, 2));
 await page.screenshot({ path: join(shotsDir, '09-deck.png') });
 
 // --- Cultivo: mejorar una carta y evolucionar otra ---
+// Se usa el CARRUSEL (el camino real del jugador: tienda -> Mazo), no la grilla
+// DOM. Al mejorar, `doUpgrade` vuelve a abrir el mazo: hay que comprobar que
+// (a) el detalle muestra Sustrato/Esporas con su aumento y (b) el anillo se
+// queda en la MISMA carta en vez de saltar al indice 0.
 const upgradeStep = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const engine = window.__fungiflush.engine;
   engine.run.money = Math.max(engine.run.money, 300);
-  window.__fungiflush.hud.showDeckBuilder();
-  await wait(500);
+
+  // El CARRUSEL se abre desde el boton Mazo de la tienda (`openDeck` en
+  // main.ts). `hud.showDeckBuilder()` abre la grilla DOM, que NO tiene detalle.
+  document.querySelector('.panel.is-shop [data-act="deck"]')?.click();
+  await wait(600);
+
+  const gen = engine.run.deck.allCards.length;
+  const car = window.__fungiflush.scene?.carousel ?? null;
+  // Foco en una carta que NO sea la primera, para que el "salto al 0" se note.
+  if (car) car.focus(Math.min(6, gen - 1));
+
+  const readDetail = () => {
+    const detail = document.querySelector('.panel.is-deck .carousel-detail');
+    if (!detail) return null;
+    return {
+      name: detail.querySelector('.carousel-detail-name')?.textContent?.trim() ?? null,
+      stats: (detail.querySelector('.carousel-detail-stats')?.textContent ?? '').replace(/\s+/g, '').trim(),
+    };
+  };
+
+  // El detalle se pinta desde el bucle de render (el anillo notifica el foco),
+  // asi que "leer apenas se mueve el anillo" es una carrera: a 12 FPS el DOM
+  // todavia muestra la carta anterior. Se espera a que el detalle muestre la
+  // carta enfocada de verdad, y recien ahi se lee.
+  const focusedUid = () => car?.entries?.[car.focusedIndex]?.uid ?? null;
+  for (let i = 0; i < 40; i++) {
+    await wait(100);
+    const d = readDetail();
+    const want = focusedUid();
+    const btn = document.querySelector('.panel.is-deck [data-act="upgrade"]');
+    if (d && d.name && d.stats && want && btn?.dataset.uid === want) break;
+  }
 
   const button = document.querySelector('.panel.is-deck [data-act="upgrade"]');
   const uid = button?.dataset.uid ?? null;
   const target = engine.run.deck.allCards.find((c) => c.uid === uid) ?? null;
   const before = { level: target?.level ?? 0, money: engine.run.money };
 
+  const detailBefore = readDetail();
+  const focusBefore = car ? car.focusedIndex : null;
+
   button?.click();
-  await wait(700);
+  // Mismo problema de carrera al volver: `doUpgrade` reabre el mazo y hay que
+  // esperar a que el detalle vuelva a pintar la carta mejorada.
+  for (let i = 0; i < 40; i++) {
+    await wait(100);
+    const d = readDetail();
+    const btn = document.querySelector('.panel.is-deck [data-act="upgrade"]');
+    if (d && d.name === detailBefore?.name && btn?.dataset.uid === uid) break;
+  }
 
   const after = engine.run.deck.allCards.find((c) => c.uid === uid) ?? null;
+  const detailAfter = readDetail();
+  const focusAfter = window.__fungiflush.scene?.carousel?.focusedIndex ?? null;
   return {
     uid,
     levelBefore: before.level,
     levelAfter: after?.level ?? 0,
     moneySpent: before.money - engine.run.money,
     statsUpgraded: engine.run.stats.cardsUpgraded,
+    // P2/Deck (a): el detalle SIEMPRE trae Sustrato/Esporas y cambian al mejorar.
+    statsBefore: detailBefore?.stats ?? null,
+    statsAfter: detailAfter?.stats ?? null,
+    statsShown: Boolean(detailBefore?.stats && detailBefore.stats.length > 0),
+    statsChanged: Boolean(detailBefore?.stats && detailAfter?.stats && detailBefore.stats !== detailAfter.stats),
+    // P2/Deck (b): el foco se queda en la carta mejorada.
+    nameBefore: detailBefore?.name ?? null,
+    nameAfter: detailAfter?.name ?? null,
+    focusBefore,
+    focusAfter,
+    focusKept: Boolean(detailBefore?.name && detailBefore.name === detailAfter?.name),
   };
 });
 console.log('\n--- Cultivo: mejorar ---');
@@ -1405,182 +1513,203 @@ for (const error of pageErrors.slice(0, 10)) console.log(`  ✗ ${error}`);
 console.log(`Avisos             : ${consoleWarnings.length}`);
 for (const warning of consoleWarnings.slice(0, 5)) console.log(`  ! ${warning}`);
 
+const CHECKS = [];
+const chk = (name, cond) => { CHECKS.push([name, !!cond]); return !!cond; };
+
 const ok =
-  ready &&
-  reward?.status === 'reward' &&
-  reward?.panel === true &&
-  reward?.offers.length === 3 &&
-  afterWin?.status === 'shop' &&
-  (afterWin?.deckAfter ?? 0) === (reward?.deckBefore ?? 0) + 1 &&
-  deckBuilder?.opened === true &&
-  (deckBuilder?.cards ?? 0) > 0 &&
-  deckBuilder?.purged === 1 &&
-  upgradeStep?.uid !== null &&
-  upgradeStep?.levelAfter === (upgradeStep?.levelBefore ?? 0) + 1 &&
-  (upgradeStep?.moneySpent ?? 0) > 0 &&
-  upgradeStep?.statsUpgraded >= 1 &&
-  evolveStep?.enabled === true &&
-  evolveStep?.defAfter === 'spore_giant_puffball' &&
-  evolveStep?.uidPreserved === true &&
-  evolveStep?.levelCarried === 3 &&
-  evolveStep?.evolvedFrom === 'spore_puffball' &&
-  evolveStep?.statsEvolved >= 1 &&
-  collectionOpened?.panel === true &&
-  (collectionOpened?.entries ?? 0) > 0 &&
-  collectionOpened?.undiscovered > 0 &&
-  collectionClosed?.backToShop === true &&
-  menuState?.status === 'menu' &&
-  menuState?.menuVisible === true &&
-  menuState?.hudHidden === true &&
-  menuState?.particles === 0 &&
-  menuState?.continueEnabled === false &&
-  settingsOpened?.opened === true &&
-  settingsOpened?.fields === 8 &&
+  chk('ready', ready) &&
+  chk('reward.status', reward?.status === 'reward') &&
+  chk('reward.panel', reward?.panel === true) &&
+  chk('reward?.offers.length === 3', reward?.offers.length === 3) &&
+  chk("afterWin?.status === 'shop'", afterWin?.status === 'shop') &&
+  chk('(afterWin?.deckAfter ?? 0) === (reward?.deckBe', (afterWin?.deckAfter ?? 0) === (reward?.deckBefore ?? 0) + 1) &&
+  chk('deckBuilder?.opened === true', deckBuilder?.opened === true) &&
+  chk('(deckBuilder?.cards ?? 0) > 0', (deckBuilder?.cards ?? 0) > 0) &&
+  chk('deckBuilder?.purged === 1', deckBuilder?.purged === 1) &&
+  chk('upgradeStep?.uid !== null', upgradeStep?.uid !== null) &&
+  chk('upgradeStep?.levelAfter === (upgradeStep?.leve', upgradeStep?.levelAfter === (upgradeStep?.levelBefore ?? 0) + 1) &&
+  chk('(upgradeStep?.moneySpent ?? 0) > 0', (upgradeStep?.moneySpent ?? 0) > 0) &&
+  chk('upgradeStep?.statsUpgraded >= 1', upgradeStep?.statsUpgraded >= 1) &&
+  chk('upgradeStep?.statsShown === true', upgradeStep?.statsShown === true) &&
+  chk('upgradeStep?.statsChanged === true', upgradeStep?.statsChanged === true) &&
+  chk('upgradeStep?.focusKept === true', upgradeStep?.focusKept === true) &&
+  chk('evolveStep?.enabled === true', evolveStep?.enabled === true) &&
+  chk("evolveStep?.defAfter === 'spore_giant_puffball", evolveStep?.defAfter === 'spore_giant_puffball') &&
+  chk('evolveStep?.uidPreserved === true', evolveStep?.uidPreserved === true) &&
+  chk('evolveStep?.levelCarried === 3', evolveStep?.levelCarried === 3) &&
+  chk("evolveStep?.evolvedFrom === 'spore_puffball'", evolveStep?.evolvedFrom === 'spore_puffball') &&
+  chk('evolveStep?.statsEvolved >= 1', evolveStep?.statsEvolved >= 1) &&
+  chk('collectionOpened?.panel === true', collectionOpened?.panel === true) &&
+  chk('(collectionOpened?.entries ?? 0) > 0', (collectionOpened?.entries ?? 0) > 0) &&
+  chk('collectionOpened?.undiscovered > 0', collectionOpened?.undiscovered > 0) &&
+  chk('collectionClosed?.backToShop === true', collectionClosed?.backToShop === true) &&
+  chk("menuState?.status === 'menu'", menuState?.status === 'menu') &&
+  chk('menuState?.menuVisible === true', menuState?.menuVisible === true) &&
+  chk('menuState?.hudHidden === true', menuState?.hudHidden === true) &&
+  chk('menuState?.particles === 0', menuState?.particles === 0) &&
+  chk('menuState?.continueEnabled === false', menuState?.continueEnabled === false) &&
+  chk('settingsOpened?.opened === true', settingsOpened?.opened === true) &&
+  chk('settingsOpened?.fields === 8', settingsOpened?.fields === 8) &&
   // --- Calidad grafica (V0) ---
-  qualityBoot?.tier === 'low' &&
-  qualityBoot?.reason === 'software' &&
-  qualityBoot?.composer === false &&
-  qualityBoot?.bloom === false &&
-  qualityBoot?.segments === 4 &&
-  qualityBoot?.active === 'auto' &&
-  qualitySwitch?.high?.tier === 'high' &&
-  qualitySwitch?.high?.active === 'high' &&
-  qualitySwitch?.auto?.tier === 'low' &&
-  qualitySwitch?.auto?.reason === 'software' &&
-  qualitySwitch?.auto?.persisted === 'auto' &&
-  settingsRoundTrip?.backToMenu === true &&
+  chk("qualityBoot?.tier === 'low'", qualityBoot?.tier === 'low') &&
+  chk("qualityBoot?.reason === 'software'", qualityBoot?.reason === 'software') &&
+  chk('qualityBoot?.composer === false', qualityBoot?.composer === false) &&
+  chk('qualityBoot?.bloom === false', qualityBoot?.bloom === false) &&
+  chk('qualityBoot?.segments === 4', qualityBoot?.segments === 4) &&
+  chk("qualityBoot?.active === 'auto'", qualityBoot?.active === 'auto') &&
+  chk("qualitySwitch?.high?.tier === 'high'", qualitySwitch?.high?.tier === 'high') &&
+  chk("qualitySwitch?.high?.active === 'high'", qualitySwitch?.high?.active === 'high') &&
+  chk("qualitySwitch?.auto?.tier === 'low'", qualitySwitch?.auto?.tier === 'low') &&
+  chk("qualitySwitch?.auto?.reason === 'software'", qualitySwitch?.auto?.reason === 'software') &&
+  chk("qualitySwitch?.auto?.persisted === 'auto'", qualitySwitch?.auto?.persisted === 'auto') &&
+  chk('settingsRoundTrip?.backToMenu === true', settingsRoundTrip?.backToMenu === true) &&
   // --- Fase 5: duelo micelial ---
-  boardChunkBeforeOpen === 0 &&
-  boardChunkAfterOpen > 0 &&
-  boardOpened?.panel === true &&
-  boardOpened?.cells === 16 &&
-  boardOpened?.curtain === true &&
-  boardOpened?.handSize > 0 &&
-  boardOpened?.handChips === 0 &&
-  afterTurn?.turn === 1 &&
-  afterTurn?.placed === 1 &&
-  afterTurn?.logEntries > 0 &&
-  afterTurn?.curtainBack === true &&
-  hiddenInfo?.rivalCards > 0 &&
-  (hiddenInfo?.leaked?.length ?? 1) === 0 &&
-  hiddenInfo?.handChips === 0 &&
-  boardFinished?.status === 'finished' &&
-  boardFinished?.filled > 0 &&
-  boardFinished?.result !== null &&
-  boardFinished?.rematch === true &&
-  boardClosed?.backToMenu === true &&
-  boardClosed?.boardGone === true &&
+  chk('boardChunkBeforeOpen === 0', boardChunkBeforeOpen === 0) &&
+  chk('boardChunkAfterOpen > 0', boardChunkAfterOpen > 0) &&
+  chk('boardOpened?.panel === true', boardOpened?.panel === true) &&
+  chk('boardOpened?.cells === 16', boardOpened?.cells === 16) &&
+  chk('boardOpened?.curtain === true', boardOpened?.curtain === true) &&
+  chk('boardOpened?.handSize > 0', boardOpened?.handSize > 0) &&
+  chk('boardOpened?.handChips === 0', boardOpened?.handChips === 0) &&
+  chk('afterTurn?.turn === 1', afterTurn?.turn === 1) &&
+  chk('afterTurn?.placed === 1', afterTurn?.placed === 1) &&
+  chk('afterTurn?.logEntries > 0', afterTurn?.logEntries > 0) &&
+  chk('afterTurn?.curtainBack === true', afterTurn?.curtainBack === true) &&
+  chk('hiddenInfo?.rivalCards > 0', hiddenInfo?.rivalCards > 0) &&
+  chk('(hiddenInfo?.leaked?.length ?? 1) === 0', (hiddenInfo?.leaked?.length ?? 1) === 0) &&
+  chk('hiddenInfo?.handChips === 0', hiddenInfo?.handChips === 0) &&
+  chk("boardFinished?.status === 'finished'", boardFinished?.status === 'finished') &&
+  chk('boardFinished?.filled > 0', boardFinished?.filled > 0) &&
+  chk('boardFinished?.result !== null', boardFinished?.result !== null) &&
+  chk('boardFinished?.rematch === true', boardFinished?.rematch === true) &&
+  chk('boardClosed?.backToMenu === true', boardClosed?.backToMenu === true) &&
+  chk('boardClosed?.boardGone === true', boardClosed?.boardGone === true) &&
   // --- Post-procesamiento (V1) ---
-  fxReady === true &&
-  postFx?.tier === 'high' &&
-  postFx?.composer === true &&
-  postFx?.bloom === true &&
-  postFx?.gradeMix === 1 &&
-  postFx?.drawCalls > 0 &&
-  postFx?.drawCallsTotal > postFx?.drawCalls &&
+  chk('fxReady === true', fxReady === true) &&
+  chk("postFx?.tier === 'high'", postFx?.tier === 'high') &&
+  chk('postFx?.composer === true', postFx?.composer === true) &&
+  chk('postFx?.bloom === true', postFx?.bloom === true) &&
+  chk('postFx?.gradeMix === 1', postFx?.gradeMix === 1) &&
+  chk('postFx?.drawCalls > 0', postFx?.drawCalls > 0) &&
+  chk('postFx?.drawCallsTotal > postFx?.drawCalls', postFx?.drawCallsTotal > postFx?.drawCalls) &&
   // El camino con post-procesamiento NO debe inflar los draw calls de escena.
   // El tier alto agrega cosas legitimas sobre el baseline de `low`: el sky dome
   // (+1), el agua (+1) y las sombras de contacto (+1). Con el techo en +4 la
   // asercion pasaba por IGUALDAD exacta y el smoke fallaba de forma
   // intermitente; +8 deja aire sin dejar de detectar una inflacion real.
-  fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 8 &&
-  fxPlaying?.status === 'playing' &&
-  (fxPlaying?.hand ?? 0) > 0 &&
-  fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0) &&
+  chk('fxPlaying?.drawCalls <= (afterBlind?.drawCalls', fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 8) &&
+  chk("fxPlaying?.status === 'playing'", fxPlaying?.status === 'playing') &&
+  chk('(fxPlaying?.hand ?? 0) > 0', (fxPlaying?.hand ?? 0) > 0) &&
+  chk('fxPlaying?.shadows === (fxPlaying?.hand ?? 0) ', fxPlaying?.shadows === (fxPlaying?.hand ?? 0) + (fxPlaying?.jokers ?? 0)) &&
   // Las esporas de ambiente del tier alto: son 900 y las calcula la GPU.
-  (postFx?.particles ?? 0) >= 900 &&
-  afterStart?.status === 'blind_select' &&
-  afterStart?.blindSelectVisible === true &&
-  afterStart?.hudHidden === false &&
+  chk('(postFx?.particles ?? 0) >= 900', (postFx?.particles ?? 0) >= 900) &&
+  chk("afterStart?.status === 'blind_select'", afterStart?.status === 'blind_select') &&
+  chk('tutorialStep?.shown === true', tutorialStep?.shown === true) &&
+  chk('tutorialStep?.hasClose === true', tutorialStep?.hasClose === true) &&
+  chk('tutorialStep?.steps === 4', tutorialStep?.steps === 4) &&
+  chk('tutorialStep?.stats === 4', tutorialStep?.stats === 4) &&
+  chk('afterStart?.tutorialDismissed === true', afterStart?.tutorialDismissed === true) &&
+  chk('afterStart?.blindSelectVisible === true', afterStart?.blindSelectVisible === true) &&
+  chk('afterStart?.hudHidden === false', afterStart?.hudHidden === false) &&
+  chk('afterStart?.engineDeckSize === 40', afterStart?.engineDeckSize === 40) &&
   // --- Tirada manual del dado ---
   // 1. Armado: el dado existe, esta esperando el gesto, el panel se corrio y
   //    los ciegos estan bloqueados (todavia no hay multiplicador).
-  dieArmed?.state?.armed === true &&
-  dieArmed?.state?.visible === true &&
-  dieArmed?.screen !== null &&
-  dieArmed?.panelCorrido === true &&
-  dieArmed?.overlayLibre === true &&
-  dieArmed?.gridBloqueado === true &&
-  dieArmed?.die === null &&
+  chk('dieArmed?.state?.armed === true', dieArmed?.state?.armed === true) &&
+  chk('dieArmed?.state?.visible === true', dieArmed?.state?.visible === true) &&
+  chk('dieArmed?.screen !== null', dieArmed?.screen !== null) &&
+  chk('dieArmed?.panelCorrido === true', dieArmed?.panelCorrido === true) &&
+  chk('dieArmed?.overlayLibre === true', dieArmed?.overlayLibre === true) &&
+  chk('dieArmed?.gridBloqueado === true', dieArmed?.gridBloqueado === true) &&
+  chk('dieArmed?.die === null', dieArmed?.die === null) &&
   // 2. En el aire: el motor YA sorteo la cara, pero el resultado sigue tapado.
-  dieMid?.busy === true &&
-  dieMid?.yaSorteado === true &&
-  dieMid?.panelCorrido === true &&
-  dieMid?.gridBloqueado === true &&
-  dieMid?.resultadoVisible === false &&
+  chk('dieMid?.busy === true', dieMid?.busy === true) &&
+  chk('dieMid?.yaSorteado === true', dieMid?.yaSorteado === true) &&
+  chk('dieMid?.panelCorrido === true', dieMid?.panelCorrido === true) &&
+  chk('dieMid?.gridBloqueado === true', dieMid?.gridBloqueado === true) &&
+  chk('dieMid?.resultadoVisible === false', dieMid?.resultadoVisible === false) &&
   // 3. Apoyado: aparece la cara y el boton de volver a tirar, y los ciegos se
   //    desbloquean.
-  dieLanded?.die !== null &&
-  dieLanded?.estado?.busy === false &&
-  dieLanded?.gridBloqueado === false &&
-  dieLanded?.rerollVisible === true &&
+  chk('dieLanded?.die !== null', dieLanded?.die !== null) &&
+  chk('dieLanded?.estado?.busy === false', dieLanded?.estado?.busy === false) &&
+  chk('dieLanded?.gridBloqueado === false', dieLanded?.gridBloqueado === false) &&
+  chk('dieLanded?.rerollVisible === true', dieLanded?.rerollVisible === true) &&
   // --- Tienda: la oferta comprada queda VENDIDA en el DOM ---
-  shopBuy?.clicked === true &&
-  (shopBuy?.offersBefore ?? 0) >= 1 &&
-  shopBuy?.vendidas === 1 &&
-  shopBuy?.boton === 'VENDIDO' &&
-  shopBuy?.deshabilitado === true &&
-  shopBuy?.sello === true &&
-  (shopBuy?.toasts ?? []).length === 0 &&
+  chk('shopBuy?.clicked === true', shopBuy?.clicked === true) &&
+  chk('(shopBuy?.offersBefore ?? 0) >= 1', (shopBuy?.offersBefore ?? 0) >= 1) &&
+  chk('shopBuy?.vendidas === 1', shopBuy?.vendidas === 1) &&
+  chk("shopBuy?.boton === 'VENDIDO'", shopBuy?.boton === 'VENDIDO') &&
+  chk('shopBuy?.deshabilitado === true', shopBuy?.deshabilitado === true) &&
+  chk('shopBuy?.sello === true', shopBuy?.sello === true) &&
+  chk('(shopBuy?.toasts ?? []).length === 0', (shopBuy?.toasts ?? []).length === 0) &&
   // --- R3: vouchers ---
-  voucherShop?.vouchers === 2 &&
-  voucherShop?.labels?.includes('Mejora') === true &&
-  voucherShop?.labels?.includes('VOUCHER') === false &&
-  voucherShop?.withArt === 2 &&
-  voucherShop?.prices?.length === 2 &&
-  Number(voucherShop?.prices?.[0]?.shown) < Number(voucherShop?.prices?.[0]?.was) &&
-  voucherShop?.prices?.[0]?.was === '20' &&
+  chk('voucherShop?.vouchers === 2', voucherShop?.vouchers === 2) &&
+  chk("voucherShop?.labels?.includes('Mejora') === tr", voucherShop?.labels?.includes('Mejora') === true) &&
+  chk("voucherShop?.labels?.includes('VOUCHER') === f", voucherShop?.labels?.includes('VOUCHER') === false) &&
+  chk('voucherShop?.withArt === 2', voucherShop?.withArt === 2) &&
+  chk('voucherShop?.prices?.length === 2', voucherShop?.prices?.length === 2) &&
+  chk('Number(voucherShop?.prices?.[0]?.shown) < Numb', Number(voucherShop?.prices?.[0]?.shown) < Number(voucherShop?.prices?.[0]?.was)) &&
+  chk("voucherShop?.prices?.[0]?.was === '20'", voucherShop?.prices?.[0]?.was === '20') &&
   // 20 con 25% de descuento: el mismo numero que `priceOf` y el que se cobra.
-  voucherShop?.paid === 15 &&
-  voucherShop?.vouchersAfter === 2 &&
-  voucherShop?.soldIsVoucher === true &&
-  voucherShop?.soldButton === 'VENDIDO' &&
-  Math.abs((voucherShop?.multiplier ?? 1) - 0.9) < 1e-6 &&
+  chk('voucherShop?.paid === 15', voucherShop?.paid === 15) &&
+  chk('voucherShop?.vouchersAfter === 2', voucherShop?.vouchersAfter === 2) &&
+  chk('voucherShop?.soldIsVoucher === true', voucherShop?.soldIsVoucher === true) &&
+  chk("voucherShop?.soldButton === 'VENDIDO'", voucherShop?.soldButton === 'VENDIDO') &&
+  chk('Math.abs((voucherShop?.multiplier ?? 1) - 0.9)', Math.abs((voucherShop?.multiplier ?? 1) - 0.9) < 1e-6) &&
   // --- R1: ascension ---
   // Chip visible y sin marcar (el nivel puesto es A0 al arrancar el bloque).
-  ascensionPanel?.present === true &&
-  ascensionPanel?.active === false &&
+  chk('ascensionPanel?.present === true', ascensionPanel?.present === true) &&
+  chk('ascensionPanel?.active === false', ascensionPanel?.active === false) &&
   // El panel lista TODOS los niveles del contenido: A0..A(max).
-  ascensionPanel?.levels?.length === ascensionPanel?.max + 1 &&
-  ascensionPanel?.levels?.[0] === 0 &&
+  chk('ascensionPanel?.levels?.length === ascensionPa', ascensionPanel?.levels?.length === ascensionPanel?.max + 1) &&
+  chk('ascensionPanel?.levels?.[0] === 0', ascensionPanel?.levels?.[0] === 0) &&
   // Con 3 desbloqueados: A0..A3 libres y el resto bloqueados.
-  ascensionPanel?.locked === ascensionPanel?.max - ascensionPanel?.unlocked &&
+  chk('ascensionPanel?.locked === ascensionPanel?.max', ascensionPanel?.locked === ascensionPanel?.max - ascensionPanel?.unlocked) &&
   // Los bloqueados EXPLICAN la condicion (no un candado mudo).
-  ascensionPanel?.lockedHelp === true &&
+  chk('ascensionPanel?.lockedHelp === true', ascensionPanel?.lockedHelp === true) &&
   // Elegir A2 lo persiste en el perfil.
-  ascensionPanel?.selected === 2 &&
+  chk('ascensionPanel?.selected === 2', ascensionPanel?.selected === 2) &&
   // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
-  jokerChip?.tieneBotonVender === true &&
-  jokerChip?.trasTocarElCuerpo === jokerChip?.antes &&
-  jokerChip?.confirmandoTrasElCuerpo === false &&
-  jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes &&
-  jokerChip?.primerToqueEnVender?.confirmando === true &&
-  menuState?.webgl === 'contexto activo' &&
-  (afterBlind?.sceneHand ?? 0) > 0 &&
-  (afterBlind?.hand ?? 0) > 0 &&
+  chk('jokerChip?.tieneBotonVender === true', jokerChip?.tieneBotonVender === true) &&
+  chk('jokerChip?.trasTocarElCuerpo === jokerChip?.an', jokerChip?.trasTocarElCuerpo === jokerChip?.antes) &&
+  chk('jokerChip?.confirmandoTrasElCuerpo === false', jokerChip?.confirmandoTrasElCuerpo === false) &&
+  chk('jokerChip?.primerToqueEnVender?.jokers === jok', jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes) &&
+  chk('jokerChip?.primerToqueEnVender?.confirmando ==', jokerChip?.primerToqueEnVender?.confirmando === true) &&
+  chk("menuState?.webgl === 'contexto activo'", menuState?.webgl === 'contexto activo') &&
+  chk('(afterBlind?.sceneHand ?? 0) > 0', (afterBlind?.sceneHand ?? 0) > 0) &&
+  chk('(afterBlind?.hand ?? 0) > 0', (afterBlind?.hand ?? 0) > 0) &&
+  chk("afterBlind?.chipDeck === '40'", afterBlind?.chipDeck === '40') &&
+  chk('afterBlind?.deckSize === 40', afterBlind?.deckSize === 40) &&
   // --- Fase 4: tap, arrastre y flip ---
-  afterTap?.selected === true &&
-  afterTap?.count === 1 &&
-  afterDragPlay?.selected === true &&
-  afterDragPlay?.count === 2 &&
-  afterDragPlay?.backInHand === true &&
-  afterDiscard?.discardsLeft === (beforeDiscard?.discardsLeft ?? 0) - 1 &&
-  afterDiscard?.stillInHand === false &&
-  afterDiscard?.cardsDiscarded === 1 &&
-  afterDiscard?.handSize === (afterBlind?.hand ?? 0) &&
-  JSON.stringify(afterDiscard?.selected) === JSON.stringify(beforeDiscard?.selected) &&
-  afterDragHand?.selected === false &&
-  afterDragHand?.count === 1 &&
-  flipTest?.accepted === true &&
-  flipTest?.allHaveBack === true &&
-  (flipTest?.back?.flip ?? 0) > 0.9 &&
-  flipTest?.back?.faceUp === false &&
-  (flipTest?.front?.flip ?? 1) < 0.1 &&
-  flipTest?.front?.faceUp === true &&
-  afterPlay?.score > 0 &&
-  afterWin?.status === 'shop' &&
-  realErrors.length === 0 &&
-  pageErrors.length === 0;
+  chk('afterTap?.selected === true', afterTap?.selected === true) &&
+  chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&
+  chk('afterTap?.count === 1', afterTap?.count === 1) &&
+  chk('afterDragPlay?.selected === true', afterDragPlay?.selected === true) &&
+  chk('afterDragPlay?.count === 2', afterDragPlay?.count === 2) &&
+  chk('afterDragPlay?.backInHand === true', afterDragPlay?.backInHand === true) &&
+  chk('afterDiscard?.discardsLeft === (beforeDiscard?', afterDiscard?.discardsLeft === (beforeDiscard?.discardsLeft ?? 0) - 1) &&
+  chk('afterDiscard?.stillInHand === false', afterDiscard?.stillInHand === false) &&
+  chk('afterDiscard?.cardsDiscarded === 1', afterDiscard?.cardsDiscarded === 1) &&
+  chk('afterDiscard?.handSize === (afterBlind?.hand ?', afterDiscard?.handSize === (afterBlind?.hand ?? 0)) &&
+  chk('JSON.stringify(afterDiscard?.selected) === JSO', JSON.stringify(afterDiscard?.selected) === JSON.stringify(beforeDiscard?.selected)) &&
+  chk('afterDragHand?.selected === false', afterDragHand?.selected === false) &&
+  chk('afterDragHand?.count === 1', afterDragHand?.count === 1) &&
+  chk('flipTest?.accepted === true', flipTest?.accepted === true) &&
+  chk('flipTest?.allHaveBack === true', flipTest?.allHaveBack === true) &&
+  chk('(flipTest?.back?.flip ?? 0) > 0.9', (flipTest?.back?.flip ?? 0) > 0.9) &&
+  chk('flipTest?.back?.faceUp === false', flipTest?.back?.faceUp === false) &&
+  chk('(flipTest?.front?.flip ?? 1) < 0.1', (flipTest?.front?.flip ?? 1) < 0.1) &&
+  chk('flipTest?.front?.faceUp === true', flipTest?.front?.faceUp === true) &&
+  chk('afterPlay?.score > 0', afterPlay?.score > 0) &&
+  chk("afterWin?.status === 'shop'", afterWin?.status === 'shop') &&
+  chk('realErrors.length === 0', realErrors.length === 0) &&
+  chk('pageErrors.length === 0', pageErrors.length === 0);
+
+const failed = CHECKS.filter(([, v]) => !v);
+if (failed.length) {
+  console.log('\n--- ASERCIONES FALLIDAS: ' + failed.length + ' ---');
+  for (const [name] of failed) console.log('  ✗ ' + name);
+}
 
 console.log(ok ? '\n✓ SMOKE TEST OK' : '\n✗ SMOKE TEST FALLO');
 

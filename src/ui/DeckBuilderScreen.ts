@@ -95,8 +95,12 @@ export interface DeckCarouselFrame {
    * Sincroniza el orden del DOM con el del carrusel: cuando se cambia el
    * orden hay que volver a llamar al preview con la carta enfocada, porque el
    * indice de la escena ya no apunta a la misma carta que antes.
+   *
+   * `focusUid` (opcional) mantiene el foco en ESA carta: al mejorar una carta,
+   * el panel se reconstruye con la lista nueva y hay que volver a pararse en la
+   * misma, no en la primera.
    */
-  setSorted: (cards: CardInstance[]) => void;
+  setSorted: (cards: CardInstance[], focusUid?: string) => void;
 }
 
 /**
@@ -137,9 +141,11 @@ export function buildDeckCarouselFrame(
   detailName.className = 'carousel-detail-name';
   const detailMeta = document.createElement('div');
   detailMeta.className = 'carousel-detail-meta';
+  const detailStats = document.createElement('div');
+  detailStats.className = 'carousel-detail-stats';
   const detailActions = document.createElement('div');
   detailActions.className = 'deck-card-actions';
-  detail.append(detailName, detailMeta, detailActions);
+  detail.append(detailName, detailMeta, detailStats, detailActions);
 
   const actions = document.createElement('div');
   actions.className = 'panel-actions is-floating';
@@ -147,9 +153,16 @@ export function buildDeckCarouselFrame(
   let sort: DeckSort = 'element';
   let sorted: CardInstance[] = sortCards(state.cards, sort);
 
-  const setSorted = (cards: CardInstance[]): void => {
+  /**
+   * Reordena la lista. `focusUid` permite MANTENER el foco en la carta que el
+   * jugador estaba mirando (p. ej. la que acaba de mejorar): sin esto el foco
+   * saltaba siempre al indice 0 y la carta mejorada "se iba" a otra posicion
+   * del anillo, que es el bug reportado.
+   */
+  const setSorted = (cards: CardInstance[], focusUid?: string): void => {
     sorted = cards;
-    setFocus(0);
+    const index = focusUid ? Math.max(0, sorted.findIndex((c) => c.uid === focusUid)) : 0;
+    setFocus(index);
   };
 
   const setFocus = (index: number): void => {
@@ -172,6 +185,37 @@ export function buildDeckCarouselFrame(
     ];
     if (info?.evolveLabel != null) bits.push(`${card.plays ?? 0}×`);
     detailMeta.textContent = bits.join(' · ');
+
+    // P2/Deck — Substrato y Esporas CON su aumento de nivel. El detalle antes
+    // solo listaba elemento/familia/rareza/nivel: el jugador mejoraba la carta
+    // y "quedaba igual" porque los numeros que cambian no estaban. Se muestra el
+    // total y, entre parentesis, lo ganado por mejoras (`+n`).
+    detailStats.innerHTML = '';
+    const substrateTotal = card.def.baseSubstrate + card.bonusSubstrate;
+    const sporesTotal = card.def.baseSpores + card.bonusSpores;
+    const statItems: Array<[string, number, number, string]> = [
+      [t('deck.substrate'), substrateTotal, card.bonusSubstrate, '#f2a63b'],
+      [t('deck.spores'), sporesTotal, card.bonusSpores, '#4fd18b'],
+    ];
+    for (const [label, total, bonus, color] of statItems) {
+      const stat = document.createElement('span');
+      stat.className = 'carousel-detail-stat';
+      const value = document.createElement('strong');
+      value.style.color = color;
+      value.textContent = label === t('deck.spores') ? `x${total}` : String(total);
+      stat.appendChild(value);
+      if (bonus > 0) {
+        const delta = document.createElement('em');
+        delta.className = 'carousel-detail-stat-bonus';
+        delta.textContent = `+${bonus}`;
+        stat.appendChild(delta);
+      }
+      const tag = document.createElement('span');
+      tag.className = 'carousel-detail-stat-label';
+      tag.textContent = label;
+      stat.appendChild(tag);
+      detailStats.appendChild(stat);
+    }
 
     if (info && info.upgradeCost !== null) {
       const upgrade = document.createElement('button');
@@ -340,9 +384,23 @@ export function buildDeckBuilderPanel(
       const substrate = document.createElement('span');
       substrate.style.color = hexToCss(0xf2a63b);
       substrate.textContent = String(card.def.baseSubstrate + card.bonusSubstrate);
+      if (card.bonusSubstrate > 0) {
+        const delta = document.createElement('em');
+        delta.className = 'deck-card-stat-bonus';
+        delta.style.color = hexToCss(0xf2a63b);
+        delta.textContent = `+${card.bonusSubstrate}`;
+        substrate.appendChild(delta);
+      }
       const spores = document.createElement('span');
       spores.style.color = hexToCss(0x4fd18b);
       spores.textContent = `x${card.def.baseSpores + card.bonusSpores}`;
+      if (card.bonusSpores > 0) {
+        const delta = document.createElement('em');
+        delta.className = 'deck-card-stat-bonus';
+        delta.style.color = hexToCss(0x4fd18b);
+        delta.textContent = `+${card.bonusSpores}`;
+        spores.appendChild(delta);
+      }
       const rarity = document.createElement('span');
       rarity.style.color = hexToCss(RARITY_COLOR[card.def.rarity]);
       rarity.textContent = t(`rarity.${card.def.rarity}`);

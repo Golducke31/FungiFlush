@@ -22,6 +22,7 @@ import {
   type CardDefinition,
   type ContentBundle,
   type EvolutionRule,
+  type InterludeDefinition,
   type JokerDefinition,
   type UpgradeTrack,
   type VoucherDefinition,
@@ -55,7 +56,7 @@ export interface PackIssue {
 }
 
 export interface Collision {
-  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante' | 'ascension';
+  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante' | 'ascension' | 'interlude';
   id: string;
   winner: string;
   loser: string;
@@ -89,6 +90,8 @@ export class ContentRegistry {
   private readonly upgrades: UpgradeTrack[] = [];
   private readonly evolutions: EvolutionRule[] = [];
   private readonly vouchers = new Map<string, Tagged<VoucherDefinition>>();
+  /** Eventos entre Ciegos (P2.4). Se acumulan: el validador detecta duplicados. */
+  private readonly interludes: InterludeDefinition[] = [];
   /**
    * Niveles de ascension, indexados por nivel. Se guarda el `__pack` de quien
    * los aporto para poder reportar un duplicado: dos packs con el MISMO nivel
@@ -132,6 +135,7 @@ export class ContentRegistry {
     this.evolutions.length = 0;
     this.vouchers.clear();
     this.ascensions.clear();
+    this.interludes.length = 0;
     this.board.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
@@ -167,6 +171,9 @@ export class ContentRegistry {
       this.evolutions.push(...pack.evolutions);
       for (const def of pack.vouchers) this.insert('voucher', this.vouchers, def.id, def, id, pack.manifest);
       for (const def of pack.ascensions) this.insertAscension(def, id, pack.manifest);
+      // Interludios: se acumulan como upgrades/evolutions. Un id repetido entre
+      // packs es un error de contenido, y `validate` lo reporta.
+      for (const def of pack.interludes) this.insertInterlude(def, id, pack.manifest);
       // Mismo criterio que upgrades y evolutions: se acumulan y el validador
       // del tipo detecta duplicados. Un `cardId` repetido entre packs es un
       // error de contenido, no un override silencioso.
@@ -287,6 +294,13 @@ export class ContentRegistry {
       ...(this.ascensions.size > 0
         ? { ascensions: this.ascensionList() }
         : {}),
+      ...(this.interludes.length > 0
+        ? {
+            interludes: this.interludes.map(
+              (d) => stripPack(d as Tagged<InterludeDefinition>) as InterludeDefinition,
+            ),
+          }
+        : {}),
     };
   }
 
@@ -295,6 +309,31 @@ export class ContentRegistry {
     return [...this.ascensions.values()]
       .sort((a, b) => a.level - b.level)
       .map((def) => stripPack(def) as AscensionDefinition);
+  }
+
+  /**
+   * Inserta un interludio validando el id duplicado. Se guarda el pack autor
+   * para reportar el conflicto, igual que ascensiones.
+   */
+  private insertInterlude(def: InterludeDefinition, packId: string, manifest: PackManifest): void {
+    const incumbent = this.interludes.find((d) => d.id === def.id) as
+      | Tagged<InterludeDefinition>
+      | undefined;
+    if (!incumbent) {
+      this.interludes.push({ ...def, __pack: packId } as Tagged<InterludeDefinition>);
+      return;
+    }
+    // Mismo criterio que `insert`: pisa solo si el pack lo pide Y es mas nuevo.
+    const canOverride =
+      manifest.gating?.allowOverride === true &&
+      manifest.version > (this.versionOf(incumbent.__pack) ?? 0);
+    if (canOverride) {
+      const idx = this.interludes.indexOf(incumbent);
+      this.interludes[idx] = { ...def, __pack: packId } as Tagged<InterludeDefinition>;
+      this.collisions.push({ kind: 'interlude', id: def.id, winner: packId, loser: incumbent.__pack });
+      return;
+    }
+    this.collisions.push({ kind: 'interlude', id: def.id, winner: incumbent.__pack, loser: packId });
   }
 
   /**
@@ -598,6 +637,34 @@ export class ContentRegistry {
       }
     }
 
+    // --- Interludios (P2.4) ---
+    // Un interludio sin opcion de declinar es un castigo disfrazado de decision:
+    // `parseInterludes` ya lo descarta, pero si llegara por otro camino se
+    // reporta como error. Tambien se exige al menos un efecto en alguna opcion
+    // (si no, el evento no hace nada y ocupa el lugar de una decision real).
+    for (const inter of this.interludes) {
+      const owner = (inter as Tagged<InterludeDefinition>).__pack;
+      if (!inter.nameKey || !inter.descKey) {
+        issues.push({ level: 'error', pack: owner, where: `interlude:${inter.id}`, message: 'falta nameKey o descKey' });
+      }
+      if (inter.choices.length < 2) {
+        issues.push({ level: 'error', pack: owner, where: `interlude:${inter.id}`, message: 'necesita al menos 2 opciones' });
+      }
+      const hasDecline = inter.choices.some((c) => (c.effects?.length ?? 0) === 0);
+      if (!hasDecline) {
+        issues.push({ level: 'error', pack: owner, where: `interlude:${inter.id}`, message: 'falta una opcion sin efectos (declinar)' });
+      }
+      const hasPayoff = inter.choices.some((c) => (c.effects?.length ?? 0) > 0);
+      if (!hasPayoff) {
+        issues.push({ level: 'warning', pack: owner, where: `interlude:${inter.id}`, message: 'ninguna opcion tiene efectos: no hace nada' });
+      }
+      for (const choice of inter.choices) {
+        if (!choice.labelKey || !choice.detailKey) {
+          issues.push({ level: 'error', pack: owner, where: `interlude:${inter.id}:${choice.id}`, message: 'falta labelKey o detailKey' });
+        }
+      }
+    }
+
     // --- Validacion semantica del motor, etiquetada por pack ---
     const registry = new CardRegistry();
     registry.load(this.toBundle());
@@ -629,6 +696,12 @@ export class ContentRegistry {
     // Los niveles de ascension tambien se traducen y vienen del contenido: sin
     // esta linea, un `ascension.a3.desc` sin traducir no lo detecta el validador.
     for (const def of this.ascensions.values()) keys.push(def.nameKey, def.descKey);
+    // Los interludios traen su nombre, su descripcion y las claves de cada
+    // opcion: sin esto, un interludio a medio traducir pasaria validation.
+    for (const def of this.interludes) {
+      keys.push(def.nameKey, def.descKey);
+      for (const choice of def.choices) keys.push(choice.labelKey, choice.detailKey);
+    }
     return keys;
   }
 
@@ -643,6 +716,10 @@ export class ContentRegistry {
     for (const def of [...this.cards.values(), ...this.jokers.values(), ...this.blinds.values()]) {
       if (where.includes(def.nameKey) || where.includes(def.descKey)) return def.__pack;
     }
+    const interlude = this.interludes.find(
+      (d) => where.includes(d.nameKey) || where.includes(d.descKey),
+    );
+    if (interlude) return (interlude as Tagged<InterludeDefinition>).__pack;
     return '<registry>';
   }
 
@@ -723,6 +800,7 @@ export class ContentRegistry {
     offers: number;
     upgrades: number;
     evolutions: number;
+    interludes: number;
     board: number;
   } {
     return {
@@ -736,6 +814,7 @@ export class ContentRegistry {
       offers: this.offers.length,
       upgrades: this.upgrades.length,
       evolutions: this.evolutions.length,
+      interludes: this.interludes.length,
       board: this.board.length,
     };
   }

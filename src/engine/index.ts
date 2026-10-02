@@ -15,6 +15,33 @@ export { ResolutionContext, describeResolution } from './resolution';
 export type { ResolutionInit } from './resolution';
 export { CardRegistry, RARITY_WEIGHT, RARITY_ORDER } from './cards/CardRegistry';
 export type { ContentBundle, ValidationIssue } from './cards/CardRegistry';
+export {
+  DEFAULT_INTERLUDE_MODIFIERS,
+  applyInterludeModifiers,
+  eligibleInterludes,
+  immediateInterludeEffects,
+  parseInterludes,
+  pickInterlude,
+} from './interlude/interlude';
+export type {
+  InterludeChoice,
+  InterludeDefinition,
+  InterludeEffect,
+  InterludeModifiers,
+} from './interlude/interlude';
+export {
+  advanceMissions,
+  MAX_ACTIVE_MISSIONS,
+  MISSION_EVENTS,
+  parseMissions,
+  pickMissions,
+} from './missions/missions';
+export type {
+  MissionDef,
+  MissionPredicate,
+  MissionState,
+  MissionWorld,
+} from './missions/missions';
 export { Deck } from './cards/Deck';
 export { TriggerEngine } from './triggers/TriggerEngine';
 export { applyAction, supportedActions } from './triggers/actions';

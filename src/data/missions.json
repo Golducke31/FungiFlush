@@ -1,0 +1,93 @@
+[
+  {
+    "id": "mission_hand_500",
+    "nameKey": "mission.hand_500.name",
+    "descKey": "mission.hand_500.desc",
+    "event": "score:hand",
+    "when": { "op": "gte", "path": "payload.total", "value": 500 },
+    "reward": 5,
+    "minAnte": 1
+  },
+  {
+    "id": "mission_hand_2000",
+    "nameKey": "mission.hand_2000.name",
+    "descKey": "mission.hand_2000.desc",
+    "event": "score:hand",
+    "when": { "op": "gte", "path": "payload.total", "value": 2000 },
+    "reward": 8,
+    "minAnte": 2
+  },
+  {
+    "id": "mission_discard_3",
+    "nameKey": "mission.discard_3.name",
+    "descKey": "mission.discard_3.desc",
+    "event": "card:discarded",
+    "when": { "op": "always" },
+    "incremental": { "max": 6, "inc": 1 },
+    "reward": 4,
+    "minAnte": 1
+  },
+  {
+    "id": "mission_jokers_3",
+    "nameKey": "mission.jokers_3.name",
+    "descKey": "mission.jokers_3.desc",
+    "event": "joker:added",
+    "when": { "op": "gte", "path": "ctx.jokerCount", "value": 3 },
+    "reward": 6,
+    "minAnte": 1
+  },
+  {
+    "id": "mission_upgrade_3",
+    "nameKey": "mission.upgrade_3.name",
+    "descKey": "mission.upgrade_3.desc",
+    "event": "card:levelup",
+    "incremental": { "max": 3, "inc": 1 },
+    "reward": 6,
+    "minAnte": 2
+  },
+  {
+    "id": "mission_blind_no_loss",
+    "nameKey": "mission.blind_no_loss.name",
+    "descKey": "mission.blind_no_loss.desc",
+    "event": "round:win",
+    "when": { "op": "gte", "path": "payload.reward", "value": 7 },
+    "reward": 7,
+    "minAnte": 3
+  },
+  {
+    "id": "mission_evolve_1",
+    "nameKey": "mission.evolve_1.name",
+    "descKey": "mission.evolve_1.desc",
+    "event": "card:evolved",
+    "when": { "op": "always" },
+    "reward": 8,
+    "minAnte": 2
+  },
+  {
+    "id": "mission_spend_30",
+    "nameKey": "mission.spend_30.name",
+    "descKey": "mission.spend_30.desc",
+    "event": "shop:purchase",
+    "incremental": { "max": 3, "inc": 1 },
+    "reward": 5,
+    "minAnte": 2
+  },
+  {
+    "id": "mission_ante_reach",
+    "nameKey": "mission.ante_reach.name",
+    "descKey": "mission.ante_reach.desc",
+    "event": "round:win",
+    "when": { "op": "gte", "path": "ctx.ante", "value": 5 },
+    "reward": 10,
+    "minAnte": 4
+  },
+  {
+    "id": "mission_destroy_2",
+    "nameKey": "mission.destroy_2.name",
+    "descKey": "mission.destroy_2.desc",
+    "event": "card:destroyed",
+    "incremental": { "max": 2, "inc": 1 },
+    "reward": 5,
+    "minAnte": 1
+  }
+]

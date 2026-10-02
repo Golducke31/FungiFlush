@@ -1005,9 +1005,18 @@ export class SceneManager {
     this.fitCarousel();
   }
 
+  /**
+   * Gira el carrusel a una entrada concreta (sin tap). Lo usa el mazo para
+   * arrancar parado en la carta resaltada (p. ej. la recien mejorada): al
+   * resetear `setEntries` el giro vuelve a 0, y sin esto el anillo mostraba la
+   * primera carta mientras el detalle mostraba otra.
+   */
+  focusCarousel(index: number): void {
+    this.carousel?.focus(index);
+  }
+
   /** Aplica una entrada del carrusel a un slot: cara (o dorso) y snap. */
-  private applyCarouselEntry(card3d: Card3D, entry: CarouselEntryView): void {
-    card3d.home.flip = 0;
+  private applyCarouselEntry(card3d: Card3D, entry: CarouselEntryView): void {    card3d.home.flip = 0;
     if (!entry.discovered) {
       // Sin descubrir: se muestra el dorso. No se toca la cara.
       if (this.backTexture) card3d.setBackTexture(this.backTexture);

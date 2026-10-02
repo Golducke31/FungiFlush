@@ -90,6 +90,7 @@ function main(): void {
   console.log(`ofertas    ${stats.offers}`);
   console.log(`mejoras    ${stats.upgrades}`);
   console.log(`evoluciones ${stats.evolutions}`);
+  console.log(`interludios ${stats.interludes}`);
   console.log(`tablero    ${stats.board}`);
   console.log(`arte       ${cards.length} cartas / ${art.byFile.size} ilustraciones distintas`);
   console.log(`hash       ${registry.contentHash()}`);

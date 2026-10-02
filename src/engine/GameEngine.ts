@@ -37,6 +37,20 @@ import { TriggerEngine } from './triggers/TriggerEngine';
 import { applyAction } from './triggers/actions';
 import { createRoundState, selectedCards, type RoundState } from './state/RoundState';
 import {
+  applyInterludeModifiers,
+  immediateInterludeEffects,
+  pickInterlude,
+  type InterludeDefinition,
+  type InterludeEffect,
+} from './interlude/interlude';
+import {
+  advanceMissions,
+  MAX_ACTIVE_MISSIONS,
+  pickMissions,
+  type MissionDef,
+  type MissionState,
+} from './missions/missions';
+import {
   combineModifiers,
   createRunState,
   discountedCost,
@@ -53,6 +67,7 @@ import type {
   DieRoll,
   JokerDefinition,
   JokerInstance,
+  Rarity,
   RoundSnapshot,
   RunSnapshot,
   ScoreBreakdown,
@@ -62,6 +77,11 @@ import type {
 } from './types';
 
 const MAX_PLAY_SIZE = MAX_PLAY_SIZE_DEFAULT;
+
+/** Probabilidad de que un interludio aparezca al salir de la tienda (P2.4). */
+const INTERLUDE_CHANCE = 0.4;
+/** El mazo nunca baja de este tamano por un purgado de interludio. */
+const MIN_DECK_SIZE = 5;
 
 /** Eventos que el motor emite por si mismo (fuera de una mano jugada). */
 export type GlobalTriggerEvent =
@@ -94,6 +114,12 @@ export interface GameEngineOptions {
    * lo aplica. Ver `CardRegistry.buildStarterDeck`.
    */
   starterOverrides?: Array<{ cardId: string; copies: number }>;
+  /**
+   * Definiciones de mision de run (P2.6). Las carga el controlador desde
+   * `src/data/missions.json`; el motor no conoce el archivo. Sin esto, la run
+   * simplemente no tiene objetivos intermedios.
+   */
+  missions?: MissionDef[];
 }
 
 export class GameEngine {
@@ -119,6 +145,14 @@ export class GameEngine {
   private reward: { offers: ShopOffer[]; pick: number; allowSkip: boolean } | null = null;
   private rewardPicked = 0;
 
+  /** Interludio pendiente de decision (P2.4). */
+  private pendingInterlude: InterludeDefinition | null = null;
+
+  /** Definiciones de mision cargadas desde el contenido (P2.6). */
+  private missionDefs: MissionDef[] = [];
+  /** `true` mientras `restore` reconstruye la run: suprime el sorteo de misiones. */
+  private restoring = false;
+
   constructor(opts: GameEngineOptions) {
     this.rng = new RNG(opts.seed ?? Date.now());
     this.registry.load(opts.bundle);
@@ -132,6 +166,7 @@ export class GameEngine {
     this.contentHash = opts.contentHash ?? null;
     this.packIds = opts.packIds ?? ['base'];
     this.starterOverrides = opts.starterOverrides;
+    this.missionDefs = opts.missions ?? [];
 
     // El estado de la run es puro y no conoce el contenido, asi que la tabla de
     // ascensiones se le INYECTA. Se hace en el constructor y no al arrancar la
@@ -153,6 +188,7 @@ export class GameEngine {
     this.run = createRunState(this.rng.getSeed(), deck);
     this.run.status = 'menu';
     this.round = null;
+    this.resetTransient();
     this.emitState();
   }
 
@@ -171,11 +207,23 @@ export class GameEngine {
     this.run = createRunState(seed ?? this.rng.getSeed(), deck, level);
     deck.setCards(this.registry.buildStarterDeck(this.rng, this.starterOverrides));
 
+    // Una run nueva no hereda el draft ni el interludio de la anterior: si el
+    // jugador reiniciaba DESDE la pantalla de interludio, el trato viejo
+    // seguia pendiente y reaparecia al salir de la primera tienda.
+    this.resetTransient();
+
     this.dispatchGlobal('ON_RUN_START');
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
 
     // No se elige el blind automaticamente: el jugador decide (Blind Select).
     this.enterBlindSelect();
+  }
+
+  /** Limpia el estado NO serializable que cuelga de una run (draft, interludio). */
+  private resetTransient(): void {
+    this.reward = null;
+    this.rewardPicked = 0;
+    this.pendingInterlude = null;
   }
 
   /**
@@ -199,6 +247,15 @@ export class GameEngine {
     this.run.status = 'blind_select';
     this.run.die = null;
     this.run.dieRerolls = 0;
+    // P2.6 — Es el momento natural para reponer misiones: el jugador esta a
+    // punto de elegir un desafio, asi que un objetivo corto nuevo se puede
+    // cumplir DENTRO de lo que viene, no despues de la run entera.
+    //
+    // AL RESTAURAR NO: `restore` llama a este metodo con las misiones ya
+    // cargadas del guardado. Si sorteara aca, recargar la partida daria misiones
+    // nuevas gratis (se podria "rerolear" cerrar y abrir), y ademas las
+    // restauradas se perderian al pisarlas.
+    if (!this.restoring) this.rollMissions();
     this.emitState();
   }
 
@@ -279,7 +336,12 @@ export class GameEngine {
     // el base pelado (que seria un descuento del 10% de nada).
     const mul = this.modifiers.targetMultiplier ?? 1;
     const asc = this.ascension.modifiers.targetMultiplier ?? 1;
-    return Math.round(base * blind.scoreMultiplier * mul * asc);
+    // P2.4 — El interludio tambien empuja el objetivo. Se multiplica aca, en la
+    // UNICA fuente del objetivo, para que la pantalla de seleccion y la ronda
+    // real muestren el mismo numero: calcularlo en dos lados es como se llega a
+    // "el panel decia 300 y el ciego pide 345".
+    const inter = this.run.interludeModifiers?.targetMultiplier ?? 1;
+    return Math.round(base * blind.scoreMultiplier * mul * asc * inter);
   }
 
   /**
@@ -385,6 +447,41 @@ export class GameEngine {
     this.emitState();
   }
 
+  /**
+   * Reordena la MANO (P1.3/P1.4) sin consumir recursos ni cambiar cartas.
+   *
+   * El criterio NO lo decide el motor: el `GameEngine` no conoce categorias de
+   * UI ("Familia", "Valor") y meterlas aca ensuciaria la capa pura. El que
+   * ordena es `src/ui/handSort.ts`; el motor solo acepta el resultado y lo
+   * aplica sobre `round.hand`, que es la unica lista que el render lee para
+   * layoutear (ver `SceneManager.syncHand`).
+   *
+   * Se valida que la lista sea una PERMUTACION de la mano actual: si el
+   * llamador se equivoca (manda un uid de mas, o de menos), la mano no se toca.
+   * Perder una carta por un bug de UI seria exactamente el fallo que el plan
+   * pide evitar.
+   */
+  reorderHand(orderedUids: readonly string[]): boolean {
+    const round = this.round;
+    if (!round || this.run.status !== 'playing') return false;
+    if (orderedUids.length !== round.hand.length) return false;
+
+    const byUid = new Map(round.hand.map((card) => [card.uid, card]));
+    const next: CardInstance[] = [];
+    for (const uid of orderedUids) {
+      const card = byUid.get(uid);
+      if (!card) return false; // uid desconocido: la lista no es una permutacion
+      next.push(card);
+      byUid.delete(uid);
+    }
+    if (byUid.size !== 0) return false; // faltaban cartas
+
+    round.hand = next;
+    // La seleccion viaja por uid, no por indice: no hace falta tocarla.
+    this.emitState();
+    return true;
+  }
+
   /** Previsualiza el score de la seleccion actual sin efectos secundarios. */
   previewSelection(): ScoreBreakdown | null {
     const round = this.round;
@@ -442,10 +539,17 @@ export class GameEngine {
     });
 
     // --- Las cartas jugadas van al descarte ---
+    // OJO: una carta que un efecto DESTRUYO durante la resolucion NO puede
+    // volver al descarte. `applyDeltas` (llamado arriba, linea ~427) ya la saco
+    // del mazo con `deck.remove()`. Si ademas le hacemos `discard()`, la carta
+    // resucita: el mazo termina con MAS copias de las que tenia (comprobado:
+    // 1 doomed -> 2). Es un exploit de duplicacion, no solo una fuga.
+    const destroyedUids = new Set(res.destroyed.map((c) => c.uid));
     for (const card of scored) {
       // Contador de uso: alimenta las evoluciones por cantidad de jugadas.
       card.plays = (card.plays ?? 0) + 1;
       round.hand = round.hand.filter((c) => c.uid !== card.uid);
+      if (destroyedUids.has(card.uid)) continue;
       this.run.deck.discard(card);
     }
     round.selected = [];
@@ -502,8 +606,13 @@ export class GameEngine {
     round.cardsDiscardedThisRound += discarded.length;
     round.isFirstPlayOfRound = false;
 
+    // Misma guarda que en `playHand`: una carta que un efecto destruyo mientras
+    // se descartaba ya fue sacada del mazo por `applyDeltas`. Devolverla al
+    // descarte la duplicaria.
+    const destroyedUids = new Set(res.destroyed.map((c) => c.uid));
     for (const card of discarded) {
       round.hand = round.hand.filter((c) => c.uid !== card.uid);
+      if (destroyedUids.has(card.uid)) continue;
       this.run.deck.discard(card);
     }
     round.selected = round.selected.filter((uid) => !discardedUids.has(uid));
@@ -622,6 +731,20 @@ export class GameEngine {
    */
   canEditDeck(): boolean {
     return this.run.status === 'blind_select' || this.run.status === 'shop';
+  }
+
+  /**
+   * TAMANO COMPLETO del mazo: robo + descarte + las cartas que estan EN LA MANO.
+   *
+   * `deck.totalSize` solo cuenta las dos pilas, asi que durante la mano (o
+   * mientras haya cartas retenidas) devuelve menos que el mazo real: con 8
+   * cartas en la mano mostraba "32" cuando el jugador tiene 40. El chip del HUD
+   * dice "Mazo", y un jugador cuenta SU mazo entero, no solo lo que le queda
+   * por robar. Es la unica fuente de ese numero: el panel de mazo y el chip
+   * leen de aca para no volver a discrepar.
+   */
+  get deckSize(): number {
+    return this.run.deck.totalSize + (this.round?.hand.length ?? 0);
   }
 
   /** Compat: la purga es una de las operaciones de edicion de mazo. */
@@ -856,9 +979,170 @@ export class GameEngine {
     // Los statuses temporales se limpian entre blinds.
     this.decayStatuses();
 
+    // P2.4 — Antes de volver a la seleccion, a veces hay un EVENTO: un trato
+    // que el jugador puede aceptar (con coste) o declinar. Se pasa por aca y no
+    // al ganar el ciego porque el interludio tiene que cortar el flujo ANTES de
+    // una decision (que ciego elegir), no mezclado con la recompensa.
+    if (this.tryEnterInterlude()) return;
+
     // Vuelve a la pantalla de eleccion: el jugador decide con que ciego sigue.
     this.enterBlindSelect();
   }
+
+  // ==========================================================================
+  // Interludios (P2.3 / P2.4)
+  // ==========================================================================
+
+  /**
+   * Sortea si toca un interludio y, si toca, entra a esa fase.
+   *
+   * Devuelve `false` si no hay tabla, si el dado de azar no dio, o si no queda
+   * ningun trato sin ver. El sorteo usa el RNG SEMBRADO: dos partidas con la
+   * misma semilla tienen que ver los mismos eventos.
+   */
+  private tryEnterInterlude(): boolean {
+    if (!this.registry.hasInterludes) return false;
+
+    const unseen = this.registry.interludeDefs.filter(
+      (def) => !this.run.seenInterludes.includes(def.id),
+    );
+    if (unseen.length === 0) return false;
+
+    // Un 40% de paradas: suficiente para que se sientan parte del bucle, bajo
+    // para que la run siga siendo "elegir ciego -> jugar -> tienda".
+    if (this.rng.next() >= INTERLUDE_CHANCE) return false;
+
+    const def = pickInterlude(unseen, this.run.ante, this.rng.next());
+    if (!def) return false;
+
+    this.run.seenInterludes.push(def.id);
+    this.run.status = 'interlude';
+    this.pendingInterlude = def;
+    bus.emit('interlude:enter', { interlude: def });
+    this.emitState();
+    return true;
+  }
+
+  /** Interludio pendiente de decision, o null. Para la UI. */
+  get currentInterlude(): InterludeDefinition | null {
+    return this.pendingInterlude;
+  }
+
+  /**
+   * Resuelve el interludio con la opcion elegida y sigue a la seleccion de
+   * ciego. Devuelve `false` si no hay interludio, la opcion no existe, o el
+   * efecto no se pudo pagar (ej: dinero insuficiente).
+   */
+  chooseInterlude(choiceId: string): boolean {
+    const def = this.pendingInterlude;
+    if (!def || this.run.status !== 'interlude') return false;
+
+    const choice = def.choices.find((c) => c.id === choiceId);
+    if (!choice) return false;
+
+    if (!this.applyInterludeEffects(choice.effects ?? [])) return false;
+
+    this.pendingInterlude = null;
+    bus.emit('interlude:choose', { interlude: def, choice });
+    this.enterBlindSelect();
+    this.emitState();
+    return true;
+  }
+
+  /**
+   * Aplica los efectos de una opcion. Devuelve `false` (sin aplicar NADA) si
+   * alguno no se puede pagar: un trato a medias seria peor que no aceptarlo.
+   *
+   * El orden importa: primero se cobra lo que cuesta y recien despues se
+   * entrega. Si se hiciera al reves, un trato con coste imposible de pagar
+   * dejaria al jugador con la ventaja y sin el coste.
+   */
+  private applyInterludeEffects(effects: readonly InterludeEffect[]): boolean {
+    // --- Validacion previa: se puede pagar TODO? ---
+    for (const effect of effects) {
+      if (effect.type === 'MONEY' && effect.value < 0 && this.run.money + effect.value < 0) {
+        return false;
+      }
+      if (effect.type === 'PURGE_RANDOM') {
+        const need = effect.count ?? 1;
+        // No se puede purgar mas de lo que queda tras el minimo jugable.
+        if (this.run.deck.totalSize - need < MIN_DECK_SIZE) return false;
+      }
+    }
+
+    // --- Los multiplicadores acumulados se guardan para las proximas consultas ---
+    const withMods = applyInterludeModifiers(this.run.interludeModifiers, effects);
+    if (withMods.targetMultiplier !== this.run.interludeModifiers.targetMultiplier) {
+      bus.emit('interlude:target', { multiplier: withMods.targetMultiplier });
+    }
+    this.run.interludeModifiers = withMods;
+
+    // --- Efectos inmediatos ---
+    for (const effect of immediateInterludeEffects(effects)) {
+      switch (effect.type) {
+        case 'MONEY':
+          this.setMoney(effect.value);
+          break;
+        case 'JOKER_SLOT':
+          this.run.jokerSlots = Math.max(0, this.run.jokerSlots + effect.value);
+          break;
+        case 'HANDS_DELTA':
+          this.run.baseHands = Math.max(1, this.run.baseHands + effect.value);
+          break;
+        case 'HAND_SIZE':
+          this.run.baseHandSize = Math.max(1, this.run.baseHandSize + effect.value);
+          break;
+        case 'CARD': {
+          const count = effect.count ?? 1;
+          const weights = effect.rarity
+            ? ({ [effect.rarity as Rarity]: 1 } as Partial<Record<Rarity, number>>)
+            : undefined;
+          for (let i = 0; i < count; i++) {
+            const def = this.registry.rollRandomCard(this.rng, undefined, weights);
+            if (!def) break;
+            const inst = this.registry.instantiate(def.id);
+            this.run.deck.insert(inst, 'random');
+            bus.emit('card:created', { card: inst });
+          }
+          break;
+        }
+        case 'PURGE_RANDOM': {
+          const count = effect.count ?? 1;
+          for (let i = 0; i < count; i++) {
+            const pool = this.run.deck.allCards;
+            if (pool.length === 0) break;
+            const victim = pool[Math.floor(this.rng.next() * pool.length)];
+            if (!victim) break;
+            if (this.run.deck.remove(victim.uid)) {
+              this.run.stats.cardsDestroyed += 1;
+              bus.emit('card:destroyed', { card: victim });
+            }
+          }
+          break;
+        }
+        case 'UPGRADE_RANDOM': {
+          const count = effect.count ?? 1;
+          for (let i = 0; i < count; i++) {
+            const pool = this.run.deck.allCards.filter((c) => {
+              const quote = this.upgrades.quote(c, 1);
+              return quote !== null && !quote.atMaxLevel;
+            });
+            if (pool.length === 0) break;
+            const lucky = pool[Math.floor(this.rng.next() * pool.length)];
+            if (!lucky) break;
+            this.upgrades.apply(lucky, 1);
+            this.run.stats.cardsUpgraded += 1;
+            bus.emit('card:levelup', { card: lucky, cost: 0, level: lucky.level });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    return true;
+  }
+
 
   // ==========================================================================
   // Internos
@@ -969,6 +1253,12 @@ export class GameEngine {
 
       this.dispatchGlobal('ON_ROUND_WIN');
 
+      // CONSERVAR EL MAZO: la mano que sobraba vuelve al mazo ANTES de salir
+      // del ciego. Sin esto, `chooseBlind` reemplaza el RoundState entero y
+      // esas cartas quedan huerfanas (ni en el mazo, ni en la mano): el mazo
+      // encogia en silencio en cada ciego ganado. Ver `conserveDeck()`.
+      this.conserveDeck();
+
       // El draft de recompensa va ANTES de la tienda. Si el contenido no
       // declara una tabla de fase 'reward', el flujo es el de siempre:
       // un pack que no la declara no cambia el juego.
@@ -998,11 +1288,38 @@ export class GameEngine {
     if (round.handsLeft <= 0) {
       bus.emit('round:loss', { score: round.score, target: round.target });
       this.dispatchGlobal('ON_ROUND_LOSS');
+      // Misma conservacion al PERDER: quedarse sin manos no destruye cartas.
+      this.conserveDeck();
       this.run.status = 'game_over';
       bus.emit('game:over', { reason: 'loss', ante: this.run.ante });
       this.emitState();
     }
   }
+
+  /**
+   * Devuelve al mazo las cartas que quedaron en la mano al cerrar el ciego.
+   *
+   * Es UNO de los cuatro pasos que el plan separa explicitamente:
+   *   finalizarPuntuacion() -> resolverEfectosDeFinDeCiego()
+   *   -> conservarEstadoDelMazo() -> crearEstadoDelSiguienteCiego()
+   *
+   * La unica forma legitima de que una carta desaparezca es `deck.remove()`
+   * (destruccion/purga explicitas, ya aplicadas en `applyDeltas`). Todo lo que
+   * siga vivo en `round.hand` vuelve al descarte y se recicla en el proximo
+   * robo: la cantidad total de cartas del mazo es invariante a traves de un
+   * ciego, salvo que una regla explicita la haya destruido.
+   */
+  private conserveDeck(): void {
+    const round = this.round;
+    if (!round || round.hand.length === 0) return;
+
+    const leftover = round.hand.length;
+    this.run.deck.discardMany(round.hand);
+    round.hand = [];
+    round.selected = [];
+    bus.emit('deck:conserved', { returned: leftover, total: this.run.deck.totalSize });
+  }
+
 
   /** Reparte hasta completar el tamano de mano. */
   private fillHand(): void {
@@ -1157,8 +1474,81 @@ export class GameEngine {
   }
 
   // ==========================================================================
-  // Snapshots (lo que consume el render / HUD)
+  // Misiones de run (P2.6)
   // ==========================================================================
+
+  /** Misiones activas (definicion + estado actual). Para el HUD. */
+  activeMissions(): Array<{ def: MissionDef; state: MissionState }> {
+    const byId = new Map(this.missionDefs.map((d) => [d.id, d]));
+    const out: Array<{ def: MissionDef; state: MissionState }> = [];
+    for (const state of this.run.missions) {
+      const def = byId.get(state.id);
+      if (def) out.push({ def, state });
+    }
+    return out;
+  }
+
+  /**
+   * Sortea misiones nuevas para el ante actual. Se llama al ENTRAR a la
+   * seleccion de ciego, y solo si quedan huecos libres: dos misiones activas a
+   * la vez es el tope, o la lista se vuelve ruido.
+   */
+  private rollMissions(): void {
+    if (this.missionDefs.length === 0) return;
+
+    const active = this.run.missions.filter((m) => !m.completed);
+    const free = MAX_ACTIVE_MISSIONS - active.length;
+    if (free <= 0) return;
+
+    const exclude = this.run.missions.map((m) => m.id);
+    const picked = pickMissions(this.missionDefs, this.run.ante, exclude, free, () =>
+      this.rng.next(),
+    );
+    for (const def of picked) {
+      this.run.missions.push({ id: def.id, progress: 0, completed: false });
+      bus.emit('mission:added', { id: def.id, nameKey: def.nameKey, descKey: def.descKey });
+    }
+  }
+
+  /**
+   * Aplica un evento del bus a las misiones activas. Lo llama el CONTROLADOR
+   * (main.ts) desde el bus: el motor no se auto-escucha, porque eso lo obligaria
+   * a conocer la forma exacta de cada payload.
+   *
+   * Devuelve las misiones completadas para que quien llame muestre el aviso.
+   */
+  advanceMissionsOn(event: string, payload: unknown, ctx?: Record<string, number | string | boolean>): MissionDef[] {
+    if (this.missionDefs.length === 0 || this.run.missions.length === 0) return [];
+
+    const world = {
+      payload,
+      ctx: ctx ?? {
+        ante: this.run.ante,
+        jokerCount: this.run.jokers.length,
+        money: this.run.money,
+        deckSize: this.run.deck.totalSize,
+      },
+    };
+    const { next, completed } = advanceMissions(
+      this.run.missions,
+      this.missionDefs,
+      event,
+      world,
+    );
+    this.run.missions = next;
+
+    for (const def of completed) {
+      this.setMoney(def.reward);
+      bus.emit('mission:completed', {
+        id: def.id,
+        nameKey: def.nameKey,
+        descKey: def.descKey,
+        reward: def.reward,
+      });
+    }
+    return completed;
+  }
+
 
   roundSnapshot(): RoundSnapshot {
     const round = this.round;
@@ -1271,6 +1661,11 @@ export class GameEngine {
       // Nivel de dificultad elegido: sin esto, recargar una run A5 la
       // devolveria a A0 y el objetivo bajaría solo. Mismo motivo que vouchers.
       ascension: this.run.ascension,
+      // --- P2.4: interludios (aditivo, sin bump de version como vouchers) ---
+      interludeTargetMultiplier: this.run.interludeModifiers.targetMultiplier,
+      seenInterludes: [...this.run.seenInterludes],
+      // --- P2.6: misiones de run (aditivo) ---
+      missions: this.run.missions.map((m) => ({ ...m })),
       // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
       contentHash: this.contentHash,
       packIds: [...this.packIds],
@@ -1315,6 +1710,27 @@ export class GameEngine {
     // `?? []` y el filtro por existencia: un guardado viejo no tiene el campo, y
     // un voucher borrado del contenido no puede romper la carga.
     this.run.vouchers = (data.vouchers ?? []).filter((id) => !!this.registry.tryGetVoucher(id));
+    // Interludios: aditivo. Un guardado previo a P2.4 no trae los campos y la
+    // run sigue con el multiplicador neutro y sin eventos vistos.
+    this.run.interludeModifiers = {
+      targetMultiplier:
+        typeof data.interludeTargetMultiplier === 'number'
+          ? data.interludeTargetMultiplier
+          : 1,
+    };
+    this.run.seenInterludes = (data.seenInterludes ?? []).filter((id) =>
+      this.registry.interludeDefs.some((def) => def.id === id),
+    );
+    // Misiones: se filtran por definiciones existentes (una mision borrada del
+    // contenido no puede romper la carga) y se clampea el progreso.
+    const knownMissions = new Map(this.missionDefs.map((d) => [d.id, d]));
+    this.run.missions = (data.missions ?? [])
+      .filter((m) => m && typeof m.id === 'string' && knownMissions.has(m.id))
+      .map((m) => ({
+        id: m.id,
+        progress: Math.max(0, Number(m.progress) || 0),
+        completed: m.completed === true,
+      }));
 
     // El contenido cambio desde que se guardo: se avisa, pero NO se invalida.
     // Un rebalanceo no deberia borrarle la partida a nadie.
@@ -1330,7 +1746,14 @@ export class GameEngine {
 
     this.round = null;
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
-    this.enterBlindSelect();
+    // `restoring` suprime el sorteo de misiones de `enterBlindSelect`: las que
+    // vienen del guardado son las que valen.
+    this.restoring = true;
+    try {
+      this.enterBlindSelect();
+    } finally {
+      this.restoring = false;
+    }
     return true;
   }
 }
@@ -1390,6 +1813,18 @@ export interface RunSaveData {
    * cae a 0 (sin ascension). Al ser aditivo NO hace falta subir `SAVE_VERSION`.
    */
   ascension?: number;
+  /**
+   * Multiplicador de objetivo acumulado por interludios (P2.4). OPCIONAL y
+   * aditivo: los guardados previos no lo tienen y `restore` cae a 1.
+   */
+  interludeTargetMultiplier?: number;
+  /** Ids de interludios ya vistos (P2.4). OPCIONAL, mismo motivo. */
+  seenInterludes?: string[];
+  /**
+   * Misiones activas en la run (P2.6). OPCIONAL y aditivo: los guardados
+   * previos no lo tienen y `restore` cae a una lista vacia.
+   */
+  missions?: Array<{ id: string; progress: number; completed: boolean }>;
   /** Hash del contenido con el que se jugo (null = desconocido, ej. save v1). */
   contentHash: string | null;
   /** Packs activos cuando empezo la run. */

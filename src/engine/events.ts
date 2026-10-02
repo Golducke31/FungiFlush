@@ -23,6 +23,7 @@ import type {
   ShopOffer,
   TriggerEvent,
 } from './types';
+import type { InterludeChoice, InterludeDefinition } from './interlude/interlude';
 
 /**
  * `RetentionReward` vive en `src/retention/types.ts`, que NO importa nada: por
@@ -150,6 +151,23 @@ export interface GameEventMap {
   'reward:pick': { offer: ShopOffer | null; card?: CardInstance };
   'reward:exit': Record<string, never>;
 
+  // --- Interludios (P2.3 / P2.4): eventos entre ciegos ---
+  /**
+   * Aparece un evento entre Ciegos. La UI abre el panel con las opciones; el
+   * motor NO aplica nada hasta que el jugador confirma (`chooseInterlude`).
+   */
+  'interlude:enter': { interlude: InterludeDefinition };
+  /** El jugador eligio una opcion. Se emite DESPUES de aplicar los efectos. */
+  'interlude:choose': { interlude: InterludeDefinition; choice: InterludeChoice };
+  /** El objetivo de los proximos ciegos cambio por un interludio. */
+  'interlude:target': { multiplier: number };
+
+  // --- Misiones de run (P2.6) ---
+  /** Aparece una mision nueva para el ante en curso. */
+  'mission:added': { id: string; nameKey: string; descKey: string };
+  /** Se cumplio una mision: paga dinero en el acto. */
+  'mission:completed': { id: string; nameKey: string; descKey: string; reward: number };
+
   // --- Tienda ---
   'shop:enter': { offers: ShopOffer[]; money: number };
   'shop:exit': Record<string, never>;
@@ -164,6 +182,12 @@ export interface GameEventMap {
 
   // --- Deckbuilding y cultivo ---
   'deck:purged': { card: CardInstance; cost: number };
+  /**
+   * Al cerrar un ciego, las cartas que sobraban en la mano vuelven al mazo.
+   * La UI lo usa para la linea "Mazo conservado: N cartas": sin este dato el
+   * jugador solo ve que su mano cambia y deduce (mal) que perdio cartas.
+   */
+  'deck:conserved': { returned: number; total: number };
   /** Una carta subio de nivel (por pago en el constructor de mazo o por efecto). */
   'card:levelup': { card: CardInstance; cost: number; level: number };
   /** Una carta evoluciono a otra especie conservando su uid. */

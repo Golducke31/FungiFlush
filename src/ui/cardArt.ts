@@ -70,6 +70,10 @@ export function cardDefFaceUrl(
     art: def.art,
     substrate: def.baseSubstrate,
     spores: def.baseSpores,
+    // P1.1/P1.2 — Misma jerarquia que en la mesa: si la carta tiene habilidad,
+    // la cara de la tienda/recompensa/coleccion dibuja la etiqueta y el panel
+    // lila. El plan exige el mismo tratamiento en la carta ampliada.
+    hasAbility: (def.effects?.length ?? 0) > 0,
   };
   return cardFaceUrl(spec, realArt);
 }
@@ -105,6 +109,7 @@ export function offerFaceUrl(
         art: def.art,
         substrate: def.baseSubstrate,
         spores: def.baseSpores,
+        hasAbility: (def.effects?.length ?? 0) > 0,
       };
     } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
       const def = engine.registry.tryGetJoker(offer.refId);

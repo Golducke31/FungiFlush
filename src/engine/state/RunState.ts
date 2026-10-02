@@ -6,6 +6,10 @@
 
 import type { Deck } from '../cards/Deck';
 import { ECONOMY, RUN_DEFAULTS } from '../constants';
+import {
+  DEFAULT_INTERLUDE_MODIFIERS,
+  type InterludeModifiers,
+} from '../interlude/interlude';
 import type {
   AscensionModifiers,
   DieRoll,
@@ -21,6 +25,8 @@ export type GameStatus =
   | 'scoring'
   /** Draft de recompensa al ganar un blind, antes de la tienda. */
   | 'reward'
+  /** Evento entre Ciegos: el jugador elige aceptar un trato o seguir (P2.4). */
+  | 'interlude'
   | 'shop'
   | 'game_over'
   | 'victory';
@@ -69,6 +75,20 @@ export interface RunState {
    */
   ascension: number;
   shop: ShopState | null;
+  /**
+   * Modificadores acumulados por los interludios (P2.4). Se leen en cada
+   * consulta del objetivo, igual que los modificadores de vouchers: una run
+   * retomada tiene que seguir con el mismo objetivo que tenia.
+   */
+  interludeModifiers: InterludeModifiers;
+  /** Ids de interludios ya vistos en esta run: no se repite el mismo trato. */
+  seenInterludes: string[];
+  /**
+   * Misiones activas de la run (P2.6). Se guardan como `{id, progress,
+   * completed}`: el id apunta al contenido y el progreso es el unico estado
+   * mutable. Una run retomada sigue con las mismas misiones a medio hacer.
+   */
+  missions: Array<{ id: string; progress: number; completed: boolean }>;
   /** Estadisticas para la pantalla final. */
   stats: {
     handsPlayed: number;
@@ -113,6 +133,9 @@ export function createRunState(seed: number, deck: Deck, ascension = 0): RunStat
     vouchers: [],
     ascension,
     shop: null,
+    interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
+    seenInterludes: [],
+    missions: [],
     stats: {
       handsPlayed: 0,
       bestHand: 0,

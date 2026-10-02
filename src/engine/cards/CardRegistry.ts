@@ -24,6 +24,7 @@ import type {
   VoucherDefinition,
 } from '../types';
 import { TRIGGER_EVENTS, type TriggerEvent } from '../types';
+import type { InterludeDefinition } from '../interlude/interlude';
 import { supportedActions } from '../triggers/actions';
 import type { RNG } from '../rng';
 
@@ -63,6 +64,12 @@ export interface ContentBundle {
    * tienen su propio mapa y no pasan por el camino generico de definiciones.
    */
   ascensions?: AscensionDefinition[];
+  /**
+   * Eventos entre Ciegos (P2.4). Opcional: sin tablas de interludios, la run
+   * simplemente no tiene paradas intermedias y el flujo es el de siempre. Un
+   * pack que no declara `interludes` no cambia el juego.
+   */
+  interludes?: InterludeDefinition[];
 }
 
 export interface ValidationIssue {
@@ -96,6 +103,7 @@ export class CardRegistry {
   private readonly blinds = new Map<string, BlindDefinition>();
   private readonly vouchers = new Map<string, VoucherDefinition>();
   private readonly ascensions = new Map<number, AscensionDefinition>();
+  private readonly interludes: InterludeDefinition[] = [];
   private anteTargets: Record<number, number> | null = null;
 
   private uidCounter = 0;
@@ -106,7 +114,19 @@ export class CardRegistry {
     for (const blind of bundle.blinds) this.blinds.set(blind.id, blind);
     for (const voucher of bundle.vouchers ?? []) this.vouchers.set(voucher.id, voucher);
     for (const asc of bundle.ascensions ?? []) this.ascensions.set(asc.level, asc);
+    this.interludes.length = 0;
+    for (const inter of bundle.interludes ?? []) this.interludes.push(inter);
     this.anteTargets = bundle.anteTargets ?? null;
+  }
+
+  /** Eventos entre Ciegos declarados por el contenido (P2.4). */
+  get interludeDefs(): readonly InterludeDefinition[] {
+    return this.interludes;
+  }
+
+  /** Hay al menos un interludio jugable? Evita el sorteo cuando no hay tabla. */
+  get hasInterludes(): boolean {
+    return this.interludes.length > 0;
   }
 
   /**
