@@ -18,10 +18,12 @@ import {
   bus,
   describeResolution,
   type CardInstance,
+  type InterludeEffect,
   type ResolutionContext,
 } from '../src/engine/index.ts';
 import { validateDictionaryCoverage } from '../src/i18n/coverage.ts';
 import { loadContentFromDisk, loadDictionaries } from './loadContent.node.ts';
+import { SIMULATED_PHASES } from './simPhases.ts';
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -150,6 +152,8 @@ interface RunResult {
   rewardsTaken: number;
   /** Mejoras compradas en la tienda. */
   upgradesBought: number;
+  /** Interludios resueltos (P2.3/P2.4): paradas de decision entre ciegos. */
+  interludesResolved: number;
   /** Problemas reales: la partida no pudo continuar. */
   errores: string[];
   /** Cortes de seguridad del Trigger Engine (no son fallos). */
@@ -159,6 +163,64 @@ interface RunResult {
 /** Valor heuristico de una carta para decidir que descartar. */
 function cardValue(card: CardInstance): number {
   return card.def.baseSubstrate + card.def.baseSpores * 3;
+}
+
+/**
+ * Puntua un efecto de interludio desde el punto de vista del bot. Positivo =
+ * el trato conviene; negativo = cuesta mas de lo que da.
+ *
+ * El objetivo de un ciego es lo que hay que batir, asi que subirlo (multiplicar
+ * >1) es un COSTE y bajarlo es una ventaja. Lo demas es valor directo: dinero,
+ * cartas, slots de joker, manos y tamano de mano suman; la purga aleatoria es
+ * ambigua (adelgaza el mazo, que suele ser bueno) y se puntua apenas positivo.
+ */
+function interludeEffectValue(effect: InterludeEffect): number {
+  switch (effect.type) {
+    case 'MONEY':
+      return effect.value;
+    case 'TARGET_MULTIPLIER':
+      // 1.15 -> -15 puntos de "dificultad" (malo); 0.85 -> +15 (bueno).
+      return (1 - effect.value) * 100;
+    case 'JOKER_SLOT':
+      return effect.value * 25;
+    case 'HANDS_DELTA':
+      return effect.value * 30;
+    case 'HAND_SIZE':
+      return effect.value * 20;
+    case 'CARD':
+      return (effect.count ?? 1) * 12;
+    case 'UPGRADE_RANDOM':
+      return (effect.count ?? 1) * 18;
+    case 'PURGE_RANDOM':
+      // Purga: mazo mas fino, en general bueno, pero aleatorio. Poco peso.
+      return (effect.count ?? 1) * 4;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Elige la opcion del interludio que el bot tomaria. Siempre prefiere una
+ * jugada que pueda PAGAR; si ninguna conviene, declina (que no tiene efectos y
+ * es la salida segura que garantiza el contenido).
+ */
+function bestInterludeChoice(
+  choices: readonly { id: string; effects?: readonly InterludeEffect[] }[],
+  money: number,
+): { id: string; score: number } {
+  let best: { id: string; score: number } | null = null;
+  for (const choice of choices) {
+    const effects = choice.effects ?? [];
+    const cost = effects.reduce((sum, e) => (e.type === 'MONEY' ? sum + e.value : sum), 0);
+    // No se puede pagar la parte en dinero: se descarta la opcion (el motor la
+    // rechazaria y el bot quedaria trabado).
+    if (money + cost < 0) continue;
+    // Declinar no tiene efectos: puntua 0 y sirve de piso. Con score estricto
+    // (>), un trato que empata con declinar no se toma: mejor no arriesgar.
+    const score = effects.reduce((sum, e) => sum + interludeEffectValue(e), 0);
+    if (!best || score > best.score) best = { id: choice.id, score };
+  }
+  return best ?? { id: 'decline', score: 0 };
 }
 
 /** A partir de este tamano de mazo el bot deja de tomar cartas en los drafts. */
@@ -178,6 +240,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   let rewardsOffered = 0;
   let rewardsTaken = 0;
   let upgradesBought = 0;
+  let interludesResolved = 0;
   engine.startRun(seed, ASCENSION);
 
   const track = (label: string, res: ResolutionContext | null) => {
@@ -192,6 +255,26 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   while (safety++ < 400) {
     const status = engine.run.status;
     if (status === 'game_over' || status === 'victory') break;
+
+    if (status === 'interlude') {
+      // P2.3/P2.4: parada entre ciegos con una decision de riesgo/recompensa.
+      // El bot toma el mejor trato que pueda PAGAR y, si ninguno conviene,
+      // declina. Antes este estado no estaba cubierto: el bot cortaba la run
+      // con "estado inesperado: interlude" (~99% de las partidas al llegar al
+      // primer interludio), lo que ademas envenenaba la telemetria de balance.
+      const def = engine.currentInterlude;
+      if (!def) {
+        errores.push('estado interlude sin definicion pendiente');
+        break;
+      }
+      const choice = bestInterludeChoice(def.choices, engine.run.money);
+      if (!engine.chooseInterlude(choice.id)) {
+        errores.push(`chooseInterlude("${choice.id}") fallo con una opcion valida`);
+        break;
+      }
+      interludesResolved += 1;
+      continue;
+    }
 
     if (status === 'blind_select') {
       // Progresion estandar: small -> big -> boss dentro de cada ante.
@@ -311,7 +394,16 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
       continue;
     }
 
-    errores.push(`estado inesperado: ${status}`);
+    // Estado sin rama. Si es una fase que simula el bot (SIMULATED_PHASES),
+    // falta la implementacion aca; si no esta en ninguna lista, es una fase
+    // nueva del motor que hay que clasificar en tools/simPhases.ts. El mensaje
+    // apunta al archivo correcto para que el arreglo sea evidente desde la CI.
+    const known = (SIMULATED_PHASES as readonly string[]).includes(status);
+    errores.push(
+      known
+        ? `estado inesperado: ${status} (declarado en SIMULATED_PHASES pero sin rama en el bot)`
+        : `estado inesperado: ${status} (fase sin clasificar en tools/simPhases.ts)`,
+    );
     break;
   }
 
@@ -332,6 +424,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
     rewardsOffered,
     rewardsTaken,
     upgradesBought,
+    interludesResolved,
     errores,
     overflows,
   };
@@ -588,6 +681,7 @@ console.log(
   `  Drafts (ofertas)      : ${avg((r) => r.rewardsOffered).toFixed(1)} ofrecidas / ${avg((r) => r.rewardsTaken).toFixed(1)} tomadas`,
 );
 console.log(`  Mejoras compradas     : ${avg((r) => r.upgradesBought).toFixed(2)} promedio`);
+console.log(`  Interludios resueltos : ${avg((r) => r.interludesResolved).toFixed(2)} promedio`);
 
 console.log(`\n  ${C.dim}Distribucion de ante alcanzado:${C.reset}`);
 for (let ante = 1; ante <= 8; ante++) {
