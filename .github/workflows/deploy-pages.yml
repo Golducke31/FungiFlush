@@ -1,0 +1,65 @@
+# Deploy del build web a GitHub Pages.
+#
+# Publica el juego en https://golducke31.github.io/FungiFlush/ para que se pueda
+# probar desde un link, sin instalar nada.
+#
+# Por que funciona bajo una subcarpeta: `vite.config.ts` ya usa `base: './'` y
+# todas las rutas del build salen relativas (`./assets/...`, `../fonts/...`).
+# No hace falta tocar `base` ni inyectar variables.
+#
+# El smoke test de WebGL y las regresiones de balance NO corren aca: ya los cubre
+# `ci.yml`. Este workflow solo compila y publica.
+
+name: Deploy a GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Permite dispararlo a mano desde la pestana Actions.
+  workflow_dispatch:
+
+# Permisos minimos que necesita el deploy oficial de Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo deploy a la vez; si encolamos otro, se cancela el anterior en curso.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build de produccion
+        # `build:release` desactiva los sourcemaps (~3 MB que no queremos publicar).
+        run: npm run build:release
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
