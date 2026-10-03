@@ -1560,7 +1560,22 @@ export class HUD {
     this.elOverlay.classList.remove('is-open', 'is-closing');
     void this.elOverlay.offsetWidth;
     this.elOverlay.classList.add('is-open');
+    this.syncPanelOpen();
     this.syncArenaCovered();
+  }
+
+  /**
+   * Marca en `#ui-root` que hay un panel/overlay abierto.
+   *
+   * En CELULAR el cromo de la partida (score, ante, dinero, jokers, misiones y
+   * barra inferior) tiene que desaparecer mientras hay una subpantalla abierta
+   * (mazo, coleccion, tienda, ciego...). Sin esto el HUD de partida se dibujaba
+   * ENCIMA del carrusel del mazo: el bloque de score tapaba el titulo "Mazo" y
+   * las pestañas de orden, y la barra de misiones se cortaba contra la barra
+   * inferior. En escritorio no se aplica: alli el HUD y el panel conviven bien.
+   */
+  private syncPanelOpen(): void {
+    this.root.classList.toggle('is-panel-open', this.elOverlay.classList.contains('is-open'));
   }
 
   /**
@@ -1588,6 +1603,7 @@ export class HUD {
     if (!this.elOverlay.classList.contains('is-open')) {
       this.elOverlay.classList.remove('is-carousel', 'is-throw');
       this.elOverlay.innerHTML = '';
+      this.syncPanelOpen();
       this.syncArenaCovered();
       return;
     }
@@ -1595,6 +1611,7 @@ export class HUD {
     this.cancelPendingClose();
     this.elOverlay.classList.remove('is-open', 'is-throw');
     this.elOverlay.classList.add('is-closing');
+    this.syncPanelOpen();
     this.syncArenaCovered();
 
     const seq = ++this.closeSeq;

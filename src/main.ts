@@ -1453,6 +1453,11 @@ async function boot(): Promise<void> {
         // i18n para tests: traducir nameKeys y verificar que el preview
         // del carrusel coincide con la carta enfocada.
         t,
+        // Abre el MAZO en su carrusel 3D (la vista real, no la grilla DOM).
+        // Se expone porque el carrusel solo se abria desde el boton del menu o
+        // de la tienda, y las herramientas de captura/smoke necesitan medir el
+        // HUD movil con ese panel abierto.
+        openDeck: () => openDeck(),
       },
     });
   }

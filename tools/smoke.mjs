@@ -418,6 +418,12 @@ if (tutorialStep.shown) {
 
 const afterStart = await page.evaluate(() => {
   const ff = window.__fungiflush;
+  // El panel de ciego tiene que entrar ENTERO en un celular landscape
+  // (844x390): si desborda el viewport, el boton "Luchar" queda al borde del
+  // pliegue y no se puede tocar. `clientHeight` vs `scrollHeight` dice si el
+  // panel necesita scroll; `bottom - innerHeight` dice si se sale de pantalla.
+  const blindPanel = document.querySelector('.panel.is-blind-select');
+  const bp = blindPanel?.getBoundingClientRect() ?? null;
   return {
     status: ff.engine.run.status,
     blindSelectVisible: Boolean(document.querySelector('.blind-grid')),
@@ -428,6 +434,12 @@ const afterStart = await page.evaluate(() => {
     // contadores del HUD aun no existen (solo se pintan en `playing`), asi que
     // la comprobacion del chip va en `afterBlind`, no aca.
     engineDeckSize: ff.engine.deckSize,
+    blindPanelFit: bp
+      ? {
+          overflowViewport: Math.round(bp.bottom - window.innerHeight),
+          scrollOverflow: blindPanel.scrollHeight - blindPanel.clientHeight,
+        }
+      : null,
   };
 });
 console.log('\n--- Tras "Nueva partida" ---');
@@ -527,6 +539,14 @@ const afterBlind = await page.evaluate(() => {
   for (const c of document.querySelectorAll('.counter')) {
     chips[c.title] = c.querySelector('.counter-value')?.textContent;
   }
+  // Misiones en tactil: el bloque entero (titulo + chips + gaps) tiene que
+  // caber entre su techo y la barra inferior SIN recortarse. Si `scrollHeight`
+  // supera `clientHeight` con `pointer-events: none`, la ultima mision queda
+  // invisible y el jugador no puede scrollear para verla.
+  const missions = document.querySelector('.hud-missions');
+  const mb = missions?.getBoundingClientRect() ?? null;
+  const lastChip = [...document.querySelectorAll('.mission-chip')].pop();
+  const lb = lastChip?.getBoundingClientRect() ?? null;
   return {
     status: ff.engine.run.status,
     blind: ff.engine.round?.blind.id,
@@ -545,6 +565,14 @@ const afterBlind = await page.evaluate(() => {
     // es el "camino de siempre". El camino con post-procesamiento solo suma el
     // sky dome (+1), asi que el alta no debe pasar de este valor + 4.
     drawCalls: ff.scene.stats().drawCalls,
+    missionsClip: missions
+      ? {
+          overflow: missions.scrollHeight - missions.clientHeight,
+          lastChipBottom: lb ? Math.round(lb.bottom) : null,
+          panelBottom: mb ? Math.round(mb.bottom) : null,
+          missionsCount: document.querySelectorAll('.mission-chip').length,
+        }
+      : null,
   };
 });
 console.log('\n--- Tras elegir ciego ---');
@@ -1346,11 +1374,20 @@ const deckBuilder = await page.evaluate(async () => {
   // El mazo ahora vive en el CARRUSEL 3D: las cartas no son nodos DOM, asi que
   // se cuentan por el estado del carrusel (mismo intento: "el panel lista el mazo").
   const cards = window.__fungiflush.scene.carouselState()?.count ?? 0;
+  // El viewport del smoke es tactil (pointer: coarse): con el mazo abierto el
+  // cromo de la partida TIENE que apagarse o se dibuja encima del carrusel
+  // (era el bug de Reordenar.PNG: score tapando "Mazo" y misiones cortadas).
+  // Se comprueba por `display`, que es lo que decide el CSS.
+  const hudVisible = {};
+  for (const sel of ['.hud-top', '.hud-jokers', '.hud-missions', '.hud-bottom']) {
+    const el = document.querySelector(sel);
+    hudVisible[sel] = el ? getComputedStyle(el).display !== 'none' : null;
+  }
   const before = window.__fungiflush.engine.run.deck.totalSize;
   document.querySelector('.panel.is-deck [data-act="purge"]')?.click();
   await wait(500);
   const after = window.__fungiflush.engine.run.deck.totalSize;
-  return { opened, cards, before, after, purged: before - after };
+  return { opened, cards, before, after, purged: before - after, hudVisible };
 });
 console.log('\n--- Constructor de mazo (purgar) ---');
 console.log(JSON.stringify(deckBuilder, null, 2));
@@ -1783,6 +1820,13 @@ const ok =
   chk('deckBuilder?.opened === true', deckBuilder?.opened === true) &&
   chk('(deckBuilder?.cards ?? 0) > 0', (deckBuilder?.cards ?? 0) > 0) &&
   chk('deckBuilder?.purged === 1', deckBuilder?.purged === 1) &&
+  // Con el mazo abierto en tactil, el cromo de la partida se apaga: si no, el
+  // score se dibuja ENCIMA del titulo "Mazo" y las misiones se cortan contra la
+  // barra inferior (bug de Reordenar.PNG).
+  chk('deckBuilder?.hudHidden.hudTop === false', deckBuilder?.hudVisible?.['.hud-top'] === false) &&
+  chk('deckBuilder?.hudHidden.hudJokers === fal', deckBuilder?.hudVisible?.['.hud-jokers'] === false) &&
+  chk('deckBuilder?.hudHidden.hudMiss === false', deckBuilder?.hudVisible?.['.hud-missions'] === false) &&
+  chk('deckBuilder?.hudHidden.hudBottom === fa', deckBuilder?.hudVisible?.['.hud-bottom'] === false) &&
   chk('upgradeStep?.uid !== null', upgradeStep?.uid !== null) &&
   chk('upgradeStep?.levelAfter === (upgradeStep?.leve', upgradeStep?.levelAfter === (upgradeStep?.levelBefore ?? 0) + 1) &&
   chk('(upgradeStep?.moneySpent ?? 0) > 0', (upgradeStep?.moneySpent ?? 0) > 0) &&
@@ -1876,6 +1920,9 @@ const ok =
   chk('afterStart?.blindSelectVisible === true', afterStart?.blindSelectVisible === true) &&
   chk('afterStart?.hudHidden === false', afterStart?.hudHidden === false) &&
   chk('afterStart?.engineDeckSize === 40', afterStart?.engineDeckSize === 40) &&
+  // El panel de ciego entra entero en el viewport tactil, sin scroll.
+  chk('(afterStart?.blindPanelFit?.overflowViewport ?? 99) <= 0', (afterStart?.blindPanelFit?.overflowViewport ?? 99) <= 0) &&
+  chk('(afterStart?.blindPanelFit?.scrollOverflow ?? 99) <= 0', (afterStart?.blindPanelFit?.scrollOverflow ?? 99) <= 0) &&
   // --- Dado: ya NO se arma en el flujo de ciego. Se movio a la habilidad del
   //     Simbionte legendario "Dado Cargado" (multiplicador directo cada 2
   //     manos). El smoke solo documenta que el ciego arranca sin dado armado.
@@ -1934,6 +1981,10 @@ const ok =
   chk("afterBlind?.chipDeck === '40/40'", afterBlind?.chipDeck === '40/40') &&
   chk('afterBlind?.deckSize === 40', afterBlind?.deckSize === 40) &&
   chk('afterBlind?.deckDraw === 40', afterBlind?.deckDraw === 40) &&
+  // Misiones tactiles: ninguna se corta contra la barra inferior (el bloque
+  // entero entra en su franja).
+  chk('(afterBlind?.missionsClip?.overflow ?? 1) <= 0', (afterBlind?.missionsClip?.overflow ?? 1) <= 0) &&
+  chk('(afterBlind?.missionsClip?.lastChipBottom ?? 1e9) <= (afterBlind?.missionsClip?.panelBottom ?? 0) + 1', (afterBlind?.missionsClip?.lastChipBottom ?? 1e9) <= (afterBlind?.missionsClip?.panelBottom ?? 0) + 1) &&
   // --- Fase 4: tap, arrastre y flip ---
   chk('afterTap?.selected === true', afterTap?.selected === true) &&
   chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&

@@ -5759,6 +5759,73 @@ body {
     font-size: 24px;
   }
 
+  /* --- Bloque de score: compacto, para que no domine la pantalla --- */
+  /* En celular el bloque de score llegaba a 103px de alto (casi un tercio de
+     los 412px del viewport) y tapaba el area de juego. Se comprime la pila
+     entera: numero, barra, aviso, objetivo y nombre del ciego con margenes
+     ajustados. Se sigue leyendo todo, pero ocupa ~78px. */
+  .hud-score {
+    max-width: 58vw;
+  }
+
+  .hud-score-main {
+    gap: 6px;
+    /* `line-height: 1` recorta los ~11px de aire vertical que el `normal`
+       agregaba sobre el numero de 24px: el bloque de score perdia alto por
+       espacio en blanco, no por contenido. */
+    line-height: 1;
+  }
+
+  .hud-score-current {
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .hud-score-target {
+    font-size: 12.5px;
+  }
+
+  .hud-progress {
+    margin-top: 5px;
+    height: 7px;
+  }
+
+  .hud-bar-notice {
+    margin-top: 2px;
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .hud-objective {
+    margin-top: 2px;
+    font-size: 10.5px;
+    gap: 2px 6px;
+  }
+
+  .hud-blind-name {
+    margin-top: 3px;
+    font-size: 10.5px;
+  }
+
+  .hud-preview {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  /* El preview del score solo reserva alto cuando hay una seleccion: apagado
+     (opacity 0) seguia ocupando su margen y estiraba el bloque. */
+  .hud-preview:not(.is-visible) {
+    display: none;
+  }
+
+  .hud-preview strong {
+    font-size: 15px;
+  }
+
+  .hud-preview-detail {
+    font-size: 10px;
+  }
+
   /* Los botones de sistema (dinero / idioma / menu) van al mismo alto que el
      bloque de ante y score, para que la barra superior sea una linea prolija. */
   .btn.is-small {
@@ -5777,25 +5844,112 @@ body {
           cromo informativo.
        2. Anclada abajo del todo se solapaba con la barra inferior y, segun el
           alto, trepaba sobre los jokers. Se la ancla justo ENCIMA de la barra
-          inferior (`bottom: 58px + safe`, el alto real de la barra) y se le pone
-          un tope de alto que la mantiene por debajo de la columna de jokers
-          (que en este viewport ocupa hasta y=213): 28vh = 109px => su techo cae
-          en ~223, despejado. */
+          inferior (`bottom: 58px + safe`, el alto real de la barra) y su tope de
+          alto (`100dvh - 260px`) la mantiene por debajo de la columna de jokers
+          (que en este viewport ocupa hasta y=213) para que el ULTIMO chip no se
+          corte contra la barra. */
   .hud-missions {
     top: auto;
     bottom: calc(58px + var(--safe-b));
     max-width: 46vw;
-    max-height: calc(28vh);
+    /* Tope = viewport menos un margen que deja libre el bloque de score arriba
+       (~119px) y respeta la columna de jokers (~213px). Asi el ultimo chip no
+       se corta y, a la vez, la franja nunca trepa sobre los jokers. */
+    max-height: calc(100dvh - 260px);
     overflow-y: auto;
     pointer-events: none;
+    /* La franja mide desde su techo hasta la barra inferior. Con `display:flex`
+       el contenido empujaba hacia ABAJO el alto y el ultimo chip se cortaba
+       contra la barra (2 misiones de 59px + titulo + gaps = 141px, pero solo
+       entraban 115px), dejando una mision invisible y sin poder scrollear
+       (pointer-events:none). Se deja que el CONTENIDO se comprima. */
+    gap: 4px;
   }
 
-  /* --- Panel de ciego: que entre en pantalla baja --- */
-  /* Las tarjetas de ciego se cortaban por abajo. En tactil se limita la grilla
-     y el panel scrollea, de modo que el boton "Luchar" siempre es alcanzable. */
+  .hud-missions-title {
+    font-size: 8.5px;
+    line-height: 1.1;
+  }
+
+  /* Chips de mision compactos: el bloque entero (titulo + chips + gaps) tiene
+     que entrar en franja entre jokers y barra inferior. Con 2 misiones y el
+     viewport de 412px de alto entran las dos sin recorte. */
+  .mission-chip {
+    padding: 4px 8px;
+    gap: 1px;
+  }
+
+  .mission-chip-name {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .mission-chip-desc {
+    font-size: 9px;
+    line-height: 1.2;
+    /* El detalle de la mision es lo primero en ceder: el nombre y la recompensa
+       ya dicen que es. Con elipsis a una linea se garantiza que el chip no
+       crezca de mas y empuje la lista fuera de la franja. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .mission-chip-reward {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  /* --- Panel de ciego: que entre entero, sin scroll --- */
+  /* En un celular landscape el panel medía 413px contra 412 de viewport: se
+     desbordaba 8px y scrolleaba, dejando el boton "Luchar" al borde del pliegue.
+     Se comprime su pila (padding, titulo, subtitulo, aviso y accion final) para
+     que entre completo. El `max-height`/`overflow` quedan como red de seguridad
+     para altos aun menores (p. ej. 360px con la barra del navegador). */
   .panel.is-blind-select {
-    max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 8px);
+    padding: 12px 14px;
+    max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 8px);
     overflow-y: auto;
+  }
+
+  .panel.is-blind-select .panel-title {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .panel.is-blind-select .panel-subtitle {
+    font-size: 11.5px;
+    margin-bottom: 8px;
+  }
+
+  /* El aviso "los ciegos van en orden" es una banda que se come ~34px: se
+     compacta su padding y su tipografia, pero no se oculta (da contexto). */
+  .panel.is-blind-select .blind-help {
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    font-size: 10.5px;
+  }
+
+  .panel.is-blind-select .panel-actions {
+    margin-top: 6px;
+  }
+
+  .panel.is-blind-select .blind-grid {
+    margin-bottom: 8px;
+  }
+
+  /* --- Subpantalla abierta: se apaga el cromo de la partida --- */
+  /* Con un panel abierto (mazo, coleccion, tienda, ciego...) el HUD de partida
+     NO debe dibujarse encima: en celular el bloque de score tapaba el titulo
+     "Mazo" y las pestañas de orden, y la barra inferior + misiones se colaban
+     por debajo del detalle del carrusel (ver Reordenar.PNG). El panel es la
+     unica pantalla; el cromo de la run vuelve al cerrarlo. */
+  #ui-root.is-panel-open > .hud-top,
+  #ui-root.is-panel-open > .hud-jokers,
+  #ui-root.is-panel-open > .hud-missions,
+  #ui-root.is-panel-open > .hud-bottom {
+    display: none;
   }
 }
 
