@@ -26,7 +26,7 @@
     "discards": "Discards",
     "deck": "Deck",
     "deckFull": "Deck: {remaining} cards left of {total}",
-    "jokers": "Jokers",
+    "jokers": "Simbionts",
     "jokerSlots": "Slots",
     "handSize": "Hand size",
     "bestHand": "Best hand",
@@ -44,6 +44,8 @@
     "reward": "Reward",
     "boss": "Boss",
     "cleared": "Cleared",
+    "next": "Next",
+    "start": "Start Blind",
     "locked": "Opens at ante {ante}",
     "effects": "Round effect",
     "hands": "Hands",
@@ -66,10 +68,13 @@
     "noDiscards": "No discards left",
     "noHands": "No hands left",
     "cantAfford": "Not enough money",
-    "slotsFull": "No free joker slots",
+    "slotsFull": "No free simbiont slots",
     "sellValue": "Sell for {value}",
     "sort": "Sort",
-    "viewDeck": "View deck"
+    "viewDeck": "View deck",
+    "useDie": "Roll die",
+    "useDieReady": "Die ready!",
+    "useDieCharge": "{count} hands left"
   },
   "phase": {
     "blind_select": "Choose your blind",
@@ -89,18 +94,27 @@
     "finalAnte": "Final ante",
     "blindsCleared": "Blinds cleared",
     "handsPlayed": "Hands played",
+    "totalScore": "Total score",
     "bestHand": "Best hand",
     "cardsDestroyed": "Cards destroyed"
   },
   "shop": {
-    "title": "The Mycelium Market",
-    "empty": "Sold out. Nothing left on the shelf.",
-    "rerollCost": "Reroll ({cost})",
-    "sold": "SOLD",
-    "voucher": "Upgrade",
+  "title": "The Mycelium Market",
+  "empty": "Sold out. Nothing left on the shelf.",
+  "rerollCost": "Reroll ({cost})",
+  "sold": "SOLD",
+  "voucher": "Upgrade",
+  "tabBuy": "Buy",
+  "tabSell": "Sell",
+  "sellTitle": "Sell what no longer serves you",
+  "sellEmpty": "You have no simbionts to sell.",
+  "sellHint": "Selling refunds Fungis and frees a slot.",
+  "sellAction": "Sell for {value}",
+  "sellConfirm": "Sure? +{value}",
+  "sellDone": "Sold {name} for {value}",
     "kind": {
       "card": "Card",
-      "joker": "Joker",
+      "joker": "Simbiont",
       "mutation": "Mutation",
       "voucher": "Upgrade",
       "money": "Fungis"
@@ -113,12 +127,12 @@
     "impactJoker": "Changes how you score",
     "impactVoucher": "Changes the run rules",
     "impactOwned": "Already owned",
-    "impactSlots": "Takes a joker slot",
+    "impactSlots": "Takes a simbiont slot",
     "improves": "Improves your deck",
     "impactMoneyGain": "+{value} Fungis",
     "impactMoneyCost": "-{value} Fungis",
-    "impactJokerSlot": "+{value} joker slot",
-    "impactJokerSlotNeg": "{value} joker slot",
+    "impactJokerSlot": "+{value} simbiont slot",
+    "impactJokerSlotNeg": "{value} simbiont slot",
     "impactHands": "{value} hand per Blind",
     "impactHandsPlus": "+{value} hand per Blind",
     "impactHandSize": "+{value} card in hand",
@@ -166,7 +180,18 @@
       "4": "Great Colony (+30 Substrate)",
       "5": "Supercolony (+60 Substrate)"
     },
-    "diversity": "Diversity (+25 Substrate)"
+    "diversity": "Diversity (+25 Substrate)",
+  "rarity": {
+    "2": "Species Pair (+8 Substrate, x1.1 Spores)",
+    "3": "Species Trio (+20 Substrate, x1.25 Spores)",
+    "4": "Species Poker (+40 Substrate, x1.4 Spores)"
+  },
+  "straight": {
+    "3": "Minor Straight (+12 Substrate, x1.1 Spores)",
+    "4": "Major Straight (+28 Substrate, x1.2 Spores)",
+    "5": "Royal Straight (+55 Substrate, x1.3 Spores)"
+  },
+  "fullhouse": "Full House (+45 Substrate, x1.6 Spores)"
   },
   "status": {
     "dormant": "Dormant",
@@ -216,7 +241,8 @@
     "gilded": "Gilded",
     "midasTouch": "Midas touch",
     "spentSpores": "Spent spores",
-    "perpetual": "Perpetual"
+    "perpetual": "Perpetual",
+    "loadedDie": "Loaded die"
   },
   "blind": {
     "current": "Current blind",
@@ -530,7 +556,11 @@
     },
     "joker_double_helix": {
       "name": "Double Helix",
-      "desc": "With 4 or more jokers: x1.5 Spores."
+      "desc": "With 4 or more simbionts: x1.5 Spores."
+    },
+    "joker_loaded_die": {
+      "name": "Loaded Die",
+      "desc": "ACTIVE ABILITY. Every 2 hands you may roll the die: its multiplier applies to the hand and grants its extra hands and discards."
     },
     "joker_sterile_field": {
       "name": "Sterile Field",
@@ -563,8 +593,8 @@
       "desc": "Permanently draw +1 card per hand."
     },
     "mutation_joker_slot": {
-      "name": "Joker Slot",
-      "desc": "Permanently gain +1 joker slot."
+      "name": "Simbiont Slot",
+      "desc": "Permanently gain +1 simbiont slot."
     },
     "mutation_graft": {
       "name": "Toxic Graft",
@@ -633,7 +663,7 @@
     "comingSoon": "Coming in a future update",
     "unknown": "Undiscovered",
     "cards": "Specimens",
-    "jokers": "Jokers",
+    "jokers": "Simbionts",
     "all": "All",
     "unlocked": "Unlocked",
     "unlockSource": {
@@ -664,7 +694,9 @@
   },
   "blindCleared": {
     "title": "Blind cleared!",
-    "score": "{score} / {target}"
+    "score": "{score} / {target}",
+    "total": "Run total score: {score}",
+    "continue": "Continue"
   },
   "die": {
     "title": "Spore die",
@@ -813,7 +845,7 @@
     },
     "ach_joker_hoard": {
       "name": "Symbiosis",
-      "desc": "Hold 5 jokers at once"
+      "desc": "Hold 5 simbionts at once"
     },
     "ach_first_evolution": {
       "name": "Something new",
@@ -922,11 +954,15 @@
     },
     "unlock_joker_parasitic_drive": {
       "name": "Parasitic Drive",
-      "desc": "Win a blind with 4 jokers at once"
+      "desc": "Win a blind with 4 simbionts at once"
     },
     "unlock_joker_double_helix": {
       "name": "Double Helix",
       "desc": "Win a run"
+    },
+    "unlock_joker_loaded_die": {
+      "name": "Loaded Die",
+      "desc": "Win a blind in ante 8"
     }
   },
   "voucher": {
@@ -947,7 +983,7 @@
     },
     "voucher_sixth_slot": {
       "name": "Sixth Shelf",
-      "desc": "+1 joker slot, for the rest of this run"
+      "desc": "+1 simbiont slot, for the rest of this run"
     },
     "voucher_cheap_rerolls": {
       "name": "Wholesaler's Deal",
@@ -1007,7 +1043,7 @@
     },
     "a8": {
       "name": "Fungal Collapse",
-      "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer joker slot, no die rerolls, and every boss gains an extra modifier."
+      "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer simbiont slot, no die rerolls, and every boss gains an extra modifier."
     }
   },
   "cosmetics": {
@@ -1072,10 +1108,13 @@
     "ability": "Ability",
     "default": "Default",
     "recommended": "Recommended order",
-    "confirm": "Sorted by {criterion}",
-    "confirmDefault": "Original order restored",
-    "alreadySorted": "The hand was already in that order"
-  },
+  "confirm": "Sorted by {criterion}",
+  "confirmDefault": "Original order restored",
+  "alreadySorted": "The hand was already in that order",
+  "auto": "Auto-sort",
+  "autoOn": "Auto-sort: {criterion}",
+  "autoOff": "Auto-sort off"
+},
   "deckstate": {
     "conservedTitle": "Deck kept",
     "conserved": "Deck kept: {count} cards",
@@ -1121,7 +1160,7 @@
       "name": "Cracked jar",
       "desc": "A broken jar with room for one more spore. Someone sells it cheap.",
       "accept": "Buy the jar",
-      "acceptDetail": "Costs 5 Fungis, +1 joker slot",
+      "acceptDetail": "Costs 5 Fungis, +1 simbiont slot",
       "decline": "Leave it"
     },
     "sacrifice": {
@@ -1167,7 +1206,7 @@
     },
     "jokers_3": {
       "name": "Symbiosis",
-      "desc": "Hold 3 jokers at once"
+      "desc": "Hold 3 simbionts at once"
     },
     "upgrade_3": {
       "name": "Cultivation",

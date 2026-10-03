@@ -819,6 +819,12 @@ await page.evaluate(() => {
 // Mismo motivo que arriba: secuencia de puntaje + aviso antes del panel.
 await page.waitForTimeout(10000);
 
+// ANTES del draft hay un aviso de "Ciego superado" (panel.is-cleared) que el
+// jugador descarta con "Continuar": hay que imitar ese gesto o el draft nunca
+// aparece y el locator de la tienda no matchea.
+await page.evaluate(() => document.querySelector('.panel.is-cleared [data-act="cleared-continue"]')?.click());
+await page.waitForTimeout(700);
+
 // OJO: el estado se lee ANTES de clickear. `chooseReward` resuelve el draft y
 // entra a la tienda en el mismo tick, asi que leer despues devolveria "shop".
 const reward = await page.evaluate(() => {
@@ -835,6 +841,7 @@ console.log(JSON.stringify(reward, null, 2));
 await page.screenshot({ path: join(shotsDir, '07-reward.png') });
 
 // Se toma la primera carta desde la UI, no desde el motor: es el camino real.
+// El aviso de "Ciego superado" ya se descarto arriba; aca solo queda el draft.
 await page.evaluate(() => document.querySelector('.panel.is-reward [data-act="pick"]')?.click());
 await page.waitForTimeout(1200);
 
@@ -1666,28 +1673,10 @@ const ok =
   chk('afterStart?.blindSelectVisible === true', afterStart?.blindSelectVisible === true) &&
   chk('afterStart?.hudHidden === false', afterStart?.hudHidden === false) &&
   chk('afterStart?.engineDeckSize === 40', afterStart?.engineDeckSize === 40) &&
-  // --- Tirada manual del dado ---
-  // 1. Armado: el dado existe, esta esperando el gesto, el panel se corrio y
-  //    los ciegos estan bloqueados (todavia no hay multiplicador).
-  chk('dieArmed?.state?.armed === true', dieArmed?.state?.armed === true) &&
-  chk('dieArmed?.state?.visible === true', dieArmed?.state?.visible === true) &&
-  chk('dieArmed?.screen !== null', dieArmed?.screen !== null) &&
-  chk('dieArmed?.panelCorrido === true', dieArmed?.panelCorrido === true) &&
-  chk('dieArmed?.overlayLibre === true', dieArmed?.overlayLibre === true) &&
-  chk('dieArmed?.gridBloqueado === true', dieArmed?.gridBloqueado === true) &&
-  chk('dieArmed?.die === null', dieArmed?.die === null) &&
-  // 2. En el aire: el motor YA sorteo la cara, pero el resultado sigue tapado.
-  chk('dieMid?.busy === true', dieMid?.busy === true) &&
-  chk('dieMid?.yaSorteado === true', dieMid?.yaSorteado === true) &&
-  chk('dieMid?.panelCorrido === true', dieMid?.panelCorrido === true) &&
-  chk('dieMid?.gridBloqueado === true', dieMid?.gridBloqueado === true) &&
-  chk('dieMid?.resultadoVisible === false', dieMid?.resultadoVisible === false) &&
-  // 3. Apoyado: aparece la cara y el boton de volver a tirar, y los ciegos se
-  //    desbloquean.
-  chk('dieLanded?.die !== null', dieLanded?.die !== null) &&
-  chk('dieLanded?.estado?.busy === false', dieLanded?.estado?.busy === false) &&
-  chk('dieLanded?.gridBloqueado === false', dieLanded?.gridBloqueado === false) &&
-  chk('dieLanded?.rerollVisible === true', dieLanded?.rerollVisible === true) &&
+  // --- Dado: ya NO se arma en el flujo de ciego. Se movio a la habilidad del
+  //     Simbionte legendario "Dado Cargado" (multiplicador directo cada 2
+  //     manos). El smoke solo documenta que el ciego arranca sin dado armado.
+  chk('die no armado en blind_select (removido del flujo)', dieArmed?.state?.armed !== true) &&
   // --- Tienda: la oferta comprada queda VENDIDA en el DOM ---
   chk('shopBuy?.clicked === true', shopBuy?.clicked === true) &&
   chk('(shopBuy?.offersBefore ?? 0) >= 1', (shopBuy?.offersBefore ?? 0) >= 1) &&

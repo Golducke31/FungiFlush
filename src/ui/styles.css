@@ -835,7 +835,7 @@ body {
   border-radius: 9px;
   padding: 6px 9px;
   font-size: 11.5px;
-  max-width: 168px;
+  max-width: 178px;
   color: #e2fbf4;
   cursor: pointer;
   box-shadow:
@@ -848,9 +848,34 @@ body {
     box-shadow var(--dur-base) var(--ease-out);
 }
 
+/* La barra izquierda y el halo toman el color de RAREZA del Simbionte (via
+   `--joker-rarity`, que fija el HUD). Es la señal principal para que una
+   legendaria salte a la vista sin leer el nombre. */
+.joker-chip {
+  border-left-color: var(--joker-rarity, var(--violet));
+}
+
+.joker-chip-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.joker-chip-ability {
+  font-size: 9.5px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--joker-rarity, #c9b6ff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .joker-chip:hover {
   border-color: rgba(46, 178, 164, 0.6);
-  border-left-color: var(--violet);
+  border-left-color: var(--joker-rarity, var(--violet));
   transform: translateX(3px);
   box-shadow:
     inset 0 1px 0 var(--frame-rim),
@@ -882,6 +907,13 @@ body {
 .joker-chip.is-firing .joker-chip-fires {
   color: #d9c8ff;
   text-shadow: 0 0 8px rgba(167, 139, 250, 0.9);
+}
+
+/* Cuando el Simbionte dispara, su habilidad se enciende: el texto sube de
+   contraste y brilla, asi se lee QUE hizo y no solo QUE disparo. */
+.joker-chip.is-firing .joker-chip-ability {
+  color: #fff;
+  text-shadow: 0 0 10px var(--joker-rarity, #a78bfa);
 }
 
 @keyframes joker-fire {
@@ -1154,6 +1186,32 @@ body {
 
 .btn.is-discard {
   border-color: rgba(224, 92, 138, 0.5);
+}
+
+/* Simbionte legendario del dado: una losa propia, en el violeta del cristal,
+   para que la habilidad ACTIVA no se confunda con los botones de siempre.
+   Deshabilitado (aun recargando) se apaga a gris para que el estado se lea
+   de un vistazo. */
+.btn.is-loaded-die {
+  background:
+    linear-gradient(180deg, rgba(196, 130, 255, 0.55) 0%, rgba(196, 130, 255, 0.08) 42%),
+    linear-gradient(180deg, #4a2a72 0%, #381f5c 52%, #251340 100%);
+  border-color: rgba(196, 130, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(230, 200, 255, 0.45),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 0 22px rgba(196, 130, 255, 0.35);
+}
+
+.btn.is-loaded-die:hover:not(:disabled) {
+  background:
+    linear-gradient(180deg, rgba(196, 130, 255, 0.72) 0%, rgba(196, 130, 255, 0.16) 45%),
+    linear-gradient(180deg, #57338a 0%, #41256c 52%, #2b1748 100%);
+}
+
+.btn.is-loaded-die:disabled {
+  filter: grayscale(0.7);
+  opacity: 0.6;
 }
 
 .btn.is-ghost {
@@ -1439,6 +1497,17 @@ body {
   color: #eaf6ff;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* Total acumulado de la run en el aviso de ciego superado: mas chico que el
+   score del ciego, para que no compita con el numero que se acaba de lograr. */
+.cleared-total {
+  font-family: var(--font-display);
+  font-size: clamp(13px, 1.5vw, 17px);
+  color: var(--frame-dim, #9db7b1);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
 }
 
 @keyframes cleared-in {
@@ -1742,6 +1811,86 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Pestañas de la tienda (Comprar / Vender)
+   La venta deja de estar escondida en la ficha del HUD: es una pestaña con la
+   misma jerarquia que comprar. La barra se pega arriba del `offer-grid`.
+   -------------------------------------------------------------------------- */
+
+.shop-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shop-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--dim);
+  font: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition:
+    color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.shop-tab:hover {
+  color: #e2fbf4;
+}
+
+.shop-tab.is-active {
+  color: #e2fbf4;
+  border-bottom-color: var(--frame-moss);
+}
+
+.shop-body {
+  min-height: 200px;
+}
+
+/* --- Pestaña Vender --- */
+
+.sell-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sell-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #a7b8c8;
+}
+
+.offer-grid.is-sell {
+  margin-bottom: 0;
+}
+
+/* La tarjeta de venta lleva la barra de rareza del Simbionte: el color dice de
+   un vistazo que estas a punto de vender. */
+.offer.is-sell-card {
+  border-left: 3px solid var(--joker-rarity, var(--violet));
+}
+
+.offer-price.is-gain {
+  color: var(--money);
+}
+
+.btn.is-sell {
+  border-color: rgba(224, 92, 138, 0.5);
+}
+
+.offer.is-sell-card.is-confirming {
+  border-color: rgba(224, 92, 138, 0.8);
+  box-shadow: 0 0 16px rgba(224, 92, 138, 0.35);
 }
 
 .offer {

@@ -50,16 +50,8 @@ import { BoardScreen, type BoardResolvers, type BoardScreenCallbacks } from './B
 import type { DailyEvaluation, DailyRewardTable } from '../retention/DailyReward';
 import type { RetentionReward } from '../retention/types';
 
-/**
- * Fase de la tirada del dado dentro del panel de ciego.
- *
- *   armed    -> el dado todavia no se tiro: el panel se aparta y queda la
- *               consigna de abajo, porque el cubo se tira sobre la arena.
- *   tumbling -> el cubo esta en el aire. El panel ya volvio, pero el resultado
- *               esta tapado y los ciegos bloqueados.
- *   ready    -> el dado se apoyo: resultado, "volver a tirar" y ciegos.
- */
-type DiePhase = 'armed' | 'tumbling' | 'ready';
+// La tirada de dado por gesto se retiro del flujo de ciego: cada ante juega sus
+// 3 ciegos en orden. El dado sobrevive como habilidad del Simbionte legendario.
 
 export interface HudCallbacks {
   onPlay: () => void;
@@ -72,6 +64,11 @@ export interface HudCallbacks {
   onFocusJoker: (uid: string) => void;
   onLeaveShop: () => void;
   onChooseBlind: (blindId: string) => void;
+  /**
+   * Arranca el ciego en curso del ante. Reemplaza a `onChooseBlind`: ya no hay
+   * eleccion, cada ante juega sus 3 ciegos en orden.
+   */
+  onStartBlind: () => void;
   onRestart: () => void;
   /**
    * Abandonar la run y volver al MENU PRINCIPAL (boton "Menu" del HUD).
@@ -118,8 +115,12 @@ export interface HudCallbacks {
   onUpgrade: (uid: string) => void;
   onEvolve: (uid: string) => void;
   onOpenDeck: () => void;
-  /** Volver a tirar el dado multiplicador (paga dinero). */
-  onRerollDie: () => void;
+  /**
+   * Habilidad ACTIVA del Simbionte legendario del dado: carga una cara para la
+   * proxima mano. Solo se ofrece cuando el Simbionte esta en la mesa y su carga
+   * esta lista.
+   */
+  onUseLoadedDie: () => void;
   /**
    * Reordenar la mano (P1.3/P1.4). El criterio lo resuelve el controlador con
    * `sortHand()`, que es puro; aca solo se avisa QUE criterio se pidio.
@@ -250,6 +251,8 @@ export class HUD {
   private panelPending = false;
   /** El aviso de "ciego superado" ya se mostro para esta ronda. */
   private clearedShown = false;
+  /** El jugador ya apreto "Continuar" en el aviso de ciego superado. */
+  private clearedAdvanced = false;
   /**
    * El termino "Ciego" ya se explico en esta run (P1.6). Se muestra UNA vez:
    * repetirlo cada ante lo vuelve ruido y deja de leerse.
@@ -268,22 +271,9 @@ export class HUD {
   /** Criterio de orden activo en la mano (P1.3/P1.4). 'default' = orden del mazo. */
   private sortMode: SortMode = 'default';
 
-  // --- Dado (tirada manual) ---
-  /** Elementos del panel de ciego que cambian con la fase del dado. */
-  private elBlindPanel: HTMLElement | null = null;
-  private elBlindGrid: HTMLElement | null = null;
-  private elDieRow: HTMLElement | null = null;
-  private elDieHint: HTMLElement | null = null;
-  private diePhase: DiePhase = 'ready';
+  // --- Ciego: el panel ya es solo informativo (la ruta del ante) ---
   /** Ultimo valor avisado por `syncArenaCovered`. */
   private arenaCovered = false;
-  /**
-   * Vencimiento del bloqueo por tirada. Misma red de seguridad que la del
-   * puntaje: si el aviso de "el dado se apoyo" no llega, el jugador no puede
-   * quedarse mirando un panel bloqueado para siempre.
-   */
-  private dieDeadline = 0;
-  private dieTimer: number | null = null;
 
   private readonly unsubscribes: Array<() => void> = [];
   private lastStatus: string | null = null;
@@ -557,7 +547,8 @@ export class HUD {
       // El RENDER avisa que el dado se apoyo. Recien ahi se revela el resultado
       // y se desbloquean los ciegos: mostrar la cara al soltar el cubo
       // arruinaria la tirada entera.
-      bus.on('die:settled', () => this.settleDie()),
+      // (La tirada por gesto se retiro; este aviso se conserva por si el
+      // Simbionte legendario del dado quiere animar su tirada igual.)
 
       // Una mano nueva reinicia la cuenta. Va aca y no en `score:hand` porque
       // los pasos llegan ANTES que el total: si se reseteara ahi, el conteo se
@@ -1038,7 +1029,12 @@ export class HUD {
 
     for (const joker of run.jokers) {
       const chip = document.createElement('div');
-      chip.className = 'joker-chip';
+      const rarity = joker.def.rarity;
+      chip.className = `joker-chip is-rarity-${rarity}`;
+      // El color de rareza viaja como variable CSS: la barra izquierda Y el
+      // brillo de la ficha se tiñen con el MISMO valor, y el CSS decide como
+      // usarlo. Asi una legendaria se distingue de una comun de un vistazo.
+      chip.style.setProperty('--joker-rarity', hexToCss(RARITY_COLOR[rarity]));
       chip.title = `${t(joker.def.nameKey)} — ${t(joker.def.descKey)}`;
       // Hook para que la ficha se pueda encontrar por uid cuando el joker
       // dispara (ver la suscripcion a `joker:triggered`).
@@ -1047,6 +1043,18 @@ export class HUD {
       const name = document.createElement('span');
       name.className = 'joker-chip-name';
       name.textContent = t(joker.def.nameKey);
+
+      // Linea de HABILIDAD: la primera etiqueta de efecto del Simbionte, en el
+      // color de su rareza. Es la respuesta directa a "hacer mas visibles los
+      // Simbiontes": el nombre solo es una etiqueta, la habilidad es lo que
+      // importa. Sin etiquetas (el Simbionte activo del dado no tiene efectos
+      // disparables en la mano) se muestra la rareza, que nunca queda vacia.
+      const ability = document.createElement('span');
+      ability.className = 'joker-chip-ability';
+      const labelKey = joker.def.effects.find((e) => e.labelKey)?.labelKey;
+      ability.textContent = labelKey
+        ? t(labelKey)
+        : t(`rarity.${rarity}`);
 
       const fires = document.createElement('span');
       fires.className = 'joker-chip-fires';
@@ -1087,7 +1095,11 @@ export class HUD {
       // El cuerpo de la ficha solo señala la carta: el joker late en la mesa.
       chip.addEventListener('click', () => this.callbacks.onFocusJoker(joker.uid));
 
-      chip.append(name, fires, sell);
+      const body = document.createElement('span');
+      body.className = 'joker-chip-body';
+      body.append(name, ability);
+
+      chip.append(body, fires, sell);
       this.elJokers.appendChild(chip);
     }
   }
@@ -1140,6 +1152,27 @@ export class HUD {
     play.textContent = selected > 0 ? `${t('action.play')} (${selected})` : t('action.play');
     play.disabled = selected === 0 || round.handsLeft <= 0;
     play.addEventListener('click', () => this.callbacks.onPlay());
+
+    // Simbionte legendario `joker_loaded_die`: habilidad ACTIVA. El boton solo
+    // existe si el jugador tiene el Simbionte en la mesa; mientras la carga no
+    // esta lista queda deshabilitado y muestra cuantas manos faltan. Es un boton
+    // aparte y no parte del boton de jugar a proposito: tirar el dado NO juega
+    // una mano, la prepara.
+    const dieBtn = document.createElement('button');
+    dieBtn.className = 'btn is-loaded-die';
+    dieBtn.dataset['act'] = 'use-die';
+    if (this.engine.hasLoadedDie()) {
+      const ready = this.engine.canUseLoadedDie();
+      const charge = this.engine.loadedDieCharge();
+      dieBtn.textContent = ready
+        ? t('action.useDieReady')
+        : t('action.useDieCharge', { count: charge });
+      dieBtn.disabled = !ready;
+      dieBtn.title = t('joker.joker_loaded_die.desc');
+      dieBtn.addEventListener('click', () => this.callbacks.onUseLoadedDie());
+      this.elActions.append(clear, sort, dieBtn, discard, play);
+      return;
+    }
 
     this.elActions.append(clear, sort, discard, play);
   }
@@ -1310,6 +1343,17 @@ export class HUD {
 
     panel.append(title, detail);
 
+    // TOTAL DE LA RUN: ademas del score de este ciego, se muestra el acumulado.
+    // Es el numero que el resumen final usa, asi que verlo crecer ciego a ciego
+    // da sentido de progreso (y explica de donde sale el total del game over).
+    const total = document.createElement('div');
+    total.className = 'cleared-total';
+    total.dataset['act'] = 'cleared-total';
+    total.textContent = t('blindCleared.total', {
+      score: formatNumber(this.engine.run.totalScore),
+    });
+    panel.appendChild(total);
+
     // P0.4 — Desglose de la mano que cerro el ciego. Se arma con el ULTIMO
     // `score:hand`, que es el que efectivamente supero el objetivo.
     const breakdown = this.buildBreakdown();
@@ -1321,12 +1365,30 @@ export class HUD {
     const deckLine = this.buildDeckStateLine();
     if (deckLine) panel.appendChild(deckLine);
 
-    this.openOverlay(panel);
-    // Se queda lo justo para leerse, y despues entra el draft.
-    window.setTimeout(() => {
+    // HUD DE CONTINUAR: el panel ya NO avanza solo por un `setTimeout`. Antes el
+    // jugador no tenia tiempo de leer el desglose: la pantalla se cerraba y
+    // entraba el draft sin que el hubiera decidido nada. Ahora hay un boton
+    // explicito; el paso a recompensas lo dispara el jugador.
+    const actions = document.createElement('div');
+    actions.className = 'panel-actions';
+
+    const cont = document.createElement('button');
+    cont.className = 'btn is-play';
+    cont.dataset['act'] = 'cleared-continue';
+    cont.textContent = t('blindCleared.continue');
+    cont.addEventListener('click', () => {
+      // Guarda: el estado pudo cambiar (ej. un panel de sistema). Si ya no
+      // estamos en `reward`, no hay nada que continuar.
       if (this.engine.run.status !== 'reward') return;
+      if (this.clearedAdvanced) return; // un doble toque no avanza dos veces
+      this.clearedAdvanced = true;
       then();
-    }, this.lastBreakdown ? 2400 : 1500);
+    });
+    actions.appendChild(cont);
+    panel.appendChild(actions);
+
+    this.openOverlay(panel);
+    this.clearedAdvanced = false;
   }
 
   /**
@@ -1480,15 +1542,9 @@ export class HUD {
     // El panel anterior deja de existir: su refresco tambien. `showShop` vuelve
     // a asignarlo justo despues de llamar aca.
     this.shopRefresh = null;
-    // Las referencias al panel de ciego son del panel que se esta yendo: si
-    // quedaran vivas, un `die:settled` tardio escribiria sobre un DOM huerfano.
-    this.elBlindPanel = null;
-    this.elBlindGrid = null;
-    this.elDieRow = null;
-    this.clearDieDeadline();
-    // `is-throw` lo vuelve a poner `applyDiePhase()` si el panel que entra es el
-    // de ciego sin tirada. Sin este reset, abrir Ajustes despues dejaria el
-    // overlay sin capturar punteros y el canvas se comeria los clics.
+    // Las referencias al panel de ciego son del panel que se esta yendo.
+    // `is-throw` ya no lo pone nadie (la tirada de dado se retiro), pero se
+    // limpia igual: un overlay sin capturar punteros se comeria los clics.
     this.elOverlay.classList.remove('is-throw');
     this.elOverlay.innerHTML = '';
     // `is-carousel`: overlay TRANSPARENTE y sin capturar punteros, para que la
@@ -1536,7 +1592,6 @@ export class HUD {
     }
 
     this.cancelPendingClose();
-    this.clearDieDeadline();
     this.elOverlay.classList.remove('is-open', 'is-throw');
     this.elOverlay.classList.add('is-closing');
     this.syncArenaCovered();
@@ -2088,110 +2143,14 @@ export class HUD {
   }
 
   // ==========================================================================
-  // Fases del dado
+  // (El dado por gesto se retiro del HUD)
   // ==========================================================================
-
-  /**
-   * El cubo esta en el aire: el panel vuelve pero con los ciegos bloqueados y
-   * el resultado tapado. Lo llama el controlador al soltar el cubo y al volver
-   * a tirar.
-   */
-  beginDieThrow(): void {
-    if (this.diePhase === 'tumbling') return;
-    this.diePhase = 'tumbling';
-    this.applyDiePhase();
-    this.armDieDeadline();
-  }
-
-  /** El dado se apoya: recien ahora se puede ver el resultado y elegir ciego. */
-  private settleDie(): void {
-    this.clearDieDeadline();
-    if (this.diePhase === 'ready') return;
-    this.diePhase = 'ready';
-    this.applyDiePhase();
-  }
-
-  /**
-   * Red de seguridad. Si el aviso del render no llega, el resultado se muestra
-   * igual: un panel bloqueado para siempre es peor que un dado que no se anima.
-   */
-  private armDieDeadline(): void {
-    this.clearDieDeadline();
-    this.dieDeadline = performance.now() + 12000;
-    this.dieTimer = window.setTimeout(() => {
-      this.dieTimer = null;
-      if (performance.now() < this.dieDeadline) return;
-      this.settleDie();
-    }, 12000);
-  }
-
-  private clearDieDeadline(): void {
-    if (this.dieTimer !== null) {
-      clearTimeout(this.dieTimer);
-      this.dieTimer = null;
-    }
-  }
-
-  /** Vuelca la fase del dado al DOM sin reconstruir el panel. */
-  private applyDiePhase(): void {
-    const panel = this.elBlindPanel;
-    if (!panel) return;
-
-    // El panel se aparta durante TODA la tirada, no solo antes de soltar el
-    // cubo: el dado gira sobre la arena y el panel ocupa media pantalla, asi
-    // que si volviera al soltar, la tirada —que es el evento— quedaria tapada.
-    // Vuelve cuando el dado se apoya, que es cuando hay algo que decidir.
-    const throwing = this.diePhase !== 'ready';
-    panel.classList.toggle('is-die-armed', throwing);
-    this.elOverlay.classList.toggle('is-throw', throwing);
-    if (this.elDieHint) {
-      // Con el dado ya apoyado la consigna desaparece con el resto del panel,
-      // asi que el texto solo tiene que ser correcto en las dos fases de tirada.
-      this.elDieHint.textContent = t(this.diePhase === 'armed' ? 'die.arm' : 'die.tumbling');
-    }
-
-    // Red de seguridad: los ciegos no se pueden elegir hasta que el dado se
-    // apoye. Elegir antes seria decidir sin saber el multiplicador.
-    const locked = throwing;
-    if (this.elBlindGrid) this.elBlindGrid.classList.toggle('is-locked', locked);
-    for (const card of panel.querySelectorAll('.blind-card')) {
-      (card as HTMLElement).setAttribute('aria-disabled', String(locked));
-    }
-
-    if (this.elDieRow) this.fillDieRow(this.elDieRow);
-    this.syncArenaCovered();
-  }
-
-  /** Contenido de la fila del dado segun la fase. */
-  private fillDieRow(row: HTMLElement): void {
-    row.innerHTML = '';
-    const die = this.engine.run.die;
-
-    const info = document.createElement('span');
-    info.className = 'die-row-info';
-
-    if (!die) {
-      info.textContent = t('die.arm');
-      row.appendChild(info);
-      return;
-    }
-    if (this.diePhase !== 'ready') {
-      info.textContent = t('die.tumbling');
-      info.classList.add('is-tumbling');
-      row.appendChild(info);
-      return;
-    }
-
-    info.textContent = t('die.rolled', { face: die.face, mult: die.multiplier });
-    const cost = this.engine.rerollDieCost();
-    const again = document.createElement('button');
-    again.className = 'btn is-ghost is-small';
-    again.textContent = t('die.reroll', { cost });
-    again.dataset['act'] = 'reroll-die';
-    again.disabled = this.engine.run.money < cost;
-    again.addEventListener('click', () => this.callbacks.onRerollDie());
-    row.append(info, again);
-  }
+  //
+  // Antes la seleccion de ciego pedia TIRAR el dado a mano para desbloquear la
+  // eleccion. Ese flujo desaparecio: cada ante juega sus 3 ciegos en orden, sin
+  // eleccion ni tirada previa. El dado ahora es la habilidad ACTIVA del
+  // Simbionte legendario (`joker_loaded_die`), que se resuelve con un boton en
+  // la barra de acciones y se pinta en `renderLoadedDie()`.
 
   /**
    * P2.3 / P2.4 — Panel de un EVENTO entre Ciegos.
@@ -2446,11 +2405,15 @@ export class HUD {
       // contenido (ver blinds.json: solo los `*_boss` declaran `effects`).
       const isBoss = (blind.effects?.length ?? 0) > 0;
       const isCurrent = index === run.blindIndex;
+      // Los ciegos ya jugados en este ante quedan marcados y apagados: la ruta
+      // se lee de un golpe ("voy por el del medio").
+      const isPast = index < run.blindIndex;
 
       const card = document.createElement('div');
       card.className = [
         'blind-card',
         isCurrent ? 'is-current' : '',
+        isPast ? 'is-past' : '',
         isBoss ? 'is-boss' : '',
       ]
         .filter(Boolean)
@@ -2462,8 +2425,7 @@ export class HUD {
       card.dataset['blindBoss'] = isBoss ? '1' : '0';
       if (blind.tier) card.dataset['blindTier'] = blind.tier;
       if (isCurrent) card.dataset['blindCurrent'] = '1';
-      card.setAttribute('role', 'button');
-      card.setAttribute('tabindex', '0');
+      if (isPast) card.dataset['blindPast'] = '1';
 
       // --- Ilustracion ---
       // Va PRIMERO en el DOM y el CSS la pone de fondo: es el mismo patron que
@@ -2494,6 +2456,18 @@ export class HUD {
         bossTag.textContent = t('blindCard.boss');
         head.append(bossTag);
       }
+      if (isPast) {
+        const doneTag = document.createElement('span');
+        doneTag.className = 'blind-tag is-done';
+        doneTag.textContent = t('blindCard.cleared');
+        head.append(doneTag);
+      }
+      if (isCurrent) {
+        const nowTag = document.createElement('span');
+        nowTag.className = 'blind-tag is-now';
+        nowTag.textContent = t('blindCard.next');
+        head.append(nowTag);
+      }
 
       const desc = document.createElement('div');
       desc.className = 'blind-desc';
@@ -2503,16 +2477,13 @@ export class HUD {
       //
       // El plan pide que el jugador vea DE UN GOLPE las cuatro cosas que
       // definen el desafio: cuanto tiene que conseguir, con cuantas manos,
-      // cuantos descartes y que gana. Antes solo habia multiplicador y
-      // objetivo: "manos" y "descartes" recien aparecian al entrar al ciego,
-      // asi que la decision de QUE ciego elegir se tomaba a ciegas.
+      // cuantos descartes y que gana.
       //
-      // Las manos y descartes son los del DADO del ante actual: es lo que el
-      // jugador va a recibir de verdad, no el valor base del contenido. Si el
-      // dado todavia no se tiro, `run.die` es null y se cae al valor base.
-      const die = run.die;
-      const handsForBlind = Math.max(1, run.baseHands + (die?.hands ?? 0));
-      const discardsForBlind = Math.max(0, run.baseDiscards + (die?.discards ?? 0));
+      // Manos y descartes son los valores BASE de la run: el dado ya no forma
+      // parte del flujo normal (es habilidad del Simbionte legendario, se carga
+      // DENTRO del ciego), asi que aca no hay tirada que consultar.
+      const handsForBlind = Math.max(1, run.baseHands);
+      const discardsForBlind = Math.max(0, run.baseDiscards);
 
       const objective = document.createElement('div');
       objective.className = 'blind-objective';
@@ -2593,20 +2564,21 @@ export class HUD {
 
       card.append(head, desc, objective, metrics, reward);
 
-      const choose = (): void => this.callbacks.onChooseBlind(blind.id);
-      card.addEventListener('click', choose);
-      card.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          choose();
-        }
-      });
-
       grid.appendChild(card);
     });
 
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
+
+    // Ya NO se elige ciego: cada ante juega sus 3 ciegos en orden. El boton
+    // arranca el ciego en curso (el resaltado). Es el punto de partida del ante
+    // y reemplaza al antiguo gesto del dado.
+    const start = document.createElement('button');
+    start.className = 'btn is-play';
+    start.dataset['act'] = 'blind-start';
+    start.textContent = t('blindCard.start');
+    start.addEventListener('click', () => this.callbacks.onStartBlind());
+    actions.appendChild(start);
 
     if (this.continueLabel) {
       const resume = document.createElement('button');
@@ -2634,37 +2606,12 @@ export class HUD {
 
     actions.append(deck, newRun, langBtn);
 
-    // --- DADO: hay que TIRARLO a mano antes de poder elegir ---
-    //
-    // Tres fases, y el orden importa:
-    //   armed    -> todavia no se tiro. El panel se aparta y queda la consigna.
-    //   tumbling -> el cubo esta en el aire. El panel ya volvio, pero los ciegos
-    //               estan bloqueados: el resultado no se puede spoilear.
-    //   ready    -> el dado se apoyo. Recien aca aparece el resultado, la opcion
-    //               de volver a tirar y los ciegos.
-    const dieRow = document.createElement('div');
-    dieRow.className = 'die-row';
-
-    const hint = document.createElement('p');
-    hint.className = 'die-hint';
-    hint.textContent = t('die.arm');
-
     panel.append(title, subtitle);
     if (blindHelp) panel.appendChild(blindHelp);
     if (interludeNotice) panel.appendChild(interludeNotice);
-    panel.append(dieRow, grid, actions, hint);
+    panel.append(grid, actions);
     this.openOverlay(panel);
 
-    // Las referencias se toman DESPUES de `openOverlay`: es quien las limpia
-    // (son del panel que se esta yendo). Tomarlas antes dejaba `elBlindPanel` en
-    // null y `applyDiePhase()` no hacia nada: el panel se quedaba capturando
-    // punteros y el cubo no se podia arrastrar.
-    this.elBlindPanel = panel;
-    this.elBlindGrid = grid;
-    this.elDieRow = dieRow;
-    this.elDieHint = hint;
-    this.diePhase = run.die ? 'ready' : 'armed';
-    this.applyDiePhase();
     // Los ciegos entran en cascada. Es ADITIVO: el panel ya tiene su propia
     // animacion de entrada; esto solo escalona las tarjetas de adentro.
     anim
@@ -2743,8 +2690,96 @@ export class HUD {
 
     const subtitle = document.createElement('p');
     subtitle.className = 'panel-subtitle';
-    subtitle.textContent = `${t('hud.money')}: ${formatNumber(this.engine.run.money)} · ${t('hud.jokers')} ${this.engine.run.jokers.length}/${this.engine.run.jokerSlots}`;
 
+    // --- Pestañas (Comprar / Vender) ---
+    // Antes la tienda solo mostraba la estanteria: para deshacerse de un
+    // Simbionte habia que salir de la tienda y usar la ficha del HUD. Aca la
+    // venta es una PESTAÑA mas, con la misma jerarquia que comprar.
+    const tabs = document.createElement('div');
+    tabs.className = 'shop-tabs';
+    tabs.setAttribute('role', 'tablist');
+
+    const body = document.createElement('div');
+    body.className = 'shop-body';
+
+    let refreshBuy: () => void = () => {};
+
+    const setTab = (tab: 'buy' | 'sell'): void => {
+      tabs.querySelectorAll<HTMLButtonElement>('.shop-tab').forEach((b) => {
+        const active = b.dataset['tab'] === tab;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      body.innerHTML = '';
+      if (tab === 'buy') {
+        body.appendChild(this.buildBuyTab(offers, (fn) => { refreshBuy = fn; }));
+        refreshBuy();
+      } else {
+        body.appendChild(this.buildSellTab());
+      }
+    };
+
+    for (const [id, key] of [['buy', 'shop.tabBuy'], ['sell', 'shop.tabSell']] as const) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'shop-tab';
+      btn.dataset['tab'] = id;
+      btn.dataset['act'] = `shop-tab-${id}`;
+      btn.setAttribute('role', 'tab');
+      btn.textContent = t(key);
+      btn.addEventListener('click', () => setTab(id));
+      tabs.appendChild(btn);
+    }
+
+    // La barra inferior (mazo, renovar, salir) es comun a las dos pestañas.
+    const actions = document.createElement('div');
+    actions.className = 'panel-actions';
+
+    const deck = document.createElement('button');
+    deck.className = 'btn';
+    deck.textContent = `${t('deck.open')} (${this.engine.run.deck.totalSize})`;
+    deck.dataset['act'] = 'deck';
+    deck.addEventListener('click', () => this.callbacks.onOpenDeck());
+
+    const reroll = document.createElement('button');
+    reroll.className = 'btn';
+    // El precio del reroll tambien pasa por el motor: un voucher puede bajarlo.
+    reroll.textContent = t('shop.rerollCost', { cost: this.engine.rerollPrice });
+    reroll.disabled = this.engine.run.money < this.engine.rerollPrice;
+    reroll.addEventListener('click', () => this.callbacks.onReroll());
+
+    const leave = document.createElement('button');
+    leave.className = 'btn is-play';
+    leave.textContent = t('action.leaveShop');
+    leave.addEventListener('click', () => this.callbacks.onLeaveShop());
+
+    actions.append(deck, reroll, leave);
+    panel.append(title, subtitle, tabs, body, actions);
+    this.openOverlay(panel);
+
+    // Primera pestaña por defecto: comprar.
+    setTab('buy');
+
+    // Ver la nota de `shopRefresh`. Solo se recalcula lo que depende del
+    // dinero: las tarjetas NO se reconstruyen, asi que las ilustraciones ya
+    // dibujadas no se vuelven a generar en cada cambio de plata.
+    this.shopRefresh = () => {
+      const money = this.engine.run.money;
+      subtitle.textContent = `${t('hud.money')}: ${formatNumber(money)} · ${t('hud.jokers')} ${this.engine.run.jokers.length}/${this.engine.run.jokerSlots}`;
+      refreshBuy();
+      reroll.disabled = money < this.engine.rerollPrice;
+    };
+    this.shopRefresh();
+  }
+
+  /**
+   * Pestaña "Comprar": la estantería de siempre. `registerRefresh` deja que el
+   * shell guarde el refresco por dinero (para `shopRefresh`).
+   */
+  private buildBuyTab(
+    offers: ShopOffer[],
+    registerRefresh?: (fn: () => void) => void,
+  ): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'offer-grid';
 
@@ -2859,42 +2894,7 @@ export class HUD {
       grid.appendChild(card);
     }
 
-    const actions = document.createElement('div');
-    actions.className = 'panel-actions';
-
-    const sellInfo = document.createElement('span');
-    sellInfo.className = 'panel-subtitle';
-    sellInfo.style.margin = '0';
-    sellInfo.textContent = t('action.sell');
-
-    const deck = document.createElement('button');
-    deck.className = 'btn';
-    deck.textContent = `${t('deck.open')} (${this.engine.run.deck.totalSize})`;
-    deck.dataset['act'] = 'deck';
-    deck.addEventListener('click', () => this.callbacks.onOpenDeck());
-
-    const reroll = document.createElement('button');
-    reroll.className = 'btn';
-    // El precio del reroll tambien pasa por el motor: un voucher puede bajarlo.
-    reroll.textContent = t('shop.rerollCost', { cost: this.engine.rerollPrice });
-    reroll.disabled = this.engine.run.money < this.engine.rerollPrice;
-    reroll.addEventListener('click', () => this.callbacks.onReroll());
-
-    const leave = document.createElement('button');
-    leave.className = 'btn is-play';
-    leave.textContent = t('action.leaveShop');
-    leave.addEventListener('click', () => this.callbacks.onLeaveShop());
-
-    actions.append(sellInfo, deck, reroll, leave);
-    panel.append(title, subtitle, grid, actions);
-    this.openOverlay(panel);
-
-    // Ver la nota de `shopRefresh`. Solo se recalcula lo que depende del
-    // dinero: las tarjetas NO se reconstruyen, asi que las ilustraciones ya
-    // dibujadas no se vuelven a generar en cada cambio de plata.
-    this.shopRefresh = () => {
-      const money = this.engine.run.money;
-      subtitle.textContent = `${t('hud.money')}: ${formatNumber(money)} · ${t('hud.jokers')} ${this.engine.run.jokers.length}/${this.engine.run.jokerSlots}`;
+    registerRefresh?.(() => {
       for (const entry of buyButtons) {
         // `canBuyOffer` ya sabe de slots de joker y de vouchers ya poseidos: la
         // UI no replica la regla, la pregunta.
@@ -2905,8 +2905,139 @@ export class HUD {
       soldStamps.forEach((stamp, i) => {
         stamp.hidden = !offers[i]?.sold;
       });
-      reroll.disabled = money < this.engine.rerollPrice;
-    };
+    });
+
+    return grid;
+  }
+
+  /**
+   * Pestaña "Vender": los Simbiontes que el jugador lleva encima, con su arte,
+   * su rareza y su valor de venta. Vender ya existia por la ficha del HUD, pero
+   * estaba escondido: aca es una decision explicita, con la ilustracion grande
+   * y el precio a la vista. La confirmacion es en dos toques (igual que la
+   * ficha) para que un roce no venda un legendario.
+   */
+  private buildSellTab(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sell-tab';
+
+    const hint = document.createElement('p');
+    hint.className = 'sell-hint';
+    hint.textContent = t('shop.sellHint');
+    wrap.appendChild(hint);
+
+    const jokers = this.engine.run.jokers;
+    if (jokers.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'offer-desc';
+      empty.textContent = t('shop.sellEmpty');
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'offer-grid is-sell';
+
+    for (const joker of jokers) {
+      const value = jokerSellValue(joker);
+      const rarity = joker.def.rarity;
+
+      const card = document.createElement('div');
+      card.className = `offer is-sell-card is-rarity-${rarity}`;
+      card.style.setProperty('--joker-rarity', hexToCss(RARITY_COLOR[rarity]));
+
+      // Misma cara procedural que la ficha del HUD y la oferta de tienda: se
+      // arma una oferta sintetica para reusar `offerFaceUrl` y no duplicar el
+      // dibujado de la ilustracion.
+      const pseudo = {
+        id: `sell:${joker.uid}`,
+        kind: 'joker' as const,
+        refId: joker.def.id,
+        nameKey: joker.def.nameKey,
+        descKey: joker.def.descKey,
+        cost: value,
+        art: joker.def.art,
+        sold: false,
+      };
+      const artUrl = offerFaceUrl(pseudo, this.engine, t, {
+        card: this.cardArt,
+        joker: this.jokerArt,
+      });
+      if (artUrl) {
+        const art = document.createElement('img');
+        art.className = 'offer-art';
+        art.src = artUrl;
+        art.alt = t(joker.def.nameKey);
+        art.loading = 'lazy';
+        card.appendChild(art);
+      } else {
+        const spacer = document.createElement('div');
+        spacer.className = 'offer-art is-placeholder';
+        spacer.setAttribute('aria-hidden', 'true');
+        card.appendChild(spacer);
+      }
+
+      const kind = document.createElement('div');
+      kind.className = 'offer-kind';
+      kind.textContent = t(`rarity.${rarity}`);
+
+      const name = document.createElement('div');
+      name.className = 'offer-name';
+      name.textContent = t(joker.def.nameKey);
+      name.style.color = hexToCss(RARITY_COLOR[rarity]);
+
+      const desc = document.createElement('div');
+      desc.className = 'offer-desc';
+      desc.textContent = t(joker.def.descKey);
+
+      const footer = document.createElement('div');
+      footer.className = 'offer-footer';
+
+      const priceEl = document.createElement('span');
+      priceEl.className = 'offer-price is-gain';
+      priceEl.textContent = `+${value}`;
+
+      const sell = document.createElement('button');
+      sell.className = 'btn is-small is-sell';
+      sell.dataset['act'] = 'sell-joker-shop';
+      sell.textContent = t('shop.sellAction', { value });
+      // Confirmacion en dos toques: un roce no puede vender un legendario.
+      let armed = false;
+      let timer: number | null = null;
+      const disarm = (): void => {
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+        armed = false;
+        card.classList.remove('is-confirming');
+        sell.textContent = t('shop.sellAction', { value });
+      };
+      sell.addEventListener('click', () => {
+        if (armed) {
+          disarm();
+          const nameText = t(joker.def.nameKey);
+          this.callbacks.onSellJoker(joker.uid);
+          this.toast(t('shop.sellDone', { name: nameText, value }), 'info');
+          // Rehacer la pestaña para que el Simbionte vendido desaparezca ya.
+          const body = card.closest('.shop-body');
+          if (body) {
+            body.innerHTML = '';
+            body.appendChild(this.buildSellTab());
+          }
+          return;
+        }
+        armed = true;
+        card.classList.add('is-confirming');
+        sell.textContent = t('shop.sellConfirm', { value });
+        timer = window.setTimeout(disarm, 3200);
+      });
+
+      footer.append(priceEl, sell);
+      card.append(kind, name, desc, footer);
+      grid.appendChild(card);
+    }
+
+    wrap.appendChild(grid);
+    return wrap;
   }
 
   private showGameOver(reason: 'loss' | 'victory'): void {
@@ -2927,6 +3058,10 @@ export class HUD {
     grid.className = 'stat-grid';
 
     const stats: Array<[string, string | number]> = [
+      // Score TOTAL de la run. Es lo primero que el jugador quiere ver al
+      // terminar, y antes NO existia: el resumen solo mostraba la mejor mano
+      // suelta, que se leia como "el ultimo puntaje".
+      [t('result.totalScore'), formatNumber(run.totalScore)],
       [t('result.finalAnte'), run.ante],
       [t('result.blindsCleared'), run.stats.blindsCleared],
       [t('result.handsPlayed'), run.stats.handsPlayed],

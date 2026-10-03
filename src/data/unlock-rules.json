@@ -206,5 +206,18 @@
       "path": "ctx.wins",
       "value": 1
     }
+  },
+  {
+    "id": "unlock_joker_loaded_die",
+    "contentId": "joker_loaded_die",
+    "kind": "joker",
+    "nameKey": "unlockRule.unlock_joker_loaded_die.name",
+    "descKey": "unlockRule.unlock_joker_loaded_die.desc",
+    "event": "round:win",
+    "when": {
+      "op": "gte",
+      "path": "ctx.ante",
+      "value": 8
+    }
   }
 ]

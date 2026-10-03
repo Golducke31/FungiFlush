@@ -14,6 +14,7 @@
 import type {
   BlindDefinition,
   CardInstance,
+  DieRoll,
   EffectDefinition,
   JokerInstance,
   RoundSnapshot,
@@ -128,6 +129,12 @@ export interface GameEventMap {
    * la eleccion de quedarsela o volver a tirar.
    */
   'die:settled': { face: number };
+  /**
+   * El Simbionte legendario del dado cargo una cara para la ronda. A diferencia
+   * de `die:settled`, aca NO hay gesto ni animacion de fisica: la cara se revela
+   * en el acto y vale para la proxima mano jugada.
+   */
+  'die:loaded': { die: DieRoll };
 
   // --- Disparadores (el render los usa para shake / particulas A->B) ---
   'trigger:fired': {

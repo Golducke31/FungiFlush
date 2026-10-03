@@ -186,9 +186,11 @@ test('el pack base real carga con el contenido esperado', () => {
   assert.equal(bundle.cards.length, 39);
   assert.equal(bundle.cards.filter((c) => (c.tags ?? []).includes('evolved')).length, 5);
   assert.equal(bundle.blinds.length, 24);
+  // 18 + el legendario del dado (`joker_loaded_die`).
+  assert.equal(bundle.jokers.length, 25);
   assert.equal(bundle.upgrades?.length, 1);
   assert.equal(bundle.evolutions?.length, 5);
-  assert.equal(registry.anteTarget(8), 190000);
+  assert.equal(registry.anteTarget(8), 180000);
   assert.equal(registry.maxAnte(), 8);
   assert.equal(registry.validate().filter((i) => i.level === 'error').length, 0);
 });

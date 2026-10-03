@@ -20,14 +20,14 @@ export const MAX_EMITS_PER_EVENT = 64;
 
 /** Objetivo base de score por ante. Se multiplica por el blind. */
 export const ANTE_BASE_TARGET: Record<number, number> = {
-  1: 300,
-  2: 800,
-  3: 2000,
-  4: 5200,
-  5: 13000,
-  6: 32000,
-  7: 78000,
-  8: 190000,
+  1: 1100,
+  2: 2200,
+  3: 4400,
+  4: 8800,
+  5: 18000,
+  6: 38000,
+  7: 82000,
+  8: 180000,
 };
 
 /**

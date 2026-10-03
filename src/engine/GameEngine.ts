@@ -18,8 +18,6 @@
 import {
   ANTE_BASE_TARGET,
   DIE_FACES,
-  DIE_REROLL_BASE,
-  DIE_REROLL_STEP,
   ECONOMY,
   MAX_HAND_SIZE,
   MAX_PLAY_SIZE_DEFAULT,
@@ -82,6 +80,12 @@ const MAX_PLAY_SIZE = MAX_PLAY_SIZE_DEFAULT;
 const INTERLUDE_CHANCE = 0.4;
 /** El mazo nunca baja de este tamano por un purgado de interludio. */
 const MIN_DECK_SIZE = 5;
+/**
+ * Simbionte legendario del dado: id de contenido y cada cuantas manos jugadas se
+ * recarga su habilidad. Ver `useLoadedDie`.
+ */
+export const LOADED_DIE_JOKER_ID = 'joker_loaded_die';
+const LOADED_DIE_EVERY = 2;
 
 /** Eventos que el motor emite por si mismo (fuera de una mano jugada). */
 export type GlobalTriggerEvent =
@@ -140,6 +144,15 @@ export class GameEngine {
 
   run!: RunState;
   round: RoundState | null = null;
+
+  /**
+   * Contador del Simbionte `joker_loaded_die`: manos jugadas desde la ultima vez
+   * que se uso el dado. `0` = habilidad lista; cada mano jugada lo baja hasta
+   * `LOADED_DIE_EVERY` cuando se usa el dado. La PRIMERA vez arranca en 0, para
+   * que comprar el Simbionte se sienta como un premio y no como una espera.
+   * Se reinicia al usar el dado, no al empezar la ronda.
+   */
+  private loadedDieChargeLeft = 0;
 
   /** Draft de recompensa pendiente (se sortea al ganar el blind). */
   private reward: { offers: ShopOffer[]; pick: number; allowSkip: boolean } | null = null;
@@ -224,6 +237,11 @@ export class GameEngine {
     this.reward = null;
     this.rewardPicked = 0;
     this.pendingInterlude = null;
+    // El contador del Simbionte del dado tambien vive fuera del `RunState`
+    // serializable: si no se resetea, una run nueva heredaria la carga de la
+    // anterior y la habilidad arrancaria armada. Se vuelve a 0 (listo) para que
+    // el primer uso este disponible en cuanto se tenga el Simbionte.
+    this.loadedDieChargeLeft = 0;
   }
 
   /**
@@ -235,21 +253,21 @@ export class GameEngine {
   }
 
   /**
-   * Entra a la pantalla de eleccion de ciego. NO tira el dado.
+   * Entra a la pantalla informativa del ciego que toca.
    *
-   * Antes lo tiraba aca y el jugador lo veia caer solo. Ahora la tirada es un
-   * GESTO: el cubo se arrastra y se suelta (`throwDie`), y el resultado recien
-   * se revela cuando el dado se apoya. El motor no puede saber cuando termina
-   * una animacion, asi que el orden es: el render avisa que se solto el cubo,
-   * el motor sortea y devuelve la cara, y el render la anima hasta que cae.
+   * Ya NO se elige ciego ni se tira el dado: cada ante juega sus 3 ciegos en
+   * ORDEN (el de menor score, el del medio y el jefe). La pantalla muestra la
+   * ruta del ante y un boton para arrancar el ciego en curso.
+   *
+   * El dado multiplicador no desaparecio: paso a ser la habilidad ACTIVA del
+   * Simbionte legendario `joker_loaded_die` (ver `useLoadedDie`). `run.die` sigue
+   * existiendo porque esa habilidad lo carga, pero este metodo ya no lo arma.
    */
   private enterBlindSelect(): void {
     this.run.status = 'blind_select';
-    this.run.die = null;
-    this.run.dieRerolls = 0;
     // P2.6 — Es el momento natural para reponer misiones: el jugador esta a
-    // punto de elegir un desafio, asi que un objetivo corto nuevo se puede
-    // cumplir DENTRO de lo que viene, no despues de la run entera.
+    // punto de enfrentar el siguiente ciego, asi que un objetivo corto nuevo se
+    // puede cumplir DENTRO de lo que viene, no despues de la run entera.
     //
     // AL RESTAURAR NO: `restore` llama a este metodo con las misiones ya
     // cargadas del guardado. Si sorteara aca, recargar la partida daria misiones
@@ -260,50 +278,18 @@ export class GameEngine {
   }
 
   /**
-   * Tira el dado porque el jugador LANZO el cubo. Devuelve la tirada para que
-   * el render la anime, o `null` si no corresponde (fuera de la seleccion de
-   * ciego, o ya tirado).
-   *
-   * El sorteo ocurre ANTES de la animacion a proposito: la fisica del cubo es
-   * puro espectaculo y no puede influir en el resultado, o el RNG sembrado
-   * dejaria de ser reproducible (la tirada dependeria de como la arrastro el
-   * dedo).
+   * La tirada de dado por GESTO (`throwDie` / `rerollDie`) se retiro junto con
+   * la eleccion de ciego: ya no hay pantalla donde tirarlo. El dado sobrevive
+   * como la habilidad ACTIVA del Simbionte legendario `joker_loaded_die`
+   * (`useLoadedDie`). `rollDie()` sigue existiendo porque esa habilidad lo usa.
    */
-  throwDie(): DieRoll | null {
-    if (this.run.status !== 'blind_select') return null;
-    if (this.run.die) return this.run.die;
-    this.run.die = this.rollDie();
-    this.emitState();
+
+  /** Cara del dado actualmente cargada para la ronda, o `null`. La UI la lee. */
+  get loadedDieFace(): DieRoll | null {
     return this.run.die;
   }
 
-  /** Coste de la proxima tirada. Sube con cada una del mismo ciego. */
-  rerollDieCost(): number {
-    return DIE_REROLL_BASE + this.run.dieRerolls * DIE_REROLL_STEP;
-  }
-
-  /**
-   * Vuelve a tirar el dado pagando. Devuelve `false` si no alcanza el dinero.
-   * El azar deja de ser algo que se sufre y pasa a ser una APUESTA.
-   *
-   * En A8 y superiores la tirada es UNICA: el dado deja de ser una apuesta y
-   * pasa a ser parte del ciego, que es exactamente lo que hace que el nivel se
-   * sienta distinto y no solo mas caro.
-   */
-  rerollDie(): boolean {
-    if (this.run.status !== 'blind_select') return false;
-    if (this.ascension.modifiers.allowDieReroll === false) return false;
-    const cost = this.rerollDieCost();
-    if (this.run.money < cost) return false;
-    this.run.money -= cost;
-    this.run.dieRerolls += 1;
-    this.run.die = this.rollDie();
-    bus.emit('money:changed', { money: this.run.money, delta: -cost });
-    this.emitState();
-    return true;
-  }
-
-  /** ¿El jugador puede volver a tirar el dado? Lo consulta el HUD. */
+  /** ¿La ascension actual permite usar el dado (habilidad del Simbionte)? */
   get canRerollDie(): boolean {
     return this.ascension.modifiers.allowDieReroll !== false;
   }
@@ -357,8 +343,16 @@ export class GameEngine {
   }
 
   /**
-   * El jugador elige el ciego y arranca la ronda.
-   * Sin argumento, toma el que corresponde al indice actual del ante.
+   * Arranca la ronda del ciego que corresponde al ante actual.
+   *
+   * Ya NO hay eleccion: cada ante juega sus 3 ciegos EN ORDEN (el de menor
+   * score, el del medio y el jefe). `blindsForAnte` los devuelve ordenados por
+   * `scoreMultiplier` ascendente, asi que el ciego es SIEMPRE
+   * `candidates[blindIndex]`.
+   *
+   * Se acepta un `blindId` opcional solo por compatibilidad con tests que
+   * arman un pack ad-hoc y necesitan fijar un ciego concreto; en el juego real
+   * el HUD llama sin argumento.
    */
   chooseBlind(blindId?: string): void {
     if (this.run.status !== 'blind_select' && this.run.status !== 'menu') return;
@@ -372,8 +366,6 @@ export class GameEngine {
       throw new Error(`[GameEngine] No hay blinds definidos para el ante ${this.run.ante}`);
     }
 
-    // El jugador puede elegir cualquier ciego del ante, pero el indice de
-    // progresion avanza igual: elegir el boss primero no saltea el ante.
     const target = this.targetFor(blind);
 
     // ASCENSION: los niveles altos suman efectos EXTRA al jefe. Un jefe es un
@@ -385,22 +377,19 @@ export class GameEngine {
       ? { ...blind, effects: [...blind.effects, ...extraBoss] }
       : blind;
 
-    // DADO MULTIPLICADOR: se tira aca, con el RNG SEMBRADO. Con `Math.random()`
-    // dos partidas con la misma semilla dejarian de ser iguales, y la
-    // reproducibilidad es un invariante del motor.
-    // La tirada ya se hizo al ENTRAR a la seleccion: aca se usa la que quedo,
-    // que el jugador pudo haber cambiado pagando.
-    const die = this.run.die ?? this.rollDie();
-    this.run.die = die;
+    // DADO: la tirada ya no se sortea por ciego. `run.die` solo tiene valor si
+    // el Simbionte legendario `joker_loaded_die` lo cargo para ESTA ronda (ver
+    // `useLoadedDie`). Si esta, se consume aca: su multiplicador y sus manos
+    // extra aplican a la ronda, y despues se limpia.
+    const die = this.run.die;
+    this.run.die = null;
 
     this.round = createRoundState(
       blindOut,
       target,
       this.run.baseHandSize,
-      // Las caras altas COBRAN manos o descartes. Los pisos evitan que una
-      // tirada deje la ronda injugable.
-      Math.max(1, this.run.baseHands + die.hands),
-      Math.max(0, this.run.baseDiscards + die.discards),
+      Math.max(1, this.run.baseHands + (die?.hands ?? 0)),
+      Math.max(0, this.run.baseDiscards + (die?.discards ?? 0)),
     );
 
     this.run.deck.shuffle();
@@ -508,9 +497,11 @@ export class GameEngine {
     const held = round.hand.filter((c) => !round.selected.includes(c.uid));
     const res = this.scorer.resolveHand(this.handOptions(scored, held));
 
-    // DADO: se aplica al FINAL, sobre el multiplicador de esporas. Asi entra en
-    // el total y sale como un paso mas — el ticker lo muestra — sin tocar el
-    // calculador de puntaje.
+    // DADO: se aplica al FINAL, sobre el multiplicador de esporas. Solo tiene
+    // valor cuando el Simbionte legendario `joker_loaded_die` lo cargo para esta
+    // mano (ver `useLoadedDie`); en el flujo normal `run.die` es `null`. Asi
+    // entra en el total y sale como un paso mas — el ticker lo muestra — sin
+    // tocar el calculador de puntaje.
     const die = this.run.die;
     if (die && die.multiplier !== 1) {
       res.multiplySpores(die.multiplier, 'die', `die.face${die.face}`, 0);
@@ -530,6 +521,12 @@ export class GameEngine {
     round.history.push({ cards: scored.map((c) => c.def.id), score: res.total });
     this.run.stats.handsPlayed += 1;
     this.run.stats.bestHand = Math.max(this.run.stats.bestHand, res.total);
+
+    // Simbionte legendario del dado: cada mano jugada acerca la recarga de la
+    // habilidad. Se consume la cara cargada (vale para UNA mano) y se descuenta
+    // una carga del dado.
+    this.run.die = null;
+    if (this.loadedDieChargeLeft > 0) this.loadedDieChargeLeft -= 1;
 
     bus.emit('score:hand', { breakdown: breakdownOf(res), total: res.total });
     bus.emit('score:changed', {
@@ -620,6 +617,58 @@ export class GameEngine {
     this.fillHand();
     this.emitState();
     return res;
+  }
+
+  // ==========================================================================
+  // Simbionte legendario del dado (habilidad activa)
+  // ==========================================================================
+
+  /** ¿El jugador tiene el Simbionte legendario del dado en la mesa? */
+  hasLoadedDie(): boolean {
+    return this.run.jokers.some((j) => j.def.id === LOADED_DIE_JOKER_ID);
+  }
+
+  /**
+   * Cargas restantes del dado: cuantas manos jugadas faltan para poder usarlo.
+   * 0 = listo. Se muestra en el HUD como contador de la habilidad.
+   *
+   * Solo el `RoundState` cuenta manos, asi que la carga se descuenta por mano
+   * jugada en la ronda en curso; al cambiar de ciego vuelve a estar disponible
+   * el remanente (la carga NO se pierde entre ciegos, para que el Simbionte se
+   * sienta potente y no un accidente de ronda).
+   */
+  loadedDieCharge(): number {
+    return this.loadedDieChargeLeft;
+  }
+
+  /** ¿Se puede usar el dado ahora? */
+  canUseLoadedDie(): boolean {
+    if (!this.hasLoadedDie()) return false;
+    if (this.run.status !== 'playing') return false;
+    if (this.run.die) return false; // ya cargado: no se apila
+    // En los niveles que prohiben tirar el dado (A8+), el Simbionte no puede
+    // saltear la regla del ciego: su dado queda bloqueado igual que lo estaba la
+    // tirada manual.
+    if (this.ascension.modifiers.allowDieReroll === false) return false;
+    return this.loadedDieChargeLeft <= 0;
+  }
+
+  /**
+   * Gasta la carga del Simbionte legendario y TIRA el dado: el resultado se
+   * aplica al multiplicador de esporas de la proxima mano. `Math` no: usa el RNG
+   * SEMBRADO, igual que el dado original, para no romper la reproducibilidad.
+   *
+   * Devuelve la tirada para que el render la anime (igual que el dado de antes),
+   * o `null` si no corresponde.
+   */
+  useLoadedDie(): DieRoll | null {
+    if (!this.canUseLoadedDie()) return null;
+    const die = this.rollDie();
+    this.run.die = die;
+    this.loadedDieChargeLeft = LOADED_DIE_EVERY;
+    bus.emit('die:loaded', { die });
+    this.emitState();
+    return die;
   }
 
   // ==========================================================================
@@ -1267,12 +1316,19 @@ export class GameEngine {
     const round = this.requireRound();
 
     if (round.score >= round.target) {
+      // La cara cargada vale para UNA ronda: se consume al cerrarla.
+      this.run.die = null;
       const reward =
         round.blind.reward +
         ECONOMY.baseBlindReward +
         round.handsLeft * ECONOMY.moneyPerUnusedHand;
       this.setMoney(reward);
       this.run.stats.blindsCleared += 1;
+      // TOTAL DE LA RUN: se acumula el score REAL del ciego superado. Sin esto
+      // el resumen final solo podia mostrar `round.score` (que se resetea al
+      // empezar el ciego siguiente) o `bestHand` (la mejor mano SUELTA), y el
+      // jugador veia "el total" como si fuera el ultimo puntaje nomas.
+      this.run.totalScore += round.score;
 
       bus.emit('round:win', {
         score: round.score,
@@ -1316,6 +1372,7 @@ export class GameEngine {
     }
 
     if (round.handsLeft <= 0) {
+      this.run.die = null;
       bus.emit('round:loss', { score: round.score, target: round.target });
       this.dispatchGlobal('ON_ROUND_LOSS');
       // Misma conservacion al PERDER: quedarse sin manos no destruye cartas.
@@ -1626,6 +1683,7 @@ export class GameEngine {
       hands: this.run.baseHands,
       discards: this.run.baseDiscards,
       round: this.run.stats.handsPlayed,
+      totalScore: this.run.totalScore,
       status: this.run.status,
     };
   }
@@ -1689,6 +1747,7 @@ export class GameEngine {
       baseDiscards: this.run.baseDiscards,
       jokers: this.run.jokers.map((j) => j.def.id),
       deck: cards,
+      totalScore: this.run.totalScore,
       stats: { ...this.run.stats },
       consumedEffects: [...this.run.consumedEffects],
       // Vouchers comprados: una run retomada tiene que seguir con las MISMAS
@@ -1739,6 +1798,9 @@ export class GameEngine {
     this.run.baseHandSize = data.baseHandSize;
     this.run.baseHands = data.baseHands;
     this.run.baseDiscards = data.baseDiscards;
+    // Score acumulado: OPCIONAL/ADITIVO (los guardados previos no lo tienen).
+    // `?? 0` deja una run vieja jugable en vez de romper la carga.
+    this.run.totalScore = typeof data.totalScore === 'number' ? data.totalScore : 0;
     // Se mezcla sobre el estado por defecto: si un campo nuevo falta en un
     // guardado migrado, la run sigue siendo jugable.
     this.run.stats = { ...this.run.stats, ...data.stats };
@@ -1828,6 +1890,11 @@ export interface RunSaveData {
   baseDiscards: number;
   jokers: string[];
   deck: SerializedCard[];
+  /**
+   * Score acumulado de la run. OPCIONAL y aditivo: los guardados previos no lo
+   * tienen y `restore` cae a 0. No hace falta subir `SAVE_VERSION`.
+   */
+  totalScore?: number;
   stats: {
     handsPlayed: number;
     bestHand: number;

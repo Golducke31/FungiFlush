@@ -653,6 +653,8 @@ export interface RunSnapshot {
   hands: number;
   discards: number;
   round: number;
+  /** Score ACUMULADO de la run (suma de los ciegos superados). */
+  totalScore: number;
   status:
     | 'menu'
     | 'blind_select'

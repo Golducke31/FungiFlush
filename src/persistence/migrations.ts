@@ -81,6 +81,9 @@ export function migrateRunV1toV2(input: UnknownRecord): UnknownRecord {
       cardsUpgraded: numberOr(stats['cardsUpgraded'], 0),
       cardsEvolved: numberOr(stats['cardsEvolved'], 0),
     },
+    // Score acumulado de la run. Aditivo: un guardado previo no lo trae y cae a
+    // 0, que es correcto (no podemos reconstruirlo hacia atras). No sube version.
+    totalScore: numberOr(input['totalScore'], 0),
     consumedEffects: Array.isArray(input['consumedEffects']) ? input['consumedEffects'] : [],
     contentHash: input['contentHash'] ?? null,
     packIds: Array.isArray(input['packIds']) && input['packIds'].length > 0 ? input['packIds'] : ['base'],

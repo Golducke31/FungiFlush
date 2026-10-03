@@ -26,7 +26,7 @@
     "discards": "Descartes",
     "deck": "Mazo",
     "deckFull": "Mazo: {remaining} cartas disponibles de {total}",
-    "jokers": "Jokers",
+    "jokers": "Simbiontes",
     "jokerSlots": "Ranuras",
     "handSize": "Cartas en mano",
     "bestHand": "Mejor mano",
@@ -44,6 +44,8 @@
     "reward": "Recompensa",
     "boss": "Jefe",
     "cleared": "Superado",
+    "next": "Siguiente",
+    "start": "Comenzar Ciego",
     "locked": "Se abre en el ante {ante}",
     "effects": "Efecto de ronda",
     "hands": "Manos",
@@ -66,10 +68,13 @@
     "noDiscards": "Sin descartes",
     "noHands": "Sin manos",
     "cantAfford": "Dinero insuficiente",
-    "slotsFull": "Sin ranuras de joker libres",
+    "slotsFull": "Sin ranuras de simbionte libres",
     "sellValue": "Vender por {value}",
     "sort": "Ordenar",
-    "viewDeck": "Ver mazo"
+    "viewDeck": "Ver mazo",
+    "useDie": "Tirar dado",
+    "useDieReady": "¡Dado listo!",
+    "useDieCharge": "Faltan {count} manos"
   },
   "phase": {
     "blind_select": "Elegí tu ciego",
@@ -89,18 +94,27 @@
     "finalAnte": "Ante final",
     "blindsCleared": "Ciegos superados",
     "handsPlayed": "Manos jugadas",
+    "totalScore": "Score total",
     "bestHand": "Mejor mano",
     "cardsDestroyed": "Cartas destruidas"
   },
   "shop": {
-    "title": "El Mercado del Micelio",
-    "empty": "Todo vendido. No queda nada en la estantería.",
-    "rerollCost": "Renovar ({cost})",
-    "sold": "VENDIDO",
-    "voucher": "Mejora",
+  "title": "El Mercado del Micelio",
+  "empty": "Todo vendido. No queda nada en la estantería.",
+  "rerollCost": "Renovar ({cost})",
+  "sold": "VENDIDO",
+  "voucher": "Mejora",
+  "tabBuy": "Comprar",
+  "tabSell": "Vender",
+  "sellTitle": "Vendé lo que ya no te sirve",
+  "sellEmpty": "No tenés simbiontes para vender.",
+  "sellHint": "Vender te devuelve Fungis y libera una ranura.",
+  "sellAction": "Vender por {value}",
+  "sellConfirm": "¿Seguro? +{value}",
+  "sellDone": "Vendiste {name} por {value}",
     "kind": {
       "card": "Carta",
-      "joker": "Joker",
+      "joker": "Simbionte",
       "mutation": "Mutación",
       "voucher": "Mejora",
       "money": "Fungis"
@@ -113,12 +127,12 @@
     "impactJoker": "Modifica cómo puntúas",
     "impactVoucher": "Cambia las reglas de la partida",
     "impactOwned": "Ya lo tenés",
-    "impactSlots": "Ocupa una ranura de joker",
+    "impactSlots": "Ocupa una ranura de simbionte",
     "improves": "Mejora tu mazo",
     "impactMoneyGain": "+{value} Fungis",
     "impactMoneyCost": "-{value} Fungis",
-    "impactJokerSlot": "+{value} ranura de joker",
-    "impactJokerSlotNeg": "{value} ranura de joker",
+    "impactJokerSlot": "+{value} ranura de simbionte",
+    "impactJokerSlotNeg": "{value} ranura de simbionte",
     "impactHands": "{value} mano por Ciego",
     "impactHandsPlus": "+{value} mano por Ciego",
     "impactHandSize": "+{value} carta en mano",
@@ -166,7 +180,18 @@
       "4": "Gran Colonia (+30 Sustrato)",
       "5": "Supercolonia (+60 Sustrato)"
     },
-    "diversity": "Diversidad (+25 Sustrato)"
+    "diversity": "Diversidad (+25 Sustrato)",
+    "rarity": {
+      "2": "Par de Especies (+8 Sustrato, x1.1 Esporas)",
+      "3": "Trío de Especies (+20 Sustrato, x1.25 Esporas)",
+      "4": "Póker de Especies (+40 Sustrato, x1.4 Esporas)"
+    },
+    "straight": {
+      "3": "Escalera Menor (+12 Sustrato, x1.1 Esporas)",
+      "4": "Escalera Mayor (+28 Sustrato, x1.2 Esporas)",
+      "5": "Escalera Real (+55 Sustrato, x1.3 Esporas)"
+    },
+    "fullhouse": "Full House (+45 Sustrato, x1.6 Esporas)"
   },
   "status": {
     "dormant": "Latente",
@@ -216,7 +241,8 @@
     "gilded": "Dorado",
     "midasTouch": "Toque de Midas",
     "spentSpores": "Esporas gastadas",
-    "perpetual": "Perpetuo"
+    "perpetual": "Perpetuo",
+    "loadedDie": "Dado cargado"
   },
   "blind": {
     "current": "Ciego actual",
@@ -530,7 +556,11 @@
     },
     "joker_double_helix": {
       "name": "Doble Hélice",
-      "desc": "Con 4 o más jokers: x1.5 Esporas."
+      "desc": "Con 4 o más simbiontes: x1.5 Esporas."
+    },
+    "joker_loaded_die": {
+      "name": "Dado Cargado",
+      "desc": "HABILIDAD ACTIVA. Cada 2 manos podés tirar el dado: su multiplicador se aplica a la mano y te da sus manos y descartes extra."
     },
     "joker_sterile_field": {
       "name": "Campo Estéril",
@@ -563,8 +593,8 @@
       "desc": "Robás +1 carta por mano de forma permanente."
     },
     "mutation_joker_slot": {
-      "name": "Ranura de Joker",
-      "desc": "Ganás +1 ranura de joker de forma permanente."
+      "name": "Ranura de Simbionte",
+      "desc": "Ganás +1 ranura de simbionte de forma permanente."
     },
     "mutation_graft": {
       "name": "Injerto Tóxico",
@@ -633,7 +663,7 @@
     "comingSoon": "Disponible en una próxima actualización",
     "unknown": "Sin descubrir",
     "cards": "Especímenes",
-    "jokers": "Jokers",
+    "jokers": "Simbiontes",
     "all": "Todas",
     "unlocked": "Desbloqueado",
     "unlockSource": {
@@ -664,7 +694,9 @@
   },
   "blindCleared": {
     "title": "¡Ciego superado!",
-    "score": "{score} / {target}"
+    "score": "{score} / {target}",
+    "total": "Score total de la run: {score}",
+    "continue": "Continuar"
   },
   "die": {
     "title": "Dado de esporas",
@@ -813,7 +845,7 @@
     },
     "ach_joker_hoard": {
       "name": "Simbiosis",
-      "desc": "Tené 5 jokers a la vez"
+      "desc": "Tené 5 simbiontes a la vez"
     },
     "ach_first_evolution": {
       "name": "Algo nuevo",
@@ -922,11 +954,15 @@
     },
     "unlock_joker_parasitic_drive": {
       "name": "Impulso Parásito",
-      "desc": "Ganá un ciego con 4 jokers a la vez"
+      "desc": "Ganá un ciego con 4 simbiontes a la vez"
     },
     "unlock_joker_double_helix": {
       "name": "Doble Hélice",
       "desc": "Ganá una partida"
+    },
+    "unlock_joker_loaded_die": {
+      "name": "Dado Cargado",
+      "desc": "Ganá un ciego en el ante 8"
     }
   },
   "voucher": {
@@ -947,7 +983,7 @@
     },
     "voucher_sixth_slot": {
       "name": "Sexto estante",
-      "desc": "+1 espacio de joker, para siempre en esta partida"
+      "desc": "+1 espacio de simbionte, para siempre en esta partida"
     },
     "voucher_cheap_rerolls": {
       "name": "Trato del mayorista",
@@ -1007,7 +1043,7 @@
     },
     "a8": {
       "name": "Colapso fúngico",
-      "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de joker menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
+      "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de simbionte menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
     }
   },
   "cosmetics": {
@@ -1072,10 +1108,13 @@
     "ability": "Habilidad",
     "default": "Predeterminado",
     "recommended": "Orden recomendado",
-    "confirm": "Ordenado por {criterion}",
-    "confirmDefault": "Orden original restaurado",
-    "alreadySorted": "La mano ya estaba en ese orden"
-  },
+  "confirm": "Ordenado por {criterion}",
+  "confirmDefault": "Orden original restaurado",
+  "alreadySorted": "La mano ya estaba en ese orden",
+  "auto": "Orden automático",
+  "autoOn": "Orden automático: {criterion}",
+  "autoOff": "Orden automático desactivado"
+},
   "deckstate": {
     "conservedTitle": "Mazo conservado",
     "conserved": "Mazo conservado: {count} cartas",
@@ -1121,7 +1160,7 @@
       "name": "Frasco rajado",
       "desc": "Un frasco roto con espacio para una espora mas. Alguien te lo vende barato.",
       "accept": "Comprar el frasco",
-      "acceptDetail": "+5 Fungis de coste, +1 ranura de joker",
+      "acceptDetail": "+5 Fungis de coste, +1 ranura de simbionte",
       "decline": "Dejarlo"
     },
     "sacrifice": {
@@ -1167,7 +1206,7 @@
     },
     "jokers_3": {
       "name": "Simbiosis",
-      "desc": "Reuni 3 jokers a la vez"
+      "desc": "Reuni 3 simbiontes a la vez"
     },
     "upgrade_3": {
       "name": "Cultivo",

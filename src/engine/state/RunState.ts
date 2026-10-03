@@ -89,6 +89,14 @@ export interface RunState {
    * mutable. Una run retomada sigue con las mismas misiones a medio hacer.
    */
   missions: Array<{ id: string; progress: number; completed: boolean }>;
+  /**
+   * Score ACUMULADO de toda la run: la suma del score final de cada ciego
+   * superado. Vive en la run (no en el RoundState, que se reemplaza en cada
+   * ciego) porque el resumen final tiene que mostrar el TOTAL de la partida,
+   * no el ultimo numero suelto. Se suma al SUPERAR el ciego; los ciegos
+   * perdidos no aportan.
+   */
+  totalScore: number;
   /** Estadisticas para la pantalla final. */
   stats: {
     handsPlayed: number;
@@ -136,6 +144,7 @@ export function createRunState(seed: number, deck: Deck, ascension = 0): RunStat
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
     seenInterludes: [],
     missions: [],
+    totalScore: 0,
     stats: {
       handsPlayed: 0,
       bestHand: 0,

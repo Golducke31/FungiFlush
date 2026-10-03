@@ -71,7 +71,7 @@ import {
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
-import { sortHand } from '@ui/handSort';
+import { sortHand, type SortMode } from '@ui/handSort';
 import {
   buildCollectionCarousel,
   type CollectionCarouselFrame,
@@ -345,40 +345,25 @@ async function boot(): Promise<void> {
     }
   });
 
-  // --- Dado multiplicador ---
-  // La tirada es MANUAL: el cubo aparece sobre la arena y el jugador lo
-  // arrastra y lo suelta (ver `onDieThrown`). El multiplicador entra al final
-  // del puntaje, asi que sale como un paso mas en el ticker.
+  // --- Dado multiplicador (Simbionte legendario) ---
+  // Ya NO hay tirada manual al entrar al ciego: cada ante juega sus 3 ciegos en
+  // orden, sin eleccion. El dado queda como habilidad ACTIVA del Simbionte
+  // legendario `joker_loaded_die`: se carga con un boton y su cara multiplica
+  // las esporas de la proxima mano.
 
-  // El ciego ya se eligio: el dado se va a su rincon mostrando la cara. Va con
-  // animacion porque viene de estar tirado en medio de la arena.
+  // El dado se aparca en su rincon si hay una cara cargada por el Simbionte.
   bus.on('blind:selected', () => {
-    const die = engine.run.die;
+    const die = engine.loadedDieFace;
     if (die) scene.parkDie(die.face, DIE_FACES);
   });
 
-  // Al ENTRAR a la seleccion de ciego todavia NO hay tirada: el dado se arma
-  // (agrandado, adelante y al centro) y espera el gesto.
-  //
-  // La condicion es la TRANSICION de estado, no una clave de (ante, ciego): un
-  // mismo ciego puede volver a jugarse (reintento tras perder) y la clave no
-  // cambiaria, dejando el dado sin armar. Una vez tirado, este handler no toca
-  // nada: la animacion manda, y el resultado lo revela `die:settled`.
-  //
-  // Arranca en `null` y NO en `engine.run.status`: el motor todavia no tiene
-  // `run` hasta que `enterMenu()` lo crea, y leerlo aca tiraba el arranque
-  // entero (`Cannot read properties of undefined`).
-  let previousStatus: string | null = null;
-  bus.on('state:changed', () => {
-    const run = engine.run;
-    const entered = run.status === 'blind_select' && previousStatus !== 'blind_select';
-    previousStatus = run.status;
-    if (!entered) return;
-    // Partida retomada: la tirada ya existia, asi que se muestra aparcada y de
-    // una (no hubo gesto que animar).
-    if (run.die) scene.showDie(run.die.face, DIE_FACES);
-    else scene.armDieThrow(DIE_FACES);
+  // El Simbionte cargo una cara: el cubo se va al rincon mostrando el resultado.
+  bus.on('die:loaded', ({ die }) => {
+    scene.parkDie(die.face, DIE_FACES);
   });
+
+  // Al entrar a la seleccion de ciego ya no hay nada que armar: el panel es
+  // informativo (la ruta del ante) y el boton "Comenzar" arranca el ciego.
 
   /**
    * Entradas de la coleccion: TODO el contenido del registro (incluido el de
@@ -530,20 +515,13 @@ async function boot(): Promise<void> {
       /**
        * El jugador LANZO el cubo del dado.
        *
-       * El render sabe con que fuerza salio (mide la velocidad del dedo); el
-       * motor es el unico que puede sortear la cara, y el render es el unico que
-       * puede animarla. El orden importa: primero se sortea, despues se anima
-       * HACIA ese resultado. Al reves (que la fisica decidiera la cara) el RNG
-       * sembrado dejaria de ser reproducible.
+       * El flujo de ciego ya no pide una tirada manual (ver arriba), asi que
+       * esta via quedo sin uso: el dado solo aparece como habilidad del
+       * Simbionte legendario, que se anima con `onUseLoadedDie`. Se deja el
+       * no-op explicito para que el render pueda seguir ofreciendo el arrastre
+       * del cubo sin romper nada si algun dia se reusa.
        */
-      onDieThrown: (impulse) => {
-        const roll = engine.throwDie();
-        if (!roll) return;
-        // Los ciegos quedan bloqueados y el resultado tapado hasta que el cubo
-        // se apoye: ver `HUD.beginDieThrow`.
-        hud?.beginDieThrow();
-        scene.releaseDie(roll.face, impulse, () => bus.emit('die:settled', { face: roll.face }));
-      },
+      onDieThrown: () => {},
       /**
        * El jugador arrastro una carta y la solto en una zona.
        *
@@ -722,6 +700,19 @@ async function boot(): Promise<void> {
   };
 
   // --- HUD ---
+  /**
+   * Criterio de orden PERSISTENTE de la mano (Task 7).
+   *
+   * Antes ordenar era un acto de un solo uso: al descartar/robar la mano
+   * volvia al orden del motor y habia que reordenar a mano cada vez. Ahora el
+   * criterio elegido se guarda y se RE-APLICA solo cuando cambia la mano, asi
+   * el jugador elige una vez y el orden se mantiene.
+   *
+   * `'default'` = sin orden automatico (es el estado inicial, y volver a
+   * elegirlo lo apaga).
+   */
+  let stickySortMode: SortMode = 'default';
+
   hud = new HUD({
     engine,
     root: uiRoot,
@@ -751,6 +742,9 @@ async function boot(): Promise<void> {
       onSortHand: (mode) => {
         const round = engine.round;
         if (!round) return;
+        // El criterio queda GUARDADO: se vuelve a aplicar cuando la mano cambie
+        // (descartar, robar, jugar). `'default'` lo apaga.
+        stickySortMode = mode;
         const ordered = sortHand(round.hand, mode);
         const before = round.hand.map((c) => c.uid).join(',');
         const after = ordered.map((c) => c.uid).join(',');
@@ -788,6 +782,8 @@ async function boot(): Promise<void> {
       onArenaCovered: (covered: boolean) => scene.setDieVisible(!covered),
       onLeaveShop: () => engine.leaveShop(),
       onChooseBlind: (blindId) => engine.chooseBlind(blindId),
+      // Ya no se elige ciego: el boton arranca el ciego en curso del ante.
+      onStartBlind: () => engine.chooseBlind(),
       // P2.4 — El HUD dibuja la decision; el MOTOR aplica los efectos. Si la
       // opcion no se puede pagar, `chooseInterlude` devuelve false y el panel
       // se queda abierto (el boton ya esta deshabilitado, pero esto cubre el
@@ -949,14 +945,12 @@ async function boot(): Promise<void> {
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
       },
-      onRerollDie: () => {
-        // Se paga y se sortea primero; despues el cubo vuelve a girar y el
-        // resultado se revela recien al apoyarse. Misma fisica que la tirada
-        // manual, solo que el impulso lo inventa el dado.
-        if (!engine.rerollDie()) return;
-        const die = engine.run.die;
+      onUseLoadedDie: () => {
+        // Habilidad del Simbionte legendario: carga el dado. El motor sortea la
+        // cara (RNG sembrado) y aca el cubo la anima hasta apoyarse; recien
+        // entonces se muestra el resultado.
+        const die = engine.useLoadedDie();
         if (!die) return;
-        hud?.beginDieThrow();
         scene.tossDie(die.face, () => bus.emit('die:settled', { face: die.face }));
       },
       onOpenDeck: () => openDeck(),
@@ -967,6 +961,34 @@ async function boot(): Promise<void> {
   });
 
   hud.bindCollectionProvider(buildCollection);
+
+  // --- Task 7: auto-orden de la mano ---
+  // Con un criterio activo, la mano se reordena SOLA cada vez que cambia su
+  // composicion (robar, descartar, jugar). Se reaplica en `state:changed`
+  // mirando la firma de la mano: si los uids son los mismos, no hay nada que
+  // hacer, asi no se emite un reordenamiento inutil en cada tick de estado.
+  let lastHandSignature = '';
+  bus.on('state:changed', () => {
+    const round = engine.round;
+    if (!round || engine.run.status !== 'playing') {
+      lastHandSignature = '';
+      return;
+    }
+    if (stickySortMode === 'default') return;
+    // La firma es INDEPENDIENTE del orden (uids ordenados alfabeticamente): asi
+    // solo cambia cuando entra o sale una carta, no cuando el propio reorden
+    // mueve las mismas cartas — que dispararia el listener de nuevo.
+    const signature = round.hand.map((c) => c.uid).sort().join(',');
+    if (signature === lastHandSignature) return;
+    lastHandSignature = signature;
+    const ordered = sortHand(round.hand, stickySortMode);
+    const current = round.hand.map((c) => c.uid).join(',');
+    const after = ordered.map((c) => c.uid).join(',');
+    // Si ya estaba ordenada, `reorderHand` no cambia nada y no se emite estado:
+    // sin el guard, esto seria un bucle infinito de cambios de estado.
+    if (current === after) return;
+    engine.reorderHand(ordered.map((c) => c.uid));
+  });
 
   // ==========================================================================
   // Retencion: recompensa diaria y logros

@@ -317,5 +317,23 @@
         "labelKey": "effect.perpetual"
       }
     ]
+  },
+  {
+    "id": "joker_loaded_die",
+    "nameKey": "joker.joker_loaded_die.name",
+    "descKey": "joker.joker_loaded_die.desc",
+    "rarity": "legendary",
+    "cost": 12,
+    "sellValue": 6,
+    "art": { "hue": 275, "hue2": 320, "pattern": "crystal", "silhouette": "truffle", "glow": 1 },
+    "effects": [
+      {
+        "id": "loaded_die_seed",
+        "trigger": "ON_ROUND_START",
+        "once": "per_round",
+        "actions": [{ "type": "ADD_SPORES", "value": 1 }],
+        "labelKey": "effect.loadedDie"
+      }
+    ]
   }
 ]
