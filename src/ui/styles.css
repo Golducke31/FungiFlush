@@ -5645,3 +5645,183 @@ body {
     font-size: 12px;
   }
 }
+
+/* ==========================================================================
+   HUD EN CELULAR TACTIL (pointer: coarse)
+   ==========================================================================
+   Estandarizacion del HUD para pantallas tactiles. Aislado con `pointer:
+   coarse` (NO por ancho): una ventana de desktop angosta NO entra aca, asi que
+   el escritorio queda EXACTAMENTE como estaba. Un celular en landscape SI.
+
+   El problema reportado: en el celular la barra inferior se rompia. Los
+   contadores hacian wrap a una segunda fila (el chip "MAZO"/"SIMBIONTES" caia
+   debajo y lo tapaba la barra de navegacion del sistema), el aviso "Misiones"
+   (`.hud-missions`, posicionado con `top: 50% + 130px`) aterrizaba ENCIMA de
+   los contadores en pantallas bajas, y los botones quedaban desalineados de la
+   fila de contadores.
+
+   Reglas de esta estandarizacion:
+     1. UNA sola franja inferior: contadores y acciones comparten alto y linea
+        de base. Nada de wrap: si no entra, los contadores se comprimen.
+     2. Alto de toque minimo (44px) en todos los controles: es el minimo
+        recomendado para dedo.
+     3. Misiones en el borde izquierdo, en su propia franja entre la columna de
+        jokers y la barra inferior, y SIN capturar toques (`pointer-events:
+        none`): es cromo informativo y no debe tapar ningun control.
+     4. La barra superior va en tres zonas claras (ante | score | dinero+botones)
+        con espaciado parejo.
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  /* --- Barra inferior: una sola franja ordenada --- */
+  .hud-bottom {
+    align-items: stretch;
+    /* Poca separacion: preferimos que entren en una fila antes que crear aire
+       que empuje los botones fuera. */
+    gap: 8px;
+    padding: 8px calc(10px + var(--safe-r)) calc(8px + var(--safe-b)) calc(10px + var(--safe-l));
+  }
+
+  .hud-counters {
+    /* SIN wrap: los contadores viven en una fila. Si el ancho no alcanza, se
+       comprimen (abajo se achica el padding), no saltan de linea. El wrap era
+       justo lo que dejaba el ultimo chip debajo de la barra del sistema. */
+    flex-wrap: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .counter {
+    /* Se comprimen antes de desbordar. `min-width: 0` es lo que permite que un
+       flex item encoja por debajo de su contenido. */
+    min-width: 0;
+    flex: 0 1 auto;
+    padding: 5px 9px;
+    gap: 6px;
+  }
+
+  .counter-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .counter-value {
+    font-size: 15px;
+  }
+
+  /* La etiqueta ("MANOS", "DESCARTES"...) es lo primero que se sacrifica: el
+     icono + el numero ya dicen que es. Asi los cuatro chips entran en una fila
+     incluso en un celular angosto. */
+  .counter .hud-label {
+    font-size: 8.5px;
+    letter-spacing: 0.1em;
+  }
+
+  .hud-actions {
+    flex: 0 0 auto;
+    gap: 7px;
+    align-items: stretch;
+  }
+
+  .hud-actions .btn {
+    /* Alto de toque comodo y homogeneo con los contadores: la franja entera se
+       lee como una sola fila, no como dos grupos de alturas distintas. */
+    min-height: 42px;
+    padding: 8px 13px;
+    font-size: 12.5px;
+  }
+
+  /* --- Barra superior: tres zonas con espaciado parejo --- */
+  .hud-top {
+    gap: 8px;
+    /* `flex-start`, NO `stretch`: los botones de sistema (idioma/menu) tienen
+       que quedar a su alto natural. Con `stretch` se estiraban a lo alto del
+       bloque de score y se veian como cajas largas. */
+    align-items: flex-start;
+    padding: calc(8px + var(--safe-t)) calc(10px + var(--safe-r)) 8px calc(10px + var(--safe-l));
+  }
+
+  .hud-ante {
+    min-width: 64px;
+  }
+
+  .hud-block {
+    padding: 6px 10px;
+  }
+
+  .hud-value {
+    font-size: 17px;
+  }
+
+  .hud-score-current {
+    font-size: 24px;
+  }
+
+  /* Los botones de sistema (dinero / idioma / menu) van al mismo alto que el
+     bloque de ante y score, para que la barra superior sea una linea prolija. */
+  .btn.is-small {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+
+  /* --- Misiones: franja propia entre los jokers y la barra inferior --- */
+  /* `.hud-missions` vive en el MISMO borde izquierdo que `.hud-jokers` (columna
+     centrada). Dos trampas en un celular landscape (844x390, el viewport del
+     smoke):
+       1. Con `pointer-events: auto` la franja se comia los toques de las fichas
+          de joker: el boton VENDER nunca recibia el click (la ficha no entraba
+          en confirmacion). Se deja `pointer-events: none`, como el resto del
+          cromo informativo.
+       2. Anclada abajo del todo se solapaba con la barra inferior y, segun el
+          alto, trepaba sobre los jokers. Se la ancla justo ENCIMA de la barra
+          inferior (`bottom: 58px + safe`, el alto real de la barra) y se le pone
+          un tope de alto que la mantiene por debajo de la columna de jokers
+          (que en este viewport ocupa hasta y=213): 28vh = 109px => su techo cae
+          en ~223, despejado. */
+  .hud-missions {
+    top: auto;
+    bottom: calc(58px + var(--safe-b));
+    max-width: 46vw;
+    max-height: calc(28vh);
+    overflow-y: auto;
+    pointer-events: none;
+  }
+
+  /* --- Panel de ciego: que entre en pantalla baja --- */
+  /* Las tarjetas de ciego se cortaban por abajo. En tactil se limita la grilla
+     y el panel scrollea, de modo que el boton "Luchar" siempre es alcanzable. */
+  .panel.is-blind-select {
+    max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 8px);
+    overflow-y: auto;
+  }
+}
+
+/* Celulas de ciego mas compactas en tactil, para que las tres entren sin
+   scroll en un celular en landscape. Va aparte del bloque general para poder
+   combinarlo con el alto y no duplicar la regla de scroll. */
+@media (pointer: coarse) and (max-height: 520px) {
+  .blind-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  /* El jefe NO ocupa dos columnas en tactil: con tres ciegos en una fila, un
+     `span 2` empujaria el tercero a una segunda fila que se corta por abajo.
+     Se distinguen por borde/halo, que ya alcanza. */
+  .blind-card.is-boss {
+    grid-column: auto;
+  }
+  .blind-card {
+    padding: 8px;
+  }
+  .blind-card .blind-desc {
+    font-size: 10.5px;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

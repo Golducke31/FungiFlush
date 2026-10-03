@@ -21,13 +21,24 @@ Deck: `engine.deckSize` = piles+hand (40); HUD chip `deckDraw/deckSize`; `deckDr
 - Stale dev server → CSS 0 rules; kill+restart. `boundingBox()` returns coords even below fold; `mouse.click` at y>innerHeight no-ops.
 - `.counter` exists only in `playing`. `elementFromPoint` false-positives pointer-events:none HUD (returns canvas) — test via `is-visible` class.
 - Carousel detail painted from render loop — poll after `focusAbs`. `hud.showDeckBuilder()` = DOM grid; 3D carousel via `openDeck()` (shop Mazo).
+- **Smoke browser context is `{844×390, isMobile:true, hasTouch:true}` ⇒ `@media (pointer: coarse)` IS ACTIVE in smoke.** Any mobile-only CSS rule is exercised by the smoke. Verify desktop separately with `tools/shot-desktop.mjs` (`pointer:fine`).
+- HUD overlays MUST NOT cover interactive controls. `.hud-missions`/`.hud-jokers` share the LEFT edge; jokers are vertically centered (`top:50%`, `max-height:48vh`) and missions sit below. Giving missions `pointer-events:auto` + bottom anchoring swallows taps on joker chips (broke the sell button). Keep `pointer-events:none`; smoke asserts `jokerChip.sellHittable` via `elementFromPoint`.
+- A smoke phase that **plays a hand** re-deals and perturbs later phases: reset `stickySortMode` (private in `main.ts`, re-applied every `state:changed`) to `'default'` when done, and wait for hand coords to stabilize before tapping.
+- **Smoke flakes come from fixed `waitForTimeout` racing animations.** Panels close with `overlay.is-closing` + `panel-out` (`--dur-base`) and stay in the DOM until the animation ends — poll `waitForFunction(el === null)` instead. Same for carousel: poll `carouselFocusedScreenPoint()` (null until `carouselActive` and the focused slot is `group.visible`), not the upgrade button.
 
 ## Recent (2026-10-03)
+- **Hand fan "ordenar" overlap FIXED**: `SceneManager.layoutHand()` runs twice in one tick (syncHand + auto-sort `reorderHand`); two staggered tweens on the same `home` targets left outer cards on the old tween → two cards at same x. Fix: `handLayoutTl?.kill()` before creating the new tween. `SceneManager.readHandXs()` = debug helper. Guarded by smoke `sortOverlap.afterSort/afterPlay > 1.9` (measures 2.32). Repro: `tools/repro-sort.mjs`, `tools/stress-sort.mjs`.
+- **Mobile HUD standardized** in a single `@media (pointer: coarse)` block appended to `styles.css` (bottom bar one row, top bar three zones, blind panel fits, `.hud-missions` repositioned ABOVE the bottom bar with `pointer-events:none`). Desktop untouched (verified `tools/shot-desktop.mjs`). Mobile capture: `tools/shot-mobile.mjs`.
 - Ante ladder retuned ~3.5–4× (smooth doubling 1100→180000) — Task 2 difficulty. Verify via `sim:balance`.
 - Shop: NEW "Venta" (sell) tab `buildSellTab()` reuses `offerFaceUrl` via synthetic `ShopOffer`; two-touch confirm → `onSellJoker`. Buy tab default.
 - Legendary Simbionte `joker_loaded_die` (Task 9): locked via `unlock-rules` (win blind ante 8); ability rolls die every 2 hands (`LOADED_DIE_EVERY=2`, starts ready). Die REMOVED from blind flow.
 - Auto-sort: `state:changed` listener re-applies `sortHand` via order-independent uid signature (avoids loop).
-- More Póker combos: rarity tiers, straights, full house in `combos.ts`.
+- **COMBOS = solo FungiFlush (en vigor desde `fe6f09e`)**: `combos.ts` detecta SOLO `element:*` (mult. Esporas), `family:*` (flat Sustrato) y `diversity:5`. El eje de POKER (par/trio/poker por rareza, escalera, full house) se ELIMINO por completo — sumaba a los otros y inflaba el score. NO reintroducirlo. Tests: `tests/combos.test.ts` (11) — `pokerCombos.test.ts` ya no existe. `card()` de test necesita `cost` y `art: ArtSpec`.
+- Tutorial (`HUD.showTutorial(force)`) es reabrible desde el chip "Guia" (`menu.guide`, `onOpenGuide`); persiste `seenTutorial` en perfil (v2, `PROFILE_MIGRATIONS[1]`). Panel `.panel.is-tutorial` es flex-column con `.tutorial-body` scrolleable (si no, en 844×390 el boton de cerrar queda bajo el pliegue).
+- Panel de ciego = secuencial (sin eleccion): `blindCard.progress`/`orderHint`, boton `blindCard.start`="Luchar", `phase.blind_select`="Proximo desafio".
+- Carrusel: `MIN_SCALE=0.68`, pulso al tocar (`PULSE_SECONDS`), tap sobre la carta enfocada dispara `onCarouselActivate` (sale por `SceneManager.callbacks`, NO `options`).
+- Orden por sustrato (`handSort.ts` `substrate`) ordena por `baseSubstrate` NUMERICO asc.
+- Deploy: `.github/workflows/deploy-pages.yml` en push a `main` -> https://golducke31.github.io/FungiFlush/ (vite `base: './'`). `ci.yml` corre typecheck/test/validate/sim:balance/sim:board/build + presupuesto bundle <1.6 MB.
 
 ## Retention/meta
 Unlock doors (R2): `unlock-rules.json` → `UnlockTracker` → `pendingUnlocks` → `PackGate`. Vouchers (R3): `priceOf(offer)` only price source. History (R5) cap 20.

@@ -551,6 +551,58 @@ console.log('\n--- Tras elegir ciego ---');
 console.log(JSON.stringify(afterBlind, null, 2));
 
 // ===========================================================================
+// Fase 3c — ORDEN DE LA MANO: el abanico NO se superpone (regresion)
+// ===========================================================================
+// Bug reportado: con un criterio activo, al jugar/descartar y volver a
+// repartir, las ilustraciones quedaban SUPERPUESTAS (dos cartas en el mismo x).
+// La causa era una carrera: dos `layoutHand()` en el mismo tick creaban dos
+// tweens con stagger que se pisaban. Ahora `layoutHand()` mata el layout
+// anterior antes de crear el nuevo, asi que la posicion final es siempre la del
+// ultimo Map. Se mide el gap MINIMO entre cartas vecinas: si es < 1.9 hay pisa.
+const sortOverlap = await page.evaluate(async () => {
+  const ff = window.__fungiflush;
+  const scene = ff.scene;
+  const measure = () => {
+    const xs = scene.readHandXs();
+    if (xs.length < 2) return { count: xs.length, minGap: Infinity };
+    let minGap = Infinity;
+    for (let i = 1; i < xs.length; i += 1) minGap = Math.min(minGap, Math.abs(xs[i] - xs[i - 1]));
+    return { count: xs.length, minGap };
+  };
+  const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Ordenar por familia, esperar a que el abanico asiente y medir.
+  document.querySelector('[data-act="sort"]')?.click();
+  await settle(150);
+  document.querySelector('[data-sort-mode="family"]')?.click();
+  await settle(2200);
+  const afterSort = measure();
+
+  // Jugar una mano y volver a medir: es el caso reportado.
+  const hand = ff.engine.round?.hand ?? [];
+  if (hand[0]) ff.engine.toggleSelect(hand[0].uid);
+  await settle(150);
+  document.querySelector('[data-act="play"]')?.click();
+  await settle(3200);
+  const afterPlay = measure();
+
+  // LIMPIAR EL CRITERIO. `onSortHand` guarda el modo en un `stickySortMode`
+  // privado de `main.ts` que se REAPLICA en cada `state:changed` y NO se apaga
+  // solo. Si esta fase lo deja en "family", todas las fases siguientes cargan
+  // con un `reorderHand()` extra por cada cambio de estado: un redibujado de
+  // mas que no aporta nada al test y ensucia el estado que miran las fases
+  // posteriores. Se vuelve a "default" para no contaminar el resto.
+  document.querySelector('[data-act="sort"]')?.click();
+  await settle(150);
+  document.querySelector('[data-sort-mode="default"]')?.click();
+  await settle(400);
+
+  return { afterSort, afterPlay, status: ff.engine.run.status };
+});
+console.log('\n--- Orden: gap minimo del abanico (regresion) ---');
+console.log(JSON.stringify(sortOverlap, null, 2));
+
+// ===========================================================================
 // Fase 4 — FLIP + ARRASTRE con gestos de puntero REALES
 // ===========================================================================
 // Nada de `engine.toggleSelect()` aca: lo que hay que probar es que el TAP siga
@@ -559,6 +611,29 @@ console.log(JSON.stringify(afterBlind, null, 2));
 
 await page.evaluate(() => window.__fungiflush.engine.clearSelection());
 await page.waitForTimeout(300);
+
+// La Fase 3c termina jugando una mano: la mano se REPARTE de nuevo y las
+// cartas viajan a su lugar. Si se muestrean las coordenadas mientras vuelan,
+// el tap cae al vacio y el test de seleccion falla por un motivo ajeno a la
+// seleccion. Se espera a que la posicion de la mano se ESTABILICE antes de
+// medir: se lee `handState()` dos veces y se exige que las coordenadas no
+// cambien entre lecturas.
+const waitHandStable = async () => {
+  let prev = '';
+  for (let i = 0; i < 40; i++) {
+    const sig = await page.evaluate(() =>
+      window.__fungiflush.scene
+        .handState()
+        .map((c) => `${c.uid}:${Math.round(c.screenX)},${Math.round(c.screenY)}`)
+        .join('|'),
+    );
+    if (sig && sig === prev) return true;
+    prev = sig;
+    await page.waitForTimeout(120);
+  }
+  return false;
+};
+await waitHandStable();
 
 const handBefore = await page.evaluate(() => window.__fungiflush.scene.handState());
 console.log('\n--- Fase 4: mano en pantalla ---');
@@ -700,6 +775,26 @@ const jokerChip = await (async () => {
   const sell = await page.locator('.joker-chip .joker-chip-sell').first().boundingBox();
   if (!chip) return { skipped: 'sin ficha de joker' };
 
+  // El boton VENDER tiene que ser ALCANZABLE: `elementFromPoint` en su centro
+  // debe devolver el propio boton. Si algo del HUD se le monta encima (p. ej.
+  // la franja de misiones con `pointer-events: auto`) el toque se pierde y la
+  // ficha nunca entra en confirmacion. Esto convierte ese caso en un fallo
+  // explicito en vez de un "confirmando: false" opaco.
+  const sellHittable = await page.evaluate(() => {
+    const btn = document.querySelector('.joker-chip .joker-chip-sell');
+    if (!btn) return { found: false };
+    const b = btn.getBoundingClientRect();
+    const el = document.elementFromPoint(
+      Math.round(b.x + b.width / 2),
+      Math.round(b.y + b.height / 2),
+    );
+    return {
+      found: true,
+      isSell: Boolean(el && el.classList.contains('joker-chip-sell')),
+      blockedBy: el && !el.classList.contains('joker-chip-sell') ? `${el.tagName}.${el.className}` : null,
+    };
+  });
+
   const antes = await page.evaluate(() => window.__fungiflush.engine.run.jokers.length);
   // Toque en el CUERPO de la ficha: 20 px desde el borde izquierdo, bien lejos
   // del boton de vender (que vive pegado al derecho).
@@ -725,6 +820,7 @@ const jokerChip = await (async () => {
 
   return {
     tieneBotonVender: Boolean(sell),
+    sellHittable,
     antes,
     trasTocarElCuerpo: despues.jokers,
     confirmandoTrasElCuerpo: despues.confirmando,
@@ -1363,9 +1459,22 @@ const carouselTap = await page.evaluate(async () => {
   // que abrir y el resultado no coincide con el foco inicial por casualidad.
   const target = Math.min(5, (car.count ?? 2) - 1);
   car.focusAbs(target);
-  for (let i = 0; i < 40; i++) {
+  // Se espera a que se cumplan TODAS las precondiciones del gesto:
+  //   - el boton de mejorar y el DETALLE (los pinta el bucle de render)
+  //   - y, sobre todo, que `carouselFocusedScreenPoint()` devuelva un punto.
+  // El puntero proyectado depende de que el carrusel este ACTIVO y de que la
+  // carta enfocada ya tenga `group.visible` (se re-layouta tras `focusAbs`). Si
+  // se lee antes, da null y la seccion se saltaba `{skipped}` -> la asercion
+  // `detailPresent` caia sin decir por que. Esperar por el punto elimina el
+  // flake.
+  let pt = null;
+  for (let i = 0; i < 60; i++) {
     await wait(100);
-    if (document.querySelector('.panel.is-deck [data-act="upgrade"]')) break;
+    const ready =
+      document.querySelector('.panel.is-deck [data-act="upgrade"]') &&
+      document.querySelector('.panel.is-deck .carousel-detail');
+    pt = scene.carouselFocusedScreenPoint();
+    if (ready && pt) break;
   }
   const focusedUid = car.currentEntries?.[car.focusedIndex]?.uid ?? null;
 
@@ -1373,8 +1482,7 @@ const carouselTap = await page.evaluate(async () => {
   // del canvas: el encuadre del anillo baja la carta para dejar lugar al panel,
   // asi que tocar el medio geometrico agarra una vecina.
   const rect = scene.renderer.domElement.getBoundingClientRect();
-  const pt = scene.carouselFocusedScreenPoint();
-  if (!pt) return { skipped: 'sin punto proyectado' };
+  if (!pt) return { skipped: 'sin punto proyectado', carouselActive: scene.carouselActive ?? null };
   const cx = rect.left + pt.x;
   const cy = rect.top + pt.y;
   const el = scene.renderer.domElement;
@@ -1383,7 +1491,13 @@ const carouselTap = await page.evaluate(async () => {
   el.dispatchEvent(new PointerEvent('pointerup', opts));
   await wait(400);
 
-  const detail = document.querySelector('.panel.is-deck .carousel-detail');
+  // El detalle lo repinta el bucle de render tras el toque: se le da un margen
+  // corto si todavia no esta, en vez de leer una sola vez y arriesgar un flake.
+  let detail = document.querySelector('.panel.is-deck .carousel-detail');
+  for (let i = 0; i < 10 && !detail; i++) {
+    await wait(100);
+    detail = document.querySelector('.panel.is-deck .carousel-detail');
+  }
   const shownName = detail?.querySelector('.carousel-detail-name')?.textContent?.trim() ?? null;
   const entryUid = car.currentEntries?.[car.focusedIndex]?.uid ?? null;
   return {
@@ -1614,7 +1728,13 @@ const quitPanel = await page.evaluate(() => ({
 
 // 2) Cancelar: la partida sigue viva y el panel se cierra.
 await page.evaluate(() => document.querySelector('[data-act="quit-cancel"]')?.click());
-await page.waitForTimeout(400);
+// El panel cierra con ANIMACION (`--dur-base`): el nodo sigue en el DOM mientras
+// corre `panel-out` y recien despues se lo saca. Un `waitForTimeout` fijo de
+// 400ms competia con la animacion y a veces la leia todavia montada (flake de
+// "afterCancel panel cerrado"). Se POLLEA hasta que desaparezca.
+await page
+  .waitForFunction(() => document.querySelector('.panel.is-confirm') === null, { timeout: 5000 })
+  .catch(() => {});
 const afterCancel = await page.evaluate(() => ({
   status: window.__fungiflush.engine.run.status,
   panel: document.querySelector('.panel.is-confirm') !== null,
@@ -1624,7 +1744,15 @@ const afterCancel = await page.evaluate(() => ({
 await page.evaluate(() => document.querySelector('[data-act="quit-to-menu"]')?.click());
 await page.waitForTimeout(400);
 await page.evaluate(() => document.querySelector('[data-act="quit-confirm"]')?.click());
-await page.waitForTimeout(800);
+// Mismo motivo que arriba: se espera al MENU, no a un tiempo fijo.
+await page
+  .waitForFunction(
+    () =>
+      window.__fungiflush.engine.run.status === 'menu' &&
+      document.querySelector('.panel.is-menu') !== null,
+    { timeout: 8000 },
+  )
+  .catch(() => {});
 const afterQuit = await page.evaluate(() => ({
   status: window.__fungiflush.engine.run.status,
   menuPanel: document.querySelector('.panel.is-menu') !== null,
@@ -1789,6 +1917,10 @@ const ok =
   chk('ascensionPanel?.selected === 2', ascensionPanel?.selected === 2) &&
   // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
   chk('jokerChip?.tieneBotonVender === true', jokerChip?.tieneBotonVender === true) &&
+  // El boton VENDER no puede quedar TAPADO por cromo del HUD: si algo se le
+  // monta encima, el toque se pierde (bug real de la franja de misiones con
+  // `pointer-events: auto`). Se verifica con hit-test, no con geometria.
+  chk('jokerChip?.sellHittable?.isSell === true', jokerChip?.sellHittable?.isSell === true) &&
   chk('jokerChip?.trasTocarElCuerpo === jokerChip?.an', jokerChip?.trasTocarElCuerpo === jokerChip?.antes) &&
   chk('jokerChip?.confirmandoTrasElCuerpo === false', jokerChip?.confirmandoTrasElCuerpo === false) &&
   chk('jokerChip?.primerToqueEnVender?.jokers === jok', jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes) &&
@@ -1835,6 +1967,16 @@ const ok =
     afterPlay?.deckDraw === 40 - (afterPlay?.cardsPlayed ?? 0) - (afterPlay?.cardsDiscarded ?? 0),
   ) &&
   chk('afterPlay?.deckSize sigue en 40', afterPlay?.deckSize === 40) &&
+  // Regresion: el abanico no se superpone tras ordenar y tras jugar. El gap
+  // uniforme es 2.32; por debajo de 1.9 hay dos cartas pisadas.
+  chk(
+    'sortOverlap.afterSort (sin superposicion)',
+    (sortOverlap?.afterSort?.minGap ?? 0) > 1.9,
+  ) &&
+  chk(
+    'sortOverlap.afterPlay (sin superposicion)',
+    (sortOverlap?.afterPlay?.minGap ?? 0) > 1.9,
+  ) &&
   // --- Salida al menu ---
   chk('quitButtonExists', quitButtonExists === true) &&
   chk('quitPanel.panel (panel de confirmacion abierto)', quitPanel?.panel === true) &&

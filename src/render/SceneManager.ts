@@ -329,6 +329,19 @@ export class SceneManager {
   /** Timeline de la secuencia de puntuacion de la mano en curso. */
   private scoreTl: ReturnType<typeof anim.sequence> | null = null;
 
+  /**
+   * Tween del abanico de la mano en curso (`layoutHand`).
+   *
+   * Se guarda para MATARLO antes de arrancar uno nuevo. Sin esto, dos layouts
+   * en el mismo tick (p. ej. el `state:changed` que dispara `syncHand` y el que
+   * dispara el auto-orden) dejan tweens con stagger pisandose: unos targets
+   * reciben el layout nuevo y otros se quedan con el viejo, y las cartas
+   * terminan SUPERPUESTAS en el mismo x (bug reportado: "al ordenar se
+   * superponen las ilustraciones"). Matar el anterior garantiza que solo el
+   * ultimo layout escribe la posicion final.
+   */
+  private handLayoutTl: ReturnType<typeof anim.tweenOf> | null = null;
+
   private clock = 0;
   /**
    * Ultimo `dt` acotado del bucle. Lo leen los gestos que ocurren FUERA del
@@ -1916,11 +1929,17 @@ export class SceneManager {
       return { x, t: total === 0 ? 0 : x / half };
     };
 
-    // Una sola pasada con STAGGER: las cartas entran en cascada desde el centro
-    // en vez de arrancar y terminar todas juntas. `amount` (no `each`) acota el
-    // spread TOTAL, asi una mano grande no estira el relayout (el smoke espera
-    // 1.6 s a que la mano vuelva a su lugar).
-    anim.tweenOf(
+    // UN SOLO LAYOUT VIVO.
+    //
+    // Dos `layoutHand()` en el mismo tick (el `state:changed` de `syncHand` y
+    // el del auto-orden) crean dos tweens con stagger sobre los MISMOS `home`.
+    // El de `from: 'center'` arranca por el medio y deja a los de las puntas con
+    // el tween viejo; cuando por fin les toca, el valor final sale de una lista
+    // con OTRO orden y dos cartas caen en el mismo x -> ilustraciones
+    // superpuestas. Matar el layout anterior antes de crear el nuevo deja
+    // SIEMPRE la ultima posicion calculada, que es la que refleja el Map.
+    this.handLayoutTl?.kill();
+    this.handLayoutTl = anim.tweenOf(
       cards.map((card) => card.home),
       {
         x: (i: number) => pos(i).x,
@@ -2785,6 +2804,18 @@ export class SceneManager {
   carouselFocusedScreenPoint(): { x: number; y: number } | null {
     if (!this.carouselActive || !this.carousel) return null;
     return this.carousel.focusedScreenPoint((v) => this.projectToScreen(v));
+  }
+
+  /**
+   * Posicion X (mundo) de cada carta de la mano, en orden del Map.
+   *
+   * Helper de DEPURACION para reproducir el bug de "ordenar superpone las
+   * ilustraciones": si dos cartas vecinas quedan a menos de ~1.1 unidades
+   * (menos de medio ancho de carta), el abanico esta mal armado. Ver
+   * `tools/repro-sort.mjs`.
+   */
+  readHandXs(): number[] {
+    return [...this.handCards.values()].map((card) => card.home.x);
   }
 
   /** Resumen para el panel de debug. */
