@@ -553,6 +553,15 @@ async function boot(): Promise<void> {
           if (!engine.discardCards([uid])) hud?.toast(t('action.noDiscards'), 'warn');
         }
       },
+      /**
+       * El jugador toco la carta que YA estaba centrada en el anillo.
+       *
+       * El render solo reporta el indice; que hacer con el lo decide la pantalla
+       * que abrio el carrusel (`carouselActivate`, registrado por `openDeck` /
+       * `onOpenCollection`). Sin handler (ninguna pantalla de anillo abierta) el
+       * gesto no hace nada, que es lo correcto.
+       */
+      onCarouselActivate: (index) => carouselActivate?.(index),
     },
   });
 
@@ -576,6 +585,15 @@ async function boot(): Promise<void> {
 
   /** El mazo usa el mismo anillo que la coleccion. */
   const DECK_CAROUSEL = { radius: 9, halfSpan: 5, wrap: true, lift: 1.9 };
+
+  /**
+   * Handler del gesto "tocar la carta centrada" en el carrusel activo.
+   *
+   * El render no conoce el panel que hay detras: solo avisa el indice tocado.
+   * Cada pantalla que monta un anillo (mazo, coleccion) registra aca que hacer
+   * con ese indice — normalmente abrir su detalle. Se limpia al cerrar.
+   */
+  let carouselActivate: ((index: number) => void) | null = null;
 
   const openDeck = (highlightUid?: string): void => {
     const state = hud?.deckState(highlightUid);
@@ -613,6 +631,7 @@ async function boot(): Promise<void> {
       onUpgrade: doUpgrade,
       onEvolve: doEvolve,
       onClose: () => {
+        carouselActivate = null;
         scene.setCarousel(null);
         hud?.closePanel();
       },
@@ -626,6 +645,10 @@ async function boot(): Promise<void> {
     // `state.cards` en el orden del mazo). Se lo damos nosotros para que el
     // indice del preview y el del anillo apunten a la misma carta.
     frame.setSorted(sorted, highlightUid);
+    // Tocar la carta centrada abre su detalle: el anillo no cambia de giro, asi
+    // que el gesto se sentia muerto. Se usa el mismo `setFocus` que ya usa el
+    // giro, porque el panel del mazo muestra UNA carta (la enfocada).
+    carouselActivate = (index) => frame.setFocus(index);
     hud.showPanel(frame.panel, { carousel: true });
     scene.setCarousel(toEntries(sorted), focus, DECK_CAROUSEL);
     // El anillo arranca dibujando la entrada 0 (setEntries resetea el giro).
@@ -781,8 +804,8 @@ async function boot(): Promise<void> {
        */
       onArenaCovered: (covered: boolean) => scene.setDieVisible(!covered),
       onLeaveShop: () => engine.leaveShop(),
-      onChooseBlind: (blindId) => engine.chooseBlind(blindId),
-      // Ya no se elige ciego: el boton arranca el ciego en curso del ante.
+      // Los 3 ciegos del ante son una RUTA, no una eleccion: sin argumento, el
+      // motor arranca el ciego que toca por `blindIndex`.
       onStartBlind: () => engine.chooseBlind(),
       // P2.4 — El HUD dibuja la decision; el MOTOR aplica los efectos. Si la
       // opcion no se puede pagar, `chooseInterlude` devuelve false y el panel
@@ -839,10 +862,14 @@ async function boot(): Promise<void> {
         // (persistente) y `startRun` la recorta al techo del contenido.
         engine.startRun(seed, profileStore.current.ascension.selected);
         scene.setMode('run');
-        // P0.3 — Tutorial jugable de la primera partida. Se ofrece UNA vez por
-        // run, sobre el panel de seleccion de ciego (que ya esta dibujado
-        // debajo). El jugador lo cierra y sigue con el flujo normal.
-        window.setTimeout(() => hud?.showTutorial(), 420);
+        // P0.3 (v2) — Guia de inicio. Se ofrece UNA vez por PERFIL
+        // (`seenTutorial`, persistido): antes era una vez por run y en memoria,
+        // asi que quien cerraba la app en el primer ciego la volvia a ver en
+        // cada partida. El cierre la marca vista; reabrirla desde el menu no
+        // depende de esto.
+        if (!profileStore.current.seenTutorial) {
+          window.setTimeout(() => hud?.showTutorial(), 420);
+        }
       },
       onSelectAscension: (level) => {
         // El nivel elegido nunca supera el desbloqueado en el perfil. El panel
@@ -877,6 +904,7 @@ async function boot(): Promise<void> {
         const focusHandler = (i: number): void => frame.setFocus(i);
         frame = buildCollectionCarousel(all, {
           onClose: () => {
+            carouselActivate = null;
             scene.setCarousel(null);
             hud?.closePanel();
           },
@@ -884,6 +912,8 @@ async function boot(): Promise<void> {
           onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
           onOpenPass: () => showPass(),
         });
+        // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
+        carouselActivate = (index) => frame.setFocus(index);
         hud?.showPanel(frame.panel, { carousel: true });
         scene.setCarousel(toViews(all), focusHandler);
       },
@@ -891,6 +921,17 @@ async function boot(): Promise<void> {
       onOpenPass: () => showPass(),
       onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
       onOpenAbout: () => hud?.showAbout(),
+      // Reabrir la guia desde el menu. Ademas de mostrarla, se marca vista en
+      // el perfil: alguien que la busca en el menu ya no necesita el aviso
+      // automatico de la primera run.
+      onOpenGuide: () => {
+        hud?.showTutorial(true);
+        if (!profileStore.current.seenTutorial) {
+          profileStore.patch((p) => {
+            p.seenTutorial = true;
+          });
+        }
+      },
       onOpenBoard: () => {
         void openBoard();
       },
@@ -963,29 +1004,27 @@ async function boot(): Promise<void> {
   hud.bindCollectionProvider(buildCollection);
 
   // --- Task 7: auto-orden de la mano ---
-  // Con un criterio activo, la mano se reordena SOLA cada vez que cambia su
-  // composicion (robar, descartar, jugar). Se reaplica en `state:changed`
-  // mirando la firma de la mano: si los uids son los mismos, no hay nada que
-  // hacer, asi no se emite un reordenamiento inutil en cada tick de estado.
-  let lastHandSignature = '';
+  // Con un criterio activo, la mano se reordena SOLA. Se reaplica en
+  // `state:changed`, pero la DECISION de reordenar no se toma por composicion
+  // sino por SECUENCIA: se compara el orden actual contra el que pide el
+  // criterio y solo se actua si difieren.
+  //
+  // Antes se filtraba por una firma de uids ordenados alfabeticamente (firma
+  // INDEPENDIENTE del orden): eso evitaba el bucle, pero tambien impedia
+  // corregir la mano cuando el orden cambiaba SIN cambiar los miembros — un
+  // descarte que vuelve a entrar, una carta que el motor mueve de lugar. La
+  // mano se quedaba desordenada sin que nadie lo notara.
+  //
+  // Ahora el guard real es `current === after`: si la mano ya esta como el
+  // criterio pide, no se emite estado y el ciclo se corta solo. No hace falta
+  // ninguna firma.
   bus.on('state:changed', () => {
     const round = engine.round;
-    if (!round || engine.run.status !== 'playing') {
-      lastHandSignature = '';
-      return;
-    }
+    if (!round || engine.run.status !== 'playing') return;
     if (stickySortMode === 'default') return;
-    // La firma es INDEPENDIENTE del orden (uids ordenados alfabeticamente): asi
-    // solo cambia cuando entra o sale una carta, no cuando el propio reorden
-    // mueve las mismas cartas — que dispararia el listener de nuevo.
-    const signature = round.hand.map((c) => c.uid).sort().join(',');
-    if (signature === lastHandSignature) return;
-    lastHandSignature = signature;
     const ordered = sortHand(round.hand, stickySortMode);
     const current = round.hand.map((c) => c.uid).join(',');
     const after = ordered.map((c) => c.uid).join(',');
-    // Si ya estaba ordenada, `reorderHand` no cambia nada y no se emite estado:
-    // sin el guard, esto seria un bucle infinito de cambios de estado.
     if (current === after) return;
     engine.reorderHand(ordered.map((c) => c.uid));
   });

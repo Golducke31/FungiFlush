@@ -99,9 +99,64 @@ test('un criterio que no cambia el orden se reporta como tal', () => {
   ];
   // 'value' ordena de mayor a menor: la de 9 ya esta primero.
   assert.equal(sortChangesOrder(hand, 'value'), false);
-  // 'substrate' agrupa por elemento: spore antes que decay -> ya esta asi.
-  // Pero 'default' nunca cambia nada por definicion.
+  // 'default' nunca cambia nada por definicion.
   assert.equal(sortChangesOrder(hand, 'default'), false);
+});
+
+/**
+ * CONTRATO del criterio rotulado "Sustrato".
+ *
+ * Este test es el que faltaba: el modo se llamaba 'substrate' y su etiqueta en
+ * la UI decia "Sustrato", pero el comparador agrupaba por ELEMENTO y nunca
+ * miraba `baseSubstrate`. El orden resultante (6, 2, 3, 5, 4) parecia roto al
+ * jugador. Lo que se afirma aca es lo que promete la etiqueta: el numero que se
+ * lee en la carta —el sustrato— queda en orden ascendente.
+ */
+test("'substrate' ordena por sustrato base ASCENDENTE, no por elemento", () => {
+  const hand = [
+    card({ element: 'crystal', family: 'agaricaceae', substrate: 6 }),
+    card({ element: 'spore', family: 'agaricaceae', substrate: 2 }),
+    card({ element: 'decay', family: 'agaricaceae', substrate: 3 }),
+    card({ element: 'poison', family: 'agaricaceae', substrate: 5 }),
+    card({ element: 'mycelium', family: 'agaricaceae', substrate: 4 }),
+  ];
+  const ordered = sortHand(hand, 'substrate').map((c) => c.def.baseSubstrate);
+  assert.deepEqual(ordered, [2, 3, 4, 5, 6], 'los sustratos salen de menor a mayor');
+});
+
+test("'substrate' usa el elemento y la familia solo como desempate", () => {
+  // Mismo sustrato: el elemento decide (orden de ELEMENT_ORDER: spore < decay),
+  // y dentro del mismo elemento, la familia.
+  const hand = [
+    card({ element: 'decay', family: 'agaricaceae', substrate: 4 }),
+    card({ element: 'spore', family: 'tricholomataceae', substrate: 4 }),
+    card({ element: 'spore', family: 'agaricaceae', substrate: 4 }),
+  ];
+  const ordered = sortHand(hand, 'substrate');
+  assert.deepEqual(
+    ordered.map((c) => c.def.element),
+    ['spore', 'spore', 'decay'],
+    'con el mismo sustrato, el elemento desempata',
+  );
+  assert.deepEqual(
+    ordered.slice(0, 2).map((c) => c.def.family),
+    ['agaricaceae', 'tricholomataceae'],
+    'dentro del mismo elemento, la familia desempata',
+  );
+});
+
+test("'family' desempata por sustrato base ascendente dentro de la familia", () => {
+  const hand = [
+    card({ element: 'decay', family: 'agaricaceae', substrate: 8 }),
+    card({ element: 'spore', family: 'agaricaceae', substrate: 2 }),
+    card({ element: 'crystal', family: 'boletaceae', substrate: 5 }),
+  ];
+  const ordered = sortHand(hand, 'family');
+  assert.deepEqual(
+    ordered.map((c) => c.def.baseSubstrate),
+    [2, 8, 5],
+    'la familia agrupa y el sustrato ordena dentro del grupo',
+  );
 });
 
 test('el auto-orden reaplicado tras un robo deja la mano ordenada', () => {
@@ -117,6 +172,13 @@ test('el auto-orden reaplicado tras un robo deja la mano ordenada', () => {
     reordered.map((c) => c.uid),
     sortHand([...hand].sort(() => 0), mode).map((c) => c.uid),
   );
-  // Y la carta nueva quedo ubicada, no al final por accidente.
-  assert.notEqual(reordered[reordered.length - 1]?.def.element, 'mycelium');
+  // Y el sustrato mas chico quedo primero, no la carta nueva por accidente.
+  assert.equal(reordered[0]?.def.baseSubstrate, 1);
+  // La secuencia quedo monotona ascendente.
+  for (let i = 1; i < reordered.length; i++) {
+    assert.ok(
+      (reordered[i - 1]?.def.baseSubstrate ?? 0) <= (reordered[i]?.def.baseSubstrate ?? 0),
+      'la secuencia de sustratos es ascendente',
+    );
+  }
 });

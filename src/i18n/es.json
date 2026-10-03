@@ -44,8 +44,10 @@
     "reward": "Recompensa",
     "boss": "Jefe",
     "cleared": "Superado",
-    "next": "Siguiente",
-    "start": "Comenzar Ciego",
+    "next": "Ahora",
+    "start": "Luchar",
+    "progress": "Ciego {current}/{total}",
+    "orderHint": "Los ciegos van en orden: superá este para llegar al siguiente.",
     "locked": "Se abre en el ante {ante}",
     "effects": "Efecto de ronda",
     "hands": "Manos",
@@ -61,7 +63,6 @@
     "sell": "Vender",
     "reroll": "Renovar",
     "leaveShop": "Salir de la Tienda",
-    "skipBlind": "Saltar Ciego",
     "selectCards": "Seleccioná hasta {count} cartas",
     "selected": "{count} seleccionadas",
     "selectionFull": "Ya tenés {count} cartas seleccionadas",
@@ -77,7 +78,7 @@
     "useDieCharge": "Faltan {count} manos"
   },
   "phase": {
-    "blind_select": "Elegí tu ciego",
+    "blind_select": "Próximo desafío",
     "playing": "Jugá tu mano",
     "scoring": "Puntuando...",
     "shop": "El Mercado del Micelio",
@@ -180,18 +181,7 @@
       "4": "Gran Colonia (+30 Sustrato)",
       "5": "Supercolonia (+60 Sustrato)"
     },
-    "diversity": "Diversidad (+25 Sustrato)",
-    "rarity": {
-      "2": "Par de Especies (+8 Sustrato, x1.1 Esporas)",
-      "3": "Trío de Especies (+20 Sustrato, x1.25 Esporas)",
-      "4": "Póker de Especies (+40 Sustrato, x1.4 Esporas)"
-    },
-    "straight": {
-      "3": "Escalera Menor (+12 Sustrato, x1.1 Esporas)",
-      "4": "Escalera Mayor (+28 Sustrato, x1.2 Esporas)",
-      "5": "Escalera Real (+55 Sustrato, x1.3 Esporas)"
-    },
-    "fullhouse": "Full House (+45 Sustrato, x1.6 Esporas)"
+    "diversity": "Diversidad (+25 Sustrato)"
   },
   "status": {
     "dormant": "Latente",
@@ -622,6 +612,7 @@
     "expansions": "Expansiones",
     "pass": "Pase de temporada",
     "settings": "Ajustes",
+    "guide": "Guía",
     "about": "Acerca de",
     "hint": "Tocá hasta 5 cartas para seleccionarlas y después jugá la mano.",
     "noSave": "No hay ninguna partida en curso",
@@ -1068,6 +1059,7 @@
   "guide": {
     "intro": "Construí manos de hongos para superar desafíos.",
     "intro2": "Llegá al objetivo antes de quedarte sin manos.",
+    "intro3": "Cada carta suma Sustrato y multiplica Esporas: el puntaje de la mano es Sustrato x Esporas.",
     "startTutorial": "Comenzar tutorial",
     "goalTitle": "OBJETIVO",
     "handsTitle": "MANOS",
@@ -1078,10 +1070,10 @@
     "selectedOne": "1 seleccionada",
     "selectedMany": "{count} seleccionadas",
     "sharedFamily": "Comparte Familia con otras cartas",
-    "tutorialStep1": "Elegí un desafío",
-    "tutorialStep2": "Seleccioná cartas",
-    "tutorialStep3": "Jugá la mano",
-    "tutorialStep4": "Usá los descartes",
+    "tutorialStep1": "Mirá el desafío y sus datos",
+    "tutorialStep2": "Seleccioná cartas para armar una mano",
+    "tutorialStep3": "Jugá la mano y sumá puntaje",
+    "tutorialStep4": "Usá descartes si la mano no sirve",
     "tutorialSelect": "Tocá hasta {count} cartas para formar una mano.",
     "tutorialPlay": "Pulsá Jugar Mano para puntuar lo que seleccionaste.",
     "tutorialDiscard": "Descartar consume 1 descarte, pero roba cartas nuevas. Usalo para buscar una combinación mejor.",
@@ -1097,7 +1089,29 @@
     "abilityTag": "HABILIDAD",
     "abilityActivated": "{name} activado",
     "substrateBonus": "Bonificación de Sustrato",
-    "firstBlindTitle": "Tu primer Ciego"
+    "firstBlindTitle": "Tu primer Ciego",
+    "title": "Guía",
+    "sectBasics": "Lo esencial",
+    "substrateTitle": "SUSTRATO",
+    "substrateDesc": "Lo que SUMA cada carta (y los bonus de la mano). Es la base del puntaje.",
+    "sporesTitle": "ESPORAS",
+    "sporesDesc": "Lo que MULTIPLICA. Una carta con x2 duplica todo el Sustrato de la mano.",
+    "multTitle": "MULTIPLICADOR",
+    "multDesc": "Combinar elementos y familias sube las Esporas. Dos Flores iguales: +25%. Cinco: x3.",
+    "sectCombos": "Combos (misma mano)",
+    "comboElementTitle": "FLORACIÓN",
+    "comboElementDesc": "2, 3, 4 o 5 cartas del MISMO elemento: sube muchísimo las Esporas.",
+    "comboFamilyTitle": "COLONIA",
+    "comboFamilyDesc": "3, 4 o 5 cartas de la MISMA familia: suma mucho Sustrato.",
+    "comboDiversityTitle": "DIVERSIDAD",
+    "comboDiversityDesc": "5 elementos distintos en la mano: +25 Sustrato.",
+    "sectBonus": "Bonus y estados",
+    "orderTitle": "BONUS DE ORDEN",
+    "orderDesc": "Ordenar bien la mano activa bonus extra: Escalera de Sustrato o Corona de Esporas.",
+    "statusTitle": "ESTADOS",
+    "statusDesc": "Algunas cartas aplican estados (veneno, eco...) que cambian la mano. Pasá el mouse por encima para leerlos.",
+    "sectGoal": "Cómo se gana",
+    "goalDesc": "Superá el Objetivo del Ciego antes de quedarte sin Manos. Cambiá de Ciego por orden."
   },
   "sort": {
     "title": "Ordenar",

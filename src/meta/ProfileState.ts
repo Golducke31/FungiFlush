@@ -10,7 +10,7 @@
  * la migracion sea una funcion pura testeable.
  */
 
-export const PROFILE_SAVE_VERSION = 1;
+export const PROFILE_SAVE_VERSION = 2;
 
 export type Language = 'en' | 'es';
 
@@ -157,6 +157,15 @@ export interface ProfileSave {
    * lectura para la pantalla de historial: nada del motor lo consulta.
    */
   history: RunHistoryEntry[];
+  /**
+   * El jugador ya vio la guia de inicio (v2).
+   *
+   * Antes el tutorial se ofrecia una vez POR RUN, en memoria: alguien que
+   * cerraba la app en el primer ciego lo volvia a ver en cada partida nueva, y
+   * quien queria repasarlo no podia. Persistirlo lo convierte en "una vez en la
+   * vida del perfil", y la guia queda ademas reabrible desde el menu.
+   */
+  seenTutorial: boolean;
 }
 
 /** Tope de entradas que se conservan en `history` (las mas viejas se descartan). */
@@ -212,5 +221,6 @@ export function defaultProfile(): ProfileSave {
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
     ascension: { highestUnlocked: 0, selected: 0 },
     history: [],
+    seenTutorial: false,
   };
 }

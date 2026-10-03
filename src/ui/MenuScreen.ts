@@ -46,6 +46,8 @@ export interface MenuCallbacks {
   onOpenCosmetics: () => void;
   /** Historial de partidas (R5). */
   onOpenHistory: () => void;
+  /** Guia de inicio reabrible (v2): explica combos, esporas, sustrato y bonus. */
+  onOpenGuide: () => void;
 }
 
 export interface MenuState {
@@ -231,6 +233,11 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   chips.appendChild(
     chip(t('menu.history'), 'history', callbacks.onOpenHistory, {
       mod: 'menu-ghost--history',
+    }),
+  );
+  chips.appendChild(
+    chip(t('menu.guide'), 'guide', callbacks.onOpenGuide, {
+      mod: 'menu-ghost--guide',
     }),
   );
   panel.appendChild(chips);

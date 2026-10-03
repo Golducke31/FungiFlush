@@ -245,6 +245,16 @@ export interface SceneCallbacks {
    * la cara al motor y volver a llamar a `releaseDie()` para animarla.
    */
   onDieThrown?: (impulse: DieImpulse) => void;
+  /**
+   * El jugador toco la carta que YA estaba centrada en el carrusel.
+   *
+   * Tocar una carta descentrada solo la gira (`focus` -> `onFocusChange`), pero
+   * tocar la que ya esta delante no cambiaba nada y el gesto se sentia muerto
+   * ("los selecciono y no hacen nada"). Ese caso es el que PIDE ACCION: el HUD
+   * lo usa para abrir el detalle de la carta, que es lo que el jugador espera.
+   * El render no sabe que hay al otro lado: solo avisa el indice tocado.
+   */
+  onCarouselActivate?: (index: number) => void;
 }
 
 /** Instantanea de una carta de la mano, para el panel de debug (F3) y los tests. */
@@ -1116,7 +1126,17 @@ export class SceneManager {
       clientY - rect.top,
       (v) => this.projectToScreen(v),
     );
-    if (index !== null) carousel.focus(index);
+    if (index === null) return;
+
+    // Tocar la carta que YA esta centrada no gira nada: `target` no cambia,
+    // `onFocusChange` no dispara y el gesto se sentia muerto ("los selecciono y
+    // no hacen nada"). Ese caso es el que ABRE el detalle, que es lo que el
+    // jugador espera al tocar la carta que tiene delante.
+    const alreadyCentered = index === carousel.focusedIndex;
+    carousel.focus(index);
+    // El pulso va SIEMPRE: es la respuesta visible al toque, centrada o no.
+    carousel.pulseFocused();
+    if (alreadyCentered) this.callbacks.onCarouselActivate?.(index);
   }
 
   private attachCarouselInput(): void {
@@ -2753,6 +2773,18 @@ export class SceneManager {
   carouselEntries(): readonly CarouselEntryView[] | null {
     if (!this.carouselActive || !this.carousel) return null;
     return this.carousel.currentEntries;
+  }
+
+  /**
+   * Centro en pantalla (px del canvas) de la carta ENFOCADA, o null.
+   *
+   * Es el punto exacto donde hay que tocar para pegarle a la carta del frente:
+   * a ojo NO es el centro del canvas (el encuadre del anillo baja la carta para
+   * dejar lugar al panel). Lo usan los tests para simular un toque real.
+   */
+  carouselFocusedScreenPoint(): { x: number; y: number } | null {
+    if (!this.carouselActive || !this.carousel) return null;
+    return this.carousel.focusedScreenPoint((v) => this.projectToScreen(v));
   }
 
   /** Resumen para el panel de debug. */

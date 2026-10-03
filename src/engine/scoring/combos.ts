@@ -5,22 +5,19 @@
  * todos los jugadores, y son la base del scoring. Viven en codigo (no en JSON)
  * porque cambian el balance global, no el contenido.
  *
- * Hay DOS familias de combos:
+ * Los combos son de IDENTIDAD micelial:
  *
- * 1. COLECCION (los de siempre): N cartas del mismo elemento (multiplicador de
- *    Esporas), N de la misma familia (Substrate plano) y 5 elementos distintos
- *    (bonus de diversidad).
+ *   - ELEMENTO: N cartas del mismo elemento -> multiplicador de Esporas
+ *     (Floracion Doble / Triple / Cuadruple / Eclosion Total).
+ *   - FAMILIA: N cartas de la misma familia -> Sustrato plano (Colonia).
+ *   - DIVERSIDAD: 5 elementos distintos en la misma mano -> Sustrato plano.
  *
- * 2. POKER (2026-10): la mano se lee tambien como una mano de poker, mapeando
- *    las propiedades de las cartas a las del naipe:
- *      - RAREZA  -> el "valor" de la carta (common < uncommon < ... < mythic).
- *        Un PAR / TRIO / POKER son 2/3/4 cartas del mismo valor.
- *      - SUSTRATO base -> el "palo" no, pero si el ORDEN: una ESCALERA es una
- *        secuencia de sustratos consecutivos, como 3-4-5.
- *      - ELEMENTO -> el palo: un "color" es N cartas del mismo elemento, que ya
- *        cubre `combo.element`; el FULL HOUSE es 3 de un elemento + 2 de otro.
- *    Se evaluan aparte y se SUMAN a los de coleccion, igual que en el poker una
- *    mano puede tener escalera y color a la vez.
+ * Se descarto el eje de POKER (2026-10 duro poco): par / trio / poker de
+ * especies por rareza, escalera por sustrato y full house. Le daba al juego un
+ * vocabulario de naipes que no es el suyo —un hongo no forma "full house"— y,
+ * como se SUMABA a los combos de elemento y familia, una mano corriente apilaba
+ * cuatro multiplicadores a la vez sin haber construido nada. FungiFlush se lee
+ * por ELEMENTO y FAMILIA, no por naipe.
  *
  * El mejor combo de cada eje se conserva (no se acumulan dos del mismo eje).
  */
@@ -60,31 +57,6 @@ const FAMILY_TIERS: readonly { cards: number; flat: number; key: string }[] = [
 /** Bonus por jugar 5 elementos distintos en la misma mano. */
 const DIVERSITY_BONUS = { flat: 25, key: 'combo.diversity' } as const;
 
-// ---------------------------------------------------------------------------
-// POKER — mapeo de las propiedades de las cartas al naipe
-// ---------------------------------------------------------------------------
-
-/** PAR / TRIO / POKER: 2/3/4 cartas del mismo valor (rareza). */
-const RARITY_TIERS: readonly { cards: number; flat: number; mult: number; key: string }[] = [
-  { cards: 4, flat: 40, mult: 1.4, key: 'combo.rarity.4' }, // poker
-  { cards: 3, flat: 20, mult: 1.25, key: 'combo.rarity.3' }, // trio
-  { cards: 2, flat: 8, mult: 1.1, key: 'combo.rarity.2' }, // par
-];
-
-/**
- * ESCALERA: N cartas con sustratos base CONSECUTIVOS (3-4-5), sin repetir.
- * Se mira el `baseSubstrate` como el "numero" de la carta. Para no castigar
- * valores grandes, se premia por LARGO de la corrida, no por su altura.
- */
-const STRAIGHT_TIERS: readonly { cards: number; flat: number; mult: number; key: string }[] = [
-  { cards: 5, flat: 55, mult: 1.3, key: 'combo.straight.5' },
-  { cards: 4, flat: 28, mult: 1.2, key: 'combo.straight.4' },
-  { cards: 3, flat: 12, mult: 1.1, key: 'combo.straight.3' },
-];
-
-/** FULL HOUSE: 3 cartas de un elemento + 2 de otro. Mano fuerte de poker. */
-const FULL_HOUSE = { flat: 45, mult: 1.6, key: 'combo.fullhouse' } as const;
-
 function groupBy<K extends string>(
   cards: readonly CardInstance[],
   key: (c: CardInstance) => K,
@@ -100,9 +72,11 @@ function groupBy<K extends string>(
 }
 
 /**
- * Detecta todos los combos de una mano.
- * Devuelve SOLO el mejor combo por elemento y por familia (no se acumulan
- * dos combos del mismo eje, para evitar explosiones de score).
+ * Detecta todos los combos de una mano: elemento, familia y diversidad.
+ *
+ * Devuelve SOLO el mejor combo por elemento y por familia (no se acumulan dos
+ * combos del mismo eje), para que armar la mano sea una decision legible y el
+ * techo de score no explote.
  */
 export function detectCombos(cards: readonly CardInstance[]): ComboResult[] {
   const results: ComboResult[] = [];
@@ -151,117 +125,9 @@ export function detectCombos(cards: readonly CardInstance[]): ComboResult[] {
     });
   }
 
-  // --- POKER: PAR / TRIO / POKER (misma rareza) ---
-  const byRarity = groupBy(cards, (c) => c.def.rarity);
-  for (const [rarity, group] of byRarity) {
-    const tier = RARITY_TIERS.find((t) => group.length >= t.cards);
-    if (!tier) continue;
-    results.push({
-      id: `rarity:${rarity}:${tier.cards}`,
-      nameKey: tier.key,
-      cardUids: group.slice(0, tier.cards).map((c) => c.uid),
-      flatSubstrate: tier.flat,
-      sporeMultiplier: tier.mult,
-    });
-  }
-
-  // --- POKER: ESCALERA (sustratos base consecutivos) ---
-  const straight = detectStraight(cards);
-  if (straight) results.push(straight);
-
-  // --- POKER: FULL HOUSE (3 de un elemento + 2 de otro) ---
-  const fullHouse = detectFullHouse(cards);
-  if (fullHouse) results.push(fullHouse);
-
   return results;
 }
 
-/**
- * Escalera: la corrida MAS LARGA de sustratos base consecutivos, sin repetir.
- * Devuelve `null` si no llega a 3 cartas (el minimo de una escalera jugable).
- */
-function detectStraight(cards: readonly CardInstance[]): ComboResult | null {
-  if (cards.length < 3) return null;
-
-  // Un mapa sustrato -> primera carta con ese sustrato. Sin repetidos: una
-  // escalera de poker no repite numero.
-  const bySubstrate = new Map<number, CardInstance>();
-  for (const card of cards) {
-    const value = card.def.baseSubstrate;
-    if (!bySubstrate.has(value)) bySubstrate.set(value, card);
-  }
-  if (bySubstrate.size < 3) return null;
-
-  const values = [...bySubstrate.keys()].sort((a, b) => a - b);
-
-  // Recorre buscando la corrida mas larga de valores consecutivos.
-  let bestStart = 0;
-  let bestLen = 1;
-  let runStart = 0;
-  for (let i = 1; i < values.length; i += 1) {
-    if (values[i] === (values[i - 1] ?? 0) + 1) {
-      const len = i - runStart + 1;
-      if (len > bestLen) {
-        bestLen = len;
-        bestStart = runStart;
-      }
-    } else {
-      runStart = i;
-    }
-  }
-
-  const tier = STRAIGHT_TIERS.find((t) => bestLen >= t.cards);
-  if (!tier) return null;
-
-  const runValues = values.slice(bestStart, bestStart + tier.cards);
-  const runCards = runValues
-    .map((v) => bySubstrate.get(v))
-    .filter((c): c is CardInstance => c !== undefined);
-
-  return {
-    id: `straight:${tier.cards}`,
-    nameKey: tier.key,
-    cardUids: runCards.map((c) => c.uid),
-    flatSubstrate: tier.flat,
-    sporeMultiplier: tier.mult,
-  };
-}
-
-/**
- * Full house: 3 cartas de un elemento + 2 de OTRO elemento (los elementos deben
- * ser distintos; un "trio + par" del mismo elemento ya lo cubre el combo de
- * elemento). Se elige el trio de mayor tamano y luego el par de mayor tamano.
- */
-function detectFullHouse(cards: readonly CardInstance[]): ComboResult | null {
-  if (cards.length < 5) return null;
-
-  const byElement = groupBy(cards, (c) => c.def.element);
-  // Solo elementos con al menos 3 cartas pueden ser el "trio".
-  const trios = [...byElement.entries()]
-    .filter(([element, group]) => element !== 'neutral' && group.length >= 3)
-    .sort((a, b) => b[1].length - a[1].length);
-  if (trios.length === 0) return null;
-
-  for (const [trioElement, trioGroup] of trios) {
-    // El par tiene que ser de OTRO elemento (un full house real mezcla palos).
-    const pair = [...byElement.entries()]
-      .filter(([element, group]) => element !== trioElement && element !== 'neutral' && group.length >= 2)
-      .sort((a, b) => b[1].length - a[1].length)[0];
-    if (!pair) continue;
-
-    const trioCards = trioGroup.slice(0, 3);
-    const pairCards = pair[1].slice(0, 2);
-    return {
-      id: `fullhouse:${trioElement}`,
-      nameKey: FULL_HOUSE.key,
-      cardUids: [...trioCards, ...pairCards].map((c) => c.uid),
-      flatSubstrate: FULL_HOUSE.flat,
-      sporeMultiplier: FULL_HOUSE.mult,
-    };
-  }
-
-  return null;
-}
 
 /** Resumen para tooltips: que elementos y familias hay en la mano. */
 export function handComposition(cards: readonly CardInstance[]): {

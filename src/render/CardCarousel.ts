@@ -78,8 +78,28 @@ interface Slot {
 const EASE = 11;
 /** Por debajo de este coseno el slot esta detras: se oculta. */
 const BACK_CULL = -0.28;
-/** Escala de la carta del fondo del arco visible. */
-const MIN_SCALE = 0.5;
+/**
+ * Escala de la carta del fondo del arco visible.
+ *
+ * Estaba en 0.5: solo la carta del frente llegaba a tamano completo y las de
+ * los costados se veian a la mitad, que es lo que se reporto como "los
+ * simbiontes se ven chicos". 0.68 mantiene la lectura de profundidad (el frente
+ * sigue siendo el mas grande) sin que las de al lado parezcan miniaturas.
+ *
+ * OJO: agrandar esto tambien agranda el ancho total del arco. Si se sube mas
+ * alla de ~0.75 hay que revisar `fitCarousel()` en SceneManager (la camara fija
+ * no se recalcula sola) o las puntas se salen de cuadro en 844x390.
+ */
+const MIN_SCALE = 0.68;
+/**
+ * Cuanto mas grande se dibuja la carta ENFOCADA respecto de su tamano de arco.
+ * Es la senal de "esta es la que estas mirando": sin esto, tocar una carta solo
+ * giraba el anillo y nada mas, y el jugador no sabia si su toque habia hecho
+ * algo (`onFocusChange` ni siquiera dispara si el foco no cambio).
+ */
+const FOCUS_SCALE_BOOST = 1.14;
+/** Duracion del pulso de seleccion, en segundos. */
+const PULSE_SECONDS = 0.34;
 
 export class CardCarousel {
   readonly group = new THREE.Group();
@@ -94,6 +114,8 @@ export class CardCarousel {
   private target = 0;
   private lastFocus = -1;
   private visible = false;
+  /** Amplitud del latido de seleccion: 1 al tocar, decae a 0. */
+  private pulse = 0;
 
   constructor(options: CarouselOptions) {
     this.options = {
@@ -257,6 +279,11 @@ export class CardCarousel {
     const half = this.options.halfSpan;
     const radius = this.options.radius;
 
+    // Indice que queda DELANTE: define el realce de escala y es lo que se
+    // reporta por `onFocusChange` si cambio respecto del frame anterior. Se
+    // calcula ANTES del lazo porque el lazo ya necesita saber quien es el foco.
+    const focus = this.wrap(base);
+
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slots[i];
       if (!slot) continue;
@@ -285,12 +312,26 @@ export class CardCarousel {
       slot.card.home.rz = 0;
       slot.card.home.arc = 0;
       slot.card.home.flip = 0;
-      // La profundidad se lee por escala: la del frente es la mas grande.
-      slot.card.setBaseScale(MIN_SCALE + (1 - MIN_SCALE) * depth * depth);
+
+      // Escala por PROFUNDIDAD (la del frente es la mas grande) mas el realce
+      // de la carta enfocada. Va por `setBaseScale`, que es el canal estructural
+      // del compositor (el mismo que usan jokers y cartas jugadas): escribir
+      // `group.scale` a mano lo pisaria el frame siguiente.
+      const isFocused = index === focus;
+      const focusedBoost = isFocused ? FOCUS_SCALE_BOOST : 1;
+      const scale = MIN_SCALE + (1 - MIN_SCALE) * depth * depth;
+      slot.card.setBaseScale(scale * focusedBoost);
+      // El SQUASH (`home.s*`) se reserva para el pulso: es aditivo sobre la
+      // escala base y no compite con ella.
+      const pulse = isFocused ? 1 + 0.06 * this.pulse : 1;
+      slot.card.home.sx = pulse;
+      slot.card.home.sy = pulse;
       slot.card.update(dt, time);
     }
 
-    const focus = this.wrap(base);
+    // El pulso decae en tiempo real y vuelve a 1: no se queda latiendo.
+    if (this.pulse > 0) this.pulse = Math.max(0, this.pulse - dt / PULSE_SECONDS);
+
     if (focus !== this.lastFocus) {
       this.lastFocus = focus;
       this.options.onFocusChange?.(focus);
@@ -298,25 +339,63 @@ export class CardCarousel {
   }
 
   /**
+   * Dispara el latido de seleccion sobre la carta enfocada.
+   *
+   * Es la respuesta VISIBLE al toque. La necesita sobre todo el caso de tocar
+   * la carta que YA estaba enfocada: ahi `target` no cambia, `onFocusChange` no
+   * dispara y sin este pulso el toque no produce ningun efecto perceptible.
+   */
+  pulseFocused(): void {
+    this.pulse = 1;
+  }
+
+  /**
    * Entrada cuyo centro en PANTALLA esta mas cerca del punto tocado.
    *
-   * Un carrusel es una fila: elegir por distancia en pantalla es mas simple y
-   * mucho mas tolerante que un raycast contra los meshes (que falla si el dedo
-   * cae entre dos cartas o sobre el halo). Usa la misma proyeccion que la UI.
+   * Un carrusel es una FILA horizontal, asi que la distancia se mide en X: el
+   * eje en el que las cartas se separan. Medir en euclideo (x^2 + y^2) hacia que
+   * un toque en el hueco ENTRE dos cartas o por debajo de su centro no eligiera
+   * nada, y el gesto se sintiera muerto. Con X, el toque cae siempre en la carta
+   * mas cercana de la fila.
+   *
+   * `maxDx` filtra el caso de tocar lejisimos del anillo (fuera del carrusel):
+   * sin el, cualquier toque en la pantalla moveria el foco.
+   *
+   * Usa la misma proyeccion que la UI (no un raycast): un raycast contra los
+   * meshes falla si el dedo cae entre dos cartas o sobre el halo.
    */
   pickNearest(
     x: number,
     y: number,
     project: (v: THREE.Vector3) => { x: number; y: number },
+    maxDx = 260,
   ): number | null {
     let best: { d: number; index: number } | null = null;
     for (const slot of this.slots) {
       if (!slot.card.group.visible) continue;
       const p = project(slot.card.worldPosition());
-      const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+      const dx = Math.abs(p.x - x);
+      if (dx > maxDx) continue;
+      // En empate de X (una carta detras de otra), gana la mas cercana en Y.
+      const d = dx * 1000 + Math.abs(p.y - y);
       if (!best || d < best.d) best = { d, index: slot.entryIndex };
     }
     return best ? best.index : null;
+  }
+
+  /**
+   * Centro en PANTALLA del slot que esta enfocado, en px del canvas, o null.
+   *
+   * Lo usan los tests (y el panel de debug): el carrusel proyecta sus cartas a
+   * mano y la carta del frente NO cae en el centro geometrico del canvas —el
+   * encuadre la baja para dejar lugar al panel—. Tocar "el centro" a ojo, por
+   * eso, agarra una carta VECINA. Esto devuelve el punto exacto que hay que
+   * tocar para pegarle a la carta enfocada.
+   */
+  focusedScreenPoint(project: (v: THREE.Vector3) => { x: number; y: number }): { x: number; y: number } | null {
+    const slot = this.slots.find((s) => s.card.group.visible && s.entryIndex === this.focusedIndex);
+    if (!slot) return null;
+    return project(slot.card.worldPosition());
   }
 
   dispose(): void {

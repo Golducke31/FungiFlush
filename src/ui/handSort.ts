@@ -17,6 +17,15 @@
  * que multiplica) y dentro del grupo sube primero las cartas CON habilidad, que
  * son las que pueden disparar una cadena. Se ofrece como AYUDA, no como
  * decision automatica: el jugador sigue eligiendo.
+ *
+ * Orden de cada criterio (lo que el jugador ve tiene que coincidir con esto):
+ *   family      -> Familia A-Z, desempate por Sustrato base.
+ *   substrate   -> Sustrato base de MENOR a MAYOR, desempate por elemento y
+ *                  familia. El sustrato es el numero que se lee en la carta.
+ *   value       -> Valor en bruto de MAYOR a MENOR (sustrato + esporas + nivel).
+ *   ability     -> Con habilidad primero; despues por valor.
+ *   recommended -> Elemento (agrupa lo que multiplica), despues habilidad y
+ *                  valor. Es el unico criterio "de ayuda", no un campo de carta.
  */
 
 import type { CardInstance } from '@engine/index';
@@ -96,16 +105,22 @@ export function sortHand(hand: readonly CardInstance[], mode: SortMode): CardIns
 function comparePrimary(a: CardInstance, b: CardInstance, mode: SortMode): number {
   switch (mode) {
     case 'family':
-      // Agrupa por Familia y, dentro del grupo, por Sustrato para que las
-      // combinaciones del mismo sustrato queden juntas.
+      // Agrupa por Familia y, dentro del grupo, por sustrato base ascendente
+      // para que las combinaciones del mismo sustrato queden juntas.
       return (
         a.def.family.localeCompare(b.def.family) ||
+        a.def.baseSubstrate - b.def.baseSubstrate ||
         elementRank(a.def.element) - elementRank(b.def.element)
       );
 
     case 'substrate':
-      // Agrupa por Sustrato/elemento, que es lo que multiplica el puntaje.
+      // De MENOR a MAYOR sustrato base. Antes este caso comparaba por
+      // `elementRank` y el sustrato numerico no entraba nunca en la cuenta: la
+      // etiqueta decia "Sustrato" y el orden real era por elemento, asi que la
+      // mano parecia desordenada (6, 2, 3, 5, 4). El elemento y la familia
+      // quedan como desempate, no como criterio.
       return (
+        a.def.baseSubstrate - b.def.baseSubstrate ||
         elementRank(a.def.element) - elementRank(b.def.element) ||
         a.def.family.localeCompare(b.def.family)
       );
@@ -119,7 +134,7 @@ function comparePrimary(a: CardInstance, b: CardInstance, mode: SortMode): numbe
       return Number(hasAbility(b)) - Number(hasAbility(a)) || rawValue(b) - rawValue(a);
 
     case 'recommended':
-      // Sustrato primero (lo que multiplica), luego las que tienen habilidad.
+      // Elemento primero (agrupa lo que multiplica), luego habilidad y valor.
       return (
         elementRank(a.def.element) - elementRank(b.def.element) ||
         Number(hasAbility(b)) - Number(hasAbility(a)) ||

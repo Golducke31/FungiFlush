@@ -63,10 +63,9 @@ export interface HudCallbacks {
   /** El jugador toco la ficha de un joker: la carta late en la mesa. */
   onFocusJoker: (uid: string) => void;
   onLeaveShop: () => void;
-  onChooseBlind: (blindId: string) => void;
   /**
-   * Arranca el ciego en curso del ante. Reemplaza a `onChooseBlind`: ya no hay
-   * eleccion, cada ante juega sus 3 ciegos en orden.
+   * Arranca el ciego en curso del ante. Los 3 ciegos se juegan EN ORDEN, asi
+   * que no existe eleccion: este es el unico camino para empezar un ciego.
    */
   onStartBlind: () => void;
   onRestart: () => void;
@@ -87,6 +86,8 @@ export interface HudCallbacks {
   onOpenPass: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
+  /** Guia de inicio reabrible desde el menu (v2). */
+  onOpenGuide: () => void;
   // --- Retencion: recompensa diaria y logros ---
   onOpenDaily: () => void;
   onClaimDaily: () => void;
@@ -258,8 +259,8 @@ export class HUD {
    * repetirlo cada ante lo vuelve ruido y deja de leerse.
    */
   private blindExplained = false;
-  /** El tutorial de la primera partida ya se ofrecio (P0.3). */
-  private tutorialOffered = false;
+  /** La guia de inicio ya se mostro en esta sesion (P0.3 / v2). */
+  private tutorialShown = false;
   /** Estado del mazo de la ultima transicion (P1.5), para la linea post-ciego. */
   private lastDeckDelta: { conserved: number; gained: number; destroyed: number } | null = null;
   /** Desglose de la ultima mano jugada (P0.4), para mostrarlo al cerrar el ciego. */
@@ -1755,6 +1756,7 @@ export class HUD {
         onOpenAchievements: () => this.callbacks.onOpenAchievements(),
         onOpenCosmetics: () => this.callbacks.onOpenCosmetics(),
         onOpenHistory: () => this.showHistory(),
+        onOpenGuide: () => this.callbacks.onOpenGuide(),
       },
     );
     this.openOverlay(panel);
@@ -1769,21 +1771,28 @@ export class HUD {
   }
 
   /**
-   * P0.3 — Tutorial jugable de 30 segundos.
+   * Guia de inicio (P0.3, ampliada v2).
    *
-   * El plan es explicito: "No conviene comenzar con una explicacion extensa. La
-   * primera partida debe ensenar mediante acciones guiadas". Este panel es el
-   * PRIMER paso: presenta el objetivo, las manos, los descartes y la recompensa
-   * del primer ciego, y deja elegir. Los pasos siguientes los enseña la propia
-   * partida (la guia de seleccion sobre la mano, el aviso de la barra y el
-   * boton de orden), no mas pantallas.
+   * Presenta el objetivo, los recursos de la ronda y —lo que faltaba— COMO se
+   * puntua: Sustrato (suma) x Esporas (multiplica), los combos por elemento y
+   * familia, el bonus de orden y los estados. Antes el tutorial solo decia
+   * "elegi, selecciona, juga" y el jugador llegaba al primer ciego sin entender
+   * por que una mano valia 40 y otra 400.
    *
-   * Se muestra UNA vez por run (`tutorialOffered`), y solo cuando la run
-   * empieza de cero. El boton lleva al flujo normal de seleccion de ciego.
+   * Dos formas de abrirla:
+   *   - Automatica UNA vez por perfil (`seenTutorial`), sobre el panel de
+   *     seleccion de ciego que ya esta dibujado debajo.
+   *   - `force = true` desde el menu ("Ver guia"), las veces que quiera.
+   *
+   * Al cerrarla desde el arranque de la run se redibuja el panel del ciego que
+   * quedaba tapado; al reabrirla desde el menu se vuelve al menu.
    */
-  showTutorial(): void {
-    if (this.tutorialOffered) return;
-    this.tutorialOffered = true;
+  showTutorial(force = false): void {
+    // El guard es solo para el aviso AUTOMATICO: reabrir a mano (`force`) debe
+    // funcionar siempre, que es justamente para lo que sirve el boton del menu.
+    if (this.tutorialShown && !force) return;
+    this.tutorialShown = true;
+    const fromRun = !force && this.engine.run?.status === 'blind_select';
 
     const panel = document.createElement('div');
     panel.className = 'panel is-tutorial';
@@ -1791,7 +1800,7 @@ export class HUD {
 
     const title = document.createElement('h2');
     title.className = 'panel-title';
-    title.textContent = t('guide.firstBlindTitle');
+    title.textContent = force ? t('guide.title') : t('guide.firstBlindTitle');
 
     const intro = document.createElement('p');
     intro.className = 'panel-subtitle';
@@ -1800,6 +1809,10 @@ export class HUD {
     const intro2 = document.createElement('p');
     intro2.className = 'tutorial-line';
     intro2.textContent = t('guide.intro2');
+
+    const intro3 = document.createElement('p');
+    intro3.className = 'tutorial-line is-key';
+    intro3.textContent = t('guide.intro3');
 
     // Los cuatro datos del primer desafio, con la misma jerarquia que el plan
     // dibuja: objetivo / manos / descartes / recompensa.
@@ -1839,27 +1852,89 @@ export class HUD {
       steps.appendChild(item);
     }
 
+    // --- Secciones explicativas (v2) ---
+    // Cada seccion es un titulo + filas. Las filas forman un mini glosario que
+    // se lee de un vistazo, sin depender de que el jugador este mirando la
+    // partida: es la explicacion de bonus, combos, multiplicadores, esporas y
+    // sustrato que faltaba.
+    const section = (heading: string, rows: Array<[string, string]>): HTMLElement => {
+      const box = document.createElement('section');
+      box.className = 'tutorial-section';
+      const h = document.createElement('h3');
+      h.className = 'tutorial-section-title';
+      h.textContent = t(`guide.${heading}`);
+      box.appendChild(h);
+      for (const [termKey, descKey] of rows) {
+        const row = document.createElement('div');
+        row.className = 'tutorial-row';
+        const term = document.createElement('span');
+        term.className = 'tutorial-term';
+        term.textContent = t(`guide.${termKey}`);
+        const desc = document.createElement('span');
+        desc.className = 'tutorial-desc';
+        desc.textContent = t(`guide.${descKey}`);
+        row.append(term, desc);
+        box.appendChild(row);
+      }
+      return box;
+    };
+
+    const sections = document.createElement('div');
+    sections.className = 'tutorial-sections';
+    sections.append(
+      section('sectBasics', [
+        ['substrateTitle', 'substrateDesc'],
+        ['sporesTitle', 'sporesDesc'],
+        ['multTitle', 'multDesc'],
+      ]),
+      section('sectCombos', [
+        ['comboElementTitle', 'comboElementDesc'],
+        ['comboFamilyTitle', 'comboFamilyDesc'],
+        ['comboDiversityTitle', 'comboDiversityDesc'],
+      ]),
+      section('sectBonus', [
+        ['orderTitle', 'orderDesc'],
+        ['statusTitle', 'statusDesc'],
+      ]),
+      section('sectGoal', [['goalDesc', 'goalDesc']]),
+    );
+
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
     const close = document.createElement('button');
     close.className = 'btn is-play';
     close.dataset['act'] = 'tutorial-close';
-    close.textContent = t('action.play');
+    close.textContent = fromRun ? t('action.play') : t('ui.close');
     close.addEventListener('click', () => {
-      // `lastStatus = null` fuerza a redibujar el panel del estado actual
-      // (blind_select), que es el que estaba tapado por el tutorial.
-      this.lastStatus = null;
-      this.closePanel();
+      if (fromRun) {
+        // `lastStatus = null` fuerza a redibujar el panel del estado actual
+        // (blind_select), que es el que estaba tapado por el tutorial.
+        this.lastStatus = null;
+        this.closePanel();
+      } else {
+        this.showMenu();
+      }
     });
     actions.appendChild(close);
 
-    panel.append(title, intro, intro2, stats, steps, actions);
+    // Cuerpo scrolleable: el encabezado y la accion quedan fijos. Sin esto, en
+    // landscape movil el glosario empujaba "Jugar" fuera de pantalla.
+    const body = document.createElement('div');
+    body.className = 'tutorial-body';
+    body.append(intro, intro2, intro3, stats, steps, sections);
+
+    panel.append(title, body, actions);
     this.openOverlay(panel);
   }
 
-  /** Marca el tutorial como ya ofrecido (el controlador lo llama al arrancar la run). */
-  markTutorialOffered(): void {
-    this.tutorialOffered = true;
+  /** Marca la guia como vista (el controlador la persiste en el perfil). */
+  markTutorialSeen(): void {
+    this.tutorialShown = true;
+  }
+
+  /** `true` si la guia ya se mostro en esta sesion. */
+  get tutorialSeen(): boolean {
+    return this.tutorialShown;
   }
 
   /** Abre el panel de seleccion de ascension. */
@@ -2348,9 +2423,26 @@ export class HUD {
     title.className = 'panel-title';
     title.textContent = t('phase.blind_select');
 
+    // Los 3 ciegos de cada ante se juegan EN ORDEN y no se eligen. El progreso
+    // `n/3` es lo que reemplaza a la vieja eleccion: dice donde estas parado sin
+    // sugerir que haya una decision (antes decia "Elegi tu ciego" y mentia).
+    const blindCount = this.engine.availableBlinds().length;
+    const blindPos = Math.min(run.blindIndex + 1, blindCount);
+
     const subtitle = document.createElement('p');
     subtitle.className = 'panel-subtitle';
-    subtitle.textContent = `${t('hud.ante')} ${run.ante} · ${t('hud.money')} ${formatNumber(run.money)}`;
+    subtitle.textContent = `${t('hud.ante')} ${run.ante} · ${t('blindCard.progress', { current: blindPos, total: blindCount })} · ${t('hud.money')} ${formatNumber(run.money)}`;
+
+    const orderHint = document.createElement('p');
+    orderHint.className = 'blind-help is-order';
+    orderHint.dataset['act'] = 'blind-order-hint';
+    const orderTag = document.createElement('span');
+    orderTag.className = 'blind-help-tag';
+    orderTag.textContent = t('hud.blind');
+    const orderText = document.createElement('span');
+    orderText.className = 'blind-help-text';
+    orderText.textContent = t('blindCard.orderHint');
+    orderHint.append(orderTag, orderText);
 
     // P1.6 — Explicar "Ciego" la PRIMERA vez que aparece.
     //
@@ -2606,7 +2698,7 @@ export class HUD {
 
     actions.append(deck, newRun, langBtn);
 
-    panel.append(title, subtitle);
+    panel.append(title, subtitle, orderHint);
     if (blindHelp) panel.appendChild(blindHelp);
     if (interludeNotice) panel.appendChild(interludeNotice);
     panel.append(grid, actions);

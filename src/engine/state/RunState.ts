@@ -40,7 +40,11 @@ export interface RunState {
   seed: number;
   /** Ante actual (1..8). */
   ante: number;
-  /** 0 = small blind, 1 = big blind, 2 = boss blind. */
+  /**
+   * Posicion dentro de la ruta de ciegos del ante (0, 1, 2). Los 3 se juegan
+   * EN ORDEN y no se eligen: 0 es el primero, 1 el segundo y 2 el jefe. Al
+   * limpiar el ante vuelve a 0.
+   */
   blindIndex: number;
   money: number;
   jokers: JokerInstance[];

@@ -50,8 +50,6 @@ const DYNAMIC_FAMILIES: Array<[string, string[]]> = [
   ['phase', ['menu', 'blind_select', 'playing', 'scoring', 'reward', 'shop', 'game_over', 'victory']],
   ['combo.element', ['2', '3', '4', '5']],
   ['combo.family', ['3', '4', '5']],
-  ['combo.rarity', ['2', '3', '4']],
-  ['combo.straight', ['3', '4', '5']],
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

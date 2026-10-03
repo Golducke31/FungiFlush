@@ -124,6 +124,25 @@ test('R5: el historial sobrevive la migracion y un perfil viejo arranca vacio', 
   assert.deepEqual(junk.history, []);
 });
 
+test('v2: la guia vista sobrevive la migracion y un perfil v1 la muestra de nuevo', () => {
+  // Misma trampa de merge que `history`: sin la linea explicita en el return,
+  // `seenTutorial` se descartaria en silencio al reconstruir el perfil.
+  const seen = migrateProfileSave({ version: 2, seenTutorial: true });
+  assert.equal(seen.seenTutorial, true);
+
+  // Un perfil v1 (sin el campo) cae a `false`: se le ofrece la guia UNA vez mas.
+  // Darlo por visto seria peor: nunca volveria a verla.
+  const fromV1 = migrateProfileSave({ version: 1, stats: { runs: 3 } });
+  assert.equal(fromV1.seenTutorial, false);
+  // El resto del perfil v1 no se pierde en el camino.
+  assert.equal(fromV1.stats.runs, 3);
+  assert.equal(fromV1.version, PROFILE_SAVE_VERSION);
+
+  // Basura en el campo tampoco rompe: solo `true` cuenta como visto.
+  const junk = migrateProfileSave({ version: 2, seenTutorial: 'si' });
+  assert.equal(junk.seenTutorial, false);
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);

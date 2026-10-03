@@ -44,8 +44,10 @@
     "reward": "Reward",
     "boss": "Boss",
     "cleared": "Cleared",
-    "next": "Next",
-    "start": "Start Blind",
+    "next": "Now",
+    "start": "Fight",
+    "progress": "Blind {current}/{total}",
+    "orderHint": "Blinds go in order: beat this one to reach the next.",
     "locked": "Opens at ante {ante}",
     "effects": "Round effect",
     "hands": "Hands",
@@ -61,7 +63,6 @@
     "sell": "Sell",
     "reroll": "Reroll",
     "leaveShop": "Leave Shop",
-    "skipBlind": "Skip Blind",
     "selectCards": "Select up to {count} cards",
     "selected": "{count} selected",
     "selectionFull": "You already have {count} cards selected",
@@ -77,7 +78,7 @@
     "useDieCharge": "{count} hands left"
   },
   "phase": {
-    "blind_select": "Choose your blind",
+    "blind_select": "Next challenge",
     "playing": "Play your hand",
     "scoring": "Scoring...",
     "shop": "The Mycelium Market",
@@ -180,18 +181,7 @@
       "4": "Great Colony (+30 Substrate)",
       "5": "Supercolony (+60 Substrate)"
     },
-    "diversity": "Diversity (+25 Substrate)",
-  "rarity": {
-    "2": "Species Pair (+8 Substrate, x1.1 Spores)",
-    "3": "Species Trio (+20 Substrate, x1.25 Spores)",
-    "4": "Species Poker (+40 Substrate, x1.4 Spores)"
-  },
-  "straight": {
-    "3": "Minor Straight (+12 Substrate, x1.1 Spores)",
-    "4": "Major Straight (+28 Substrate, x1.2 Spores)",
-    "5": "Royal Straight (+55 Substrate, x1.3 Spores)"
-  },
-  "fullhouse": "Full House (+45 Substrate, x1.6 Spores)"
+    "diversity": "Diversity (+25 Substrate)"
   },
   "status": {
     "dormant": "Dormant",
@@ -622,6 +612,7 @@
     "expansions": "Expansions",
     "pass": "Season Pass",
     "settings": "Settings",
+    "guide": "Guide",
     "about": "About",
     "hint": "Tap to select up to 5 cards, then play the hand.",
     "noSave": "No run in progress",
@@ -1068,6 +1059,7 @@
   "guide": {
     "intro": "Build mushroom hands to overcome challenges.",
     "intro2": "Reach the goal before you run out of hands.",
+    "intro3": "Each card adds Substrate and multiplies Spores: a hand's score is Substrate x Spores.",
     "startTutorial": "Start tutorial",
     "goalTitle": "GOAL",
     "handsTitle": "HANDS",
@@ -1078,10 +1070,10 @@
     "selectedOne": "1 selected",
     "selectedMany": "{count} selected",
     "sharedFamily": "Shares a Family with other cards",
-    "tutorialStep1": "Pick a challenge",
-    "tutorialStep2": "Select cards",
-    "tutorialStep3": "Play the hand",
-    "tutorialStep4": "Use your discards",
+    "tutorialStep1": "Check the challenge and its stats",
+    "tutorialStep2": "Select cards to build a hand",
+    "tutorialStep3": "Play the hand to score",
+    "tutorialStep4": "Use discards if the hand is bad",
     "tutorialSelect": "Tap up to {count} cards to build a hand.",
     "tutorialPlay": "Press Play Hand to score what you selected.",
     "tutorialDiscard": "Discarding spends 1 discard but draws new cards. Use it to hunt a better combo.",
@@ -1097,7 +1089,29 @@
     "abilityTag": "ABILITY",
     "abilityActivated": "{name} activated",
     "substrateBonus": "Substrate bonus",
-    "firstBlindTitle": "Your first Blind"
+    "firstBlindTitle": "Your first Blind",
+    "title": "Guide",
+    "sectBasics": "The basics",
+    "substrateTitle": "SUBSTRATE",
+    "substrateDesc": "What each card ADDS (plus hand bonuses). It's the base of your score.",
+    "sporesTitle": "SPORES",
+    "sporesDesc": "What MULTIPLIES. A card with x2 doubles the whole hand's Substrate.",
+    "multTitle": "MULTIPLIER",
+    "multDesc": "Matching elements and families raise Spores. Two of the same Bloom: +25%. Five: x3.",
+    "sectCombos": "Combos (same hand)",
+    "comboElementTitle": "BLOOM",
+    "comboElementDesc": "2, 3, 4 or 5 cards of the SAME element: raises Spores massively.",
+    "comboFamilyTitle": "COLONY",
+    "comboFamilyDesc": "3, 4 or 5 cards of the SAME family: adds a lot of Substrate.",
+    "comboDiversityTitle": "DIVERSITY",
+    "comboDiversityDesc": "5 different elements in the hand: +25 Substrate.",
+    "sectBonus": "Bonuses and statuses",
+    "orderTitle": "ORDER BONUS",
+    "orderDesc": "Ordering the hand well triggers extra bonuses: Substrate Ladder or Spore Crown.",
+    "statusTitle": "STATUSES",
+    "statusDesc": "Some cards apply statuses (poison, echo...) that change the hand. Hover over them to read.",
+    "sectGoal": "How to win",
+    "goalDesc": "Beat the Blind's Goal before you run out of Hands. Blinds come in a fixed order."
   },
   "sort": {
     "title": "Sort",

@@ -386,17 +386,32 @@ const tutorialStep = await page.evaluate(() => {
     hasClose: Boolean(panel?.querySelector('[data-act="tutorial-close"]')),
     steps: document.querySelectorAll('.tutorial-steps li').length,
     stats: document.querySelectorAll('.tutorial-stat').length,
+    // La guia v2 explica Sustrato/Esporas/Combos: se comprueba que las
+    // secciones existen y que el cuerpo scrollea (no que la accion quede
+    // visible de entrada: en landscape el glosario es largo a proposito).
+    sections: document.querySelectorAll('.tutorial-section').length,
+    rows: document.querySelectorAll('.tutorial-row').length,
+    hasBody: Boolean(panel?.querySelector('.tutorial-body')),
   };
 });
 console.log('\n--- Tutorial (P0.3) ---');
 console.log(JSON.stringify(tutorialStep, null, 2));
 
 if (tutorialStep.shown) {
-  const closeBox = await page.locator('[data-act="tutorial-close"]').boundingBox();
-  if (closeBox) {
+  // La accion vive al pie del panel. En landscape movil (844x390) el glosario de
+  // la guia es largo: hay que desplazar el panel como haria el jugador, porque
+  // `page.mouse.click` a una Y bajo el pliegue NO hace scroll por si solo.
+  const closeBtn = page.locator('[data-act="tutorial-close"]');
+  await closeBtn.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  const closeBox = await closeBtn.boundingBox();
+  // `boundingBox` devuelve coordenadas aunque el boton este fuera del viewport:
+  // se valida contra el alto real antes de tocar, o el click se pierde.
+  const vh = await page.evaluate(() => window.innerHeight);
+  if (closeBox && closeBox.y + closeBox.height / 2 <= vh) {
     await page.mouse.click(closeBox.x + closeBox.width / 2, closeBox.y + closeBox.height / 2);
   } else {
-    await page.evaluate(() => document.querySelector('[data-act="tutorial-close"]')?.click());
+    await closeBtn.click();
   }
   await page.waitForTimeout(900);
 }
@@ -1331,6 +1346,59 @@ console.log('\n--- Cultivo: mejorar ---');
 console.log(JSON.stringify(upgradeStep, null, 2));
 await page.screenshot({ path: join(shotsDir, '10-upgrade.png') });
 
+// Tocar la carta CENTRADA del anillo tiene que abrir su detalle. Antes el gesto
+// moria en silencio (el foco no cambia -> `onFocusChange` no dispara). El
+// carrusel del mazo gira con el foco en una carta NO primera, asi que tocar el
+// centro cambia el detalle a la entrada enfocada; se verifica contra el estado
+// del carrusel, no contra un nombre fijo.
+const carouselTap = await page.evaluate(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const deckPanel = document.querySelector('.panel.is-deck');
+  if (!deckPanel) return { skipped: 'no hay mazo abierto' };
+  const scene = window.__fungiflush.scene;
+  const car = scene?.carousel ?? null;
+  if (!car) return { skipped: 'no hay carrusel' };
+
+  // Se gira a una carta que NO sea la primera: asi "tocar el centro" tiene algo
+  // que abrir y el resultado no coincide con el foco inicial por casualidad.
+  const target = Math.min(5, (car.count ?? 2) - 1);
+  car.focusAbs(target);
+  for (let i = 0; i < 40; i++) {
+    await wait(100);
+    if (document.querySelector('.panel.is-deck [data-act="upgrade"]')) break;
+  }
+  const focusedUid = car.currentEntries?.[car.focusedIndex]?.uid ?? null;
+
+  // El punto a tocar es el centro PROYECTADO de la carta enfocada, no el centro
+  // del canvas: el encuadre del anillo baja la carta para dejar lugar al panel,
+  // asi que tocar el medio geometrico agarra una vecina.
+  const rect = scene.renderer.domElement.getBoundingClientRect();
+  const pt = scene.carouselFocusedScreenPoint();
+  if (!pt) return { skipped: 'sin punto proyectado' };
+  const cx = rect.left + pt.x;
+  const cy = rect.top + pt.y;
+  const el = scene.renderer.domElement;
+  const opts = { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse', clientX: cx, clientY: cy };
+  el.dispatchEvent(new PointerEvent('pointerdown', opts));
+  el.dispatchEvent(new PointerEvent('pointerup', opts));
+  await wait(400);
+
+  const detail = document.querySelector('.panel.is-deck .carousel-detail');
+  const shownName = detail?.querySelector('.carousel-detail-name')?.textContent?.trim() ?? null;
+  const entryUid = car.currentEntries?.[car.focusedIndex]?.uid ?? null;
+  return {
+    focusedUid,
+    entryUid,
+    shownName,
+    focus: car.focusedIndex,
+    // El detalle sigue a la carta enfocada: tocar el centro no rompe nada.
+    detailPresent: Boolean(detail),
+    matchesFocus: Boolean(entryUid && focusedUid && entryUid === focusedUid),
+  };
+});
+console.log('\n--- Carrusel: tocar la carta centrada abre el detalle ---');
+console.log(JSON.stringify(carouselTap, null, 2));
+
 const evolveStep = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const engine = window.__fungiflush.engine;
@@ -1594,6 +1662,9 @@ const ok =
   chk('upgradeStep?.statsShown === true', upgradeStep?.statsShown === true) &&
   chk('upgradeStep?.statsChanged === true', upgradeStep?.statsChanged === true) &&
   chk('upgradeStep?.focusKept === true', upgradeStep?.focusKept === true) &&
+  // Tocar la carta CENTRADA del anillo abre su detalle (antes el gesto moria).
+  chk('carouselTap?.detailPresent === true', carouselTap?.detailPresent === true) &&
+  chk('carouselTap?.matchesFocus === true', carouselTap?.matchesFocus === true) &&
   chk('evolveStep?.enabled === true', evolveStep?.enabled === true) &&
   chk("evolveStep?.defAfter === 'spore_giant_puffball", evolveStep?.defAfter === 'spore_giant_puffball') &&
   chk('evolveStep?.uidPreserved === true', evolveStep?.uidPreserved === true) &&
@@ -1669,6 +1740,10 @@ const ok =
   chk('tutorialStep?.hasClose === true', tutorialStep?.hasClose === true) &&
   chk('tutorialStep?.steps === 4', tutorialStep?.steps === 4) &&
   chk('tutorialStep?.stats === 4', tutorialStep?.stats === 4) &&
+  // Guia v2: glosario de Sustrato/Esporas/Combos + Bonus, con cuerpo scrolleable.
+  chk('tutorialStep?.sections === 4', tutorialStep?.sections === 4) &&
+  chk('(tutorialStep?.rows ?? 0) >= 8', (tutorialStep?.rows ?? 0) >= 8) &&
+  chk('tutorialStep?.hasBody === true', tutorialStep?.hasBody === true) &&
   chk('afterStart?.tutorialDismissed === true', afterStart?.tutorialDismissed === true) &&
   chk('afterStart?.blindSelectVisible === true', afterStart?.blindSelectVisible === true) &&
   chk('afterStart?.hudHidden === false', afterStart?.hudHidden === false) &&

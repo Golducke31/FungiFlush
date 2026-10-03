@@ -26,7 +26,9 @@ export const RUN_MIGRATIONS: Record<number, Migration> = {
   1: migrateRunV1toV2,
 };
 
-export const PROFILE_MIGRATIONS: Record<number, Migration> = {};
+export const PROFILE_MIGRATIONS: Record<number, Migration> = {
+  1: migrateProfileV1toV2,
+};
 
 export function migrateChain(
   data: UnknownRecord,
@@ -87,6 +89,23 @@ export function migrateRunV1toV2(input: UnknownRecord): UnknownRecord {
     consumedEffects: Array.isArray(input['consumedEffects']) ? input['consumedEffects'] : [],
     contentHash: input['contentHash'] ?? null,
     packIds: Array.isArray(input['packIds']) && input['packIds'].length > 0 ? input['packIds'] : ['base'],
+  };
+}
+
+/**
+ * Perfil: v1 -> v2
+ *
+ * v2 agrega `seenTutorial` (la guia de inicio se muestra una vez por perfil, no
+ * una vez por run). Default `false` a proposito: un perfil v1 es de alguien que
+ * jugo ANTES de que la guia nueva existiera o que nunca llego a verla, y
+ * mostrarle la guia una vez mas es inofensivo; darlo por visto y no mostrarla
+ * nunca seria peor. El jugador la cierra en un toque.
+ */
+export function migrateProfileV1toV2(input: UnknownRecord): UnknownRecord {
+  return {
+    ...input,
+    version: 2,
+    seenTutorial: input['seenTutorial'] === true,
   };
 }
 
@@ -161,6 +180,10 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     ? (migrated['history'] as ProfileSave['history'])
     : [];
 
+  // Guia de inicio (v2): booleano ADITIVO. El `return` de abajo es explicito,
+  // asi que sin esta linea se perderia igual que `history`.
+  const seenTutorial = migrated['seenTutorial'] === true;
+
   return {
     version: CURRENT_PROFILE_VERSION,
     updatedAt: typeof migrated['updatedAt'] === 'string' ? migrated['updatedAt'] : fallback.updatedAt,
@@ -177,6 +200,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     board,
     ascension,
     history,
+    seenTutorial,
   };
 }
 
