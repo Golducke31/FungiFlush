@@ -47,6 +47,11 @@
     "next": "Ahora",
     "start": "Luchar",
     "progress": "Ciego {current}/{total}",
+    "upNextTitle": "Próximo Desafío",
+    "singleHelp": "Superá este desafío para desbloquear el siguiente.",
+    "effect": "Efecto",
+    "details": "Detalles",
+    "detailsTitle": "Detalles de la partida",
     "orderHint": "Los ciegos van en orden: superá este para llegar al siguiente.",
     "locked": "Se abre en el ante {ante}",
     "effects": "Efecto de ronda",
@@ -100,19 +105,19 @@
     "cardsDestroyed": "Cartas destruidas"
   },
   "shop": {
-  "title": "El Mercado del Micelio",
-  "empty": "Todo vendido. No queda nada en la estantería.",
-  "rerollCost": "Renovar ({cost})",
-  "sold": "VENDIDO",
-  "voucher": "Mejora",
-  "tabBuy": "Comprar",
-  "tabSell": "Vender",
-  "sellTitle": "Vendé lo que ya no te sirve",
-  "sellEmpty": "No tenés simbiontes para vender.",
-  "sellHint": "Vender te devuelve Fungis y libera una ranura.",
-  "sellAction": "Vender por {value}",
-  "sellConfirm": "¿Seguro? +{value}",
-  "sellDone": "Vendiste {name} por {value}",
+    "title": "El Mercado del Micelio",
+    "empty": "Todo vendido. No queda nada en la estantería.",
+    "rerollCost": "Renovar ({cost})",
+    "sold": "VENDIDO",
+    "voucher": "Mejora",
+    "tabBuy": "Comprar",
+    "tabSell": "Vender",
+    "sellTitle": "Vendé lo que ya no te sirve",
+    "sellEmpty": "No tenés simbiontes para vender.",
+    "sellHint": "Vender te devuelve Fungis y libera una ranura.",
+    "sellAction": "Vender por {value}",
+    "sellConfirm": "¿Seguro? +{value}",
+    "sellDone": "Vendiste {name} por {value}",
     "kind": {
       "card": "Carta",
       "joker": "Simbionte",
@@ -489,6 +494,46 @@
     "poison_goldcap": {
       "name": "Sombrero Dorado",
       "desc": "Al ganar dinero: +3 Esporas."
+    },
+    "bridge_saprophyte": {
+      "name": "Saprófito Puente",
+      "desc": "Carta bisagra: si jugás 4 o más cartas, suma +4 de Sustrato. Sirve para cualquier mazo."
+    },
+    "spore_archetype_burst_cap": {
+      "name": "Sombrero de Ráfaga",
+      "desc": "Con 3 o más Esporas en la mano, multiplica las Esporas ×1.6."
+    },
+    "spore_archetype_signal": {
+      "name": "Señal Esporada",
+      "desc": "Al jugarse, multiplica las Esporas ×2 y suma +2."
+    },
+    "colony_network_node": {
+      "name": "Nodo de Red",
+      "desc": "Cada carta de Micelio que juegues suma +3 de Sustrato mientras está en la mano."
+    },
+    "colony_rhizomorph": {
+      "name": "Rizomorfo",
+      "desc": "Con 3 o más Tricolomatáceas en la mano, suma +14 de Sustrato."
+    },
+    "decay_compost_heap": {
+      "name": "Pila de Compost",
+      "desc": "Al jugarse, pudre una carta al azar de tu mano (−2 de Sustrato por disparo)."
+    },
+    "decay_carrion_bloom": {
+      "name": "Flor de Carroña",
+      "desc": "Cosecha toda la podredumbre de tus cartas: cada pila pudrida da +4 Esporas."
+    },
+    "crystal_prism_gill": {
+      "name": "Lámina de Prisma",
+      "desc": "Al elegir un ciego, purgar te cuesta 1 Fungi menos. Podés apilar varias."
+    },
+    "crystal_shard_bloom": {
+      "name": "Flor de Esquirla",
+      "desc": "Con 5 cartas o más en la mano jugada, multiplica las Esporas ×3."
+    },
+    "wild_dung_beetle": {
+      "name": "Escarabajo Pelotero",
+      "desc": "Comodín: al jugarse suma +6 de Sustrato y +2 Esporas, sin condiciones."
     }
   },
   "joker": {
@@ -1035,7 +1080,23 @@
     "a8": {
       "name": "Colapso fúngico",
       "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de simbionte menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
-    }
+    },
+    "mod": {
+      "target": "Objetivo de cada ciego",
+      "shop": "Precio de la tienda",
+      "hands": "Manos por ronda",
+      "discards": "Descartes por ronda",
+      "handSize": "Cartas en mano",
+      "jokerSlots": "Espacios de simbionte",
+      "reroll": "Costo de renovar la tienda",
+      "money": "Fungis al arrancar",
+      "purge": "Costo de purgar",
+      "noDieReroll": "Sin repetir la tirada del dado"
+    },
+    "rewardUnlock": "▸ Superarlo desbloquea el nivel A{next}",
+    "rewardMax": "▸ Cumbre: superarlo cierra la escalera",
+    "why": "Qué exige",
+    "whyBody": "Cada peldano te saca una red de seguridad. Es para quien ya domina el mazo base y quiere que cada mano cuente de verdad."
   },
   "cosmetics": {
     "title": "Cosméticos",
@@ -1054,7 +1115,13 @@
     "empty": "Todavía no jugaste ninguna partida.",
     "win": "Victoria",
     "loss": "Derrota",
-    "detail": "Ante {ante} · Semilla {seed}"
+    "detail": "Ante {ante} · Semilla {seed}",
+    "stat": {
+      "bestHand": "Mejor mano",
+      "totalScore": "Puntaje total",
+      "blinds": "Ciegos",
+      "destroyed": "Cartas destruidas"
+    }
   },
   "guide": {
     "intro": "Construí manos de hongos para superar desafíos.",
@@ -1087,6 +1154,7 @@
     "breakdownMult": "Multiplicador",
     "breakdownTotal": "Total",
     "abilityTag": "HABILIDAD",
+    "abilityHint": "Esta carta tiene un efecto que se dispara sola. El borde lila y el ✦ la marcan.",
     "abilityActivated": "{name} activado",
     "substrateBonus": "Bonificación de Sustrato",
     "firstBlindTitle": "Tu primer Ciego",
@@ -1122,13 +1190,13 @@
     "ability": "Habilidad",
     "default": "Predeterminado",
     "recommended": "Orden recomendado",
-  "confirm": "Ordenado por {criterion}",
-  "confirmDefault": "Orden original restaurado",
-  "alreadySorted": "La mano ya estaba en ese orden",
-  "auto": "Orden automático",
-  "autoOn": "Orden automático: {criterion}",
-  "autoOff": "Orden automático desactivado"
-},
+    "confirm": "Ordenado por {criterion}",
+    "confirmDefault": "Orden original restaurado",
+    "alreadySorted": "La mano ya estaba en ese orden",
+    "auto": "Orden automático",
+    "autoOn": "Orden automático: {criterion}",
+    "autoOff": "Orden automático desactivado"
+  },
   "deckstate": {
     "conservedTitle": "Mazo conservado",
     "conserved": "Mazo conservado: {count} cartas",
@@ -1245,6 +1313,48 @@
     "destroy_2": {
       "name": "Purga",
       "desc": "Destruye 2 cartas"
+    }
+  },
+  "archetype": {
+    "title": "Arquetipo",
+    "subtitle": "Elegí con qué forma de puntuar vas a jugar",
+    "select": "Elegir",
+    "selected": "Elegido",
+    "startWith": "Empezar con {name}",
+    "deckCount": "Mazo de {count} cartas",
+    "classic": {
+      "name": "Clásico",
+      "tagline": "Mazo base, sin sesgo. La experiencia de siempre.",
+      "how": "Jugá con el mazo completo del juego y todas las cartas a la par. Es la forma de aprender el sistema sin que nada te empuje para un lado.",
+      "weakness": "Sin un elemento firme, la tienda no te ayuda a enfocar: dependés más de la suerte."
+    },
+    "spores": {
+      "name": "Esporas",
+      "tagline": "Multiplicá Esporas hasta que una mano lo sea todo.",
+      "desc": "Las Esporas multiplican tu puntaje: cada carta que sumás al montón vale más que la anterior.",
+      "how": "Juntá muchas cartas de Esporas y activá los multiplicadores. Cuantas más esporas puntúen en una mano, mayor el estallido final.",
+      "weakness": "Sin un multiplicador activo, tus manos valen poco. Es el arquetipo más frágil al principio."
+    },
+    "colony": {
+      "name": "Colonia",
+      "tagline": "Una base estable que crece turno a turno.",
+      "desc": "El micelio no busca el golpe grande: acumula Sustrato sólido y sostiene el ritmo pase lo que pase.",
+      "how": "Desplegá la red de micelio, sumá Sustrato permanente y ganá por constancia. Cada carta refuerza a las demás.",
+      "weakness": "Techo bajo: contra jefes con objetivo muy alto te va a faltar el pico de daño."
+    },
+    "decay": {
+      "name": "Putrefacción",
+      "tagline": "Convertí la corrupción en combustible.",
+      "desc": "Aplicás Pudriéndose a tus propias cartas y después la consumís para cosechar Esporas. El riesgo es real: si no cosechás, la descomposición te come el puntaje.",
+      "how": "Marcá cartas con Pudriéndose, después jugá el cosechador para convertir ese estado en Esporas. Cuanto más aguantes sin cosechar, mayor la recompensa.",
+      "weakness": "Cada carta en descomposición puntúa MENOS mientras esperás. Si te pasás de tiempo, perdés la mano."
+    },
+    "crystal": {
+      "name": "Cristal",
+      "tagline": "Explosiones perfectas o nada.",
+      "desc": "El cristal premia las manos completas: cuando todo encaja, multiplica en grande; cuando no, se queda opaco.",
+      "how": "Buscá manos llenas y perfectas para disparar multiplicadores altos. Abaratás purgas para quedarte solo con lo que sirve.",
+      "weakness": "Depende de la consistencia: una mano pobre no tiene plan B."
     }
   }
 }

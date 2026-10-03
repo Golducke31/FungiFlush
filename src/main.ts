@@ -18,6 +18,7 @@
 
 import {
   DIE_FACES,
+  RNG,
   GameEngine,
   MAX_PLAY_SIZE_DEFAULT,
   bus,
@@ -38,6 +39,7 @@ import { Storage } from '@persistence/Storage';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
 import { HISTORY_CAP } from '@meta/ProfileState';
+import { ARCHETYPES, biasFor, starterFor } from '@meta/Archetypes';
 import { notifier } from '@notify/notify';
 import {
   AchievementTracker,
@@ -304,6 +306,7 @@ async function boot(): Promise<void> {
       // una run ya terminada (el save se escribe al morir, no al salir).
       const already = p.history.some((h) => h.seed === engine.run.seed);
       if (!already) {
+        const stats = engine.run.stats;
         p.history.unshift({
           seed: engine.run.seed,
           ante,
@@ -311,6 +314,15 @@ async function boot(): Promise<void> {
           win: reason === 'victory',
           reason: reason === 'victory' ? 'victory' : 'loss',
           at: Date.now(),
+          // Un historial que solo dice "ganaste/perdiste" no cuenta una run.
+          // Estos cuatro numeros son los que hacen que dos derrotas en el mismo
+          // ante se lean distinto (una llego con 40k de mejor mano, la otra con
+          // 3k), y el arquetipo dice CON QUE se jugo.
+          bestHand: stats.bestHand,
+          totalScore: engine.run.totalScore,
+          blindsCleared: stats.blindsCleared,
+          cardsDestroyed: stats.cardsDestroyed,
+          archetype: engine.run.archetype,
         });
         if (p.history.length > HISTORY_CAP) p.history.length = HISTORY_CAP;
       }
@@ -696,10 +708,21 @@ async function boot(): Promise<void> {
   // techo del contenido es mayor que lo desbloqueado, el panel ya lo explica.
   const syncAscension = (): void => {
     const p = profileStore.current;
+    const max = engine.registry.maxAscension();
+    // Modificadores reales por nivel, para que el panel derive "que cambia"
+    // en vez de repetir prosa escrita a mano (que se desincroniza del JSON).
+    const modifiers: Array<Record<string, number | boolean | undefined> | undefined> = [undefined];
+    for (let level = 1; level <= max; level++) {
+      modifiers[level] = engine.registry.ascension(level).modifiers as Record<
+        string,
+        number | boolean | undefined
+      >;
+    }
     hud?.setAscensionState({
       unlocked: p.ascension.highestUnlocked,
       selected: p.ascension.selected,
-      max: engine.registry.maxAscension(),
+      max,
+      modifiers,
     });
   };
 
@@ -720,6 +743,36 @@ async function boot(): Promise<void> {
   // Igual que ascensión/cosméticos: el HUD no conoce el perfil, se lo empuja.
   const syncHistory = (): void => {
     hud?.setHistoryState(profileStore.current.history.map((h) => ({ ...h })));
+  };
+
+  // --- Arquetipos ---
+  // El HUD no conoce ni el perfil ni `archetypes.json`: se le empuja la lista
+  // (con las claves i18n) y el total de cartas de cada mazo inicial. El total se
+  // calcula con el MISMO `buildStarterDeck` que arranca la run, para que el
+  // numero de la tarjeta no mienta.
+  const starterSizeOf = (id: string): number => {
+    const overrides = starterFor(id);
+    if (!overrides) return 0;
+    const resolved = engine.registry.buildStarterDeck(new RNG(1), overrides);
+    return resolved.length;
+  };
+
+  const syncArchetypes = (): void => {
+    const list = ARCHETYPES.map((a) => ({
+      id: a.id,
+      nameKey: a.nameKey,
+      taglineKey: a.taglineKey,
+      howKey: a.howKey,
+      weaknessKey: a.weaknessKey,
+      element: a.element as string,
+    }));
+    const starterSizes: Record<string, number> = {};
+    for (const a of ARCHETYPES) starterSizes[a.id] = starterSizeOf(a.id);
+    hud?.setArchetypeState({
+      list,
+      selected: profileStore.current.archetype.selected,
+      starterSizes,
+    });
   };
 
   // --- HUD ---
@@ -867,6 +920,25 @@ async function boot(): Promise<void> {
         // asi que quien cerraba la app en el primer ciego la volvia a ver en
         // cada partida. El cierre la marca vista; reabrirla desde el menu no
         // depende de esto.
+        if (!profileStore.current.seenTutorial) {
+          window.setTimeout(() => hud?.showTutorial(), 420);
+        }
+      },
+      // El arquetipo elegido en el panel arranca la run con SU mazo y SU sesgo.
+      // Se persiste como preferencia para que el proximo arranque lo recuerde.
+      onStartRunWithArchetype: (archetypeId) => {
+        void runStore.clear();
+        const starter = starterFor(archetypeId);
+        const bias = biasFor(archetypeId);
+        // El motor no conoce `archetypes.json`: se le inyectan el mazo y el
+        // sesgo YA resueltos, y el id solo para guardarlo en la run.
+        engine.setArchetypeLoadout(starter, bias);
+        engine.startRun(seed, profileStore.current.ascension.selected, archetypeId);
+        profileStore.patch((p) => {
+          p.archetype.selected = archetypeId;
+        });
+        syncArchetypes();
+        scene.setMode('run');
         if (!profileStore.current.seenTutorial) {
           window.setTimeout(() => hud?.showTutorial(), 420);
         }
@@ -1040,17 +1112,31 @@ async function boot(): Promise<void> {
   /**
    * Nombre visible de un reward. El registry del MOTOR es el que sabe los
    * nombres (es el contenido ya filtrado por DLC), asi que se resuelve aca.
+   *
+   * FALLBACK: si el id no resuelve a una definicion (contenido retirado, id mal
+   * escrito en un JSON de contenido, o un DLC que el jugador no tiene), NO se
+   * muestra el id crudo (`joker_golden_mold`), que es ilegible para el jugador.
+   * Se "embellece": snake_case -> palabras capitalizadas. Sigue siendo un
+   * fallback honesto (no inventa un nombre que no existe), pero deja de parecer
+   * un bug de localizacion.
    */
+  const prettyId = (id: string): string =>
+    id
+      .split('_')
+      .filter((part) => part.length > 0)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
   const rewardName = (reward: RetentionReward): string => {
     if (reward.type === 'card') {
       const def = engine.registry.tryGetCard(reward.id);
-      return def ? t(def.nameKey) : reward.id;
+      return def ? t(def.nameKey) : prettyId(reward.id);
     }
     if (reward.type === 'joker') {
       const def = engine.registry.tryGetJoker(reward.id);
-      return def ? t(def.nameKey) : reward.id;
+      return def ? t(def.nameKey) : prettyId(reward.id);
     }
-    return reward.id;
+    return prettyId(reward.id);
   };
   hud.bindRewardNames(rewardName);
 
@@ -1399,6 +1485,8 @@ async function boot(): Promise<void> {
   // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.
   syncCosmetics();
   syncHistory();
+  // Arquetipos: el chip del menu y el panel de "Nueva partida" leen esto.
+  syncArchetypes();
 
   savedRun = await runStore.load();
   if (savedRun) {

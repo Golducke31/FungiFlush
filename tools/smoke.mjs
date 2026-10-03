@@ -365,11 +365,51 @@ console.log(JSON.stringify(boardClosed, null, 2));
 // CLICK REAL, no `element.click()`: el arreglo de `pointer-events` de la Fase
 // 4 dependia de que la capa de UI recibiera los toques de verdad, y un click
 // por JS lo habria dado por bueno sin probar nada.
+//
+// "Nueva partida" ya NO arranca la run: abre el selector de ARQUETIPO. El
+// recorrido real del jugador es `new` -> `archetypes-start`. Se prueban los dos
+// pasos porque el panel es una puerta nueva y, si se rompe, el jugador NO puede
+// empezar una partida (el bug mas caro posible).
 const newButton = await page.locator('.panel.is-menu [data-act="new"]').boundingBox();
 if (newButton) {
   await page.mouse.click(newButton.x + newButton.width / 2, newButton.y + newButton.height / 2);
 } else {
   await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+}
+await page.waitForTimeout(700);
+
+// --- Selector de arquetipo: elegir uno y confirmar ---
+const archetypeStep = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-archetypes');
+  return {
+    shown: Boolean(panel),
+    cards: document.querySelectorAll('.panel.is-archetypes .archetype-card').length,
+    hasStart: Boolean(panel?.querySelector('[data-act="archetypes-start"]')),
+  };
+});
+console.log('\n--- Selector de arquetipo ---');
+console.log(JSON.stringify(archetypeStep, null, 2));
+
+if (archetypeStep.shown) {
+  // Se elige "Esporas" (el primer arquetipo no-clasico) y se confirma. El panel
+  // es de DOBLE toque: el primer click selecciona, el segundo (sobre el mismo)
+  // arranca. Aca se usa el boton "start", que es el camino equivalente.
+  const sporeCard = page.locator('.panel.is-archetypes .archetype-card[data-archetype="spores"]');
+  if (await sporeCard.count()) {
+    await sporeCard.first().scrollIntoViewIfNeeded();
+    await sporeCard.first().click();
+    await page.waitForTimeout(200);
+  }
+  const startBtn = page.locator('.panel.is-archetypes [data-act="archetypes-start"]');
+  await startBtn.scrollIntoViewIfNeeded();
+  const startBox = await startBtn.boundingBox();
+  const vhA = await page.evaluate(() => window.innerHeight);
+  if (startBox && startBox.y + startBox.height / 2 <= vhA) {
+    await page.mouse.click(startBox.x + startBox.width / 2, startBox.y + startBox.height / 2);
+  } else {
+    await startBtn.click();
+  }
+  await page.waitForTimeout(1400);
 }
 await page.waitForTimeout(1600);
 
@@ -426,7 +466,8 @@ const afterStart = await page.evaluate(() => {
   const bp = blindPanel?.getBoundingClientRect() ?? null;
   return {
     status: ff.engine.run.status,
-    blindSelectVisible: Boolean(document.querySelector('.blind-grid')),
+    blindSelectVisible: Boolean(document.querySelector('.blind-focus .blind-card')),
+    blindRouteDots: document.querySelectorAll('.blind-route-dot').length,
     tutorialDismissed: !document.querySelector('.panel.is-tutorial'),
     hudHidden: document.getElementById('ui-root')?.classList.contains('in-menu') ?? false,
     deckSize: ff.engine.run.deck.totalSize,
@@ -434,6 +475,11 @@ const afterStart = await page.evaluate(() => {
     // contadores del HUD aun no existen (solo se pintan en `playing`), asi que
     // la comprobacion del chip va en `afterBlind`, no aca.
     engineDeckSize: ff.engine.deckSize,
+    // El arquetipo elegido cambia el mazo inicial (Clasico = 40, cada arquetipo
+    // = 20). La asercion del tamano tiene que comparar contra el mazo del
+    // arquetipo realmente elegido, no contra un 40 fijo.
+    archetype: ff.engine.run.archetype ?? '',
+    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
     blindPanelFit: bp
       ? {
           overflowViewport: Math.round(bp.bottom - window.innerHeight),
@@ -559,6 +605,10 @@ const afterBlind = await page.evaluate(() => {
     chipDeck: chips['Mazo'] ?? null,
     chipDeckTotal: chips['Mazo']?.split('/')[1] ?? null,
     deckSize: ff.engine.deckSize,
+    // El mazo inicial depende del arquetipo (Clasico 40, arquetipos 20). Las
+    // aserciones del chip y del mazo se comparan contra este valor, no contra
+    // un 40 fijo, para que el smoke siga valido con cualquier arquetipo.
+    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
     deckDraw: ff.engine.deckDraw,
     deckRemaining: ff.engine.run.deck.remaining,
     // Baseline de draw calls de ESCENA en el tier bajo (sin composer, sin sky):
@@ -935,6 +985,9 @@ const afterPlay = await page.evaluate(() => {
     chipDeck: chips['Mazo'] ?? null,
     deckDraw: ff.engine.deckDraw,
     deckSize: ff.engine.deckSize,
+    // El mazo depende del arquetipo (Clasico 40, arquetipos 20); las cuentas de
+    // "disponible" se hacen contra este valor, no contra un 40 fijo.
+    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
     cardsPlayed: ff.engine.round?.cardsPlayedThisRound ?? 0,
     cardsDiscarded: ff.engine.round?.cardsDiscardedThisRound ?? 0,
     stats: ff.scene.stats(),
@@ -1695,7 +1748,11 @@ await page.screenshot({ path: join(shotsDir, '18a-postfx-menu.png') });
 
 // Entrar a una partida: el bloom se juzga sobre las cartas y sus halos, no
 // sobre el panel del menu (que tapa media escena con un fondo casi opaco).
+// "Nueva partida" abre el selector de arquetipo: se confirma con el boton
+// "start" (mismo recorrido que arriba) para llegar a la partida de verdad.
 await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+await page.waitForTimeout(600);
+await page.evaluate(() => document.querySelector('.panel.is-archetypes [data-act="archetypes-start"]')?.click());
 await page.waitForTimeout(2000);
 await page.evaluate(() => {
   const ff = window.__fungiflush;
@@ -1919,7 +1976,10 @@ const ok =
   chk('afterStart?.tutorialDismissed === true', afterStart?.tutorialDismissed === true) &&
   chk('afterStart?.blindSelectVisible === true', afterStart?.blindSelectVisible === true) &&
   chk('afterStart?.hudHidden === false', afterStart?.hudHidden === false) &&
-  chk('afterStart?.engineDeckSize === 40', afterStart?.engineDeckSize === 40) &&
+  chk(
+    'afterStart?.engineDeckSize === afterStart?.expectedDeckSize',
+    afterStart?.engineDeckSize === afterStart?.expectedDeckSize,
+  ) &&
   // El panel de ciego entra entero en el viewport tactil, sin scroll.
   chk('(afterStart?.blindPanelFit?.overflowViewport ?? 99) <= 0', (afterStart?.blindPanelFit?.overflowViewport ?? 99) <= 0) &&
   chk('(afterStart?.blindPanelFit?.scrollOverflow ?? 99) <= 0', (afterStart?.blindPanelFit?.scrollOverflow ?? 99) <= 0) &&
@@ -1976,11 +2036,24 @@ const ok =
   chk('(afterBlind?.sceneHand ?? 0) > 0', (afterBlind?.sceneHand ?? 0) > 0) &&
   chk('(afterBlind?.hand ?? 0) > 0', (afterBlind?.hand ?? 0) > 0) &&
   // El chip MAZO ahora es "disponible / total": al empezar el ciego nada se
-  // consumio todavia, asi que arranca en el total (40/40) y baja al jugar.
-  chk("afterBlind?.chipDeckTotal === '40'", afterBlind?.chipDeckTotal === '40') &&
-  chk("afterBlind?.chipDeck === '40/40'", afterBlind?.chipDeck === '40/40') &&
-  chk('afterBlind?.deckSize === 40', afterBlind?.deckSize === 40) &&
-  chk('afterBlind?.deckDraw === 40', afterBlind?.deckDraw === 40) &&
+  // consumio todavia, asi que arranca en el total (N/N) y baja al jugar. El
+  // total depende del arquetipo, por eso se compara contra `expectedDeckSize`.
+  chk(
+    "afterBlind?.chipDeckTotal === String(afterBlind?.expectedDeckSize)",
+    afterBlind?.chipDeckTotal === String(afterBlind?.expectedDeckSize),
+  ) &&
+  chk(
+    'afterBlind?.chipDeck === `${afterBlind?.expectedDeckSize}/${afterBlind?.expectedDeckSize}`',
+    afterBlind?.chipDeck === `${afterBlind?.expectedDeckSize}/${afterBlind?.expectedDeckSize}`,
+  ) &&
+  chk(
+    'afterBlind?.deckSize === afterBlind?.expectedDeckSize',
+    afterBlind?.deckSize === afterBlind?.expectedDeckSize,
+  ) &&
+  chk(
+    'afterBlind?.deckDraw === afterBlind?.expectedDeckSize',
+    afterBlind?.deckDraw === afterBlind?.expectedDeckSize,
+  ) &&
   // Misiones tactiles: ninguna se corta contra la barra inferior (el bloque
   // entero entra en su franja).
   chk('(afterBlind?.missionsClip?.overflow ?? 1) <= 0', (afterBlind?.missionsClip?.overflow ?? 1) <= 0) &&
@@ -2007,17 +2080,27 @@ const ok =
   chk('flipTest?.front?.faceUp === true', flipTest?.front?.faceUp === true) &&
   chk('afterPlay?.score > 0', afterPlay?.score > 0) &&
   // FIX chip MAZO: el numero visible baja con lo que la ronda consumio. Sin el
-  // fix quedaba en 40 pese a haber jugado 3 cartas.
+  // fix quedaba clavado en el total pese a haber jugado cartas.
   chk(
-    'afterPlay?.chipDeck (disponible) = 40 - jugadas',
+    'afterPlay?.chipDeck (disponible) = total - jugadas',
     afterPlay?.chipDeck?.split('/')[0] ===
-      String(40 - (afterPlay?.cardsPlayed ?? 0) - (afterPlay?.cardsDiscarded ?? 0)),
+      String(
+        (afterPlay?.expectedDeckSize ?? 40) -
+          (afterPlay?.cardsPlayed ?? 0) -
+          (afterPlay?.cardsDiscarded ?? 0),
+      ),
   ) &&
   chk(
-    'afterPlay?.deckDraw = 40 - consumidas',
-    afterPlay?.deckDraw === 40 - (afterPlay?.cardsPlayed ?? 0) - (afterPlay?.cardsDiscarded ?? 0),
+    'afterPlay?.deckDraw = total - consumidas',
+    afterPlay?.deckDraw ===
+      (afterPlay?.expectedDeckSize ?? 40) -
+        (afterPlay?.cardsPlayed ?? 0) -
+        (afterPlay?.cardsDiscarded ?? 0),
   ) &&
-  chk('afterPlay?.deckSize sigue en 40', afterPlay?.deckSize === 40) &&
+  chk(
+    'afterPlay?.deckSize sigue en el total',
+    afterPlay?.deckSize === afterPlay?.expectedDeckSize,
+  ) &&
   // Regresion: el abanico no se superpone tras ordenar y tras jugar. El gap
   // uniforme es 2.32; por debajo de 1.9 hay dos cartas pisadas.
   chk(

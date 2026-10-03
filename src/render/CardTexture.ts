@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import type { ArtSpec, ElementType, FamilyType, Rarity, StatusType } from '@engine/index';
 import {
+  ABILITY_COLOR,
   ELEMENT_COLOR,
   RARITY_BORDER,
   RARITY_COLOR,
@@ -75,6 +76,15 @@ export interface CardTextureSpec {
    *   - color lila-ambar propio en la etiqueta y el texto.
    */
   hasAbility?: boolean;
+  /**
+   * Ya traducidos. La spec no tiene acceso a `t()` (es una capa de dibujo), asi
+   * que quien la arma —que si traduce— deja aca las etiquetas de la taxonomia.
+   * La cabecera las pinta para que Familia y Elemento se lean en la CARA y no
+   * solo al pasar el mouse: son los dos datos que mas se comparan entre cartas.
+   * Sin esto la carta solo muestra el elemento en crudo ("SPORE").
+   */
+  elementLabel?: string;
+  familyLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -511,6 +521,7 @@ function drawChip(
   label: string,
   value: string,
   color: number,
+  glyph?: string,
 ): void {
   const g = ctx.createLinearGradient(x, y, x, y + h);
   g.addColorStop(0, hexToRgba(color, 0.28));
@@ -523,11 +534,25 @@ function drawChip(
   roundRect(ctx, x, y, w, h, 12);
   ctx.stroke();
 
+  // Zona FIJA del dato: el valor siempre a la DERECHA y la etiqueta siempre a
+  // la izquierda, con un glifo propio delante. Asi comparar dos cartas es un
+  // barrido vertical del mismo punto, no una relectura. El glifo es un simbolo
+  // de texto (▲ sustrato, ✱ esporas), no un asset: se dibuja a cualquier
+  // tamano sin perder nitidez y no depende de una fuente de iconos externa.
+  const labelX = x + 14;
+  if (glyph) {
+    ctx.fillStyle = hexToCss(color);
+    ctx.font = `700 20px ${CARD_TEXT_FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(glyph, labelX, y + h / 2 + 1);
+  }
+
   ctx.fillStyle = hexToRgba(color, 0.85);
-  ctx.font = `700 17px ${CARD_TEXT_FONT}`;
+  ctx.font = `700 15px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label.toUpperCase(), x + 14, y + h / 2 + 1);
+  ctx.fillText(label.toUpperCase(), labelX + (glyph ? 26 : 0), y + h / 2 + 1);
 
   ctx.fillStyle = '#ffffff';
   ctx.font = `700 38px ${CARD_TEXT_FONT}`;
@@ -625,13 +650,51 @@ export function createCardCanvas(
 
   }
 
-  // --- 4. Cabecera: elemento + nombre ---
+  // --- 4. Cabecera: taxonomia (Elemento · Familia) + nombre ---
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
 
-  ctx.fillStyle = hexToRgba(accent, 0.95);
-  ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
-  ctx.fillText((spec.kind === 'voucher' ? 'MEJORA' : spec.element).toUpperCase(), W / 2, 30);
+  // Linea de taxonomia: dos rotulos con su punto de color. El elemento ya venia
+  // crudo ("SPORE"); ahora van los dos datos traducidos, separados por un punto
+  // medio, para que Familia (lo que agrupa los combos) se vea sin abrir el
+  // tooltip. Cada palabra lleva el color del elemento como ancla visual.
+  const elementLabel = (spec.elementLabel ?? (spec.kind === 'voucher' ? 'MEJORA' : spec.element)).toUpperCase();
+  const familyLabel = (spec.familyLabel ?? '').toUpperCase();
+  if (familyLabel && spec.kind === 'card') {
+    const sep = ' · ';
+    // La linea tiene que entrar en el ancho util: familias largas
+    // ("TRICOLOMATACEAS") con elementos largos ("SIMBIOSIS") se salian del
+    // marco. Se busca el tamano mas grande que entra, de 17px para abajo.
+    const maxWidth = W - pad * 2 - 24;
+    let fontPx = 17;
+    while (fontPx > 11) {
+      ctx.font = `400 ${fontPx}px ${CARD_DISPLAY_FONT}`;
+      const width =
+        ctx.measureText(elementLabel).width +
+        ctx.measureText(sep).width +
+        ctx.measureText(familyLabel).width;
+      if (width <= maxWidth) break;
+      fontPx -= 1;
+    }
+    const elementWidth = ctx.measureText(elementLabel).width;
+    const sepWidth = ctx.measureText(sep).width;
+    let cursor = W / 2 - (elementWidth + sepWidth + ctx.measureText(familyLabel).width) / 2;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = hexToRgba(accent, 0.95);
+    ctx.fillText(elementLabel, cursor, 30);
+    cursor += elementWidth;
+    ctx.fillStyle = hexToRgba(accent, 0.5);
+    ctx.fillText(sep, cursor, 30);
+    cursor += sepWidth;
+    ctx.fillStyle = 'rgba(214, 226, 236, 0.85)';
+    ctx.fillText(familyLabel, cursor, 30);
+    ctx.textAlign = 'center';
+  } else {
+    ctx.fillStyle = hexToRgba(accent, 0.95);
+    ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
+    ctx.fillText(elementLabel, W / 2, 30);
+  }
+
   ctx.fillStyle = '#f2f6fb';
   ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
   const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 20, 2);
@@ -655,8 +718,8 @@ export function createCardCanvas(
 
   if (spec.kind === 'card') {
     const chipW = (W - pad * 2 - 18) / 2;
-    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', String(spec.substrate ?? 0), 0xf2a63b);
-    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b);
+    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', `+${spec.substrate ?? 0}`, 0xf2a63b, '▲');
+    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱');
   } else {
     // Jokers, mutaciones y vouchers: sin stats, solo un rotulo de tipo.
     const label =
@@ -693,7 +756,7 @@ export function createCardCanvas(
   //   HABILIDAD          -> lila + etiqueta "✦ HABILIDAD"
   // La etiqueta es lo importante para accesibilidad: el color solo refuerza.
   const hasAbility = spec.hasAbility === true;
-  const abilityColor = 0xc4a8ff;
+  const abilityColor = ABILITY_COLOR;
   const panelBorder = hasAbility ? abilityColor : elementColor;
 
   ctx.fillStyle = hasAbility ? 'rgba(26, 18, 42, 0.62)' : 'rgba(6, 10, 16, 0.55)';

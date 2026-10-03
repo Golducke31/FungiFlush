@@ -52,6 +52,16 @@ export const UI_COLORS = {
   tableLine: 0x1b2b38,
 } as const;
 
+/**
+ * Lila de HABILIDAD.
+ *
+ * Un unico valor para la etiqueta de la cara de carta (`CardTexture`) y para el
+ * VFX de activacion en la mesa (`SceneManager.flashAbility`): si el jugador ve
+ * el destello, tiene que poder rastrearlo hasta el borde lila de la carta. Dos
+ * constantes separadas se desincronizarian al primer ajuste de paleta.
+ */
+export const ABILITY_COLOR = 0xc4a8ff;
+
 /** 0xRRGGBB -> '#rrggbb' */
 export function hexToCss(hex: number): string {
   return `#${hex.toString(16).padStart(6, '0')}`;

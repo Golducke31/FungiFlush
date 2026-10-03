@@ -66,6 +66,12 @@ export class ResolutionContext {
   handsDelta = 0;
   discardsDelta = 0;
   jokerSlotsDelta = 0;
+  /**
+   * Delta ACUMULABLE del coste de purgar (PURGE_COST_DELTA). Se aplica al cerrar
+   * la resolucion, como el resto de los deltas de run, para que un dryRun no
+   * toque el coste real.
+   */
+  purgeCostDelta = 0;
   drawRequests = 0;
   readonly destroyed: CardInstance[] = [];
   readonly createdIds: string[] = [];

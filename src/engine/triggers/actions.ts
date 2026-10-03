@@ -149,6 +149,44 @@ const HANDLERS: HandlerMap = {
     env.res.statusRequests.push({ uid: target.uid, status: a.status, value: a.value, turns });
   },
 
+  /**
+   * CONSUME_STATUS: cobra un status acumulado y lo convierte en recurso.
+   *
+   * Mira la carta OBJETIVO (o la fuente). `full` cosecha todas las pilas; si no,
+   * baja `stacks` (o 1) y descarta el status cuando llega a 0.
+   *
+   * La mutacion es DIRECTA, igual que APPLY_STATUS: `statusRequests` existe en
+   * `ResolutionContext` pero NUNCA llego a aplicarse (seria un bug latente), asi
+   * que escribir ahi dejaria el status vivo en la carta y el "consumo" seria
+   * solo cosmetico. Se respeta el `dryRun` para no consumir de verdad durante
+   * la previsualizacion de score que corre el HUD.
+   */
+  CONSUME_STATUS: (a, env) => {
+    const target = env.target ?? env.source.card;
+    if (!target) return;
+    const existing = target.statuses.find((s) => s.type === a.status);
+    if (!existing || existing.value <= 0) return;
+    const stacks = a.full ? existing.value : Math.min(existing.value, Math.max(1, a.stacks ?? 1));
+    const gain = (a.value ?? 1) * stacks;
+    if (gain === 0) return;
+
+    if (a.gain === 'substrate') {
+      env.res.addSubstrate(gain, env.source.uid, env.source.nameKey, env.depth, target.uid);
+    } else {
+      env.res.addSpores(gain, env.source.uid, env.source.nameKey, env.depth, target.uid);
+    }
+
+    if (!env.res.dryRun) {
+      const left = existing.value - stacks;
+      if (left <= 0) target.statuses = target.statuses.filter((s) => s !== existing);
+      else existing.value = left;
+    }
+  },
+
+  PURGE_COST_DELTA: (a, env) => {
+    env.res.purgeCostDelta += a.value;
+  },
+
   EMIT_EVENT: (a, env) => {
     env.emit({ event: a.event });
   },

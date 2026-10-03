@@ -184,6 +184,16 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // asi que sin esta linea se perderia igual que `history`.
   const seenTutorial = migrated['seenTutorial'] === true;
 
+  // Arquetipo elegido: OBJETO anidado ADITIVO. Un perfil viejo no lo tiene y
+  // cae a `''` (clasico). Si llegara con la forma equivocada (string suelto,
+  // edicion a mano) el spread sobre el default lo descarta.
+  const archRaw = migrated['archetype'];
+  const archetype = {
+    ...fallback.archetype,
+    ...((typeof archRaw === 'object' && archRaw !== null ? archRaw : {}) as object),
+  };
+  if (typeof archetype.selected !== 'string') archetype.selected = '';
+
   return {
     version: CURRENT_PROFILE_VERSION,
     updatedAt: typeof migrated['updatedAt'] === 'string' ? migrated['updatedAt'] : fallback.updatedAt,
@@ -199,6 +209,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     stats,
     board,
     ascension,
+    archetype,
     history,
     seenTutorial,
   };

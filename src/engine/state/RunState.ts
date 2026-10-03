@@ -78,6 +78,22 @@ export interface RunState {
    * `ascension: 0` tendria otro objetivo que la que el jugador empezo.
    */
   ascension: number;
+  /**
+   * Delta acumulado del coste de purgar (PURGE_COST_DELTA).
+   *
+   * Vive en la run (no en el perfil) porque lo mueven los efectos del contenido
+   * y tiene que sobrevivir a un guardado: una run retomada sigue con el mismo
+   * coste de purga que tenia. Ver `GameEngine.purgeCost`.
+   */
+  purgeCostBonus: number;
+  /**
+   * Arquetipo de la run (id; ver `src/data/archetypes.json`).
+   *
+   * Un arquetipo no cambia las REGLAS del juego: cambia el MAZO INICIAL y las
+   * cartas que la tienda favorece. Se guarda en la run porque la tienda lo lee
+   * en cada reroll y el resumen/historial lo muestran. Vacio = mazo base.
+   */
+  archetype: string;
   shop: ShopState | null;
   /**
    * Modificadores acumulados por los interludios (P2.4). Se leen en cada
@@ -123,7 +139,7 @@ export interface RunState {
  * leyera la ascension, bastaria olvidarse de uno para que A5 fuera mas facil
  * que A4 sin que nadie lo note.
  */
-export function createRunState(seed: number, deck: Deck, ascension = 0): RunState {
+export function createRunState(seed: number, deck: Deck, ascension = 0, archetype = ''): RunState {
   const mods = ascensionModifiersFor(ascension);
   return {
     seed,
@@ -144,6 +160,8 @@ export function createRunState(seed: number, deck: Deck, ascension = 0): RunStat
     consumedEffects: new Set<string>(),
     vouchers: [],
     ascension,
+    purgeCostBonus: 0,
+    archetype,
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
     seenInterludes: [],

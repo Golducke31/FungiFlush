@@ -634,6 +634,11 @@ export class Card3D {
     return (this.card?.statuses ?? []).map((s) => s.type);
   }
 
+  /** La carta trae efectos propios (lo que la UI marca como "✦ HABILIDAD"). */
+  get hasAbility(): boolean {
+    return (this.card?.def.effects?.length ?? 0) > 0;
+  }
+
   dispose(): void {
     this.disposed = true;
     this.flipHandle?.cancel();

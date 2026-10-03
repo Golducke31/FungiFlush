@@ -228,6 +228,10 @@ export class ScoreCalculator {
    * Aplica los valores base de una carta al acumulador, respetando statuses.
    *   - spore_lock: la carta no aporta Spores (queda "esteril").
    *   - overgrowth: la carta aporta Spores extra.
+   *
+   * `decay` (Pudriendose) NO se resta aca: lo hace TriggerEngine por cada
+   * disparo de la carta, que es donde tiene sentido ("te cuesta cada vez que
+   * actua"). Este metodo solo mira los statuses que cambian los valores BASE.
    */
   private addCardBaseValues(card: CardInstance, res: ResolutionContext): void {
     const substrate = card.def.baseSubstrate + card.bonusSubstrate;

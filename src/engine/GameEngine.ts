@@ -63,6 +63,7 @@ import type {
   CardDefinition,
   CardInstance,
   DieRoll,
+  ElementType,
   JokerDefinition,
   JokerInstance,
   Rarity,
@@ -124,6 +125,14 @@ export interface GameEngineOptions {
    * simplemente no tiene objetivos intermedios.
    */
   missions?: MissionDef[];
+  /**
+   * Mazo inicial del ARQUETIPO elegido. Si esta, gana sobre `starterOverrides`
+   * (que es el mazo del perfil): el arquetipo define la run entera, mientras que
+   * `starterOverrides` son copias extra ganadas en el pase.
+   */
+  archetypeStarter?: Array<{ cardId: string; copies: number }>;
+  /** Elementos que la tienda prioriza para el arquetipo elegido. */
+  archetypeBias?: ElementType[];
 }
 
 export class GameEngine {
@@ -141,6 +150,16 @@ export class GameEngine {
   private readonly contentHash: string | null;
   private readonly packIds: string[];
   private readonly starterOverrides?: Array<{ cardId: string; copies: number }>;
+  /** Mazo que gana sobre `starterOverrides` cuando la run tiene arquetipo. */
+  private archetypeStarter?: Array<{ cardId: string; copies: number }>;
+  /**
+   * Elementos que el ARQUETIPO de la run favorece en la tienda.
+   *
+   * El motor NO sabe que existen los arquetipos (no conoce `archetypes.json`):
+   * el controlador le pasa la lista de ids que prioriza y el motor solo la usa
+   * como peso. Vacia = sin sesgo, que es el arquetipo clasico.
+   */
+  private archetypeBias: ElementType[] = [];
 
   run!: RunState;
   round: RoundState | null = null;
@@ -179,6 +198,8 @@ export class GameEngine {
     this.contentHash = opts.contentHash ?? null;
     this.packIds = opts.packIds ?? ['base'];
     this.starterOverrides = opts.starterOverrides;
+    this.archetypeStarter = opts.archetypeStarter;
+    this.archetypeBias = opts.archetypeBias ?? [];
     this.missionDefs = opts.missions ?? [];
 
     // El estado de la run es puro y no conoce el contenido, asi que la tabla de
@@ -210,15 +231,41 @@ export class GameEngine {
   // ==========================================================================
 
   /**
+   * Inyecta el mazo y el sesgo del arquetipo elegido.
+   *
+   * El motor no lee `archetypes.json` (no conoce archivos ni ids): el
+   * controlador resuelve ambos y los pasa ya armados. Llamar con `undefined`
+   * deja la run sin arquetipo, que es el caso clasico.
+   *
+   * Se separa de `startRun` porque el arquetipo cambia ANTES de arrancar, pero
+   * los parametros del motor son inmutables una vez construido: este es el
+   * unico punto de mutacion, explicito y previo al `startRun`.
+   */
+  setArchetypeLoadout(
+    starter: Array<{ cardId: string; copies: number }> | undefined,
+    bias: readonly ElementType[],
+  ): void {
+    this.archetypeStarter = starter;
+    this.archetypeBias = [...bias];
+  }
+
+  /**
    * Arranca una run. `ascension` es el nivel de dificultad elegido en el menu
    * (0 = base). Se clampea al maximo que declare el contenido: un nivel que no
    * existe no puede aplicarse "de memoria", o el balance seria inventado.
+   *
+   * `archetype` es el id del arquetipo elegido (`''` = clasico). El motor no
+   * conoce `archetypes.json`: el controlador le pasa el id (para guardarlo y
+   * para el HUD) y, por separado, el mazo y el sesgo ya resueltos
+   * (`archetypeStarter`/`archetypeBias`). Asi el motor sigue siendo puro.
    */
-  startRun(seed?: number, ascension = 0): void {
-    const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
+  startRun(seed?: number, ascension = 0, archetype = ''): void {    const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
     const deck = new Deck(seed !== undefined ? new RNG(seed) : this.rng);
-    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level);
-    deck.setCards(this.registry.buildStarterDeck(this.rng, this.starterOverrides));
+    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype);
+    // El mazo del arquetipo gana sobre el del perfil: elegir arquetipo es
+    // arrancar con ESE mazo, y las copias del pase no tienen por que mezclarse.
+    const starter = this.archetypeStarter ?? this.starterOverrides;
+    deck.setCards(this.registry.buildStarterDeck(this.rng, starter));
 
     // Una run nueva no hereda el draft ni el interludio de la anterior: si el
     // jugador reiniciaba DESDE la pantalla de interludio, el trato viejo
@@ -768,9 +815,21 @@ export class GameEngine {
   // Deckbuilding
   // ==========================================================================
 
-  /** Coste de purgar (eliminar) una carta del mazo. */
+  /**
+   * Coste de purgar (eliminar) una carta del mazo.
+   *
+   * Suma tres fuentes: la base de economia, el modificador de ascension y el
+   * delta ACUMULADO por efectos de la run (PURGE_COST_DELTA, que es la palanca
+   * del arquetipo Cristal para quemar cartas sin fundirse). Se clampea a 0: un
+   * descuento que dejaria el coste en negativo se lee como bug.
+   */
   get purgeCost(): number {
-    return Math.max(0, ECONOMY.purgeCost + (this.ascension.modifiers.purgeCostDelta ?? 0));
+    return Math.max(
+      0,
+      ECONOMY.purgeCost +
+        (this.ascension.modifiers.purgeCostDelta ?? 0) +
+        this.run.purgeCostBonus,
+    );
   }
 
   /**
@@ -1265,6 +1324,12 @@ export class GameEngine {
     if (res.jokerSlotsDelta !== 0) {
       this.run.jokerSlots = Math.max(1, this.run.jokerSlots + res.jokerSlotsDelta);
     }
+    // PURGE_COST_DELTA: se acumula en la run. Es un delta, no un set, asi que
+    // dos cartas que abaratan la purga se suman. El HUD lee `purgeCost` al
+    // refrescar, asi que no hace falta empujar un evento propio.
+    if (res.purgeCostDelta !== 0) {
+      this.run.purgeCostBonus += res.purgeCostDelta;
+    }
 
     // Mejoras pedidas por efectos (LEVEL_UP_CARD): se aplican ACA, cuando la
     // cadena ya termino, y NUNCA en un dryRun. Ese es el bug que tenia la
@@ -1507,6 +1572,9 @@ export class GameEngine {
     if (res.jokerSlotsDelta !== 0) {
       this.run.jokerSlots = Math.max(1, this.run.jokerSlots + res.jokerSlotsDelta);
     }
+    if (res.purgeCostDelta !== 0) {
+      this.run.purgeCostBonus += res.purgeCostDelta;
+    }
     for (const defId of res.createdIds) {
       if (!this.registry.tryGetCard(defId)) continue;
       const card = this.registry.instantiate(defId);
@@ -1538,6 +1606,9 @@ export class GameEngine {
       // Los vouchers ya comprados quedan fuera del sorteo: ofrecer una regla
       // que el jugador tiene es una oferta muerta que ocupa un lugar.
       ownedVouchers: this.run.vouchers,
+      // Sesgo de arquetipo (ver `RunState.archetype`). Vacio en una run
+      // clasica, y entonces `OfferService` sortea sin ponderar por elemento.
+      elementBias: this.archetypeBias,
     };
   }
 
@@ -1756,6 +1827,9 @@ export class GameEngine {
       // Nivel de dificultad elegido: sin esto, recargar una run A5 la
       // devolveria a A0 y el objetivo bajaría solo. Mismo motivo que vouchers.
       ascension: this.run.ascension,
+      // Arquetipo de la run (ADITIVO, sin bump de version como vouchers). Es un
+      // id, no un objeto: rebalancear el arquetipo no invalida guardados.
+      archetype: this.run.archetype,
       // --- P2.4: interludios (aditivo, sin bump de version como vouchers) ---
       interludeTargetMultiplier: this.run.interludeModifiers.targetMultiplier,
       seenInterludes: [...this.run.seenInterludes],
@@ -1790,7 +1864,8 @@ export class GameEngine {
     // creara en A0, los valores de abajo (que pueden venir de un voucher o de
     // una recompensa) se medirian contra una base equivocada.
     const savedAscension = typeof data.ascension === 'number' ? data.ascension : 0;
-    this.run = createRunState(data.seed, deck, savedAscension);
+    const savedArchetype = typeof data.archetype === 'string' ? data.archetype : '';
+    this.run = createRunState(data.seed, deck, savedAscension, savedArchetype);
     this.run.ante = data.ante;
     this.run.blindIndex = data.blindIndex;
     this.run.money = data.money;
@@ -1916,6 +1991,12 @@ export interface RunSaveData {
    * cae a 0 (sin ascension). Al ser aditivo NO hace falta subir `SAVE_VERSION`.
    */
   ascension?: number;
+  /**
+   * Id del arquetipo de la run. OPCIONAL y aditivo: los guardados previos a la
+   * feature no lo tienen y `restore` cae a `''` (clasico). NO hace falta subir
+   * `SAVE_VERSION`.
+   */
+  archetype?: string;
   /**
    * Multiplicador de objetivo acumulado por interludios (P2.4). OPCIONAL y
    * aditivo: los guardados previos no lo tienen y `restore` cae a 1.

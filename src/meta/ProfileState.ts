@@ -150,6 +150,18 @@ export interface ProfileSave {
     selected: number;
   };
   /**
+   * Arquetipo elegido para la proxima run (id; ver `src/data/archetypes.json`).
+   *
+   * Se PERSISTE a proposito: es una preferencia de estilo de juego, no una
+   * decision de una sola vez. Quien juega Esporas quiere volver a jugar Esporas
+   * sin re-elegir. `''` = clasico (mazo base, sin sesgo de tienda).
+   *
+   * Aditivo: los perfiles viejos no lo tienen y la migracion cae a `''`.
+   */
+  archetype: {
+    selected: string;
+  };
+  /**
    * Historial de partidas (R5). Lo ultimo primero, capeado por `HISTORY_CAP`.
    *
    * `reason` distingue la victoria final (llegar al ante maximo) de una derrota
@@ -182,6 +194,23 @@ export interface RunHistoryEntry {
   reason: 'loss' | 'victory';
   /** epoch ms. */
   at: number;
+  /**
+   * Puntaje maximo de una sola mano en la run. Es el numero que el jugador
+   * recuerda ("hice 40k de un saque"), y el que hace que dos derrotas se
+   * distingan entre si.
+   */
+  bestHand?: number;
+  /** Puntaje total acumulado de la run. */
+  totalScore?: number;
+  /** Ciegos superados. Mide QUE TAN LEJOS llego, no solo en que ante murio. */
+  blindsCleared?: number;
+  /** Cartas destruidas/purgadas: mide cuanto limpio su mazo. */
+  cardsDestroyed?: number;
+  /**
+   * Arquetipo jugado (id; ver `src/data/archetypes.json`). Opcional porque las
+   * partidas viejas —de antes de que existiera el arquetipo— no lo tienen.
+   */
+  archetype?: string;
 }
 
 export const DEFAULT_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -220,6 +249,7 @@ export function defaultProfile(): ProfileSave {
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
     ascension: { highestUnlocked: 0, selected: 0 },
+    archetype: { selected: '' },
     history: [],
     seenTutorial: false,
   };

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "spores",
+    "nameKey": "archetype.spores.name",
+    "taglineKey": "archetype.spores.tagline",
+    "descKey": "archetype.spores.desc",
+    "howKey": "archetype.spores.how",
+    "weaknessKey": "archetype.spores.weakness",
+    "element": "spore",
+    "accentElement": "spore",
+    "starter": [
+      { "cardId": "spore_puffball", "copies": 6 },
+      { "cardId": "spore_veilcap", "copies": 6 },
+      { "cardId": "spore_fairycake", "copies": 3 },
+      { "cardId": "spore_archetype_burst_cap", "copies": 3 },
+      { "cardId": "bridge_saprophyte", "copies": 2 }
+    ],
+    "bias": ["spore", "crystal"]
+  },
+  {
+    "id": "colony",
+    "nameKey": "archetype.colony.name",
+    "taglineKey": "archetype.colony.tagline",
+    "descKey": "archetype.colony.desc",
+    "howKey": "archetype.colony.how",
+    "weaknessKey": "archetype.colony.weakness",
+    "element": "mycelium",
+    "accentElement": "mycelium",
+    "starter": [
+      { "cardId": "mycelium_thread", "copies": 6 },
+      { "cardId": "mycelium_webcap", "copies": 6 },
+      { "cardId": "colony_network_node", "copies": 3 },
+      { "cardId": "colony_rhizomorph", "copies": 3 },
+      { "cardId": "bridge_saprophyte", "copies": 2 }
+    ],
+    "bias": ["mycelium", "symbiosis"]
+  },
+  {
+    "id": "decay",
+    "nameKey": "archetype.decay.name",
+    "taglineKey": "archetype.decay.tagline",
+    "descKey": "archetype.decay.desc",
+    "howKey": "archetype.decay.how",
+    "weaknessKey": "archetype.decay.weakness",
+    "element": "decay",
+    "accentElement": "decay",
+    "starter": [
+      { "cardId": "decay_bracket", "copies": 6 },
+      { "cardId": "decay_rotwood", "copies": 6 },
+      { "cardId": "decay_compost_heap", "copies": 3 },
+      { "cardId": "decay_carrion_bloom", "copies": 3 },
+      { "cardId": "bridge_saprophyte", "copies": 2 }
+    ],
+    "bias": ["decay", "poison"]
+  },
+  {
+    "id": "crystal",
+    "nameKey": "archetype.crystal.name",
+    "taglineKey": "archetype.crystal.tagline",
+    "descKey": "archetype.crystal.desc",
+    "howKey": "archetype.crystal.how",
+    "weaknessKey": "archetype.crystal.weakness",
+    "element": "crystal",
+    "accentElement": "crystal",
+    "starter": [
+      { "cardId": "crystal_coralfungus", "copies": 6 },
+      { "cardId": "crystal_glasscap", "copies": 6 },
+      { "cardId": "crystal_prism_gill", "copies": 3 },
+      { "cardId": "crystal_shard_bloom", "copies": 3 },
+      { "cardId": "bridge_saprophyte", "copies": 2 }
+    ],
+    "bias": ["crystal", "spore"]
+  }
+]

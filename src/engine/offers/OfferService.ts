@@ -29,6 +29,7 @@ import type { RNG } from '../rng';
 import type { CardRegistry } from '../cards/CardRegistry';
 import type {
   CardDefinition,
+  ElementType,
   JokerDefinition,
   OfferGroup,
   OfferOption,
@@ -52,6 +53,18 @@ export interface RollContext {
    * ofrecer una regla repetida: una oferta muerta que ocupa un lugar.
    */
   ownedVouchers?: readonly string[];
+  /**
+   * Elementos que el ARQUETIPO de la run favorece (ver `src/meta/Archetypes.ts`).
+   *
+   * No restringe el pool: lo PONDERA. Una carta del elemento firma aparece mas
+   * seguido, pero el resto del catalogo sigue disponible. Restringir seria
+   * convertir el arquetipo en un modo aparte; ponderar es darle direccion sin
+   * quitarle al jugador la decision de desviarse.
+   *
+   * Vacio (el caso del arquetipo clasico) = sorteo sin sesgo, identico al
+   * comportamiento historico.
+   */
+  elementBias?: readonly ElementType[];
 }
 
 export class OfferService {
@@ -178,6 +191,7 @@ export class OfferService {
           (card) => this.cardAllowed(card, ctx, used, picked),
           picked.rarityWeights,
           picked.tag,
+          this.elementWeights(ctx),
         );
         if (!def) return undefined;
         return {
@@ -273,8 +287,28 @@ export class OfferService {
     }
   }
 
-  private isEligible(option: OfferOption, ante: number): boolean {
-    if (option.minAnte !== undefined && ante < option.minAnte) return false;
+  /**
+   * Pesos por elemento segun el arquetipo de la run.
+   *
+   * El elemento FIRMA pesa 3x y el secundario 2x. La diferencia entre ambos es
+   * lo que hace que una run de Esporas no se sienta igual que una de Cristal:
+   * sin ella, los dos elementos "favorecidos" serian indistinguibles y la
+   * identidad del arquetipo se diluiria.
+   *
+   * `undefined` cuando no hay sesgo: asi el sorteo se comporta EXACTAMENTE como
+   * antes para el arquetipo clasico.
+   */
+  private elementWeights(ctx: RollContext): Partial<Record<ElementType, number>> | undefined {
+    const bias = ctx.elementBias;
+    if (!bias || bias.length === 0) return undefined;
+    const weights: Partial<Record<ElementType, number>> = {};
+    const [primary, ...rest] = bias;
+    if (primary) weights[primary] = 3;
+    for (const element of rest) if (weights[element] === undefined) weights[element] = 2;
+    return weights;
+  }
+
+  private isEligible(option: OfferOption, ante: number): boolean {    if (option.minAnte !== undefined && ante < option.minAnte) return false;
     if (option.maxAnte !== undefined && ante > option.maxAnte) return false;
     return option.weight > 0;
   }

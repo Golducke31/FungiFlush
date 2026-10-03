@@ -37,8 +37,8 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary' | 'mythic';
 /** Efectos negativos que se acumulan sobre cartas o sobre la ronda. */
 export type StatusType =
   | 'dormant' // la carta no dispara sus efectos
-  | 'decay' // resta Substrate plano por cada disparo
-  | 'spore_lock' // bloquea multiplicadores durante N manos
+  | 'decay' // resta Sustrato plano por cada disparo; cosechable con CONSUME_STATUS
+  | 'spore_lock' // bloquea multiplicadores durante N manos ("Esteril")
   | 'overgrowth'; // suma Spores extra por carta jugada
 
 export interface StatusInstance {
@@ -124,6 +124,36 @@ export interface ActionPayloadMap {
   LEVEL_UP_CARD: { value: number };
   CREATE_CARD: { cardId: string };
   APPLY_STATUS: { status: StatusType; value: number; turns?: number };
+  /**
+   * CONSUME_STATUS — convierte un status acumulado en recurso.
+   *
+   * Es la pieza que hace jugable al arquetipo Putrefaccion: las cartas se
+   * "pudren" (`rotting`) y este efecto COBRA esa podredumbre a cambio de
+   * Esporas. Sin esta accion, poner un status negativo no tendria salida y la
+   * unica jugada posible seria no usarlo.
+   *
+   * `gain` decide a que contador va `value * stacks`; `full: true` cobra TODAS
+   * las pilas y borra el status (la jugada "cosecha"); sin `full`, baja las
+   * pilas en `stacks` (o en 1 si no se indica).
+   */
+  CONSUME_STATUS: {
+    status: StatusType;
+    gain: 'spores' | 'substrate';
+    /** Multiplicador por pila consumida. Default 1. */
+    value?: number;
+    /** Pilas a consumir. Default 1. Se ignora si `full`. */
+    stacks?: number;
+    /** Cobra el status entero y lo borra. */
+    full?: boolean;
+  };
+  /**
+   * PURGE_COST_DELTA — abarata (o encarece) purgar durante la run.
+   *
+   * Cristal se apoya en quemar cartas para afinar el mazo; sin un modificador
+   * de coste, purgar a 4 Fungis cada vez hace inviable el arquetipo. Es un delta
+   * ACUMULABLE dentro de la run (como los de interludio) y no un set absoluto.
+   */
+  PURGE_COST_DELTA: { value: number };
   /** Vuelve a emitir un evento del motor. Peligroso: el TriggerEngine lo limita por profundidad. */
   EMIT_EVENT: { event: TriggerEvent };
 }

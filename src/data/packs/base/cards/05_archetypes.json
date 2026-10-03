@@ -1,0 +1,231 @@
+[
+  {
+    "id": "bridge_saprophyte",
+    "nameKey": "card.bridge_saprophyte.name",
+    "descKey": "card.bridge_saprophyte.desc",
+    "element": "neutral",
+    "family": "polyporaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "copies": 2,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 60, "hue2": 40, "pattern": "blotch", "silhouette": "cap", "glow": 0.35 },
+    "effects": [
+      {
+        "id": "saprophyte_bridge",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 4 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 4 }],
+        "labelKey": "effect.synergy"
+      }
+    ]
+  },
+
+  {
+    "id": "spore_archetype_burst_cap",
+    "nameKey": "card.spore_archetype_burst_cap.name",
+    "descKey": "card.spore_archetype_burst_cap.desc",
+    "element": "spore",
+    "family": "agaricaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 2,
+    "baseSpores": 3,
+    "cost": 5,
+    "tags": ["archetype", "spores"],
+    "art": { "hue": 48, "hue2": 20, "pattern": "radial", "silhouette": "cluster", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "spore_burst_cap_mult",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_element_count_gte", "element": "spore", "value": 3 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.6 }],
+        "labelKey": "effect.sporeBloom"
+      }
+    ]
+  },
+  {
+    "id": "spore_archetype_signal",
+    "nameKey": "card.spore_archetype_signal.name",
+    "descKey": "card.spore_archetype_signal.desc",
+    "element": "spore",
+    "family": "agaricaceae",
+    "rarity": "rare",
+    "baseSubstrate": 1,
+    "baseSpores": 4,
+    "cost": 6,
+    "tags": ["archetype", "spores", "rare"],
+    "art": { "hue": 52, "hue2": 28, "pattern": "radial", "silhouette": "cap", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "spore_signal_ritmo",
+        "trigger": "ON_PLAY",
+        "actions": [
+          { "type": "MULTIPLY_SPORES", "value": 2 },
+          { "type": "ADD_SPORES", "value": 2 }
+        ],
+        "labelKey": "effect.bloom"
+      }
+    ]
+  },
+
+  {
+    "id": "colony_network_node",
+    "nameKey": "card.colony_network_node.name",
+    "descKey": "card.colony_network_node.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["archetype", "colony"],
+    "art": { "hue": 268, "hue2": 300, "pattern": "fibrous", "silhouette": "mold", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "colony_node_grow",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 3 }],
+        "labelKey": "effect.network"
+      }
+    ]
+  },
+  {
+    "id": "colony_rhizomorph",
+    "nameKey": "card.colony_rhizomorph.name",
+    "descKey": "card.colony_rhizomorph.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "rare",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 6,
+    "tags": ["archetype", "colony", "rare"],
+    "art": { "hue": 258, "hue2": 292, "pattern": "fibrous", "silhouette": "coral", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "rhizomorph_stable_base",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_family_count_gte", "family": "tricholomataceae", "value": 3 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 14 }],
+        "labelKey": "effect.colony"
+      }
+    ]
+  },
+
+  {
+    "id": "decay_compost_heap",
+    "nameKey": "card.decay_compost_heap.name",
+    "descKey": "card.decay_compost_heap.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 6,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["archetype", "decay"],
+    "art": { "hue": 18, "hue2": 4, "pattern": "rings", "silhouette": "bracket", "glow": 0.25 },
+    "effects": [
+      {
+        "id": "compost_rot",
+        "trigger": "ON_PLAY",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": -1 }],
+        "labelKey": "effect.compost"
+      }
+    ]
+  },
+  {
+    "id": "decay_carrion_bloom",
+    "nameKey": "card.decay_carrion_bloom.name",
+    "descKey": "card.decay_carrion_bloom.desc",
+    "element": "decay",
+    "family": "polyporaceae",
+    "rarity": "rare",
+    "baseSubstrate": 3,
+    "baseSpores": 1,
+    "cost": 6,
+    "tags": ["archetype", "decay", "rare"],
+    "art": { "hue": 24, "hue2": 6, "pattern": "blotch", "silhouette": "cap", "glow": 0.45 },
+    "effects": [
+      {
+        "id": "carrion_harvest_all",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "actions": [{ "type": "CONSUME_STATUS", "status": "decay", "gain": "spores", "value": 4, "full": true }],
+        "labelKey": "effect.decayHarvest"
+      }
+    ]
+  },
+
+  {
+    "id": "crystal_prism_gill",
+    "nameKey": "card.crystal_prism_gill.name",
+    "descKey": "card.crystal_prism_gill.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 5,
+    "tags": ["archetype", "crystal"],
+    "art": { "hue": 188, "hue2": 220, "pattern": "crystal", "silhouette": "cap", "glow": 0.72 },
+    "effects": [
+      {
+        "id": "prism_purge_cheap",
+        "trigger": "ON_BLIND_SELECTED",
+        "actions": [{ "type": "PURGE_COST_DELTA", "value": -1 }],
+        "labelKey": "effect.refraction"
+      }
+    ]
+  },
+  {
+    "id": "crystal_shard_bloom",
+    "nameKey": "card.crystal_shard_bloom.name",
+    "descKey": "card.crystal_shard_bloom.desc",
+    "element": "crystal",
+    "family": "clavariaceae",
+    "rarity": "rare",
+    "baseSubstrate": 2,
+    "baseSpores": 3,
+    "cost": 7,
+    "tags": ["archetype", "crystal", "rare"],
+    "art": { "hue": 178, "hue2": 208, "pattern": "crystal", "silhouette": "coral", "glow": 0.85 },
+    "effects": [
+      {
+        "id": "shard_perfect_hand",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 5 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 3 }],
+        "labelKey": "effect.refract"
+      }
+    ]
+  },
+
+  {
+    "id": "wild_dung_beetle",
+    "nameKey": "card.wild_dung_beetle.name",
+    "descKey": "card.wild_dung_beetle.desc",
+    "element": "neutral",
+    "family": "polyporaceae",
+    "rarity": "legendary",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 8,
+    "tags": ["archetype", "wildcard"],
+    "art": { "hue": 90, "hue2": 60, "pattern": "rings", "silhouette": "truffle", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "dung_beetle_any",
+        "trigger": "ON_PLAY",
+        "actions": [
+          { "type": "ADD_SUBSTRATE", "value": 6 },
+          { "type": "ADD_SPORES", "value": 2 }
+        ],
+        "labelKey": "effect.trade"
+      }
+    ]
+  }
+]

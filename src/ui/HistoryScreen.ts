@@ -21,6 +21,16 @@ export interface HistoryEntryView {
   reason: 'loss' | 'victory';
   /** epoch ms. */
   at: number;
+  /** Puntaje maximo de una sola mano. Ausente en partidas viejas. */
+  bestHand?: number;
+  /** Puntaje total acumulado de la run. */
+  totalScore?: number;
+  /** Ciegos superados. */
+  blindsCleared?: number;
+  /** Cartas destruidas/purgadas durante la run. */
+  cardsDestroyed?: number;
+  /** Id del arquetipo jugado (`''` o ausente = clasico). */
+  archetype?: string;
 }
 
 export interface HistoryCallbacks {
@@ -45,6 +55,29 @@ function formatWhen(at: number): string {
 /** Etiqueta del nivel: A0 se omite para no ensuciar la fila. */
 function ascensionLabel(level: number): string {
   return level > 0 ? `A${level}` : '';
+}
+
+/**
+ * Nombre legible de un arquetipo a partir de su id.
+ *
+ * El id (`spores`) viaja en el historial, no su clave i18n: el guardado solo
+ * tiene ids, igual que las cartas. La clave se reconstruye con el mismo patron
+ * que usa `archetypes.json` (`archetype.<id>.name`). Un id vacio o desconocido
+ * cae al nombre del clasico, que es el caso de las partidas previas a la
+ * feature.
+ */
+function archetypeNameKey(id: string | undefined): string {
+  if (!id) return 'archetype.classic.name';
+  return `archetype.${id}.name`;
+}
+
+/** Formatea numeros grandes igual que el HUD (K/M/B) para la fila del historial. */
+function formatScore(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (abs >= 1e4) return `${(value / 1e3).toFixed(1)}K`;
+  return Math.round(value).toLocaleString();
 }
 
 function historyRow(entry: HistoryEntryView): HTMLElement {
@@ -73,12 +106,46 @@ function historyRow(entry: HistoryEntryView): HTMLElement {
     ascTag.textContent = asc;
     head.appendChild(ascTag);
   }
+  // El arquetipo es lo que hace comparables dos runs: "perdi en el ante 3" se
+  // lee MUY distinto si fue con Esporas o con Colonia.
+  const archTag = document.createElement('span');
+  archTag.className = 'history-archetype';
+  archTag.dataset['archetype'] = entry.archetype ?? '';
+  archTag.textContent = t(archetypeNameKey(entry.archetype));
+  head.appendChild(archTag);
 
   const meta = document.createElement('span');
   meta.className = 'history-meta';
   meta.textContent = t('history.detail', { ante: entry.ante, seed: entry.seed });
 
   body.append(head, meta);
+
+  // Ficha de numeros: solo los que EXISTEN (las partidas viejas no los tienen).
+  // Un historial que solo dice "ganaste/perdiste" no cuenta una run; estos
+  // cuatro numeros hacen que dos derrotas se lean distintas.
+  const statDefs: Array<[string, number | undefined]> = [
+    ['bestHand', entry.bestHand],
+    ['totalScore', entry.totalScore],
+    ['blinds', entry.blindsCleared],
+    ['destroyed', entry.cardsDestroyed],
+  ];
+  const stats = document.createElement('span');
+  stats.className = 'history-stats';
+  for (const [key, value] of statDefs) {
+    if (typeof value !== 'number') continue;
+    const stat = document.createElement('span');
+    stat.className = 'history-stat';
+    stat.dataset['stat'] = key;
+    const label = document.createElement('span');
+    label.className = 'history-stat-label';
+    label.textContent = t(`history.stat.${key}`);
+    const num = document.createElement('span');
+    num.className = 'history-stat-value';
+    num.textContent = formatScore(value);
+    stat.append(label, num);
+    stats.appendChild(stat);
+  }
+  if (stats.childElementCount > 0) body.appendChild(stats);
 
   const when = document.createElement('span');
   when.className = 'history-when';

@@ -70,6 +70,11 @@ export function cardDefFaceUrl(
     art: def.art,
     substrate: def.baseSubstrate,
     spores: def.baseSpores,
+    // Taxonomia traducida para la cabecera: Elemento · Familia se leen en la
+    // CARA, no solo en el tooltip. La spec no traduce, asi que las etiquetas
+    // viajan ya resueltas.
+    elementLabel: translate(`element.${def.element}`),
+    familyLabel: translate(`family.${def.family}`),
     // P1.1/P1.2 — Misma jerarquia que en la mesa: si la carta tiene habilidad,
     // la cara de la tienda/recompensa/coleccion dibuja la etiqueta y el panel
     // lila. El plan exige el mismo tratamiento en la carta ampliada.
@@ -109,6 +114,8 @@ export function offerFaceUrl(
         art: def.art,
         substrate: def.baseSubstrate,
         spores: def.baseSpores,
+        elementLabel: translate(`element.${def.element}`),
+        familyLabel: translate(`family.${def.family}`),
         hasAbility: (def.effects?.length ?? 0) > 0,
       };
     } else if (offer.kind === 'joker' || offer.kind === 'mutation') {

@@ -12,8 +12,15 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder. Repo: Golducke31/FungiFlus
 `tools/simulate.ts` runs the whole sim at top level (no `import.meta.main`); importing it runs 100 games. When the engine gains a phase, `tools/simulate.ts` MUST gain a `while`/`if` branch or it aborts (`estado inesperado: X`). `sim:balance` (500) + `sim:board` must stay green.
 
 ## Flow
-menu → blind_select → playing → reward → shop (leaveShop may detour to interlude). **A "Ciego superado" interstitial (`.panel.is-cleared`, `cleared-continue`) shows BEFORE the reward draft** — HUD `case 'reward'` gates it via `clearedShown`.
-Deck: `engine.deckSize` = piles+hand (40); HUD chip `deckDraw/deckSize`; `deckDraw` monotonic within round. `conserveDeck()` returns hand to discard on win/loss.
+menu → **archetypes (selector, NEW)** → blind_select → playing → reward → shop (leaveShop may detour to interlude). **A "Ciego superado" interstitial (`.panel.is-cleared`, `cleared-continue`) shows BEFORE the reward draft** — HUD `case 'reward'` gates it via `clearedShown`.
+Deck: `engine.deckSize` = piles+hand; **classic = 40, each archetype starter = 20**; HUD chip `deckDraw/deckSize`; `deckDraw` monotonic within round. `conserveDeck()` returns hand to discard on win/loss.
+
+## Archetypes (2026-10-03, Tanda 7)
+- `src/data/archetypes.json` = single source of the 4 archetypes (`spores`/`colony`/`decay`/`crystal`) + `classic` (id `''`): nameKey/taglineKey/descKey/howKey/weaknessKey, `element`, `accentElement`, `starter` (20 cards), `bias`. Read ONLY via `src/meta/Archetypes.ts` (`ARCHETYPES`/`getArchetype`/`starterFor`/`biasFor`, `CLASSIC_ARCHETYPE_ID=''`) which discards malformed entries.
+- Loadout: `GameEngine.setArchetypeLoadout(starter, bias)` then `startRun(seed?, ascension=0, archetype='')`; `createRunState(..., archetype)` stores `run.archetype` (serialized + migrated). Shop bias: `OfferService.RollContext.elementBias` → `elementWeights` = `{primary:3, secondary:2}`, applied in `CardRegistry.rollRandomCard(rng, filter?, rarityWeights?, tag?, elementWeights?)` (multiplies rarity weight per element).
+- New engine actions `CONSUME_STATUS` + `PURGE_COST_DELTA` (`triggers/actions.ts`); `ResolutionContext.purgeCostDelta`, `RunState.purgeCostBonus` (sums into `purgeCost`).
+- Ascension panel builds `.ascension-changes` from `ascensionDeltas(current, previous)` (diffs `ascension(level).modifiers`) so the UI can't lie vs JSON.
+- Smoke: "Nueva partida" now opens the archetype panel — both `[data-act="new"]` sites must confirm with `[data-act="archetypes-start"]`; deck-size assertions use `expectedDeckSize = run.archetype ? 20 : 40`.
 
 ## UI traps (smoke catches)
 - `openOverlay()` replaces (never stacks) the prior panel + clears refs.
@@ -48,7 +55,7 @@ Deck: `engine.deckSize` = piles+hand (40); HUD chip `deckDraw/deckSize`; `deckDr
 Unlock doors (R2): `unlock-rules.json` → `UnlockTracker` → `pendingUnlocks` → `PackGate`. Vouchers (R3): `priceOf(offer)` only price source. History (R5) cap 20.
 
 ## Art rule
-All new art AI-generated img2img (never procedural/SVG); anchor `art-source/art_card_<element>_common.png`. `cardFaceUrl`/`offerFaceUrl` single source.
+All new art AI-generated img2img (never procedural/SVG); anchor `art-source/art_card_<element>_common.png`. `cardFaceUrl`/`offerFaceUrl` single source. **Every card NEEDS its own `art_card_own_<id>.webp`** — validator FAILS if two cards share an illustration (49 cards / 49 distinct as of Tanda 7). Pipeline: `art-source/*.png` → `npm run art` (= optimize_art.py + genArtIndex.mjs) → `public/art/*.webp` + manifest.
 
 ## Open bugs / notes
 - Water in `high` tier washed out (render bug).

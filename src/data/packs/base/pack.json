@@ -11,7 +11,8 @@
       "cards/01_starters.json",
       "cards/02_specimens.json",
       "cards/03_apex.json",
-      "cards/04_evolved.json"
+      "cards/04_evolved.json",
+      "cards/05_archetypes.json"
     ],
     "jokers": ["jokers.json"],
     "mutations": ["mutations.json"],

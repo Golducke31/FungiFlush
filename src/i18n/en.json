@@ -47,6 +47,11 @@
     "next": "Now",
     "start": "Fight",
     "progress": "Blind {current}/{total}",
+    "upNextTitle": "Next Challenge",
+    "singleHelp": "Beat this challenge to unlock the next one.",
+    "effect": "Effect",
+    "details": "Details",
+    "detailsTitle": "Run details",
     "orderHint": "Blinds go in order: beat this one to reach the next.",
     "locked": "Opens at ante {ante}",
     "effects": "Round effect",
@@ -100,19 +105,19 @@
     "cardsDestroyed": "Cards destroyed"
   },
   "shop": {
-  "title": "The Mycelium Market",
-  "empty": "Sold out. Nothing left on the shelf.",
-  "rerollCost": "Reroll ({cost})",
-  "sold": "SOLD",
-  "voucher": "Upgrade",
-  "tabBuy": "Buy",
-  "tabSell": "Sell",
-  "sellTitle": "Sell what no longer serves you",
-  "sellEmpty": "You have no simbionts to sell.",
-  "sellHint": "Selling refunds Fungis and frees a slot.",
-  "sellAction": "Sell for {value}",
-  "sellConfirm": "Sure? +{value}",
-  "sellDone": "Sold {name} for {value}",
+    "title": "The Mycelium Market",
+    "empty": "Sold out. Nothing left on the shelf.",
+    "rerollCost": "Reroll ({cost})",
+    "sold": "SOLD",
+    "voucher": "Upgrade",
+    "tabBuy": "Buy",
+    "tabSell": "Sell",
+    "sellTitle": "Sell what no longer serves you",
+    "sellEmpty": "You have no simbionts to sell.",
+    "sellHint": "Selling refunds Fungis and frees a slot.",
+    "sellAction": "Sell for {value}",
+    "sellConfirm": "Sure? +{value}",
+    "sellDone": "Sold {name} for {value}",
     "kind": {
       "card": "Card",
       "joker": "Simbiont",
@@ -489,6 +494,46 @@
     "poison_goldcap": {
       "name": "Goldcap",
       "desc": "When you gain money: +3 Spores."
+    },
+    "bridge_saprophyte": {
+      "name": "Bridge Saprophyte",
+      "desc": "Bridge card: if you play 4 or more cards, it adds +4 Substrate. Fits any deck."
+    },
+    "spore_archetype_burst_cap": {
+      "name": "Bursting Cap",
+      "desc": "With 3 or more Spores in hand, it multiplies Spores ×1.6."
+    },
+    "spore_archetype_signal": {
+      "name": "Spore Signal",
+      "desc": "When played, multiplies Spores ×2 and adds +2."
+    },
+    "colony_network_node": {
+      "name": "Network Node",
+      "desc": "Every Mycelium card you play adds +3 Substrate while it is held."
+    },
+    "colony_rhizomorph": {
+      "name": "Rhizomorph",
+      "desc": "With 3 or more Tricholomataceae in hand, it adds +14 Substrate."
+    },
+    "decay_compost_heap": {
+      "name": "Compost Heap",
+      "desc": "When played, rots a random card in your hand (−2 Substrate per trigger)."
+    },
+    "decay_carrion_bloom": {
+      "name": "Carrion Bloom",
+      "desc": "Harvests all rot from your cards: each rotting stack gives +4 Spores."
+    },
+    "crystal_prism_gill": {
+      "name": "Prism Gill",
+      "desc": "When you pick a blind, purging costs 1 less Fungi. Stacks with more copies."
+    },
+    "crystal_shard_bloom": {
+      "name": "Shard Bloom",
+      "desc": "With 5 or more cards in the played hand, it multiplies Spores ×3."
+    },
+    "wild_dung_beetle": {
+      "name": "Dung Beetle",
+      "desc": "Wildcard: when played it adds +6 Substrate and +2 Spores, no conditions."
     }
   },
   "joker": {
@@ -1035,7 +1080,23 @@
     "a8": {
       "name": "Fungal Collapse",
       "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer simbiont slot, no die rerolls, and every boss gains an extra modifier."
-    }
+    },
+    "mod": {
+      "target": "Each blind's target",
+      "shop": "Shop prices",
+      "hands": "Hands per round",
+      "discards": "Discards per round",
+      "handSize": "Cards in hand",
+      "jokerSlots": "Symbiont slots",
+      "reroll": "Shop reroll cost",
+      "money": "Fungis to start",
+      "purge": "Purge cost",
+      "noDieReroll": "No rerolling the die"
+    },
+    "rewardUnlock": "▸ Beating it unlocks level A{next}",
+    "rewardMax": "▸ Summit: beating it closes the ladder",
+    "why": "What it demands",
+    "whyBody": "Each rung takes away a safety net. For players who already know the base deck and want every hand to truly count."
   },
   "cosmetics": {
     "title": "Cosmetics",
@@ -1054,7 +1115,13 @@
     "empty": "You haven't played any run yet.",
     "win": "Victory",
     "loss": "Defeat",
-    "detail": "Ante {ante} · Seed {seed}"
+    "detail": "Ante {ante} · Seed {seed}",
+    "stat": {
+      "bestHand": "Best hand",
+      "totalScore": "Total score",
+      "blinds": "Blinds",
+      "destroyed": "Cards destroyed"
+    }
   },
   "guide": {
     "intro": "Build mushroom hands to overcome challenges.",
@@ -1087,6 +1154,7 @@
     "breakdownMult": "Multiplier",
     "breakdownTotal": "Total",
     "abilityTag": "ABILITY",
+    "abilityHint": "This card has an effect that triggers on its own. The violet border and the ✦ mark it.",
     "abilityActivated": "{name} activated",
     "substrateBonus": "Substrate bonus",
     "firstBlindTitle": "Your first Blind",
@@ -1122,13 +1190,13 @@
     "ability": "Ability",
     "default": "Default",
     "recommended": "Recommended order",
-  "confirm": "Sorted by {criterion}",
-  "confirmDefault": "Original order restored",
-  "alreadySorted": "The hand was already in that order",
-  "auto": "Auto-sort",
-  "autoOn": "Auto-sort: {criterion}",
-  "autoOff": "Auto-sort off"
-},
+    "confirm": "Sorted by {criterion}",
+    "confirmDefault": "Original order restored",
+    "alreadySorted": "The hand was already in that order",
+    "auto": "Auto-sort",
+    "autoOn": "Auto-sort: {criterion}",
+    "autoOff": "Auto-sort off"
+  },
   "deckstate": {
     "conservedTitle": "Deck kept",
     "conserved": "Deck kept: {count} cards",
@@ -1245,6 +1313,48 @@
     "destroy_2": {
       "name": "Purge",
       "desc": "Destroy 2 cards"
+    }
+  },
+  "archetype": {
+    "title": "Archetype",
+    "subtitle": "Choose how you will score this run",
+    "select": "Select",
+    "selected": "Selected",
+    "startWith": "Start with {name}",
+    "deckCount": "{count}-card deck",
+    "classic": {
+      "name": "Classic",
+      "tagline": "Base deck, no bias. The original experience.",
+      "how": "Play with the full base deck and every card on equal footing. The way to learn the system with nothing pushing you in one direction.",
+      "weakness": "With no signature element the shop will not help you focus: you lean more on luck."
+    },
+    "spores": {
+      "name": "Spores",
+      "tagline": "Multiply Spores until one hand is everything.",
+      "desc": "Spores multiply your score: every card you add to the pile is worth more than the last.",
+      "how": "Gather many Spore cards and trigger the multipliers. The more spores that score in one hand, the bigger the final burst.",
+      "weakness": "With no multiplier active your hands are worth little. The most fragile archetype early on."
+    },
+    "colony": {
+      "name": "Colony",
+      "tagline": "A stable base that grows turn by turn.",
+      "desc": "Mycelium doesn't chase the big hit: it stacks solid Substrate and keeps the pace no matter what.",
+      "how": "Lay down the mycelium network, add permanent Substrate and win by consistency. Every card reinforces the others.",
+      "weakness": "Low ceiling: against bosses with very high targets you'll lack the damage spike."
+    },
+    "decay": {
+      "name": "Decay",
+      "tagline": "Turn corruption into fuel.",
+      "desc": "You apply Rotting to your own cards, then consume it to harvest Spores. The risk is real: if you don't harvest, decomposition eats your score.",
+      "how": "Mark cards with Rotting, then play the harvester to turn that status into Spores. The longer you hold out, the bigger the payoff.",
+      "weakness": "Every rotting card scores LESS while you wait. Hold too long and you lose the hand."
+    },
+    "crystal": {
+      "name": "Crystal",
+      "tagline": "Perfect explosions or nothing.",
+      "desc": "Crystal rewards complete hands: when everything lines up it multiplies hard; when it doesn't, it stays dull.",
+      "how": "Chase full, perfect hands to fire high multipliers. You get cheap purges to keep only what works.",
+      "weakness": "It depends on consistency: a poor hand has no plan B."
     }
   }
 }

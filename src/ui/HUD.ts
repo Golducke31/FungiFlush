@@ -32,7 +32,7 @@ import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
 import { SORT_LABEL_KEY, SORT_MODES, type SortMode } from './handSort';
-import { buildAscensionPanel, buildMenuPanel } from './MenuScreen';
+import { buildArchetypePanel, buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
@@ -136,6 +136,12 @@ export interface HudCallbacks {
   onEquip: (kind: 'cardback' | 'felt', id: string) => void;
   // --- R5: historial de partidas ---
   onOpenHistory: () => void;
+  // --- Arquetipos: la forma de puntuar de la run ---
+  /**
+   * El jugador eligio un arquetipo y quiere arrancar la run con el.
+   * `''` = clasico (mazo base, sin sesgo de tienda).
+   */
+  onStartRunWithArchetype: (archetypeId: string) => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -254,11 +260,6 @@ export class HUD {
   private clearedShown = false;
   /** El jugador ya apreto "Continuar" en el aviso de ciego superado. */
   private clearedAdvanced = false;
-  /**
-   * El termino "Ciego" ya se explico en esta run (P1.6). Se muestra UNA vez:
-   * repetirlo cada ante lo vuelve ruido y deja de leerse.
-   */
-  private blindExplained = false;
   /** La guia de inicio ya se mostro en esta sesion (P0.3 / v2). */
   private tutorialShown = false;
   /** Estado del mazo de la ultima transicion (P1.5), para la linea post-ciego. */
@@ -281,10 +282,17 @@ export class HUD {
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
   /** Ascension (R1): se la empuja el controlador desde el perfil. */
-  private ascensionState: { unlocked: number; selected: number; max: number } = {
+  private ascensionState: {
+    unlocked: number;
+    selected: number;
+    max: number;
+    /** Modificadores por nivel, para el detalle "que cambia". Indice = nivel. */
+    modifiers: Array<Record<string, number | boolean | undefined> | undefined>;
+  } = {
     unlocked: 0,
     selected: 0,
     max: 0,
+    modifiers: [],
   };
   /** Cosméticos (R4b): se los empuja el controlador desde el perfil. */
   private cosmeticsState: CosmeticsState = {
@@ -293,6 +301,24 @@ export class HUD {
   };
   /** Historial (R5): se lo empuja el controlador desde el perfil. */
   private historyState: HistoryEntryView[] = [];
+  /**
+   * Arquetipos disponibles y el elegido. Los empuja el controlador desde el
+   * contenido (`archetypes.json`) y el perfil: el HUD no conoce ninguno de los
+   * dos. `starterSizes` es el total de cartas de cada mazo inicial, para que la
+   * tarjeta pueda decir "Mazo de 20 cartas" sin que el HUD cuente copias.
+   */
+  private archetypeState: {
+    list: Array<{
+      id: string;
+      nameKey: string;
+      taglineKey: string;
+      howKey: string;
+      weaknessKey: string;
+      element: string;
+    }>;
+    selected: string;
+    starterSizes: Record<string, number>;
+  } = { list: [], selected: '', starterSizes: {} };
   /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
   private closeSeq = 0;
   /** Respaldo por si `animationend` no llega (animacion desactivada). */
@@ -1759,6 +1785,8 @@ export class HUD {
         onOpenBoard: () => this.callbacks.onOpenBoard(),
         ascension: this.ascensionState,
         onOpenAscension: () => this.showAscension(),
+        archetypes: this.archetypeState.list,
+        selectedArchetype: this.archetypeState.selected,
       },
       {
         onStartRun: () => this.callbacks.onStartRun(),
@@ -1774,6 +1802,11 @@ export class HUD {
         onOpenCosmetics: () => this.callbacks.onOpenCosmetics(),
         onOpenHistory: () => this.showHistory(),
         onOpenGuide: () => this.callbacks.onOpenGuide(),
+        onSelectArchetype: () => {
+          // Solo se usa desde el panel (que llama a `onStart` con el id); el
+          // chip del menu abre el panel. Se deja por completitud del contrato.
+        },
+        onOpenArchetypes: () => this.showArchetypes(),
       },
     );
     this.openOverlay(panel);
@@ -1783,8 +1816,52 @@ export class HUD {
    * Estado de ascension para el menu. Lo llama el controlador cada vez que el
    * perfil cambia (y antes de `showMenu`), porque el HUD no conoce el perfil.
    */
-  setAscensionState(state: { unlocked: number; selected: number; max: number }): void {
-    this.ascensionState = state;
+  setAscensionState(state: {
+    unlocked: number;
+    selected: number;
+    max: number;
+    modifiers?: Array<Record<string, number | boolean | undefined> | undefined>;
+  }): void {
+    this.ascensionState = { ...state, modifiers: state.modifiers ?? [] };
+  }
+
+  /**
+   * Estado de arquetipos para el menu. Lo empuja el controlador (contenido +
+   * perfil) antes de `showMenu`, igual que ascension.
+   */
+  setArchetypeState(state: {
+    list: Array<{
+      id: string;
+      nameKey: string;
+      taglineKey: string;
+      howKey: string;
+      weaknessKey: string;
+      element: string;
+    }>;
+    selected: string;
+    starterSizes: Record<string, number>;
+  }): void {
+    this.archetypeState = state;
+  }
+
+  /**
+   * Panel de seleccion de arquetipo. Al confirmar, delega en el controlador
+   * (que arranca la run con el mazo y el sesgo resueltos).
+   */
+  showArchetypes(): void {
+    if (this.archetypeState.list.length === 0) return;
+    const panel = buildArchetypePanel(
+      {
+        archetypes: this.archetypeState.list,
+        selected: this.archetypeState.selected,
+        starterSizes: this.archetypeState.starterSizes,
+      },
+      {
+        onStart: (id) => this.callbacks.onStartRunWithArchetype(id),
+        onClose: () => this.showMenu(),
+      },
+    );
+    this.openOverlay(panel);
   }
 
   /**
@@ -2436,55 +2513,31 @@ export class HUD {
     const panel = document.createElement('div');
     panel.className = 'panel is-blind-select';
 
-    const title = document.createElement('h2');
-    title.className = 'panel-title';
-    title.textContent = t('phase.blind_select');
-
     // Los 3 ciegos de cada ante se juegan EN ORDEN y no se eligen. El progreso
-    // `n/3` es lo que reemplaza a la vieja eleccion: dice donde estas parado sin
-    // sugerir que haya una decision (antes decia "Elegi tu ciego" y mentia).
+    // `n/3` dice donde estas parado sin sugerir que haya una decision.
     const blindCount = this.engine.availableBlinds().length;
     const blindPos = Math.min(run.blindIndex + 1, blindCount);
+    const current = this.engine.availableBlinds()[run.blindIndex];
+    const currentTarget = current ? this.engine.targetFor(current) : 0;
+
+    // --- Cabecera: PRÓXIMO DESAFÍO ---
+    //
+    // Antes esta pantalla repetia la misma informacion cuatro veces: "Ciego"
+    // como titulo Y como explicacion, dos ordenes casi identicas, el objetivo
+    // en el bloque principal Y dentro de la tarjeta, y la guia repitiendo la
+    // frase final. Ahora hay UNA sola estructura.
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t('blindCard.upNextTitle');
 
     const subtitle = document.createElement('p');
     subtitle.className = 'panel-subtitle';
     subtitle.textContent = `${t('hud.ante')} ${run.ante} · ${t('blindCard.progress', { current: blindPos, total: blindCount })} · ${t('hud.money')} ${formatNumber(run.money)}`;
 
-    const orderHint = document.createElement('p');
-    orderHint.className = 'blind-help is-order';
-    orderHint.dataset['act'] = 'blind-order-hint';
-    const orderTag = document.createElement('span');
-    orderTag.className = 'blind-help-tag';
-    orderTag.textContent = t('hud.blind');
-    const orderText = document.createElement('span');
-    orderText.className = 'blind-help-text';
-    orderText.textContent = t('blindCard.orderHint');
-    orderHint.append(orderTag, orderText);
-
-    // P1.6 — Explicar "Ciego" la PRIMERA vez que aparece.
-    //
-    // "Ciego" es jerga de roguelite y no se deduce mirando la pantalla. Se
-    // explica UNA sola vez por run (`blindExplained`), en el mismo lugar donde
-    // el jugador tiene que elegir: si se repite cada vez se vuelve ruido, y si
-    // nunca aparece el jugador adivina que es un enemigo o un castigo.
-    let blindHelp: HTMLElement | null = null;
-    if (!this.blindExplained) {
-      this.blindExplained = true;
-      blindHelp = document.createElement('p');
-      blindHelp.className = 'blind-help';
-      blindHelp.dataset['act'] = 'blind-help';
-      const helpTag = document.createElement('span');
-      helpTag.className = 'blind-help-tag';
-      helpTag.textContent = t('hud.blind');
-      const helpText = document.createElement('span');
-      helpText.className = 'blind-help-text';
-      helpText.textContent = t('guide.whatIsBlind');
-      blindHelp.append(helpTag, helpText);
-    }
-
     // P2.3 — Aviso de que el objetivo esta alterado por un interludio. Sin
     // esto, un jugador que acepto "+15% de objetivo" veria un numero distinto
-    // al del contenido y no sabria por que.
+    // al del contenido y no sabria por que. Se mantiene porque NO es duplicado:
+    // es un dato extra que ninguna otra parte de la pantalla dice.
     const interludeMul = run.interludeModifiers?.targetMultiplier ?? 1;
     let interludeNotice: HTMLElement | null = null;
     if (Math.abs(interludeMul - 1) > 0.001) {
@@ -2504,43 +2557,40 @@ export class HUD {
       interludeNotice.append(noticeTag, noticeText);
     }
 
-    const grid = document.createElement('div');
-    grid.className = 'blind-grid';
+    // --- Tarjeta unica del desafio en curso ---
+    //
+    // Solo se dibuja el ciego ACTUAL a tamano completo: los ya superados quedan
+    // como una tira de puntos (ruta) y el siguiente no se adelanta. Antes se
+    // listaban los 3 con toda su ficha y la pantalla se leia como una tienda.
+    const focus = document.createElement('div');
+    focus.className = 'blind-focus';
 
-    const blinds = this.engine.availableBlinds();
-    blinds.forEach((blind, index) => {
-      const target = this.engine.targetFor(blind);
-      // Un ciego es JEFE si trae efectos ambientales: es la convencion del
-      // contenido (ver blinds.json: solo los `*_boss` declaran `effects`).
-      const isBoss = (blind.effects?.length ?? 0) > 0;
-      const isCurrent = index === run.blindIndex;
-      // Los ciegos ya jugados en este ante quedan marcados y apagados: la ruta
-      // se lee de un golpe ("voy por el del medio").
-      const isPast = index < run.blindIndex;
+    // Tira de ruta: 3 marcas que dicen en que punto del ante estas.
+    const route = document.createElement('div');
+    route.className = 'blind-route';
+    route.dataset['act'] = 'blind-route';
+    for (let i = 0; i < blindCount; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'blind-route-dot';
+      if (i < run.blindIndex) dot.classList.add('is-done');
+      if (i === run.blindIndex) dot.classList.add('is-now');
+      dot.dataset['blindRouteIndex'] = String(i);
+      route.appendChild(dot);
+    }
+
+    if (current) {
+      const isBoss = (current.effects?.length ?? 0) > 0;
 
       const card = document.createElement('div');
-      card.className = [
-        'blind-card',
-        isCurrent ? 'is-current' : '',
-        isPast ? 'is-past' : '',
-        isBoss ? 'is-boss' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-      // Hooks de test/smoke: id, tier y estado del ciego, sin depender del
-      // orden DOM.
+      card.className = `blind-card is-current${isBoss ? ' is-boss' : ''}`;
       card.dataset['act'] = 'blind';
-      card.dataset['blind'] = blind.id;
+      card.dataset['blind'] = current.id;
       card.dataset['blindBoss'] = isBoss ? '1' : '0';
-      if (blind.tier) card.dataset['blindTier'] = blind.tier;
-      if (isCurrent) card.dataset['blindCurrent'] = '1';
-      if (isPast) card.dataset['blindPast'] = '1';
+      card.dataset['blindCurrent'] = '1';
+      if (current.tier) card.dataset['blindTier'] = current.tier;
 
-      // --- Ilustracion ---
-      // Va PRIMERO en el DOM y el CSS la pone de fondo: es el mismo patron que
-      // la cara de carta de la tienda, y deja el texto por encima sin capas
-      // extra. Sin arte, la tarjeta se queda con su material.
-      const art = this.blindArt?.(blind.art);
+      // Ilustracion: fondo a sangre (mismo patron que la cara de carta).
+      const art = this.blindArt?.(current.art);
       if (art?.src) {
         const artImg = document.createElement('img');
         artImg.className = 'blind-art';
@@ -2550,14 +2600,12 @@ export class HUD {
         card.appendChild(artImg);
       }
 
-      // --- Cabecera: nombre + etiqueta de jefe ---
+      // Cabecera: nombre + etiqueta JEFE.
       const head = document.createElement('div');
       head.className = 'blind-head';
-
       const name = document.createElement('div');
       name.className = 'blind-name';
-      name.textContent = t(blind.nameKey);
-
+      name.textContent = t(current.nameKey);
       head.append(name);
       if (isBoss) {
         const bossTag = document.createElement('span');
@@ -2565,98 +2613,74 @@ export class HUD {
         bossTag.textContent = t('blindCard.boss');
         head.append(bossTag);
       }
-      if (isPast) {
-        const doneTag = document.createElement('span');
-        doneTag.className = 'blind-tag is-done';
-        doneTag.textContent = t('blindCard.cleared');
-        head.append(doneTag);
-      }
-      if (isCurrent) {
-        const nowTag = document.createElement('span');
-        nowTag.className = 'blind-tag is-now';
-        nowTag.textContent = t('blindCard.next');
-        head.append(nowTag);
+
+      // Descripcion: para un ciego normal es sabor; para un JEFE es su EFECTO
+      // (el contenido pone la regla en `descKey`), asi que se etiqueta como tal
+      // en vez de repetirla dos veces. En un ciego comun se muestra solo si
+      // aporta algo distinto del nombre.
+      const descText = t(current.descKey);
+      let desc: HTMLElement | null = null;
+      if (descText && descText !== t(current.nameKey)) {
+        desc = document.createElement('div');
+        desc.className = isBoss ? 'blind-effect' : 'blind-desc';
+        if (isBoss) {
+          const effectTag = document.createElement('span');
+          effectTag.className = 'blind-effect-tag';
+          effectTag.textContent = t('blindCard.effect');
+          const effectBody = document.createElement('span');
+          effectBody.className = 'blind-effect-text';
+          effectBody.textContent = descText;
+          desc.append(effectTag, effectBody);
+        } else {
+          desc.textContent = descText;
+        }
       }
 
-      const desc = document.createElement('div');
-      desc.className = 'blind-desc';
-      desc.textContent = t(blind.descKey);
-
-      // --- Objetivo / Manos / Descartes / Recompensa (P0.1) ---
-      //
-      // El plan pide que el jugador vea DE UN GOLPE las cuatro cosas que
-      // definen el desafio: cuanto tiene que conseguir, con cuantas manos,
-      // cuantos descartes y que gana.
-      //
-      // Manos y descartes son los valores BASE de la run: el dado ya no forma
-      // parte del flujo normal (es habilidad del Simbionte legendario, se carga
-      // DENTRO del ciego), asi que aca no hay tirada que consultar.
+      // Estadisticas: Objetivo / Manos / Descartes. Una sola vez, en su zona
+      // fija. Manos y descartes son los valores BASE de la run.
       const handsForBlind = Math.max(1, run.baseHands);
       const discardsForBlind = Math.max(0, run.baseDiscards);
 
-      const objective = document.createElement('div');
-      objective.className = 'blind-objective';
+      const stats = document.createElement('div');
+      stats.className = 'blind-stats';
+      stats.dataset['act'] = 'blind-stats';
 
-      const objectiveLine = document.createElement('div');
-      objectiveLine.className = 'blind-objective-line';
+      const objectiveCell = document.createElement('div');
+      objectiveCell.className = 'blind-stat is-objective';
+      objectiveCell.dataset['blindResource'] = 'objective';
       const objectiveLabel = document.createElement('span');
-      objectiveLabel.className = 'blind-objective-label';
+      objectiveLabel.className = 'blind-stat-label';
       objectiveLabel.textContent = t('guide.goalTitle');
       const objectiveValue = document.createElement('span');
-      objectiveValue.className = 'blind-objective-value';
-      objectiveValue.textContent = t('blindCard.objectiveValue', { count: formatNumber(target) });
-      objectiveLine.append(objectiveLabel, objectiveValue);
-      objective.appendChild(objectiveLine);
+      objectiveValue.className = 'blind-stat-value is-objective';
+      objectiveValue.textContent = formatNumber(currentTarget);
+      objectiveCell.append(objectiveLabel, objectiveValue);
 
-      const resources = document.createElement('div');
-      resources.className = 'blind-resources';
-      const resourceCells: Array<[string, string, number]> = [
-        ['hands', t('guide.handsTitle'), handsForBlind],
-        ['discards', t('guide.discardsTitle'), discardsForBlind],
-      ];
-      for (const [kind, label, value] of resourceCells) {
-        const cell = document.createElement('div');
-        cell.className = `blind-resource is-${kind}`;
-        cell.dataset['blindResource'] = kind;
-        const cellValue = document.createElement('span');
-        cellValue.className = 'blind-resource-value';
-        cellValue.textContent = formatNumber(value);
-        const cellLabel = document.createElement('span');
-        cellLabel.className = 'blind-resource-label';
-        cellLabel.textContent = label;
-        cell.append(cellValue, cellLabel);
-        resources.appendChild(cell);
-      }
-      objective.appendChild(resources);
+      const handsCell = document.createElement('div');
+      handsCell.className = 'blind-stat is-hands';
+      handsCell.dataset['blindResource'] = 'hands';
+      const handsLabel = document.createElement('span');
+      handsLabel.className = 'blind-stat-label';
+      handsLabel.textContent = t('guide.handsTitle');
+      const handsValue = document.createElement('span');
+      handsValue.className = 'blind-stat-value';
+      handsValue.textContent = formatNumber(handsForBlind);
+      handsCell.append(handsLabel, handsValue);
 
-      // --- Metricas: multiplicador y objetivo ---
-      const metrics = document.createElement('div');
-      metrics.className = 'blind-metrics';
+      const discardsCell = document.createElement('div');
+      discardsCell.className = 'blind-stat is-discards';
+      discardsCell.dataset['blindResource'] = 'discards';
+      const discardsLabel = document.createElement('span');
+      discardsLabel.className = 'blind-stat-label';
+      discardsLabel.textContent = t('guide.discardsTitle');
+      const discardsValue = document.createElement('span');
+      discardsValue.className = 'blind-stat-value';
+      discardsValue.textContent = formatNumber(discardsForBlind);
+      discardsCell.append(discardsLabel, discardsValue);
 
-      const mult = document.createElement('div');
-      mult.className = 'blind-metric';
-      const multValue = document.createElement('div');
-      multValue.className = 'blind-metric-value is-mult';
-      // `x1` y `x1.5` se leen mejor que `x1.0`: se cae el decimal inutil.
-      multValue.textContent = `×${formatMultiplier(blind.scoreMultiplier)}`;
-      const multLabel = document.createElement('div');
-      multLabel.className = 'blind-metric-label';
-      multLabel.textContent = t('blindCard.mult');
-      mult.append(multValue, multLabel);
+      stats.append(objectiveCell, handsCell, discardsCell);
 
-      const tgt = document.createElement('div');
-      tgt.className = 'blind-metric';
-      const tgtValue = document.createElement('div');
-      tgtValue.className = 'blind-metric-value is-target';
-      tgtValue.textContent = formatNumber(target);
-      const tgtLabel = document.createElement('div');
-      tgtLabel.className = 'blind-metric-label';
-      tgtLabel.textContent = t('blindCard.target');
-      tgt.append(tgtValue, tgtLabel);
-
-      metrics.append(mult, tgt);
-
-      // --- Recompensa ---
+      // Recompensa: un solo lugar, con el multiplicador como contexto.
       const reward = document.createElement('div');
       reward.className = 'blind-reward';
       const rewardIcon = document.createElement('img');
@@ -2666,22 +2690,45 @@ export class HUD {
       rewardIcon.setAttribute('aria-hidden', 'true');
       const rewardAmount = document.createElement('span');
       rewardAmount.className = 'blind-reward-amount';
-      rewardAmount.textContent = `+${formatNumber(blind.reward)}`;
+      rewardAmount.textContent = `+${formatNumber(current.reward)}`;
       const rewardLabel = document.createElement('span');
       rewardLabel.textContent = t('blindCard.reward');
       reward.append(rewardIcon, rewardAmount, rewardLabel);
+      const multTag = document.createElement('span');
+      multTag.className = 'blind-reward-mult';
+      multTag.textContent = `×${formatMultiplier(current.scoreMultiplier)} ${t('blindCard.mult')}`;
+      reward.append(multTag);
 
-      card.append(head, desc, objective, metrics, reward);
+      card.append(head);
+      if (desc) card.appendChild(desc);
+      card.append(stats, reward);
+      focus.append(card);
+    }
 
-      grid.appendChild(card);
-    });
+    // --- Una sola linea de ayuda ---
+    //
+    // Reemplaza a las dos ordenes casi identicas + la explicacion de "Ciego"
+    // que se repetia cada vez. Se muestra SIEMPRE (no "una vez por run"): es la
+    // unica frase que hay y resume como funciona la pantalla.
+    const help = document.createElement('p');
+    help.className = 'blind-help is-order';
+    help.dataset['act'] = 'blind-help';
+    const helpTag = document.createElement('span');
+    helpTag.className = 'blind-help-tag';
+    helpTag.textContent = t('hud.blind');
+    const helpText = document.createElement('span');
+    helpText.className = 'blind-help-text';
+    helpText.textContent = t('blindCard.singleHelp');
+    help.append(helpTag, helpText);
 
+    // --- Acciones ---
+    //
+    // UNA accion principal (Luchar) y UNA secundaria (Menu). "Continuar
+    // partida" NO va aca: en medio de una run no hay nada que continuar, eso
+    // vive en el menu principal. El mazo se abre con un boton terciario.
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
-    // Ya NO se elige ciego: cada ante juega sus 3 ciegos en orden. El boton
-    // arranca el ciego en curso (el resaltado). Es el punto de partida del ante
-    // y reemplaza al antiguo gesto del dado.
     const start = document.createElement('button');
     start.className = 'btn is-play';
     start.dataset['act'] = 'blind-start';
@@ -2689,53 +2736,95 @@ export class HUD {
     start.addEventListener('click', () => this.callbacks.onStartBlind());
     actions.appendChild(start);
 
-    if (this.continueLabel) {
-      const resume = document.createElement('button');
-      resume.className = 'btn';
-      resume.textContent = `${t('ui.continue')} — ${this.continueLabel}`;
-      resume.addEventListener('click', () => this.callbacks.onContinueRun());
-      actions.appendChild(resume);
-    }
-
     const deck = document.createElement('button');
     deck.className = 'btn';
     deck.textContent = `${t('deck.open')} (${run.deck.totalSize})`;
     deck.dataset['act'] = 'deck';
     deck.addEventListener('click', () => this.callbacks.onOpenDeck());
 
-    const newRun = document.createElement('button');
-    newRun.className = 'btn is-ghost';
-    newRun.textContent = t('ui.newRun');
-    newRun.addEventListener('click', () => this.callbacks.onRestart());
+    const details = document.createElement('button');
+    details.className = 'btn is-ghost';
+    details.dataset['act'] = 'blind-details';
+    details.textContent = t('blindCard.details');
+    details.addEventListener('click', () => this.showRunDetails());
 
-    const langBtn = document.createElement('button');
-    langBtn.className = 'btn is-ghost';
-    langBtn.textContent = t('ui.language');
-    langBtn.addEventListener('click', () => this.callbacks.onToggleLanguage());
+    const menu = document.createElement('button');
+    menu.className = 'btn is-ghost';
+    menu.dataset['act'] = 'blind-menu';
+    menu.textContent = t('ui.menu');
+    menu.addEventListener('click', () => this.callbacks.onQuitToMenu());
 
-    actions.append(deck, newRun, langBtn);
+    actions.append(deck, details, menu);
 
-    panel.append(title, subtitle, orderHint);
-    if (blindHelp) panel.appendChild(blindHelp);
+    panel.append(title, subtitle, route, focus);
     if (interludeNotice) panel.appendChild(interludeNotice);
-    panel.append(grid, actions);
+    panel.append(help, actions);
     this.openOverlay(panel);
 
-    // Los ciegos entran en cascada. Es ADITIVO: el panel ya tiene su propia
-    // animacion de entrada; esto solo escalona las tarjetas de adentro.
-    anim
-      .sequence()
-      .fromTo(
-        grid.querySelectorAll('.blind-card'),
-        { y: 18, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: anim.d(0.3),
-          ease: anim.EASE.cssOut,
-          stagger: { amount: anim.d(0.18) },
-        },
-      );
+    // La tarjeta entra sola (ya no hay cascada de 3).
+    const card = focus.querySelector('.blind-card');
+    if (card) {
+      anim
+        .sequence()
+        .fromTo(
+          card,
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: anim.d(0.3), ease: anim.EASE.cssOut },
+        );
+    }
+  }
+
+  /**
+   * Panel de detalles de la run (semilla incluida).
+   *
+   * La semilla dejo de estar a la vista durante el flujo normal: no es una
+   * decision (no se puede cambiar) y ocupaba el lugar de datos que si importan.
+   * Aca queda a mano quien la quiera compartir o repetir, sin ensuciar la
+   * pantalla de desafio.
+   */
+  private showRunDetails(): void {
+    const run = this.engine.run;
+    const panel = document.createElement('div');
+    panel.className = 'panel is-blind-details';
+
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t('blindCard.detailsTitle');
+
+    const list = document.createElement('div');
+    list.className = 'details-list';
+    const rows: Array<[string, string]> = [
+      [t('ui.seed'), String(run.seed)],
+      [t('hud.ante'), String(run.ante)],
+      [t('ascension.title'), run.ascension > 0 ? `A${run.ascension}` : t('ascension.off')],
+      [t('deck.title'), String(run.deck.totalSize)],
+      [t('hud.money'), formatNumber(run.money)],
+    ];
+    for (const [label, value] of rows) {
+      const row = document.createElement('div');
+      row.className = 'details-row';
+      const labelEl = document.createElement('span');
+      labelEl.className = 'details-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'details-value';
+      valueEl.textContent = value;
+      valueEl.dataset['detailsValue'] = label;
+      row.append(labelEl, valueEl);
+      list.appendChild(row);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'panel-actions';
+    const back = document.createElement('button');
+    back.className = 'btn is-play';
+    back.dataset['act'] = 'blind-details-back';
+    back.textContent = t('ui.close');
+    back.addEventListener('click', () => this.showBlindSelect());
+    actions.appendChild(back);
+
+    panel.append(title, list, actions);
+    this.openOverlay(panel);
   }
 
   /**
@@ -3223,41 +3312,102 @@ export class HUD {
     name.textContent = t(def.nameKey);
     name.style.color = hexToCss(ELEMENT_COLOR[def.element]);
 
-    const meta = document.createElement('div');
-    meta.className = 'tooltip-meta';
-    meta.textContent = `${t(`element.${def.element}`)} · ${t(`family.${def.family}`)} · ${t(`rarity.${def.rarity}`)}`;
+    // Taxonomia con badges GRANDES: Familia y Elemento son lo que mas se
+    // consulta al comparar dos cartas, y como texto plano "Agaricácea ·
+    // Esporas · Común" se leia de corrido y costaba encontrar uno de los dos.
+    // Cada uno lleva su forma (chip de color con inicial) ademas del color, asi
+    // la jerarquia no depende solo del tono.
+    const taxonomy = document.createElement('div');
+    taxonomy.className = 'tooltip-taxonomy';
+
+    const elementBadge = document.createElement('span');
+    elementBadge.className = 'tooltip-badge is-element';
+    elementBadge.dataset['badge'] = 'element';
+    elementBadge.style.setProperty('--badge-color', hexToCss(ELEMENT_COLOR[def.element]));
+    const elementGlyph = document.createElement('span');
+    elementGlyph.className = 'tooltip-badge-glyph';
+    // La inicial del elemento es un ancla legible cuando no hay icono.
+    elementGlyph.textContent = t(`element.${def.element}`).charAt(0).toUpperCase();
+    const elementText = document.createElement('span');
+    elementText.className = 'tooltip-badge-text';
+    elementText.textContent = t(`element.${def.element}`);
+    elementBadge.append(elementGlyph, elementText);
+
+    const familyBadge = document.createElement('span');
+    familyBadge.className = 'tooltip-badge is-family';
+    familyBadge.dataset['badge'] = 'family';
+    familyBadge.style.setProperty('--badge-color', hexToCss(ELEMENT_COLOR[def.element]));
+    const familyGlyph = document.createElement('span');
+    familyGlyph.className = 'tooltip-badge-glyph';
+    familyGlyph.textContent = t(`family.${def.family}`).charAt(0).toUpperCase();
+    const familyText = document.createElement('span');
+    familyText.className = 'tooltip-badge-text';
+    familyText.textContent = t(`family.${def.family}`);
+    familyBadge.append(familyGlyph, familyText);
+
+    taxonomy.append(elementBadge, familyBadge);
+
+    const rarity = document.createElement('div');
+    rarity.className = 'tooltip-rarity';
+    rarity.textContent = t(`rarity.${def.rarity}`);
 
     const desc = document.createElement('div');
     desc.className = 'tooltip-desc';
     desc.textContent = t(def.descKey);
 
+    // Estadisticas en zona FIJA (siempre Sustrato a la izquierda, Esporas a la
+    // derecha) para que comparar dos cartas sea un barrido vertical y no una
+    // busqueda. El nivel suma al valor base como antes.
     const stats = document.createElement('div');
     stats.className = 'tooltip-stats';
 
     const substrate = document.createElement('div');
-    substrate.className = 'tooltip-stat';
+    substrate.className = 'tooltip-stat is-substrate';
+    substrate.dataset['tooltipStat'] = 'substrate';
     const sVal = document.createElement('div');
     sVal.className = 'tooltip-stat-value';
     sVal.style.color = hexToCss(0xf2a63b);
-    sVal.textContent = String(def.baseSubstrate + card.bonusSubstrate);
+    sVal.textContent = `+${def.baseSubstrate + card.bonusSubstrate}`;
     const sLabel = document.createElement('div');
     sLabel.className = 'tooltip-stat-label';
     sLabel.textContent = t('hud.substrate');
     substrate.append(sVal, sLabel);
 
     const spores = document.createElement('div');
-    spores.className = 'tooltip-stat';
+    spores.className = 'tooltip-stat is-spores';
+    spores.dataset['tooltipStat'] = 'spores';
     const pVal = document.createElement('div');
     pVal.className = 'tooltip-stat-value';
     pVal.style.color = hexToCss(0x4fd18b);
-    pVal.textContent = `x${def.baseSpores + card.bonusSpores}`;
+    pVal.textContent = `×${def.baseSpores + card.bonusSpores}`;
     const pLabel = document.createElement('div');
     pLabel.className = 'tooltip-stat-label';
     pLabel.textContent = t('hud.spores');
     spores.append(pVal, pLabel);
 
     stats.append(substrate, spores);
-    this.elTooltip.append(name, meta, desc, stats);
+
+    // HABILIDAD: la etiqueta va con FORMA (glifo ✦ + banda propia), no solo con
+    // color, para no depender del tono (accesibilidad). El mismo tratamiento que
+    // la cara de la carta y la mesa: una sola jerarquia en todo el juego.
+    const hasAbility = (def.effects?.length ?? 0) > 0;
+    let ability: HTMLElement | null = null;
+    if (hasAbility) {
+      ability = document.createElement('div');
+      ability.className = 'tooltip-ability';
+      ability.dataset['act'] = 'tooltip-ability';
+      const abilityTag = document.createElement('span');
+      abilityTag.className = 'tooltip-ability-tag';
+      abilityTag.textContent = `✦ ${t('guide.abilityTag')}`;
+      ability.appendChild(abilityTag);
+      const abilityBody = document.createElement('span');
+      abilityBody.className = 'tooltip-ability-text';
+      abilityBody.textContent = t('guide.abilityHint');
+      ability.appendChild(abilityBody);
+    }
+
+    this.elTooltip.append(name, taxonomy, rarity, desc, stats);
+    if (ability) this.elTooltip.appendChild(ability);
 
     if (card.statuses.length > 0) {
       const statuses = document.createElement('div');

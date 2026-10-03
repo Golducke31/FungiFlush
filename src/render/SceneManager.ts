@@ -59,7 +59,7 @@ import { CardCarousel, type CarouselEntryView } from './CardCarousel';
 import { Water, hitHorizontalPlane } from './Water';
 import { Die3D, type DieImpulse } from './Die3D';
 import * as anim from './anim';
-import { ELEMENT_COLOR, UI_COLORS } from './palette';
+import { ABILITY_COLOR, ELEMENT_COLOR, UI_COLORS } from './palette';
 
 // --- Constantes de layout (unidades de mundo) ---
 //
@@ -2172,6 +2172,13 @@ export class SceneManager {
 
       if (step.action === 'MULTIPLY_SPORES') this.rig.addShake(0.05);
 
+      // HABILIDAD ACTIVADA. Si la carta que origina este paso trae efectos
+      // propios (no un combo ni un bonus generico), se marca con un destello en
+      // el color de habilidad: la etiqueta "✦ HABILIDAD" dice CUALES la tienen,
+      // y esto dice CUANDO se disparan. Es la parte que no se puede deducir del
+      // color de la carta, asi que va con un VFX propio y no con un tinte.
+      this.flashAbility(step.sourceId);
+
       const sign = step.value >= 0 ? '+' : '';
       const text =
         step.action === 'MULTIPLY_SPORES' ? `x${step.value}` : `${sign}${Math.round(step.value)}`;
@@ -2234,6 +2241,26 @@ export class SceneManager {
       life: 0.7,
     });
     this.rig.addShake(Math.min(0.12, 0.02 + depth * 0.01));
+  }
+
+  /**
+   * Marca la ACTIVACION de una habilidad sobre la carta que la disparo.
+   *
+   * La etiqueta "✦ HABILIDAD" de la cara dice QUE cartas tienen efecto; sin
+   * esto, el jugador ve el numero subir pero no a QUE carta atribuirlo. El
+   * aviso es un latido corto en el lila de habilidad + un anillo de particulas,
+   * ambos con FORMA (movimiento) y color: no depende solo del tono.
+   *
+   * `ABILITY_COLOR` tiene que coincidir con el lila de la cara de carta
+   * (`CardTexture.abilityColor`) para que el jugador lea "esa misma etiqueta".
+   */
+  private flashAbility(sourceId: string): void {
+    // Solo cartas/jokers reales: los pasos de combo y orden usan ids sinteticos
+    // ("combo:*", "order:*") y no son habilidades de una carta.
+    if (sourceId.startsWith('combo:') || sourceId.startsWith('order:')) return;
+    const card3d = this.handCards.get(sourceId) ?? this.scoringCards.find((c) => c.uid === sourceId);
+    if (!card3d || !card3d.hasAbility) return;
+    this.celebrateCard(card3d, ABILITY_COLOR, 14);
   }
 
   private celebrate(): void {

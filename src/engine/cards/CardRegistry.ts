@@ -14,6 +14,7 @@ import type {
   CardDefinition,
   CardInstance,
   EffectDefinition,
+  ElementType,
   FamilyType,
   EvolutionRule,
   JokerDefinition,
@@ -328,17 +329,26 @@ export class CardRegistry {
    * `rarityWeights` permite que una tabla de oferta cambie el balance de un
    * draft concreto (por ejemplo, un draft de recompensa con mas raras) sin
    * tocar los pesos globales del juego.
+   *
+   * `elementWeights` MULTIPLICA el peso por elemento. Es el gancho que usa el
+   * arquetipo de la run para sesgar la tienda (ver `OfferService`): una carta
+   * del elemento firma pesa mas, sin excluir al resto. Se multiplica, no se
+   * reemplaza, para que el sesgo de arquetipo y el de rareza COMPONGAN en vez de
+   * que uno pise al otro.
    */
   rollRandomCard(
     rng: RNG,
     filter?: (c: CardDefinition) => boolean,
     rarityWeights?: Partial<Record<Rarity, number>>,
     tag?: string,
+    elementWeights?: Partial<Record<ElementType, number>>,
   ): CardDefinition | undefined {
     const pool = this.allCards().filter(
       (c) => (!filter || filter(c)) && (!tag || (c.tags ?? []).includes(tag)),
     );
-    const weights = pool.map((c) => rarityWeights?.[c.rarity] ?? RARITY_WEIGHT[c.rarity]);
+    const weights = pool.map(
+      (c) => (rarityWeights?.[c.rarity] ?? RARITY_WEIGHT[c.rarity]) * (elementWeights?.[c.element] ?? 1),
+    );
     return rng.weighted(pool, weights);
   }
 
