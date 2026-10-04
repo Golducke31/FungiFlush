@@ -33,6 +33,7 @@
     "progress": "Progress",
     "anteOf": "Ante {current} of {total}",
     "objective": "Goal",
+    "objectiveRemaining": "{value} to go",
     "sort": "Sort",
     "deckState": "Deck state",
     "remaining": "Remaining: {hands} hands · {discards} discards",
@@ -1339,6 +1340,8 @@
     "title": "MISSIONS",
     "reward": "+{value}",
     "completed": "Complete",
+    "toggle": "Missions {done}/{total}",
+    "allDoneBadge": "✓ Mission complete",
     "hand_500": {
       "name": "Strong hand",
       "desc": "Play a hand of 500 or more"

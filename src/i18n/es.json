@@ -33,6 +33,7 @@
     "progress": "Progreso",
     "anteOf": "Ante {current} de {total}",
     "objective": "Objetivo",
+    "objectiveRemaining": "Faltan {value} puntos",
     "sort": "Ordenar",
     "deckState": "Estado del mazo",
     "remaining": "Te quedan: {hands} manos · {discards} descartes",
@@ -1339,6 +1340,8 @@
     "title": "MISIONES",
     "reward": "+{value}",
     "completed": "Cumplida",
+    "toggle": "Misiones {done}/{total}",
+    "allDoneBadge": "✓ Misión completada",
     "hand_500": {
       "name": "Mano fuerte",
       "desc": "Juga una mano de 500 o mas"

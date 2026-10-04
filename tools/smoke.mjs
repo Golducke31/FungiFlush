@@ -585,11 +585,11 @@ const afterBlind = await page.evaluate(() => {
   for (const c of document.querySelectorAll('.counter')) {
     chips[c.title] = c.querySelector('.counter-value')?.textContent;
   }
-  // Misiones en tactil: el bloque entero (titulo + chips + gaps) tiene que
-  // caber entre su techo y la barra inferior SIN recortarse. Si `scrollHeight`
-  // supera `clientHeight` con `pointer-events: none`, la ultima mision queda
-  // invisible y el jugador no puede scrollear para verla.
-  const missions = document.querySelector('.hud-missions');
+  // Misiones en tactil (P0.3): ahora son un chip plegable en la barra inferior
+  // izquierda, NO una franja que compite con el tablero. Se verifica que el chip
+  // exista, este visible y quede DENTRO de la barra inferior (no se recorta ni
+  // trepa sobre las cartas).
+  const missions = document.querySelector('.hud-missions-toggle');
   const mb = missions?.getBoundingClientRect() ?? null;
   const lastChip = [...document.querySelectorAll('.mission-chip')].pop();
   const lb = lastChip?.getBoundingClientRect() ?? null;
@@ -680,6 +680,19 @@ const sortOverlap = await page.evaluate(async () => {
 console.log('\n--- Orden: gap minimo del abanico (regresion) ---');
 console.log(JSON.stringify(sortOverlap, null, 2));
 
+// P0.8 — REGRESION DE SEPARACION: las cartas del abanico NUNCA se pisan. El gap
+// minimo entre vecinas (en unidades de mundo de la escena) debe quedar por
+// encima del umbral de pisado. Si el layout vuelve a crear dos cartas en el
+// mismo x, el gap cae y esto falla antes de que el jugador lo vea.
+if (sortOverlap.afterSort.count >= 2 && sortOverlap.afterSort.minGap < 1.9) {
+  console.error('P0.8 FALLO: abanico se pisa tras ordenar (gap=' + sortOverlap.afterSort.minGap + ')');
+  process.exit(1);
+}
+if (sortOverlap.afterPlay.count >= 2 && sortOverlap.afterPlay.minGap < 1.9) {
+  console.error('P0.8 FALLO: abanico se pisa tras jugar mano (gap=' + sortOverlap.afterPlay.minGap + ')');
+  process.exit(1);
+}
+
 // ===========================================================================
 // Fase 4 — FLIP + ARRASTRE con gestos de puntero REALES
 // ===========================================================================
@@ -720,6 +733,33 @@ console.log(
     handBefore.map((c) => ({ uid: c.uid, sx: c.screenX, sy: c.screenY, back: c.hasBack })),
   ),
 );
+
+// P0.7 — REGRESION: ningun nodo del HUD puede montarse sobre el CENTRO de una
+// carta de la mano. Antes del pulido, la franja de misiones (107 px de alto en
+// y247–354) se pintaba encima de las cartas y `elementFromPoint` en el centro
+// de una carta devolvia el HUD en lugar del canvas: el toque se tragaba y la
+// carta no seleccionaba. Ahora las misiones son un chip plegable y el panel
+// slide-in arranca CERRADO, asi que el centro de cada carta debe quedar libre.
+// Si un nodo del HUD intercepta, lo reportamos y fallamos el smoke.
+const hudCover = await page.evaluate(() => {
+  const blocked = ['.hud-top', '.hud-bottom', '.hud-jokers', '.hud-missions-panel',
+    '.hud-missions-toggle', '.hud-status', '.overlay', '.panel'];
+  const covered = [];
+  for (const c of window.__fungiflush.scene.handState()) {
+    const el = document.elementFromPoint(c.screenX, c.screenY);
+    const hit = el ? (el.closest(blocked.join(',')) ? el.className || el.tagName : null) : 'void';
+    // El canvas (o un hijo suyo) es lo esperado: la carta se dibuja ahi.
+    const isCanvas = el && (el.tagName === 'CANVAS' || el.closest('canvas') !== null);
+    if (!isCanvas) covered.push({ uid: c.uid, x: Math.round(c.screenX), y: Math.round(c.screenY), hit });
+  }
+  return { covered };
+});
+if (hudCover.covered.length > 0) {
+  console.error('P0.7 FALLO: el HUD tapa el centro de cartas ->', JSON.stringify(hudCover.covered));
+  process.exit(1);
+}
+console.log('\n--- P0.7: centro de cartas libre de HUD ---');
+console.log(JSON.stringify(hudCover));
 
 // --- Tap: debe seguir seleccionando ---
 const tapCard = handBefore[1];
@@ -1469,7 +1509,7 @@ const deckBuilder = await page.evaluate(async () => {
   // (era el bug de Reordenar.PNG: score tapando "Mazo" y misiones cortadas).
   // Se comprueba por `display`, que es lo que decide el CSS.
   const hudVisible = {};
-  for (const sel of ['.hud-top', '.hud-jokers', '.hud-missions', '.hud-bottom']) {
+  for (const sel of ['.hud-top', '.hud-jokers', '.hud-missions-toggle', '.hud-bottom']) {
     const el = document.querySelector(sel);
     hudVisible[sel] = el ? getComputedStyle(el).display !== 'none' : null;
   }
@@ -1919,7 +1959,7 @@ const ok =
   // barra inferior (bug de Reordenar.PNG).
   chk('deckBuilder?.hudHidden.hudTop === false', deckBuilder?.hudVisible?.['.hud-top'] === false) &&
   chk('deckBuilder?.hudHidden.hudJokers === fal', deckBuilder?.hudVisible?.['.hud-jokers'] === false) &&
-  chk('deckBuilder?.hudHidden.hudMiss === false', deckBuilder?.hudVisible?.['.hud-missions'] === false) &&
+  chk('deckBuilder?.hudHidden.hudMiss === false', deckBuilder?.hudVisible?.['.hud-missions-toggle'] === false) &&
   chk('deckBuilder?.hudHidden.hudBottom === fa', deckBuilder?.hudVisible?.['.hud-bottom'] === false) &&
   chk('upgradeStep?.uid !== null', upgradeStep?.uid !== null) &&
   chk('upgradeStep?.levelAfter === (upgradeStep?.leve', upgradeStep?.levelAfter === (upgradeStep?.levelBefore ?? 0) + 1) &&

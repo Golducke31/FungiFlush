@@ -772,7 +772,7 @@ body {
    cromo del HUD.
    -------------------------------------------------------------------------- */
 
-.hud-missions {
+.hud-missions-panel {
   position: fixed;
   top: calc(50% + 130px);
   left: calc(10px + var(--safe-l));
@@ -783,8 +783,51 @@ body {
   pointer-events: none;
 }
 
-.hud-missions.is-visible {
+.hud-missions-panel.is-visible {
   display: flex;
+}
+
+/* En movil (pointer: coarse) el panel se vuelve lateral y se desliza; ver el
+   bloque @media (pointer: coarse) mas abajo. La base mantiene el look de
+   escritorio (franja fija) para que el desktop no cambie. */
+
+/* --- Chip plegable de misiones (P0.3 / HUD movil) ---
+   Vive en la esquina inferior izquierda de la barra de acciones y es el unico
+   control de misiones en tactil. Siempre visible durante la run. */
+.hud-missions-toggle {
+  position: fixed;
+  left: calc(10px + var(--safe-l));
+  bottom: calc(64px + var(--safe-b));
+  z-index: 30;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--frame-edge);
+  background: linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 100%);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: var(--font-ui, inherit);
+}
+
+.hud-missions-toggle.is-visible {
+  display: inline-flex;
+}
+
+.hud-missions-toggle.is-open {
+  background: var(--frame-body-lo);
+}
+
+.hud-missions-toggle-progress {
+  color: var(--frame-dim);
+  font-weight: 500;
+  font-size: 10px;
 }
 
 .hud-missions-title {
@@ -5962,13 +6005,124 @@ body {
    ========================================================================== */
 
 @media (pointer: coarse) {
+  /* --- Barra superior: la mitad de alto (P0.1 / HUD movil) ---
+     En movil horizontal el viewport es bajo (412px típico) y la barra de arriba
+     se comia ~23% de la pantalla con marcador + objetivo + aviso + barra. Aqui
+     se aplana: padding mínimo, marcador grande pero en una sola linea, objetivo
+     a una frase corta y SIN el aviso permanente de la barra (salió del HUD en
+     HUD.ts). El resultado medido: ~56–64px en vez de 96px. */
+  .hud-top {
+    /* P0.1 (re-ajuste CA1): la franja tiene que quedar <= 64px de alto en
+       915x412. Bajamos el padding a 4px y el gap a 6px: con el bloque de
+       score compacto eso da ~60px, no los 80px previos. */
+    padding: 4px calc(10px + var(--safe-r)) 4px calc(10px + var(--safe-l));
+    gap: 6px;
+  }
+
+  .hud-block.hud-score {
+    /* Menos aire interno: el marcador, la barra y el objetivo en un bloque
+       compacto de una sola linea. */
+    padding: 4px 9px;
+    gap: 2px;
+  }
+
+  .hud-score-main {
+    gap: 5px;
+  }
+
+  .hud-score-current {
+    /* Numero grande sigue, pero no gigante: en pantallas bajas un texto de 34px
+       ya domina la franja sin necesidad de 44px. Para CA1 bajamos a 20px y
+       ACAPILLAMOS el line-height: el numero heredaba ~1.5 y su caja de linea
+       media 33px, lo que disparaba el hud-top por encima de 64px. Con
+       line-height:1 la caja mide lo que la fuente. */
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .hud-score-target {
+    font-size: 11px;
+  }
+
+  .hud-progress {
+    margin-top: 2px;
+    height: 4px;
+  }
+
+  .hud-blind-name {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  /* El objetivo ahora es UNA frase corta ("Faltan 540 puntos"), no el puntaje
+     repetido. Ocupa una linea chica y se centra con el marcador. */
+  .hud-objective {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  /* P0.1 (CA1) — En movil el nombre del ciego se FUNDE en la linea del objetivo
+     (lo hace HUD.ts: añade ".hud-objective-blind" con el nombre). Asi no ocupa
+     un renglon propio y el hud-top baja de 64px. La linea suelta del ciego se
+     oculta en movil; en escritorio sigue en su renglon aparte. */
+  .hud-blind-name {
+    display: none;
+  }
+  .hud-objective-blind {
+    color: var(--frame-dim);
+    font-weight: 500;
+  }
+
+  /* Aviso de la barra: desaparece del HUD de juego (P0.2). La clase existe por
+     si se reusara en algun otro sitio, pero aqui no se muestra nunca. */
+  .hud-bar-notice {
+    display: none !important;
+  }
+
   /* --- Barra inferior: una sola franja ordenada --- */
   .hud-bottom {
     align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
     /* Poca separacion: preferimos que entren en una fila antes que crear aire
        que empuje los botones fuera. */
+    padding: 4px calc(10px + var(--safe-r)) calc(6px + var(--safe-b)) calc(10px + var(--safe-l));
+  }
+
+  /* La fila de chips (escritorio) se oculta en movil: la reemplaza la linea de
+     estado compacta (P0.5). Así no hay dos fuentes de los mismos datos. */
+  .hud-counters {
+    display: none;
+  }
+
+  .hud-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
     gap: 8px;
-    padding: 8px calc(10px + var(--safe-r)) calc(8px + var(--safe-b)) calc(10px + var(--safe-l));
+    min-height: 28px;
+    font-size: 13px;
+    color: var(--frame-dim);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .hud-status-part {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    white-space: nowrap;
+  }
+
+  .hud-status-value {
+    font-weight: 900;
+    color: var(--text);
+  }
+
+  .hud-status-sep {
+    color: var(--frame-dim);
+    opacity: 0.6;
   }
 
   .hud-counters {
@@ -6016,10 +6170,70 @@ body {
 
   .hud-actions .btn {
     /* Alto de toque comodo y homogeneo con los contadores: la franja entera se
-       lee como una sola fila, no como dos grupos de alturas distintas. */
-    min-height: 42px;
+       lee como una sola fila, no como dos grupos de alturas distintas. P0 (CA9):
+       >= 44px de alto de toque en movil. */
+    min-height: 44px;
     padding: 8px 13px;
     font-size: 12.5px;
+  }
+
+  /* P0.4 (HUD movil) — La guia de seleccion flota JUSTO ENCIMA de la barra de
+     acciones, en la franja libre entre las cartas y los botones. Antes estaba a
+     `bottom: 126px` fijo y caia sobre las cartas. Ahora se ancla al borde de la
+     barra inferior para no tapar jamas el tablero. La altura de la barra
+     movil (estado + acciones) ronda los ~64px + safe-bottom. */
+  .hud-select-hint {
+    bottom: calc(70px + var(--safe-b, 0px));
+    /* P0.8 — Legibilidad: el texto mas cercano a las cartas (badge "N
+       seleccionadas") no baja de 14px en tactil, asi se lee sin zoom. */
+    font-size: 14px;
+    padding: 5px 12px;
+  }
+
+  /* P0.6 (HUD movil) — Jugar Mano es el PROTAGONISTA. Mas ancho, color verde/
+     turquesa y tipografia de peso; los otros botones ceden. Los deshabilitados
+     mantienen contraste de lectura (no se ven "rotos"). */
+  .hud-actions .btn.is-play {
+    flex: 1 1 auto;
+    min-height: 48px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #06231c;
+    background: linear-gradient(180deg, #7dffd2 0%, var(--spores) 60%, #1f9a68 100%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 16px rgba(79, 209, 139, 0.55);
+  }
+
+  .hud-actions .btn.is-play:disabled {
+    /* Opacidad reducida PERO texto legible: contraste AA sobre el fondo. */
+    opacity: 0.5;
+    color: #06231c;
+    background: linear-gradient(180deg, #9fe9cf 0%, #4aa987 100%);
+    box-shadow: none;
+  }
+
+  .hud-actions .btn.is-discard {
+    color: #2a1f06;
+    background: linear-gradient(180deg, #ffd98a 0%, #e0a93b 100%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+
+  .hud-actions .btn.is-discard:disabled {
+    opacity: 0.5;
+    color: #2a1f06;
+    background: linear-gradient(180deg, #e6c98f 0%, #b9902f 100%);
+  }
+
+  .hud-actions .btn.is-sort {
+    color: var(--text);
+    border-color: rgba(150, 170, 255, 0.5);
+  }
+
+  .hud-actions .btn.is-ghost {
+    /* Limpiar: gris, cede peso al resto. */
+    color: var(--frame-dim);
+    border-color: var(--border);
   }
 
   /* --- Barra superior: tres zonas con espaciado parejo --- */
@@ -6027,9 +6241,10 @@ body {
     gap: 8px;
     /* `flex-start`, NO `stretch`: los botones de sistema (idioma/menu) tienen
        que quedar a su alto natural. Con `stretch` se estiraban a lo alto del
-       bloque de score y se veian como cajas largas. */
+       bloque de score y se veian como cajas largas. P0.1 (CA1): el padding
+       baja a 4px para que el hud-top quede <= 64px en 915x412. */
     align-items: flex-start;
-    padding: calc(8px + var(--safe-t)) calc(10px + var(--safe-r)) 8px calc(10px + var(--safe-l));
+    padding: calc(4px + var(--safe-t)) calc(10px + var(--safe-r)) 4px calc(10px + var(--safe-l));
   }
 
   .hud-ante {
@@ -6037,7 +6252,8 @@ body {
   }
 
   .hud-block {
-    padding: 6px 10px;
+    /* P0.1 (CA1): menos aire interno en el bloque de score. */
+    padding: 4px 8px;
   }
 
   .hud-value {
@@ -6045,7 +6261,7 @@ body {
   }
 
   .hud-score-current {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   /* --- Bloque de score: compacto, para que no domine la pantalla --- */
@@ -6066,7 +6282,7 @@ body {
   }
 
   .hud-score-current {
-    font-size: 24px;
+    font-size: 20px;
     line-height: 1;
   }
 
@@ -6075,8 +6291,9 @@ body {
   }
 
   .hud-progress {
-    margin-top: 5px;
-    height: 7px;
+    /* P0.1 (CA1): barra mas fina para recortar alto del bloque de score. */
+    margin-top: 3px;
+    height: 4px;
   }
 
   .hud-bar-notice {
@@ -6137,22 +6354,38 @@ body {
           alto (`100dvh - 260px`) la mantiene por debajo de la columna de jokers
           (que en este viewport ocupa hasta y=213) para que el ULTIMO chip no se
           corte contra la barra. */
-  .hud-missions {
-    top: auto;
-    bottom: calc(58px + var(--safe-b));
-    max-width: 46vw;
-    /* Tope = viewport menos un margen que deja libre el bloque de score arriba
-       (~119px) y respeta la columna de jokers (~213px). Asi el ultimo chip no
-       se corta y, a la vez, la franja nunca trepa sobre los jokers. */
-    max-height: calc(100dvh - 260px);
-    overflow-y: auto;
+  /* P0.3 (HUD movil) — El panel de misiones se vuelve lateral y se desliza
+     desde la izquierda. Cuando esta plegado (`is-open` ausente) queda fuera de
+     pantalla por transform, asi que NO tapa el tablero ni come toques. El chip
+     plegable (`hud-missions-toggle`) es el que lo abre. */
+  .hud-missions-panel {
+    top: calc(56px + var(--safe-t));
+    bottom: calc(64px + var(--safe-b));
+    left: 0;
+    right: auto;
+    max-width: 70vw;
+    width: min(280px, 70vw);
+    max-height: none;
+    transform: translateX(-110%);
+    transition: transform 0.22s var(--ease-out, ease);
     pointer-events: none;
-    /* La franja mide desde su techo hasta la barra inferior. Con `display:flex`
-       el contenido empujaba hacia ABAJO el alto y el ultimo chip se cortaba
-       contra la barra (2 misiones de 59px + titulo + gaps = 141px, pero solo
-       entraban 115px), dejando una mision invisible y sin poder scrollear
-       (pointer-events:none). Se deja que el CONTENIDO se comprima. */
+    background: linear-gradient(180deg, rgba(14, 21, 30, 0.94), rgba(10, 15, 22, 0.9));
+    border-right: 1px solid var(--frame-edge);
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5);
     gap: 4px;
+  }
+
+  .hud-missions-panel.is-visible {
+    /* Sigue oculto hasta que se abre: `is-visible` marca que HAY misiones, pero
+       el panel solo aparece con `is-open` (tocando el chip). */
+    display: flex;
+  }
+
+  .hud-missions-panel.is-open {
+    transform: translateX(0);
+    pointer-events: auto;
   }
 
   .hud-missions-title {
@@ -6259,7 +6492,8 @@ body {
      unica pantalla; el cromo de la run vuelve al cerrarlo. */
   #ui-root.is-panel-open > .hud-top,
   #ui-root.is-panel-open > .hud-jokers,
-  #ui-root.is-panel-open > .hud-missions,
+  #ui-root.is-panel-open > .hud-missions-panel,
+  #ui-root.is-panel-open > .hud-missions-toggle,
   #ui-root.is-panel-open > .hud-bottom {
     display: none;
   }

@@ -205,6 +205,8 @@ export class HUD {
   private elMoney = document.createElement('span');
   private elBlind = document.createElement('div');
   private elCounters = document.createElement('div');
+  /** P0.5 — Linea de estado compacta (movil): "4 manos · 3 descartes · Mazo 40/40". */
+  private elStatus = document.createElement('div');
   private elJokers = document.createElement('div');
   private elActions = document.createElement('div');
   private elOverlay = document.createElement('div');
@@ -236,6 +238,14 @@ export class HUD {
    * de objetivos cortos que dan direccion entre ciego y ciego.
    */
   private elMissions = document.createElement('div');
+  /**
+   * P0.3 (HUD movil) — Chip plegable de misiones. En movil horizontal la franja
+   * de misiones se comia la esquina inferior izquierda del tablero; aqui se
+   * reduce a un boton pequeno ("[ Misiones 1/2 ]") que abre el panel lateral.
+   */
+  private elMissionsToggle = document.createElement('button');
+  /** Estado plegado/abierto del panel de misiones (solo el chip lo controla). */
+  private missionsOpen = false;
   /** Contador grande: aparece durante la secuencia y suma en vivo. */
   private elTicker = document.createElement('div');
   private elTickerOp = document.createElement('span');
@@ -463,8 +473,11 @@ export class HUD {
     const bottom = document.createElement('footer');
     bottom.className = 'hud-bottom';
     this.elCounters.className = 'hud-counters';
+    this.elStatus.className = 'hud-status';
     this.elActions.className = 'hud-actions';
-    bottom.append(this.elCounters, this.elActions);
+    // P0.5 (HUD movil): dos bandas distintas en táctil bajo — estado arriba,
+    // acciones abajo — y la fila de chips (escritorio) oculta por CSS.
+    bottom.append(this.elStatus, this.elCounters, this.elActions);
 
     // --- Capas flotantes ---
     this.elOverlay.className = 'overlay';
@@ -489,14 +502,23 @@ export class HUD {
     this.elSelectHint.className = 'hud-select-hint';
     this.elSelectHint.dataset['act'] = 'select-hint';
 
-    // P2.6 — Misiones: van entre los jokers y los controles, sin capturar
-    // punteros (viven en la capa de HUD, que es pointer-events:none).
-    this.elMissions.className = 'hud-missions';
+    // P0.3 (HUD movil) — Misiones: un chip plegable + un panel lateral. El chip
+    // SI captura punteros (es el unico control de misiones en movil); el panel
+    // se desliza desde la izquierda y tambien es interactivo cuando esta abierto.
+    this.elMissionsToggle.className = 'hud-missions-toggle';
+    this.elMissionsToggle.dataset['act'] = 'missions-toggle';
+    this.elMissionsToggle.addEventListener('click', () => {
+      this.missionsOpen = !this.missionsOpen;
+      this.syncMissions();
+    });
+
+    this.elMissions.className = 'hud-missions-panel';
     this.elMissions.dataset['act'] = 'missions';
 
     this.root.append(
       top,
       this.elJokers,
+      this.elMissionsToggle,
       this.elMissions,
       bottom,
       this.elSelectHint,
@@ -725,17 +747,52 @@ export class HUD {
   }
 
   /**
-   * P2.6 — Franja de MISIONES activas. Solo se dibuja dentro de una run (en el
-   * menu no hay misiones) y se apaga sola si no hay ninguna.
+   * P0.3 (HUD movil) — Misiones plegables.
+   *
+   * En movil horizontal la franja completa tapaba la esquina inferior izquierda
+   * del tablero; ahora hay un chip pequeño ("[ Misiones 1/2 ]") SIEMPRE visible
+   * durante la run y un panel lateral que se desliza al tocarlo. El chip tambien
+   * muestra el progreso de un vistazo sin abrir ("PURGA · 0/2") y cambia a
+   * "[ ✓ Misión completada ]" cuando todas estan hechas.
    */
   private renderMissions(): void {
-    this.elMissions.innerHTML = '';
     const hasRun =
       this.engine.run.status !== 'menu' && this.engine.run.status !== 'game_over';
     const missions = hasRun ? this.engine.activeMissions() : [];
+    const pending = missions.filter((m) => !m.state.completed).length;
 
+    // El chip plegable vive en la barra inferior izquierda y es el unico control
+    // de misiones en movil: SI captura punteros (a diferencia de la franja vieja,
+    // que era informativa y no se tocaba).
+    this.elMissionsToggle.innerHTML = '';
+    if (missions.length === 0) {
+      this.elMissionsToggle.classList.remove('is-visible');
+    } else {
+      this.elMissionsToggle.classList.add('is-visible');
+      const allDone = pending === 0;
+      const label = document.createElement('span');
+      label.className = 'hud-missions-toggle-label';
+      label.textContent = allDone
+        ? t('mission.allDoneBadge')
+        : t('mission.toggle', { done: missions.length - pending, total: missions.length });
+      this.elMissionsToggle.append(label);
+      // Una mision destacada durante la partida: la primera pendiente incremental
+      // muestra su progreso ("PURGA · 0/2") para dar direccion sin abrir.
+      const featured = missions.find((m) => !m.state.completed);
+      if (featured && featured.def.incremental) {
+        const progress = document.createElement('span');
+        progress.className = 'hud-missions-toggle-progress';
+        progress.textContent = `${t(featured.def.nameKey)} · ${featured.state.progress}/${featured.def.incremental.max}`;
+        this.elMissionsToggle.append(progress);
+      }
+    }
+
+    // El panel lateral: misma lista de siempre, pero se desliza desde la
+    // izquierda (oculto por transform cuando esta plegado).
+    this.elMissions.innerHTML = '';
     if (missions.length === 0) {
       this.elMissions.classList.remove('is-visible');
+      this.syncMissions();
       return;
     }
 
@@ -774,6 +831,13 @@ export class HUD {
       this.elMissions.appendChild(chip);
     }
     this.elMissions.classList.add('is-visible');
+    this.syncMissions();
+  }
+
+  /** Aplica el estado plegado/abierto del panel de misiones a ambos nodos. */
+  private syncMissions(): void {
+    this.elMissionsToggle.classList.toggle('is-open', this.missionsOpen);
+    this.elMissions.classList.toggle('is-open', this.missionsOpen);
   }
 
   /**
@@ -788,47 +852,39 @@ export class HUD {
   private renderObjective(round: RoundState): void {
     this.elObjective.innerHTML = '';
 
-    const goal = document.createElement('span');
-    goal.className = 'hud-objective-goal';
-    goal.textContent = `${formatNumber(round.score)} / ${formatNumber(round.target)} ${t('hud.score')}`;
-
-    const sep = document.createElement('span');
-    sep.className = 'hud-objective-sep';
-    sep.setAttribute('aria-hidden', 'true');
-    sep.textContent = '·';
-
+    // P0.1 (HUD movil) — NO repetir el puntaje.
+    //
+    // Antes esta linea decia "0 / 1100 Puntos" DEBAJO del numero grande que ya
+    // muestra "0 / 1100": el mismo dato dos veces, y en un viewport de 412px de
+    // alto cada linea cuenta. Ahora el objetivo aporta lo que el numero grande
+    // NO dice: que falta y cuando termina la ronda. La linea queda en UNA sola
+    // frase corta y el puntaje vive una unica vez, arriba y grande.
     const left = document.createElement('span');
     left.className = 'hud-objective-left';
-    left.textContent = t('hud.remaining', {
-      hands: round.handsLeft,
-      discards: round.discardsLeft,
-    });
-    const handsSpan = document.createElement('span');
-    handsSpan.className = `hud-objective-num${round.handsLeft <= 1 ? ' is-low' : ''}`;
-    handsSpan.textContent = String(round.handsLeft);
-    const discardSpan = document.createElement('span');
-    discardSpan.className = `hud-objective-num${round.discardsLeft === 0 ? ' is-low' : ''}`;
-    discardSpan.textContent = String(round.discardsLeft);
 
-    // Se compone la linea a mano para poder pintar los numeros criticos en
-    // rojo: un `textContent` con interpolacion perderia esa jerarquia.
-    left.textContent = '';
-    left.append(
-      document.createTextNode(`${t('hud.remainingPrefix')} `),
-      handsSpan,
-      document.createTextNode(` ${t('hud.hands')} `),
-      sep.cloneNode(true) as HTMLElement,
-      document.createTextNode(' '),
-      discardSpan,
-      document.createTextNode(` ${t('hud.discards')}`),
-    );
+    const remaining = Math.max(0, round.target - round.score);
+    left.textContent = t('hud.objectiveRemaining', { value: formatNumber(remaining) });
 
-    this.elObjective.append(goal, left);
+    this.elObjective.append(left);
+    // P0.1 (CA1) — En movil (pointer: coarse) la franja es baja: en vez de darle
+    // al nombre del ciego su propio renglon, lo fundimos en esta misma linea del
+    // objetivo ("Faltan 540 · Ciego X"). Asi ahorramos ~13px y el hud-top queda
+    // por debajo de 64px. El umbral es el mismo que usa el CSS (coarse), asi que
+    // desktop y movil coinciden. En escritorio el nombre del ciego queda en su
+    // linea aparte (.hud-blind-name, visible).
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      const blind = document.createElement('span');
+      blind.className = 'hud-objective-blind';
+      blind.textContent = ` · ${t(round.blind.nameKey)}`;
+      this.elObjective.append(blind);
+    }
     this.elObjective.classList.add('is-visible');
 
-    // P0.2 — El aviso de "la barra avanza solo al jugar" se apaga solo tras
-    // la primera mano jugada: cumplio su funcion y repetirlo seria ruido.
-    this.elBarNotice.classList.toggle('is-visible', round.cardsPlayedThisRound === 0);
+    // P0.2 (HUD movil) — El aviso de "la barra avanza solo al jugar" ya NO es
+    // una linea permanente del HUD: ocupaba alto todo el tiempo para explicar
+    // algo que, despues de la primera mano, ya se entiende. Vive en la Guia y
+    // en el icono de ayuda (?). Aca solo se deja apagado.
+    this.elBarNotice.classList.remove('is-visible');
   }
 
   /**
@@ -1039,6 +1095,40 @@ export class HUD {
       cell.append(iconEl, valueEl, labelEl);
       this.elCounters.appendChild(cell);
     }
+
+    // P0.5 (HUD movil) — Linea de estado COMPACTA, que reemplaza a los cuatro
+    // chips en pantallas tactiles bajas. Los cuatro numeros (manos, descartes,
+    // mazo, simbiontes) pesan igual en el chip y se comprimen hasta quedar
+    // ilegibles; aqui se leen en una sola frase. La fila de chips sigue existiendo
+    // para el escritorio (que NO entra en la regla pointer:coarse) y se oculta en
+    // movil con CSS, no aqui.
+    //
+    // Orden de prioridad del plan: lo que GASTAS (manos/descartes) primero, luego
+    // el mazo (informacion), y los Simbiontes al FINAL con contexto ("Ranuras"),
+    // nunca como un "0/5" suelto. El mazo muestra el par "por robar / total".
+    this.elStatus.innerHTML = '';
+    const parts: Array<[string, string]> = [
+      [t('hud.hands'), String(round.handsLeft)],
+      [t('hud.discards'), String(round.discardsLeft)],
+      [t('hud.deck'), `${this.engine.deckDraw}/${deckTotal}`],
+      [t('hud.jokerSlots'), `${run.jokers.length}/${run.jokerSlots}`],
+    ];
+    parts.forEach(([label, value], i) => {
+      const part = document.createElement('span');
+      part.className = 'hud-status-part';
+      const v = document.createElement('span');
+      v.className = 'hud-status-value';
+      v.textContent = value;
+      part.append(v, document.createTextNode(` ${label}`));
+      this.elStatus.appendChild(part);
+      if (i < parts.length - 1) {
+        const dot = document.createElement('span');
+        dot.className = 'hud-status-sep';
+        dot.setAttribute('aria-hidden', 'true');
+        dot.textContent = '·';
+        this.elStatus.appendChild(dot);
+      }
+    });
   }
 
   /**
@@ -1141,11 +1231,16 @@ export class HUD {
 
     const selected = round.selected.length;
 
-    const clear = document.createElement('button');
-    clear.className = 'btn is-ghost';
-    clear.textContent = t('action.clear');
-    clear.disabled = selected === 0;
-    clear.addEventListener('click', () => this.callbacks.onClear());
+    // P0.5/P0.6 — "Limpiar" solo aparece cuando hay seleccion. Con 0 cartas no
+    // hay nada que limpiar, asi que el boton fantasma deshabilitado no aporta:
+    // lo omitimos del DOM para dejar espacio al boton protagonista (Jugar).
+    let clear: HTMLButtonElement | null = null;
+    if (selected > 0) {
+      clear = document.createElement('button');
+      clear.className = 'btn is-ghost';
+      clear.textContent = t('action.clear');
+      clear.addEventListener('click', () => this.callbacks.onClear());
+    }
 
     // P1.3 / P1.4 — Ordenar. NO reorganiza sola: abre un menu y el jugador
     // elige. El plan es explicito en que el orden automatico debe ser
@@ -1197,11 +1292,11 @@ export class HUD {
       dieBtn.disabled = !ready;
       dieBtn.title = t('joker.joker_loaded_die.desc');
       dieBtn.addEventListener('click', () => this.callbacks.onUseLoadedDie());
-      this.elActions.append(clear, sort, dieBtn, discard, play);
+      this.elActions.append(...(clear ? [clear] : []), sort, dieBtn, discard, play);
       return;
     }
 
-    this.elActions.append(clear, sort, discard, play);
+    this.elActions.append(...(clear ? [clear] : []), sort, discard, play);
   }
 
   /**
