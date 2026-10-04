@@ -1271,7 +1271,18 @@ export class HUD {
     const play = document.createElement('button');
     play.className = 'btn is-play';
     play.dataset['act'] = 'play';
-    play.textContent = selected > 0 ? `${t('action.play')} (${selected})` : t('action.play');
+    // P1.1 — Puntaje estimado en el boton de jugar. Cuando hay cartas
+    // seleccionadas, el motor ya calcula la previsualizacion; la mostramos
+    // en el boton para que el jugador sepa CUANTO va a puntuar antes de
+    // tocar. Formato: "Jugar Mano · 420" (o "Jugar Mano" si nada seleccionado).
+    const preview = selected > 0 ? this.engine.previewSelection() : null;
+    if (preview && preview.total > 0) {
+      play.textContent = `${t('action.play')} · ${formatNumber(preview.total)}`;
+    } else if (selected > 0) {
+      play.textContent = `${t('action.play')} (${selected})`;
+    } else {
+      play.textContent = t('action.play');
+    }
     play.disabled = selected === 0 || round.handsLeft <= 0;
     play.addEventListener('click', () => this.callbacks.onPlay());
 
