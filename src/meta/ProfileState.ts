@@ -10,7 +10,7 @@
  * la migracion sea una funcion pura testeable.
  */
 
-export const PROFILE_SAVE_VERSION = 2;
+export const PROFILE_SAVE_VERSION = 3;
 
 export type Language = 'en' | 'es';
 
@@ -178,6 +178,11 @@ export interface ProfileSave {
    * vida del perfil", y la guia queda ademas reabrible desde el menu.
    */
   seenTutorial: boolean;
+  /** P1.5 — Estado abierto/plegado de paneles UI (aditivo, v3). */
+  ui: {
+    missionsOpen: boolean;
+    helpOpen: boolean;
+  };
 }
 
 /** Tope de entradas que se conservan en `history` (las mas viejas se descartan). */
@@ -252,5 +257,6 @@ export function defaultProfile(): ProfileSave {
     archetype: { selected: '' },
     history: [],
     seenTutorial: false,
+    ui: { missionsOpen: false, helpOpen: false },
   };
 }

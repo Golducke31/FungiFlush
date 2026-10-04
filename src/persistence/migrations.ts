@@ -28,6 +28,7 @@ export const RUN_MIGRATIONS: Record<number, Migration> = {
 
 export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   1: migrateProfileV1toV2,
+  2: migrateProfileV2toV3,
 };
 
 export function migrateChain(
@@ -106,6 +107,20 @@ export function migrateProfileV1toV2(input: UnknownRecord): UnknownRecord {
     ...input,
     version: 2,
     seenTutorial: input['seenTutorial'] === true,
+  };
+}
+
+/**
+ * Perfil: v2 -> v3
+ *
+ * v3 agrega `ui` (estado de paneles: misiones plegadas, ayuda abierta).
+ * Default todo cerrado: un perfil v2 no tiene preferencias previas.
+ */
+export function migrateProfileV2toV3(input: UnknownRecord): UnknownRecord {
+  return {
+    ...input,
+    version: 3,
+    ui: { missionsOpen: false, helpOpen: false },
   };
 }
 
@@ -212,6 +227,10 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     archetype,
     history,
     seenTutorial,
+    ui: {
+      missionsOpen: (migrated['ui'] as UnknownRecord)?.['missionsOpen'] === true,
+      helpOpen: (migrated['ui'] as UnknownRecord)?.['helpOpen'] === true,
+    },
   };
 }
 

@@ -198,6 +198,8 @@ const MAX_ANIMATED_STEPS = 12;
 export interface SceneCallbacks {
   /** El jugador toco/cliqueo una carta de la mano. */
   onCardClick: (uid: string) => void;
+  /** P1.3 — Toque largo o doble toque sobre carta de la mano: abrir detalle. */
+  onCardDetail?: (uid: string) => void;
   /** El puntero entro/salio de una carta (solo raton). */
   onHoverChange: (card: CardInstance | null) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
@@ -473,6 +475,8 @@ export class SceneManager {
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
       onClick: (card) => this.handleClick(card),
+      onLongPress: (card) => this.handleLongPress(card),
+      onDoubleTap: (card) => this.handleDoubleTap(card),
       onDragStart: (card) => this.handleDragStart(card),
       onDrag: (card, point, zone) => this.handleDrag(card, point, zone),
       onDrop: (card, zone) => this.handleDrop(card, zone),
@@ -1678,6 +1682,24 @@ export class SceneManager {
       card3d.setSelected(selectedUids.includes(card.uid));
     }
 
+    // P1.2 — Resaltar cartas compatibles con la selección actual.
+    // Una carta es "compatible" si comparte elemento O familia con alguna
+    // carta ya seleccionada. Esto guía al jugador hacia combos sin forzarlo.
+    const selectedCards = cards.filter((c) => selectedUids.includes(c.uid));
+    const selElements = new Set(selectedCards.map((c) => c.def.element));
+    const selFamilies = new Set(selectedCards.map((c) => c.def.family));
+    for (const card of cards) {
+      if (selectedUids.includes(card.uid)) continue;
+      const card3d = this.handCards.get(card.uid);
+      if (!card3d) continue;
+      const isCompat = selElements.has(card.def.element) || selFamilies.has(card.def.family);
+      card3d.setCompatible(isCompat);
+    }
+    // Si no hay selección, apagar todos los compatibles.
+    if (selectedCards.length === 0) {
+      for (const card3d of this.handCards.values()) card3d.setCompatible(false);
+    }
+
     // REORDENAR EL MAP SEGUN EL MOTOR.
     //
     // `layoutHand()` recorre `handCards` para decidir la posicion de cada carta,
@@ -2388,6 +2410,16 @@ export class SceneManager {
   private handleClick(card: Card3D): void {
     if (card.kind !== 'card') return;
     this.callbacks.onCardClick(card.uid);
+  }
+
+  private handleLongPress(card: Card3D): void {
+    if (card.kind !== 'card') return;
+    this.callbacks.onCardDetail?.(card.uid);
+  }
+
+  private handleDoubleTap(card: Card3D): void {
+    if (card.kind !== 'card') return;
+    this.callbacks.onCardDetail?.(card.uid);
   }
 
   private handleHover(card: Card3D | null): void {

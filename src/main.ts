@@ -500,6 +500,9 @@ async function boot(): Promise<void> {
       onCardClick: (uid) => {
         engine.toggleSelect(uid);
       },
+      onCardDetail: (uid) => {
+        hud?.showCardDetail(uid);
+      },
       onHoverChange: (card) => {
         if (!hud) return;
         if (!card) {
@@ -1070,8 +1073,18 @@ async function boot(): Promise<void> {
       onPurge: doPurge,
       onUpgrade: doUpgrade,
       onEvolve: doEvolve,
+      // P1.5 — Persistir estado de paneles UI en el perfil.
+      onUiStateChange: (state) => {
+        profileStore.patch((p) => {
+          p.ui.missionsOpen = state.missionsOpen;
+          p.ui.helpOpen = state.helpOpen;
+        });
+      },
     },
   });
+
+  // P1.5 — Restaurar estado de paneles UI desde el perfil.
+  hud.setUiState(profileStore.current.ui);
 
   hud.bindCollectionProvider(buildCollection);
 

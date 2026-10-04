@@ -142,6 +142,8 @@ export interface HudCallbacks {
    * `''` = clasico (mazo base, sin sesgo de tienda).
    */
   onStartRunWithArchetype: (archetypeId: string) => void;
+  /** P1.5 — Cambio de estado de paneles UI (misiones, ayuda). */
+  onUiStateChange?: (state: { missionsOpen: boolean; helpOpen: boolean }) => void;
 }
 
 /** Datos de build que muestra el menu / acerca de. */
@@ -204,6 +206,8 @@ export class HUD {
   private anteRailTotal = -1;
   private elMoney = document.createElement('span');
   private elBlind = document.createElement('div');
+  /** P1.4 — Icono de ayuda contextual (?). */
+  private elHelp = document.createElement('button');
   private elCounters = document.createElement('div');
   /** P0.5 — Linea de estado compacta (movil): "4 manos · 3 descartes · Mazo 40/40". */
   private elStatus = document.createElement('div');
@@ -223,6 +227,8 @@ export class HUD {
    */
   private elBanner = document.createElement('div');
   private elPreview = document.createElement('div');
+  /** P1.3 — Panel ampliado de carta (toque largo / doble toque). */
+  private elCardDetail = document.createElement('div');
   /**
    * Franja de OBJETIVO de la ronda (P0.1): "OBJETIVO 300 puntos · MANOS 4 ·
    * DESCARTES 3". Va pegada a la barra de progreso, que es donde el jugador
@@ -411,6 +417,11 @@ export class HUD {
     this.elObjective.className = 'hud-objective';
     this.elBlind.className = 'hud-blind-name';
     this.elPreview.className = 'hud-preview';
+    // P1.4 — Icono de ayuda contextual junto al objetivo.
+    this.elHelp.className = 'hud-help';
+    this.elHelp.textContent = '?';
+    this.elHelp.title = t('help.hint');
+    this.elHelp.addEventListener('click', () => this.toggleHelp());
     scoreBlock.append(
       scoreMain,
       this.elProgress,
@@ -418,6 +429,7 @@ export class HUD {
       this.elObjective,
       this.elBlind,
       this.elPreview,
+      this.elHelp,
     );
 
     const rightGroup = document.createElement('div');
@@ -515,6 +527,10 @@ export class HUD {
     this.elMissions.className = 'hud-missions-panel';
     this.elMissions.dataset['act'] = 'missions';
 
+    // P1.3 — Panel ampliado de carta (toque largo / doble toque).
+    this.elCardDetail.className = 'panel is-card-detail';
+    this.elCardDetail.dataset['act'] = 'card-detail';
+
     this.root.append(
       top,
       this.elJokers,
@@ -528,6 +544,7 @@ export class HUD {
       this.elToasts,
       this.elTooltip,
       this.elOverlay,
+      this.elCardDetail,
     );
   }
 
@@ -838,6 +855,7 @@ export class HUD {
   private syncMissions(): void {
     this.elMissionsToggle.classList.toggle('is-open', this.missionsOpen);
     this.elMissions.classList.toggle('is-open', this.missionsOpen);
+    this.callbacks.onUiStateChange?.({ missionsOpen: this.missionsOpen, helpOpen: this.helpOpen });
   }
 
   /**
@@ -1776,6 +1794,107 @@ export class HUD {
       clearTimeout(this.closeTimer);
       this.closeTimer = null;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // P1.3 — Panel ampliado de carta
+  // -------------------------------------------------------------------------
+
+  showCardDetail(uid: string): void {
+    const round = this.engine.round;
+    if (!round) return;
+    const card = round.hand.find((c) => c.uid === uid);
+    if (!card) return;
+
+    this.elCardDetail.innerHTML = '';
+    this.elCardDetail.classList.add('is-visible');
+
+    const shell = document.createElement('div');
+    shell.className = 'card-detail-shell';
+
+    // Nombre
+    const name = document.createElement('div');
+    name.className = 'card-detail-name';
+    name.textContent = t(card.def.nameKey);
+
+    // Elemento · Familia
+    const meta = document.createElement('div');
+    meta.className = 'card-detail-meta';
+    meta.textContent = `${t(`element.${card.def.element}`)} · ${t(`family.${card.def.family}`)}`;
+
+    // Stats
+    const stats = document.createElement('div');
+    stats.className = 'card-detail-stats';
+    const sub = document.createElement('span');
+    sub.className = 'card-detail-stat';
+    sub.textContent = `+${card.def.baseSubstrate} ${t('hud.substrate')}`;
+    const spore = document.createElement('span');
+    spore.className = 'card-detail-stat';
+    spore.textContent = `×${card.def.baseSpores} ${t('hud.spores')}`;
+    stats.append(sub, spore);
+
+    // Efectos / habilidad
+    const abilities = document.createElement('div');
+    abilities.className = 'card-detail-abilities';
+    if (card.def.effects && card.def.effects.length > 0) {
+      for (const eff of card.def.effects) {
+        const row = document.createElement('div');
+        row.className = 'card-detail-ability';
+        const icon = document.createElement('span');
+        icon.textContent = '✦ ';
+        const desc = document.createElement('span');
+        desc.textContent = t(eff.labelKey ?? 'effect.unknown');
+        row.append(icon, desc);
+        abilities.appendChild(row);
+      }
+    } else {
+      abilities.textContent = t('card.noAbility');
+    }
+
+    // Cerrar
+    const close = document.createElement('button');
+    close.className = 'btn is-ghost card-detail-close';
+    close.textContent = t('action.close');
+    close.addEventListener('click', () => this.hideCardDetail());
+
+    shell.append(name, meta, stats, abilities, close);
+    this.elCardDetail.appendChild(shell);
+
+    // Cerrar al tocar fuera del shell.
+    const onOutside = (e: MouseEvent) => {
+      if (e.target === this.elCardDetail) {
+        this.hideCardDetail();
+        this.elCardDetail.removeEventListener('click', onOutside);
+      }
+    };
+    this.elCardDetail.addEventListener('click', onOutside);
+  }
+
+  hideCardDetail(): void {
+    this.elCardDetail.classList.remove('is-visible');
+    this.elCardDetail.innerHTML = '';
+  }
+
+  // -------------------------------------------------------------------------
+  // P1.4 — Ayuda contextual
+  // -------------------------------------------------------------------------
+
+  private helpOpen = false;
+
+  /** P1.5 — Restaurar estado de paneles desde el perfil. */
+  setUiState(state: { missionsOpen: boolean; helpOpen: boolean }): void {
+    this.missionsOpen = state.missionsOpen;
+    this.helpOpen = state.helpOpen;
+    this.syncMissions();
+    this.elHelp.classList.toggle('is-active', this.helpOpen);
+    this.elBarNotice.classList.toggle('is-visible', this.helpOpen);
+  }
+
+  private toggleHelp(): void {
+    this.helpOpen = !this.helpOpen;
+    this.elHelp.classList.toggle('is-active', this.helpOpen);
+    this.elBarNotice.classList.toggle('is-visible', this.helpOpen);
+    this.callbacks.onUiStateChange?.({ missionsOpen: this.missionsOpen, helpOpen: this.helpOpen });
   }
 
   /**

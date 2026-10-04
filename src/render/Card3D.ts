@@ -193,9 +193,12 @@ export class Card3D {
 
   hovering = false;
   selected = false;
+  /** P1.2 — Brillo sutil para cartas compatibles con la selección actual. */
+  compatible = false;
   /** 0..1, controla la elevacion y el brillo del halo. */
   private lift = 0;
   private selectGlow = 0;
+  private compatibleGlow = 0;
   private disposed = false;
   /** Mientras se arrastra, el hover y la elevacion los maneja el arrastre. */
   private dragging = false;
@@ -451,6 +454,13 @@ export class Card3D {
     this.selected = value;
   }
 
+  /** P1.2 — Resaltar compatibles: cartas que comparten familia/elemento con
+      la selección actual. Brillo sutil, sin elevación (no compite con la
+      selección). */
+  setCompatible(value: boolean): void {
+    this.compatible = value;
+  }
+
   /**
    * Marca la carta como "en la mano del jugador" mientras se la arrastra.
    *
@@ -547,20 +557,23 @@ export class Card3D {
 
     const targetLift = this.dragging ? 0 : this.hovering ? 1 : this.selected ? 0.55 : 0;
     const targetGlow = this.dragging ? 1 : this.selected || this.hovering ? 1 : 0;
+    const targetCompatible = this.compatible ? 0.35 : 0;
 
     // Interpolacion exponencial independiente del framerate.
     const k = 1 - Math.exp(-dt * 14);
+    const kc = 1 - Math.exp(-dt * 10); // compatible mas lento, menos llamativo
     this.lift += (targetLift - this.lift) * k;
     this.selectGlow += (targetGlow - this.selectGlow) * k;
+    this.compatibleGlow += (targetCompatible - this.compatibleGlow) * kc;
 
     tickShader(this.haloMaterial, time);
 
-    // Intensidad del halo: base + hover/seleccion + foil.
+    // Intensidad del halo: base + hover/seleccion + compatible + foil.
     const base = this.kind === 'joker' ? 0.42 : 0.3;
-    const pulse = 0.55 + this.selectGlow * 1.5 + this.lift * 0.7;
+    const pulse = 0.55 + this.selectGlow * 1.5 + this.compatibleGlow * 0.6 + this.lift * 0.7;
     (this.haloMaterial.uniforms['uIntensity'] as { value: number }).value = base + pulse * 0.55;
     (this.haloMaterial.uniforms['uRingIntensity'] as { value: number }).value =
-      this.selectGlow * 0.85;
+      this.selectGlow * 0.85 + this.compatibleGlow * 0.4;
     // El foil es un holograma sobre la CARA: boca abajo no tiene sentido. Ahora
     // que vive en el mismo shader que el halo, se apaga por uniform en vez de
     // por `.visible`.
