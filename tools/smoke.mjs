@@ -971,6 +971,47 @@ const jokerChip = await (async () => {
 console.log('\n--- Ficha de joker (señalar no vende) ---');
 console.log(JSON.stringify(jokerChip, null, 2));
 
+// --- P6: ranuras fijas de Simbionte ---
+// Comprueba que existan tantas ranuras 3D como `run.jokerSlots` y que su
+// huella sea la de una carta normal a escala joker (mismo tamano que un
+// Simbionte real). Ademas, que sumar una ranura cree una nueva al instante.
+const jokerSlotsGuard = await (async () => {
+  const before = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
+    return {
+      ...ff.scene.jokerSlotDebug(),
+      engineSlots: ff.engine.run.jokerSlots,
+    };
+  });
+  await page.waitForTimeout(400);
+
+  const grown = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const prev = ff.engine.run.jokerSlots;
+    ff.engine.run.jokerSlots = prev + 1;
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
+    const d = ff.scene.jokerSlotDebug();
+    ff.engine.run.jokerSlots = prev;
+    return d;
+  });
+  await page.waitForTimeout(300);
+
+  const EXPECT_W = Number((2.2 * 0.86).toFixed(4));
+  const EXPECT_H = Number((3.2 * 0.86).toFixed(4));
+  return {
+    count: before.count,
+    engineSlots: before.engineSlots,
+    matchesEngine: before.count === before.engineSlots,
+    sizesOk: before.slots.length > 0 && before.slots.every((s) => s.w === EXPECT_W && s.h === EXPECT_H),
+    expect: { w: EXPECT_W, h: EXPECT_H },
+    grewOnPlusOne: grown.count === before.count + 1,
+    grownCount: grown.count,
+  };
+})();
+console.log('\n--- P6 ranuras de Simbionte ---');
+console.log(JSON.stringify(jokerSlotsGuard, null, 2));
+
 // --- Flip: el dorso existe y la carta se da vuelta y vuelve ---
 const flipTest = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2109,6 +2150,10 @@ const ok =
   chk('jokerChip?.confirmandoTrasElCuerpo === false', jokerChip?.confirmandoTrasElCuerpo === false) &&
   chk('jokerChip?.primerToqueEnVender?.jokers === jok', jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes) &&
   chk('jokerChip?.primerToqueEnVender?.confirmando ==', jokerChip?.primerToqueEnVender?.confirmando === true) &&
+  // P6: ranuras fijas de Simbionte, del tamano de una carta normal.
+  chk('jokerSlotsGuard?.matchesEngine === true', jokerSlotsGuard?.matchesEngine === true) &&
+  chk('jokerSlotsGuard?.sizesOk === true', jokerSlotsGuard?.sizesOk === true) &&
+  chk('jokerSlotsGuard?.grewOnPlusOne === true', jokerSlotsGuard?.grewOnPlusOne === true) &&
   chk("menuState?.webgl === 'contexto activo'", menuState?.webgl === 'contexto activo') &&
   chk('(afterBlind?.sceneHand ?? 0) > 0', (afterBlind?.sceneHand ?? 0) > 0) &&
   chk('(afterBlind?.hand ?? 0) > 0', (afterBlind?.hand ?? 0) > 0) &&

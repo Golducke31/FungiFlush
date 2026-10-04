@@ -206,14 +206,17 @@
      Escala tipografica. El CSS no tenia escala: habia ~20 font-size distintos
      en px. Estos tokens no reemplazan todos de golpe, pero dan el vocabulario
      para unificar progresivamente. Se listan de menor a mayor.
+     Escala SUBIDA ~12-18% por legibilidad: en 844x390 los textos se percibian
+     demasiado chicos. Si algo desborda, se compacta en los bloques
+     `(pointer: coarse) and (max-height: 520px)`, NO bajando el base.
      ------------------------------------------------------------------------- */
-  --text-xs:   9.5px;
-  --text-sm:   11px;
-  --text-base: 13px;
-  --text-md:   15px;
-  --text-lg:   18px;
-  --text-xl:   22px;
-  --text-xxl:  34px;
+  --text-xs:   11px;
+  --text-sm:   12.5px;
+  --text-base: 14.5px;
+  --text-md:   16.5px;
+  --text-lg:   20px;
+  --text-xl:   24px;
+  --text-xxl:  36px;
 
   /* Safe areas: en celulares con notch el HUD no debe quedar debajo. */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -336,7 +339,17 @@ body {
 }
 
 .hud-block {
-  padding: 8px 14px;
+  /* Mas aire vertical que horizontal: la losa se lee como una unidad y su
+     contenido respira. Con 8px justos los bloques parecian apretados entre si
+     y la jerarquia se aplanaba (todo al mismo peso). */
+  padding: 10px 14px;
+}
+
+/* Jerarquia por color dentro de un bloque: la ETIQUETA ("ANTE", "FUNGIS") es
+   contexto y se apaga; el VALOR es el dato y va a plena intensidad. Sin esto
+   ambos compartian el mismo color y el ojo no sabia que leer primero. */
+.hud-block .hud-label {
+  opacity: 0.82;
 }
 
 /* --- Bloque de ante: numero + riel de progreso --- */
@@ -380,7 +393,7 @@ body {
 }
 
 .hud-label {
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--frame-dim);
@@ -388,7 +401,7 @@ body {
 }
 
 .hud-value {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -460,7 +473,7 @@ body {
 }
 
 .hud-score-target {
-  font-size: 15px;
+  font-size: 17px;
   color: var(--frame-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -493,14 +506,14 @@ body {
 
 .hud-blind-name {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--frame-dim);
 }
 
 /* Previsualizacion del score de la seleccion actual. */
 .hud-preview {
   margin-top: 7px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--spores);
   opacity: 0;
   transform: translateY(-3px);
@@ -517,7 +530,7 @@ body {
 }
 
 .hud-preview strong {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
@@ -825,7 +838,10 @@ body {
 .hud-missions-toggle {
   position: fixed;
   left: calc(10px + var(--safe-l));
-  bottom: calc(64px + var(--safe-b));
+  /* Justo POR ENCIMA de la barra inferior. La barra crecio a ~90px con la
+     tipografia mas grande, asi que el ancla sube de 64 a 98px: a 64 el chip
+     caia sobre la linea de estado ("4 Manos · 3 Descartes · ..."). */
+  bottom: calc(98px + var(--safe-b));
   z-index: 30;
   display: none;
   align-items: center;
@@ -886,19 +902,19 @@ body {
 }
 
 .mission-chip-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text);
 }
 
 .mission-chip-desc {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.3;
   color: #a7b8c8;
 }
 
 .mission-chip-reward {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--tag-score);
 }
@@ -921,7 +937,7 @@ body {
   border-left: 3px solid var(--violet);
   border-radius: 9px;
   padding: 6px 9px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   max-width: 178px;
   color: #e2fbf4;
   cursor: pointer;
@@ -951,7 +967,7 @@ body {
 }
 
 .joker-chip-ability {
-  font-size: 9.5px;
+  font-size: 11px;
   line-height: 1.2;
   letter-spacing: 0.02em;
   color: var(--joker-rarity, #c9b6ff);
@@ -981,7 +997,7 @@ body {
 .joker-chip-fires {
   color: var(--frame-dim);
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* El joker acaba de disparar: un latido violeta corto. Es la unica señal de
@@ -1084,7 +1100,7 @@ body {
 }
 
 .counter-value {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
@@ -1093,7 +1109,7 @@ body {
 
 /* El tope de una capacidad (`/5` de jokers) es contexto, no dato: pesa menos. */
 .counter-cap {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--frame-dim);
   margin-left: 1px;
@@ -1219,7 +1235,7 @@ body {
   background: var(--panel);
   color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 700;
   padding: 12px 22px;
   border-radius: 11px;
@@ -1263,6 +1279,12 @@ body {
     inset 0 1px 0 rgba(160, 255, 210, 0.4),
     inset 0 -2px 0 rgba(0, 0, 0, 0.4),
     0 0 22px rgba(79, 209, 139, 0.3);
+  /* Jerarquia: JUGAR MANO es la accion primaria de la franja. Pesa mas que
+     Descartar/Ordenar con tipografia algo mayor y un halo mas marcado, sin
+     agrandar el boton (romperia la fila). */
+  font-size: 1.05em;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .btn.is-play:hover:not(:disabled) {
@@ -1309,7 +1331,7 @@ body {
 }
 
 .btn.is-small {
-  font-size: 12.5px;
+  font-size: 13.5px;
   padding: 8px 14px;
   min-height: 38px;
 }
@@ -1423,7 +1445,7 @@ body {
 }
 
 .tooltip-name {
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 800;
   margin-bottom: 3px;
 }
@@ -1968,7 +1990,7 @@ body {
 }
 
 .panel-title {
-  font-size: 25px;
+  font-size: 27px;
   font-weight: 900;
   margin: 0 0 4px;
   font-family: var(--font-display);
@@ -1977,7 +1999,7 @@ body {
 }
 
 .panel-subtitle {
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--dim);
   margin: 0 0 18px;
 }
@@ -2248,90 +2270,6 @@ body {
 /* ==========================================================================
    P1.3 — Panel ampliado de carta (toque largo / doble toque)
    ========================================================================== */
-
-.panel.is-card-detail {
-  position: fixed;
-  inset: 0;
-  z-index: 85;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.55);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.22s ease;
-}
-
-.panel.is-card-detail.is-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.card-detail-shell {
-  width: min(360px, 92vw);
-  max-height: min(520px, 78vh);
-  overflow-y: auto;
-  padding: 20px 22px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(8, 24, 28, 0.96) 0%, rgba(4, 14, 16, 0.98) 100%);
-  border: 1px solid var(--frame-rim);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.card-detail-name {
-  font-size: 20px;
-  font-weight: 900;
-  color: var(--text);
-  text-align: center;
-  line-height: 1.2;
-}
-
-.card-detail-meta {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--spores);
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.card-detail-stats {
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  padding: 10px 0;
-  border-top: 1px solid var(--frame-rim);
-  border-bottom: 1px solid var(--frame-rim);
-}
-
-.card-detail-stat {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.card-detail-abilities {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.card-detail-ability {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--frame-dim);
-}
-
-.card-detail-close {
-  align-self: center;
-  margin-top: 4px;
-  min-height: 40px;
-  padding: 8px 24px;
-}
 
 .tutorial-stat-label {
   font-size: 9.5px;
@@ -4422,10 +4360,10 @@ body {
 
 @media (max-height: 560px) {
   .hud-score-current {
-    font-size: 25px;
+    font-size: 27px;
   }
   .hud-value {
-    font-size: 16px;
+    font-size: 18px;
   }
   /* El icono acompaña al numero: si el numero baja y el icono no, el icono
      termina mas alto que el valor y desalinea la fila. */
@@ -4434,7 +4372,7 @@ body {
     height: 16px;
   }
   .hud-label {
-    font-size: 9px;
+    font-size: 10.5px;
   }
   .hud-block {
     padding: 6px 11px;
@@ -4445,7 +4383,7 @@ body {
      que la fila siga entrando sin empujar nada fuera de pantalla. */
   .btn.is-small {
     padding: 6px 10px;
-    font-size: 11px;
+    font-size: 12px;
     min-height: 32px;
   }
   .btn {
@@ -6147,17 +6085,17 @@ body {
   }
 
   .hud-score-current {
-    /* Numero grande sigue, pero no gigante: en pantallas bajas un texto de 34px
-       ya domina la franja sin necesidad de 44px. Para CA1 bajamos a 20px y
-       ACAPILLAMOS el line-height: el numero heredaba ~1.5 y su caja de linea
-       media 33px, lo que disparaba el hud-top por encima de 64px. Con
-       line-height:1 la caja mide lo que la fuente. */
-    font-size: 20px;
+    /* Numero grande sigue, pero no gigante: en pantallas bajas un texto de 36px
+       ya domina la franja sin necesidad de mas. Para CA1 ACAPILLAMOS el
+       line-height: el numero heredaba ~1.5 y su caja de linea media 33px, lo
+       que disparaba el hud-top por encima de 64px. Con line-height:1 la caja
+       mide lo que la fuente. Subido de 20 a 23px por legibilidad. */
+    font-size: 23px;
     line-height: 1;
   }
 
   .hud-score-target {
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .hud-progress {
@@ -6167,14 +6105,14 @@ body {
 
   .hud-blind-name {
     margin-top: 2px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   /* El objetivo ahora es UNA frase corta ("Faltan 540 puntos"), no el puntaje
      repetido. Ocupa una linea chica y se centra con el marcador. */
   .hud-objective {
     margin-top: 2px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   /* P0.1 (CA1) — En movil el nombre del ciego se FUNDE en la linea del objetivo
@@ -6267,15 +6205,16 @@ body {
   }
 
   .counter-value {
-    font-size: 15px;
+    font-size: 17px;
   }
 
   /* La etiqueta ("MANOS", "DESCARTES"...) es lo primero que se sacrifica: el
      icono + el numero ya dicen que es. Asi los cuatro chips entran en una fila
-     incluso en un celular angosto. */
+     incluso en un celular angosto. Sube de 8.5 a 10px: por debajo de 10 el texto
+     no se lee en 844x390. */
   .counter .hud-label {
-    font-size: 8.5px;
-    letter-spacing: 0.1em;
+    font-size: 10px;
+    letter-spacing: 0.08em;
   }
 
   .hud-actions {
@@ -6299,7 +6238,12 @@ body {
      barra inferior para no tapar jamas el tablero. La altura de la barra
      movil (estado + acciones) ronda los ~64px + safe-bottom. */
   .hud-select-hint {
-    bottom: calc(70px + var(--safe-b, 0px));
+    /* Se ancla POR ENCIMA de toda la barra inferior (status + acciones), no
+       solo de los botones. Antes usaba 70px y con la tipografia mas grande la
+       barra inferior pasa a ~90px: el aviso caia ENCIMA de la linea de estado
+       ("4 Manos · 3 Descartes · ...") y la tapaba. 104px deja el aviso limpio
+       sobre la barra. */
+    bottom: calc(104px + var(--safe-b, 0px));
     /* P0.8 — Legibilidad: el texto mas cercano a las cartas (badge "N
        seleccionadas") no baja de 14px en tactil, asi se lee sin zoom. */
     font-size: 14px;
@@ -6373,11 +6317,11 @@ body {
   }
 
   .hud-value {
-    font-size: 17px;
+    font-size: 19px;
   }
 
   .hud-score-current {
-    font-size: 20px;
+    font-size: 23px;
   }
 
   /* --- Bloque de score: compacto, para que no domine la pantalla --- */
@@ -6398,12 +6342,12 @@ body {
   }
 
   .hud-score-current {
-    font-size: 20px;
+    font-size: 23px;
     line-height: 1;
   }
 
   .hud-score-target {
-    font-size: 12.5px;
+    font-size: 13.5px;
   }
 
   .hud-progress {
@@ -6476,7 +6420,7 @@ body {
      plegable (`hud-missions-toggle`) es el que lo abre. */
   .hud-missions-panel {
     top: calc(56px + var(--safe-t));
-    bottom: calc(64px + var(--safe-b));
+    bottom: calc(98px + var(--safe-b));
     left: 0;
     right: auto;
     max-width: 70vw;

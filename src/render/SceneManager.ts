@@ -85,7 +85,19 @@ const HAND_Z = 3.0;
  */
 const JOKER_Y = 0.16;
 const JOKER_Z = -3.3;
-const JOKER_SCALE = 0.66;
+/**
+ * P6 — Cuanto se hunde el marco de una ranura vacia respecto de la carta que la
+ * ocupa. Evita el z-fighting cuando la ranura se llena: la carta manda.
+ */
+const JOKER_SLOT_DY = 0.02;
+/**
+ * Escala de los Simbiontes. Antes era 0.66 ("chicos y al fondo"): con las
+ * ranuras fijas (P6) el Simbionte tiene que leerse al mismo tamaño y tipografia
+ * que una carta de la mano, asi que sube a PLAY_SCALE (0.86). Una ranura vacia
+ * se dibuja con la MISMA huella que una carta llena: el hueco y la carta son
+ * indistinguibles en tamaño.
+ */
+const JOKER_SCALE = 0.86;
 // Piles moved outward in X (±10.5, antes ±7.8) and back in Z (1.0, antes 2.4)
 // para dejar de tapar las cartas de los extremos de la mano: con la mano en
 // X hasta ±8.25 y los piles en ±7.8, los montones compartian pantalla con la
@@ -198,8 +210,6 @@ const MAX_ANIMATED_STEPS = 12;
 export interface SceneCallbacks {
   /** El jugador toco/cliqueo una carta de la mano. */
   onCardClick: (uid: string) => void;
-  /** P1.3 — Toque largo o doble toque sobre carta de la mano: abrir detalle. */
-  onCardDetail?: (uid: string) => void;
   /** El puntero entro/salio de una carta (solo raton). */
   onHoverChange: (card: CardInstance | null) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
@@ -299,6 +309,15 @@ export class SceneManager {
 
   private readonly handCards = new Map<string, Card3D>();
   private readonly jokerCards = new Map<string, Card3D>();
+  /**
+   * P6 — Ranuras FIJAS de Simbionte dibujadas en la mesa. Hay una por
+   * `run.jokerSlots` y SIEMPRE se ven (vacias o no): el jugador ve cuantas
+   * tiene y donde caera el proximo Simbionte. Se reconstruyen solo cuando
+   * cambia el total de ranuras, no cada frame.
+   */
+  private readonly jokerSlotMeshes: THREE.Mesh[] = [];
+  /** Total de ranuras construidas: sirve de cache para no reconstruir de mas. */
+  private jokerSlotsBuilt = -1;
   /** Cartas que estan en la zona de puntuacion (ya salieron de la mano). */
   private readonly scoringCards: Card3D[] = [];
 
@@ -475,8 +494,6 @@ export class SceneManager {
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
       onClick: (card) => this.handleClick(card),
-      onLongPress: (card) => this.handleLongPress(card),
-      onDoubleTap: (card) => this.handleDoubleTap(card),
       onDragStart: (card) => this.handleDragStart(card),
       onDrag: (card, point, zone) => this.handleDrag(card, point, zone),
       onDrop: (card, zone) => this.handleDrop(card, zone),
@@ -1081,6 +1098,9 @@ export class SceneManager {
     const inMenu = this.mode === 'menu';
     for (const card3d of this.handCards.values()) card3d.group.visible = showRun;
     for (const card3d of this.jokerCards.values()) card3d.group.visible = showRun;
+    // P6 — Las ranuras vacias tambien se ocultan en el carrusel/menu: son parte
+    // del cromo de la partida, no de la coleccion.
+    for (const slot of this.jokerSlotMeshes) slot.visible = showRun && !inMenu;
     for (const card3d of this.scoringCards) card3d.group.visible = showRun;
     for (const card3d of this.menuCards) card3d.group.visible = showRun;
     if (this.deckMesh) this.deckMesh.visible = showRun && !inMenu;
@@ -1514,7 +1534,7 @@ export class SceneManager {
         const playing = this.engine.run.status === 'playing';
         if (playing && round) this.syncHand(round.hand, this.engine.round?.selected ?? []);
         else this.syncHand([], []);
-        this.syncJokers(this.engine.run.jokers);
+        this.syncJokers(this.engine.run.jokers, this.engine.run.jokerSlots);
       }),
 
       bus.on('card:played', ({ card, index }) => {
@@ -1682,6 +1702,13 @@ export class SceneManager {
       card3d.setSelected(selectedUids.includes(card.uid));
     }
 
+    // REPARTO DE MANO NUEVA: llegaron cartas cuando la mano YA tenia cartas.
+    // Eso solo pasa al robar tras jugar/descartar (fillHand). Es mas corto y
+    // sin volteo boca-abajo: el jugador ya vio su mano, solo necesita notar
+    // QUE robo. Si la mano estaba vacia es el reparto de apertura (arriba) y
+    // tiene su propia animacion.
+    const drawDeal = !openingDeal && newHomes.length > 0 && !this.reduceMotion;
+
     // P1.2 — Resaltar cartas compatibles con la selección actual.
     // Una carta es "compatible" si comparte elemento O familia con alguna
     // carta ya seleccionada. Esto guía al jugador hacia combos sin forzarlo.
@@ -1722,12 +1749,37 @@ export class SceneManager {
     // Arco de reparto SOLO para las cartas nuevas: suben y bajan mientras el
     // layout las lleva a su lugar. Usa la propiedad `arc`, asi que no compite
     // con el layout (que mueve x/y/z).
-    for (const home of newHomes) {
-      anim.tweenOf(home, {
-        keyframes: [
-          { arc: 0.9, duration: anim.d(0.16), ease: anim.EASE.quadOut },
-          { arc: 0, duration: anim.d(0.26), ease: anim.EASE.quadIn },
-        ],
+    //
+    // APERTURA: arco amplio y volteo boca-arriba en cascada; es el "comienza"
+    // de la ronda y merece la animacion completa. MANO NUEVA (drawDeal): arco
+    // mas bajo y un asentamiento, para que se sienta el robo sin repetir todo
+    // el ceremonial de la apertura. `reduceMotion` ya dejo ambos flags en false.
+    //
+    // Arco y asentamiento van en UNA sola timeline por carta: dos `tweenOf`
+    // sobre el mismo `home` con la misma duracion serian dos animaciones
+    // peleando por el mismo objeto. La timeline los encadena.
+    if (openingDeal || drawDeal) {
+      const arcPeak = openingDeal ? 0.9 : 0.55;
+      const arcUp = openingDeal ? anim.d(0.16) : anim.d(0.12);
+      const arcDown = openingDeal ? anim.d(0.26) : anim.d(0.2);
+      const settleStart = arcUp + arcDown;
+      newHomes.forEach((home, i) => {
+        // Un pelo de stagger para que no caigan todas exactamente juntas: el
+        // reparto se lee de izquierda a derecha, como se reparte una baraja.
+        const at = anim.d(i * 0.04);
+        const tl = anim.sequence();
+        tl.to(home, { arc: arcPeak, duration: arcUp, ease: anim.EASE.quadOut }, at);
+        tl.to(home, { arc: 0, duration: arcDown, ease: anim.EASE.quadIn });
+        tl.to(
+          home,
+          {
+            keyframes: [
+              { sx: 1.12, sy: 0.9, duration: anim.d(0.07), ease: anim.EASE.quadOut },
+              { sx: 1, sy: 1, duration: anim.d(0.22), ease: anim.EASE.backOut },
+            ],
+          },
+          at + settleStart,
+        );
       });
     }
 
@@ -1780,7 +1832,15 @@ export class SceneManager {
     for (const [uid, card3d] of ordered) this.handCards.set(uid, card3d);
   }
 
-  private syncJokers(jokers: readonly JokerInstance[]): void {
+  /**
+   * Reconstruye la fila de Simbiontes y sus ranuras vacias.
+   *
+   * PUBLICO a proposito: el probe `tools/probe-joker-slots.mjs` necesita forzar
+   * el cambio de `jokerSlots` sin recorrer el ciclo de estado del bus, para
+   * comprobar que una ranura nueva aparece de inmediato. En produccion solo lo
+   * llama el handler de `state:changed`.
+   */
+  syncJokers(jokers: readonly JokerInstance[], jokerSlots: number): void {
     const alive = new Set(jokers.map((j) => j.uid));
 
     for (const [uid, card3d] of [...this.jokerCards]) {
@@ -1800,9 +1860,67 @@ export class SceneManager {
       }
     }
 
+    // P6 — Ranuras fijas: una por slot. Se reconstruyen SOLO si cambio el total
+    // (comprar un voucher/mutacion de +1 ranura). Las ranuras desbloqueables se
+    // ven al instante porque el conteo entra por `jokerSlots`.
+    this.rebuildJokerSlots(jokerSlots);
+
     if (this.carouselActive) this.applyRunVisibility();
     this.layoutJokers();
     this.refreshTargets();
+  }
+
+  /**
+   * P6 — Ranuras fijas de Simbionte.
+   *
+   * Cada ranura es un MARCO sutil apoyado en la mesa, con la huella exacta de
+   * una carta (ancho x alto x JOKER_SCALE). No es una `Card3D`: un hueco vacio
+   * no tiene arte, texto ni VFX, y crear 5 cartas fantasma por partida seria
+   * caro y dispararia el pool de texturas al pedo. Un plano con un contorno
+   * basta para que el jugador lea "aca va un Simbionte".
+   */
+  private rebuildJokerSlots(slots: number): void {
+    const wanted = Math.max(0, Math.floor(slots));
+    if (wanted === this.jokerSlotsBuilt) return;
+
+    for (const mesh of this.jokerSlotMeshes) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      this.scene.remove(mesh);
+    }
+    this.jokerSlotMeshes.length = 0;
+    this.jokerSlotsBuilt = wanted;
+
+    // Huella exacta de una carta a escala joker. Cada ranura tiene su propia
+    // geometria porque su `EdgesGeometry` se deriva de ella; el dispose de
+    // `rebuildJokerSlots` libera ambas juntas.
+    const w = CARD_WIDTH * JOKER_SCALE;
+    const h = CARD_HEIGHT * JOKER_SCALE;
+    for (let i = 0; i < wanted; i += 1) {
+      // Plano acostado en la mesa (igual que las cartas de la partida). El
+      // relleno violeta tenue + el contorno se leen como "ranura vacia", no
+      // como una carta boca abajo.
+      const geometry = new THREE.PlaneGeometry(w, h);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0x8a7bd8,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = `joker-slot-${i}`;
+      // El contorno lo da un anillo de aristas: barato y legible desde lejos.
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0xb0a0f5, transparent: true, opacity: 0.75 }),
+      );
+      mesh.add(edges);
+      // Las ranuras NO son interactivas: no deben entrar al raycast.
+      mesh.userData['isJokerSlot'] = true;
+      this.scene.add(mesh);
+      this.jokerSlotMeshes.push(mesh);
+    }
   }
 
   private createCard3D(card: CardInstance | null, joker?: JokerInstance): Card3D {
@@ -1979,38 +2097,53 @@ export class SceneManager {
 
   private layoutJokers(): void {
     const cards = [...this.jokerCards.values()];
-    const count = cards.length;
-    if (count === 0) return;
+    const slotCount = Math.max(this.jokerSlotMeshes.length, cards.length);
+    if (slotCount === 0) return;
 
-    // El espaciado sale del ancho REAL de la carta, no de un numero fijo.
-    // Y lo que manda no es `CARD_WIDTH` sino el HALO, que es el contorno mas
-    // grande: a escala joker la carta mide 1.1 pero el halo 1.63. El 1.5 fijo
-    // de antes era menor que el halo, asi que se pisaban y la fila se leia
-    // como una mancha continua en vez de como cartas separadas.
+    // El espaciado sale del ancho REAL del HALO de la carta, no de un numero
+    // fijo: a escala joker la carta mide menos que su halo, y con un gap menor
+    // las ranuras se pisan y la fila se lee como una mancha.
     const haloWidth = CARD_HALO_WIDTH * JOKER_SCALE;
     const gap = 0.3;
-    // Si algun dia entran mas jokers de los que caben, se comprime el espacio
-    // ANTES que dejar que la fila se salga de cuadro.
+    // Tope de ancho: si entran mas ranuras de las que caben, se comprime el
+    // espacio ANTES que dejar que la fila se salga de cuadro.
     const maxSpan = this.handSpread + CARD_WIDTH;
     const wanted = haloWidth + gap;
-    const spacing = count > 1 ? Math.min(wanted, maxSpan / (count - 1)) : wanted;
-    const total = spacing * (count - 1);
-
+    const spacing = slotCount > 1 ? Math.min(wanted, maxSpan / (slotCount - 1)) : wanted;
+    const total = spacing * (slotCount - 1);
     const half = total / 2;
-    anim.tweenOf(
-      cards.map((card) => card.home),
-      {
-        x: (i: number) => -half + i * spacing,
-        y: JOKER_Y,
-        z: JOKER_Z,
-        rx: -Math.PI / 2,
-        ry: 0,
-        rz: 0,
-        duration: anim.d(0.36),
-        ease: anim.EASE.cubicOut,
-        stagger: { amount: anim.d(0.16), from: 'center' },
-      },
-    );
+    /** X de la ranura i, de izquierda a derecha. */
+    const slotX = (i: number): number => -half + i * spacing;
+
+    // Ranuras vacias: cada una en SU indice, siempre visible. Se apoyan un pelo
+    // por DEBAJO de las cartas (JOKER_SLOT_DY) para que la carta que llene la
+    // ranura no pelee el z-buffer con el marco (z-fighting).
+    for (let i = 0; i < this.jokerSlotMeshes.length; i += 1) {
+      const mesh = this.jokerSlotMeshes[i];
+      if (!mesh) continue;
+      mesh.position.set(slotX(i), JOKER_Y - JOKER_SLOT_DY, JOKER_Z);
+      mesh.rotation.set(-Math.PI / 2, 0, 0);
+    }
+
+    // Simbiontes: el indice en `jokers[]` ES la ranura. El motor agrega al
+    // final y elimina en el lugar, asi que la primera posicion libre se llena
+    // sola y al vender no se reacomodan los demas (el hueco queda a la vista).
+    if (cards.length > 0) {
+      anim.tweenOf(
+        cards.map((card) => card.home),
+        {
+          x: (i: number) => slotX(i),
+          y: JOKER_Y,
+          z: JOKER_Z,
+          rx: -Math.PI / 2,
+          ry: 0,
+          rz: 0,
+          duration: anim.d(0.36),
+          ease: anim.EASE.cubicOut,
+          stagger: { amount: anim.d(0.16), from: 'center' },
+        },
+      );
+    }
   }
 
   private moveToPlayZone(uid: string): void {
@@ -2410,16 +2543,6 @@ export class SceneManager {
   private handleClick(card: Card3D): void {
     if (card.kind !== 'card') return;
     this.callbacks.onCardClick(card.uid);
-  }
-
-  private handleLongPress(card: Card3D): void {
-    if (card.kind !== 'card') return;
-    this.callbacks.onCardDetail?.(card.uid);
-  }
-
-  private handleDoubleTap(card: Card3D): void {
-    if (card.kind !== 'card') return;
-    this.callbacks.onCardDetail?.(card.uid);
   }
 
   private handleHover(card: Card3D | null): void {
@@ -2824,6 +2947,20 @@ export class SceneManager {
     this.jokerCards.clear();
     this.scoringCards.length = 0;
 
+    // P6 — Ranuras de Simbionte: geometria, relleno y contorno.
+    for (const mesh of this.jokerSlotMeshes) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      for (const child of mesh.children) {
+        const line = child as THREE.LineSegments;
+        line.geometry.dispose();
+        (line.material as THREE.Material).dispose();
+      }
+      this.scene.remove(mesh);
+    }
+    this.jokerSlotMeshes.length = 0;
+    this.jokerSlotsBuilt = -1;
+
     this.textures.clear();
     for (const zone of this.dropZones) zone.dispose();
     this.dropZones.length = 0;
@@ -2875,6 +3012,30 @@ export class SceneManager {
    */
   readHandXs(): number[] {
     return [...this.handCards.values()].map((card) => card.home.x);
+  }
+
+  /**
+   * P6 — Instantanea de las ranuras de Simbionte, para el probe/smoke.
+   *
+   * Devuelve la huella de cada ranura (debe ser la de una carta normal) y si
+   * esta visible. El test comprueba que una ranura vacia mida lo mismo que un
+   * Simbionte real (mismo `JOKER_SCALE`) y que al sumar `jokerSlots` aparezca
+   * una nueva.
+   */
+  jokerSlotDebug(): { count: number; built: number; slots: Array<{ w: number; h: number; visible: boolean; x: number }> } {
+    return {
+      count: this.jokerSlotMeshes.length,
+      built: this.jokerSlotsBuilt,
+      slots: this.jokerSlotMeshes.map((mesh) => {
+        const params = (mesh.geometry as THREE.PlaneGeometry).parameters;
+        return {
+          w: Number(params.width.toFixed(4)),
+          h: Number(params.height.toFixed(4)),
+          visible: mesh.visible,
+          x: Number(mesh.position.x.toFixed(3)),
+        };
+      }),
+    };
   }
 
   /** Resumen para el panel de debug. */

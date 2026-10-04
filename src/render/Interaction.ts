@@ -38,10 +38,6 @@ const PLANE_HIT = new THREE.Vector3();
 export interface InteractionCallbacks {
   onHover: (card: Card3D | null) => void;
   onClick: (card: Card3D) => void;
-  /** P1.3 — Toque mantenido (>= 500 ms sin moverse) sobre una carta. */
-  onLongPress?: (card: Card3D) => void;
-  /** P1.3 — Doble toque rapido sobre la misma carta. */
-  onDoubleTap?: (card: Card3D) => void;
   onPointerMove?: (ndc: THREE.Vector2) => void;
   /** Empieza el arrastre (ya se superaron los 10 px). */
   onDragStart?: (card: Card3D) => void;
@@ -69,11 +65,6 @@ export class Interaction {
   private candidate: Card3D | null = null;
   private pointerId: number | null = null;
   private dragActive = false;
-
-  // P1.3 — Long-press y doble-toque.
-  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  private lastTapTime = 0;
-  private lastTapUid: string | null = null;
 
   constructor(
     private readonly element: HTMLElement,
@@ -122,11 +113,6 @@ export class Interaction {
     if (this.candidate && !this.dragActive) {
       const dx = event.clientX - this.downX;
       const dy = event.clientY - this.downY;
-      // P1.3 — Si se mueve mas que el slop, cancelar long-press.
-      if (Math.hypot(dx, dy) > CLICK_SLOP_PX && this.longPressTimer) {
-        clearTimeout(this.longPressTimer);
-        this.longPressTimer = null;
-      }
       if (Math.hypot(dx, dy) > DRAG_START_PX) {
         this.dragActive = true;
         // Mientras se arrastra no hay hover: la carta ya esta "en la mano", y
@@ -159,27 +145,11 @@ export class Interaction {
     this.pointerId = event.pointerId;
     this.dragActive = false;
 
-    // Cancelar timer previo.
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-
     // El candidato se elige al BAJAR: si el gesto termina en arrastre ya
     // sabemos que carta se mueve. Si termina en tap, este pick se descarta y
     // el `pick()` del pointerup manda.
     this.candidate = this.pick();
     if (!this.candidate) return;
-
-    // P1.3 — Long-press: si el dedo queda quieto >= 500 ms, abrir detalle.
-    const capturedCandidate = this.candidate;
-    this.longPressTimer = setTimeout(() => {
-      if (this.candidate === capturedCandidate && !this.dragActive) {
-        this.callbacks.onLongPress?.(capturedCandidate);
-        // Evitar que el pointerup dispare click.
-        this.candidate = null;
-      }
-    }, 500);
 
     // Captura del puntero: el arrastre sigue funcionando aunque el dedo se
     // salga del canvas. Se toma solo cuando hay una carta debajo, para no
@@ -207,12 +177,6 @@ export class Interaction {
     const moved = Math.hypot(event.clientX - this.downX, event.clientY - this.downY);
     const elapsed = performance.now() - this.downTime;
 
-    // P1.3 — Cancelar long-press si sigue pendiente.
-    if (this.longPressTimer) {
-      clearTimeout(this.longPressTimer);
-      this.longPressTimer = null;
-    }
-
     this.endDrag();
 
     // Click = poco movimiento y rapido. Un arrastre no selecciona cartas.
@@ -222,16 +186,6 @@ export class Interaction {
     const hit = this.pick();
     if (!hit) return;
 
-    // P1.3 — Doble toque: dos taps en la misma carta dentro de 350 ms.
-    const now = performance.now();
-    if (hit.uid === this.lastTapUid && now - this.lastTapTime < 350) {
-      this.lastTapUid = null;
-      this.lastTapTime = 0;
-      this.callbacks.onDoubleTap?.(hit);
-      return;
-    }
-    this.lastTapUid = hit.uid;
-    this.lastTapTime = now;
     this.callbacks.onClick(hit);
   };
 

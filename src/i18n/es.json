@@ -715,6 +715,9 @@
     "upgradeUnavailable": "Esa carta no se puede mejorar ahora.",
     "evolveUnavailable": "Esa carta todavía no puede evolucionar."
   },
+  "help": {
+    "hint": "Cómo jugar: tocá hasta 5 cartas para seleccionarlas y después jugá la mano."
+  },
   "menu": {
     "tagline": "Un roguelite de mazo micelial",
     "newRun": "Nueva partida",

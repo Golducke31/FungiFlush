@@ -500,9 +500,6 @@ async function boot(): Promise<void> {
       onCardClick: (uid) => {
         engine.toggleSelect(uid);
       },
-      onCardDetail: (uid) => {
-        hud?.showCardDetail(uid);
-      },
       onHoverChange: (card) => {
         if (!hud) return;
         if (!card) {

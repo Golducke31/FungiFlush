@@ -715,6 +715,9 @@
     "upgradeUnavailable": "That card cannot be upgraded right now.",
     "evolveUnavailable": "That card cannot evolve yet."
   },
+  "help": {
+    "hint": "How to play: tap up to 5 cards to select them, then play the hand."
+  },
   "menu": {
     "tagline": "A mycelial roguelite deckbuilder",
     "newRun": "New Run",
