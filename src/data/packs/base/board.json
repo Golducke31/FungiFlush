@@ -1,56 +1,925 @@
 [
-  { "cardId": "spore_puffball", "arrows": [1, 0, 1, 0, 2, 0, 1, 0] },
-  { "cardId": "spore_veilcap", "arrows": [0, 1, 2, 1, 0, 0, 1, 0] },
-  { "cardId": "mycelium_thread", "arrows": [0, 1, 0, 1, 0, 2, 0, 1] },
-  { "cardId": "mycelium_webcap", "arrows": [1, 1, 1, 1, 1, 0, 0, 0] },
-  { "cardId": "decay_bracket", "arrows": [1, 0, 0, 1, 2, 1, 0, 0] },
-  { "cardId": "decay_rotwood", "arrows": [0, 0, 0, 1, 3, 2, 0, 0] },
-  { "cardId": "symbiosis_boletus", "arrows": [1, 0, 2, 0, 0, 0, 2, 0] },
-  { "cardId": "symbiosis_mycorrhiza", "arrows": [1, 0, 1, 0, 2, 0, 1, 0] },
-  { "cardId": "crystal_coralfungus", "arrows": [2, 0, 1, 0, 2, 0, 1, 0] },
-  { "cardId": "crystal_glasscap", "arrows": [1, 0, 2, 0, 1, 0, 2, 0] },
-  { "cardId": "amanita_toxica", "arrows": [2, 1, 0, 0, 0, 0, 0, 1] },
-  { "cardId": "shiitake_hearty", "arrows": [1, 0, 0, 1, 2, 1, 0, 0] },
-
-  { "cardId": "amanita_pantherina", "arrows": [3, 2, 1, 0, 0, 0, 0, 2], "power": 1, "defense": 1 },
-  { "cardId": "psilocybe_azurea", "arrows": [2, 0, 2, 0, 2, 0, 2, 0], "power": 1, "defense": 1 },
-  { "cardId": "cordyceps_mind", "arrows": [3, 2, 0, 0, 1, 0, 0, 2], "power": 1, "defense": 1 },
-  { "cardId": "morel_prize", "arrows": [1, 0, 0, 2, 3, 2, 0, 0], "power": 1, "defense": 1 },
-  { "cardId": "lion_mane", "arrows": [1, 0, 3, 0, 1, 0, 3, 0], "power": 1, "defense": 1 },
-  { "cardId": "turkey_tail", "arrows": [0, 0, 0, 3, 2, 3, 0, 0], "power": 1, "defense": 1 },
-  { "cardId": "oyster_cluster", "arrows": [0, 0, 1, 0, 0, 2, 3, 2], "power": 1, "defense": 1 },
-
-  { "cardId": "psilocybe_cyanescens", "arrows": [4, 3, 3, 0, 2, 0, 3, 0], "power": 2, "defense": 2 },
-  { "cardId": "ergot_rye", "arrows": [3, 4, 4, 3, 2, 0, 0, 0], "power": 2, "defense": 2 },
-  { "cardId": "chanterelle_gold", "arrows": [3, 0, 2, 3, 4, 3, 0, 0], "power": 2, "defense": 2 },
-  { "cardId": "reishi_elixir", "arrows": [4, 0, 4, 0, 4, 0, 4, 0], "power": 2, "defense": 2 },
-  { "cardId": "fly_agaric_ring", "arrows": [4, 3, 3, 0, 0, 0, 2, 3], "power": 2, "defense": 2 },
-  { "cardId": "ghost_fungus", "arrows": [3, 0, 4, 0, 3, 0, 4, 2], "power": 2, "defense": 2 },
-
-  { "cardId": "death_cap", "arrows": [5, 4, 4, 0, 3, 0, 4, 4], "power": 3, "defense": 3 },
-  { "cardId": "mycena_lucifer", "arrows": [5, 3, 5, 0, 5, 0, 5, 3], "power": 3, "defense": 3 },
-  { "cardId": "armillaria_honey", "arrows": [4, 5, 0, 4, 3, 4, 0, 5], "power": 3, "defense": 3 },
-  { "cardId": "old_man_of_woods", "arrows": [4, 0, 3, 5, 6, 5, 3, 0], "power": 3, "defense": 3 },
-
-  { "cardId": "destroying_angel", "arrows": [6, 5, 5, 4, 5, 4, 5, 5], "power": 4, "defense": 4 },
-
-  { "cardId": "spore_giant_puffball", "arrows": [3, 0, 2, 0, 3, 0, 2, 0], "power": 1, "defense": 1 },
-  { "cardId": "mycelium_elder_web", "arrows": [2, 4, 0, 3, 0, 3, 0, 4], "power": 2, "defense": 2 },
-  { "cardId": "amanita_apex_toxica", "arrows": [4, 3, 2, 0, 0, 0, 0, 3], "power": 1, "defense": 1 },
-  { "cardId": "crystal_grand_coral", "arrows": [5, 0, 4, 0, 4, 0, 4, 0], "power": 2, "defense": 2 },
-  { "cardId": "decay_ancient_stump", "arrows": [2, 0, 0, 3, 4, 3, 0, 0], "power": 1, "defense": 1 },
-  { "cardId": "spore_fairycake", "arrows": [1, 0, 2, 0, 2, 0, 3, 0], "power": 1, "defense": 1 },
-  { "cardId": "mycelium_truffle", "arrows": [4, 3, 2, 0, 1, 0, 0, 3], "power": 2, "defense": 2 },
-  { "cardId": "decay_inkcap", "arrows": [3, 2, 2, 0, 3, 3, 0, 0], "power": 2, "defense": 2 },
-  { "cardId": "poison_goldcap", "arrows": [3, 2, 2, 2, 3, 0, 0, 2], "power": 2, "defense": 2 },
-  { "cardId": "bridge_saprophyte", "arrows": [1, 1, 1, 0, 1, 0, 1, 1], "power": 1, "defense": 1 },
-  { "cardId": "spore_archetype_burst_cap", "arrows": [3, 2, 2, 0, 3, 0, 2, 0], "power": 1, "defense": 1 },
-  { "cardId": "spore_archetype_signal", "arrows": [4, 0, 4, 0, 3, 0, 3, 0], "power": 2, "defense": 2 },
-  { "cardId": "colony_network_node", "arrows": [1, 3, 1, 3, 1, 3, 1, 3], "power": 1, "defense": 2 },
-  { "cardId": "colony_rhizomorph", "arrows": [2, 3, 0, 4, 0, 4, 0, 3], "power": 2, "defense": 2 },
-  { "cardId": "decay_compost_heap", "arrows": [0, 0, 0, 3, 3, 3, 0, 0], "power": 1, "defense": 2 },
-  { "cardId": "decay_carrion_bloom", "arrows": [3, 3, 2, 0, 3, 0, 2, 3], "power": 2, "defense": 2 },
-  { "cardId": "crystal_prism_gill", "arrows": [3, 0, 2, 0, 3, 0, 2, 0], "power": 1, "defense": 1 },
-  { "cardId": "crystal_shard_bloom", "arrows": [4, 0, 4, 0, 4, 0, 4, 0], "power": 2, "defense": 2 },
-  { "cardId": "wild_dung_beetle", "arrows": [5, 4, 4, 3, 5, 3, 4, 4], "power": 3, "defense": 3 }
+  {
+    "cardId": "spore_puffball",
+    "arrows": [
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "spore_veilcap",
+    "arrows": [
+      0,
+      1,
+      2,
+      1,
+      0,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "mycelium_thread",
+    "arrows": [
+      0,
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1
+    ]
+  },
+  {
+    "cardId": "mycelium_webcap",
+    "arrows": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "decay_bracket",
+    "arrows": [
+      1,
+      0,
+      0,
+      1,
+      2,
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "decay_rotwood",
+    "arrows": [
+      0,
+      0,
+      0,
+      1,
+      3,
+      2,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "symbiosis_boletus",
+    "arrows": [
+      1,
+      0,
+      2,
+      0,
+      0,
+      0,
+      2,
+      0
+    ]
+  },
+  {
+    "cardId": "symbiosis_mycorrhiza",
+    "arrows": [
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "crystal_coralfungus",
+    "arrows": [
+      2,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "crystal_glasscap",
+    "arrows": [
+      1,
+      0,
+      2,
+      0,
+      1,
+      0,
+      2,
+      0
+    ]
+  },
+  {
+    "cardId": "amanita_toxica",
+    "arrows": [
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "cardId": "shiitake_hearty",
+    "arrows": [
+      1,
+      0,
+      0,
+      1,
+      2,
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "amanita_pantherina",
+    "arrows": [
+      3,
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      2
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "psilocybe_azurea",
+    "arrows": [
+      2,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "cordyceps_mind",
+    "arrows": [
+      3,
+      2,
+      0,
+      0,
+      1,
+      0,
+      0,
+      2
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "morel_prize",
+    "arrows": [
+      1,
+      0,
+      0,
+      2,
+      3,
+      2,
+      0,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "lion_mane",
+    "arrows": [
+      1,
+      0,
+      3,
+      0,
+      1,
+      0,
+      3,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "turkey_tail",
+    "arrows": [
+      0,
+      0,
+      0,
+      3,
+      2,
+      3,
+      0,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "oyster_cluster",
+    "arrows": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      2,
+      3,
+      2
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "psilocybe_cyanescens",
+    "arrows": [
+      4,
+      3,
+      3,
+      0,
+      2,
+      0,
+      3,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "ergot_rye",
+    "arrows": [
+      3,
+      4,
+      4,
+      3,
+      2,
+      0,
+      0,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "chanterelle_gold",
+    "arrows": [
+      3,
+      0,
+      2,
+      3,
+      4,
+      3,
+      0,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "reishi_elixir",
+    "arrows": [
+      4,
+      0,
+      4,
+      0,
+      4,
+      0,
+      4,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "fly_agaric_ring",
+    "arrows": [
+      4,
+      3,
+      3,
+      0,
+      0,
+      0,
+      2,
+      3
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "ghost_fungus",
+    "arrows": [
+      3,
+      0,
+      4,
+      0,
+      3,
+      0,
+      4,
+      2
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "death_cap",
+    "arrows": [
+      5,
+      4,
+      4,
+      0,
+      3,
+      0,
+      4,
+      4
+    ],
+    "power": 3,
+    "defense": 3
+  },
+  {
+    "cardId": "mycena_lucifer",
+    "arrows": [
+      5,
+      3,
+      5,
+      0,
+      5,
+      0,
+      5,
+      3
+    ],
+    "power": 3,
+    "defense": 3
+  },
+  {
+    "cardId": "armillaria_honey",
+    "arrows": [
+      4,
+      5,
+      0,
+      4,
+      3,
+      4,
+      0,
+      5
+    ],
+    "power": 3,
+    "defense": 3
+  },
+  {
+    "cardId": "old_man_of_woods",
+    "arrows": [
+      4,
+      0,
+      3,
+      5,
+      6,
+      5,
+      3,
+      0
+    ],
+    "power": 3,
+    "defense": 3
+  },
+  {
+    "cardId": "destroying_angel",
+    "arrows": [
+      6,
+      5,
+      5,
+      4,
+      5,
+      4,
+      5,
+      5
+    ],
+    "power": 4,
+    "defense": 4
+  },
+  {
+    "cardId": "spore_giant_puffball",
+    "arrows": [
+      3,
+      0,
+      2,
+      0,
+      3,
+      0,
+      2,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "mycelium_elder_web",
+    "arrows": [
+      2,
+      4,
+      0,
+      3,
+      0,
+      3,
+      0,
+      4
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "amanita_apex_toxica",
+    "arrows": [
+      4,
+      3,
+      2,
+      0,
+      0,
+      0,
+      0,
+      3
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "crystal_grand_coral",
+    "arrows": [
+      5,
+      0,
+      4,
+      0,
+      4,
+      0,
+      4,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "decay_ancient_stump",
+    "arrows": [
+      2,
+      0,
+      0,
+      3,
+      4,
+      3,
+      0,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "spore_fairycake",
+    "arrows": [
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      3,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "mycelium_truffle",
+    "arrows": [
+      4,
+      3,
+      2,
+      0,
+      1,
+      0,
+      0,
+      3
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "decay_inkcap",
+    "arrows": [
+      3,
+      2,
+      2,
+      0,
+      3,
+      3,
+      0,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "poison_goldcap",
+    "arrows": [
+      3,
+      2,
+      2,
+      2,
+      3,
+      0,
+      0,
+      2
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "bridge_saprophyte",
+    "arrows": [
+      1,
+      1,
+      1,
+      0,
+      1,
+      0,
+      1,
+      1
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "spore_archetype_burst_cap",
+    "arrows": [
+      3,
+      2,
+      2,
+      0,
+      3,
+      0,
+      2,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "spore_archetype_signal",
+    "arrows": [
+      4,
+      0,
+      4,
+      0,
+      3,
+      0,
+      3,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "colony_network_node",
+    "arrows": [
+      1,
+      3,
+      1,
+      3,
+      1,
+      3,
+      1,
+      3
+    ],
+    "power": 1,
+    "defense": 2
+  },
+  {
+    "cardId": "colony_rhizomorph",
+    "arrows": [
+      2,
+      3,
+      0,
+      4,
+      0,
+      4,
+      0,
+      3
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "decay_compost_heap",
+    "arrows": [
+      0,
+      0,
+      0,
+      3,
+      3,
+      3,
+      0,
+      0
+    ],
+    "power": 1,
+    "defense": 2
+  },
+  {
+    "cardId": "decay_carrion_bloom",
+    "arrows": [
+      3,
+      3,
+      2,
+      0,
+      3,
+      0,
+      2,
+      3
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "crystal_prism_gill",
+    "arrows": [
+      3,
+      0,
+      2,
+      0,
+      3,
+      0,
+      2,
+      0
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "crystal_shard_bloom",
+    "arrows": [
+      4,
+      0,
+      4,
+      0,
+      4,
+      0,
+      4,
+      0
+    ],
+    "power": 2,
+    "defense": 2
+  },
+  {
+    "cardId": "wild_dung_beetle",
+    "arrows": [
+      5,
+      4,
+      4,
+      3,
+      5,
+      3,
+      4,
+      4
+    ],
+    "power": 3,
+    "defense": 3
+  },
+  {
+    "cardId": "spore_amanita_veil",
+    "arrows": [
+      2,
+      1,
+      1,
+      0,
+      1,
+      0,
+      1,
+      1
+    ],
+    "power": 1,
+    "defense": 1
+  },
+  {
+    "cardId": "spore_boletus_puff",
+    "arrows": [
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1,
+      1
+    ]
+  },
+  {
+    "cardId": "spore_psilocybe_dust",
+    "arrows": [
+      2,
+      0,
+      2,
+      0,
+      2,
+      0,
+      1,
+      1
+    ]
+  },
+  {
+    "cardId": "spore_clavaria_spray",
+    "arrows": [
+      1,
+      2,
+      0,
+      1,
+      2,
+      0,
+      2,
+      0
+    ]
+  },
+  {
+    "cardId": "colony_agaric_thread",
+    "arrows": [
+      2,
+      1,
+      2,
+      1,
+      0,
+      2,
+      0,
+      1
+    ]
+  },
+  {
+    "cardId": "colony_boletus_root",
+    "arrows": [
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "colony_amanita_web",
+    "arrows": [
+      3,
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      2
+    ]
+  },
+  {
+    "cardId": "colony_clavaria_filament",
+    "arrows": [
+      1,
+      2,
+      0,
+      3,
+      0,
+      3,
+      0,
+      2
+    ]
+  },
+  {
+    "cardId": "decay_agaric_mould",
+    "arrows": [
+      0,
+      0,
+      1,
+      1,
+      2,
+      1,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "decay_boletus_slime",
+    "arrows": [
+      0,
+      0,
+      0,
+      2,
+      3,
+      2,
+      0,
+      0
+    ]
+  },
+  {
+    "cardId": "decay_clavaria_ash",
+    "arrows": [
+      0,
+      0,
+      1,
+      2,
+      3,
+      2,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "decay_amanita_blight",
+    "arrows": [
+      2,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "cardId": "crystal_agaric_facet",
+    "arrows": [
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "cardId": "crystal_boletus_prism",
+    "arrows": [
+      3,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      0
+    ]
+  },
+  {
+    "cardId": "crystal_tricholoma_lens",
+    "arrows": [
+      1,
+      0,
+      3,
+      0,
+      1,
+      0,
+      3,
+      0
+    ]
+  },
+  {
+    "cardId": "crystal_amanita_shard",
+    "arrows": [
+      4,
+      3,
+      3,
+      0,
+      3,
+      0,
+      3,
+      3
+    ],
+    "power": 1,
+    "defense": 1
+  }
 ]

@@ -229,6 +229,7 @@
     "synergy": "Synergy",
     "sterile": "Sterile",
     "sporeBloom": "Spore bloom",
+    "sporeRelease": "Spore release",
     "decayHarvest": "Harvest",
     "fairyRing": "Fairy ring",
     "deepStore": "Deep store",
@@ -501,7 +502,7 @@
     },
     "spore_archetype_burst_cap": {
       "name": "Bursting Cap",
-      "desc": "With 3 or more Spores in hand, it multiplies Spores ×1.6."
+      "desc": "With 3 or more Spores from at least 2 different Families, it multiplies Spores ×1.4."
     },
     "spore_archetype_signal": {
       "name": "Spore Signal",
@@ -534,6 +535,70 @@
     "wild_dung_beetle": {
       "name": "Dung Beetle",
       "desc": "Wildcard: when played it adds +6 Substrate and +2 Spores, no conditions."
+    },
+    "spore_amanita_veil": {
+      "name": "Amanita Veil",
+      "desc": "Early spore: when played it adds +2 Spores. Family borrowed from the Amanitaceae."
+    },
+    "spore_boletus_puff": {
+      "name": "Bolete Puffball",
+      "desc": "If you play 3 or more cards, it adds +4 Substrate. Spore of the Boletaceae family."
+    },
+    "spore_psilocybe_dust": {
+      "name": "Psilocybe Dust",
+      "desc": "With 2 or more Spores in hand, multiplies Spores ×1.3. Parasitic spore."
+    },
+    "spore_clavaria_spray": {
+      "name": "Clavaria Spray",
+      "desc": "When played it adds +3 Substrate. Spore of the coral family."
+    },
+    "colony_agaric_thread": {
+      "name": "Agaric Thread",
+      "desc": "Every time you play a Mycelium card, it adds +2 Substrate. Mycelium of the Agaricaceae family."
+    },
+    "colony_boletus_root": {
+      "name": "Bolete Root",
+      "desc": "If you play 4 or more cards, it adds +5 Substrate. Mycelium of the Boletaceae family."
+    },
+    "colony_amanita_web": {
+      "name": "Amanita Web",
+      "desc": "With 2 or more Tricholomataceae in hand, it adds +4 Substrate. Mycelium of the Amanitaceae family."
+    },
+    "colony_clavaria_filament": {
+      "name": "Clavaria Filament",
+      "desc": "With 3 or more Tricholomataceae in hand, it adds +10 Substrate. Mycelium of the coral family."
+    },
+    "decay_agaric_mould": {
+      "name": "Agaric Mould",
+      "desc": "When played it rots a random card in hand. Decay of the Agaricaceae family."
+    },
+    "decay_boletus_slime": {
+      "name": "Bolete Slime",
+      "desc": "If the hand has a Rotting card, it adds +6 Substrate. Decay of the Boletaceae family."
+    },
+    "decay_clavaria_ash": {
+      "name": "Clavaria Ash",
+      "desc": "Consumes 3 Rotting points and turns them into Spores. Decay of the coral family."
+    },
+    "decay_amanita_blight": {
+      "name": "Amanita Blight",
+      "desc": "When played it rots 2 points on a random card in hand. Decay of the Amanitaceae family."
+    },
+    "crystal_agaric_facet": {
+      "name": "Agaric Facet",
+      "desc": "If you play 4 or more cards, it adds +2 Spores. Crystal of the Agaricaceae family."
+    },
+    "crystal_boletus_prism": {
+      "name": "Bolete Prism",
+      "desc": "When played it adds +1 Spore. Crystal of the Boletaceae family."
+    },
+    "crystal_tricholoma_lens": {
+      "name": "Tricholoma Lens",
+      "desc": "When you pick the blind, purging costs 1 less Fungi. Crystal of the Tricholomataceae family."
+    },
+    "crystal_amanita_shard": {
+      "name": "Amanita Shard",
+      "desc": "With 5 cards played, multiplies Spores ×2.2. Crystal of the Amanitaceae family."
     }
   },
   "joker": {

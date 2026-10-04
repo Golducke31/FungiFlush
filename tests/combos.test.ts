@@ -96,6 +96,29 @@ test('elemento: el combo multiplica Esporas y NO suma Sustrato plano', () => {
   assert.ok(combo.sporeMultiplier > 1);
 });
 
+test('solapamiento: si Floracion y Colonia pegan juntas, el Sustrato de familia se reduce a la mitad', () => {
+  // Caso base: mismo elemento y misma familia se solapan (el eje 1:1 del juego).
+  const overlapping = detectCombos(
+    Array.from({ length: 5 }, () => card({ element: 'spore', family: 'boletaceae' })),
+  );
+  const famOverlap = overlapping.find((c) => c.id === 'family:boletaceae:5');
+  assert.ok(famOverlap);
+  assert.ok(overlapping.some((c) => c.id.startsWith('element:')));
+  assert.equal(famOverlap.flatSubstrate, 40);
+
+  // Contraprueba: la misma familia de 5 cartas repartida en 5 elementos distintos
+  // no activa Floracion, asi que conserva el Sustrato pleno.
+  const spread = detectCombos(
+    (['spore', 'mycelium', 'decay', 'crystal', 'symbiosis'] as const).map((element) =>
+      card({ element, family: 'boletaceae' }),
+    ),
+  );
+  const famSpread = spread.find((c) => c.id === 'family:boletaceae:5');
+  assert.ok(famSpread);
+  assert.ok(!spread.some((c) => c.id.startsWith('element:')));
+  assert.equal(famSpread.flatSubstrate, 80);
+});
+
 test('diversidad: 5 elementos distintos dan el bonus', () => {
   const hand = [
     card({ element: 'spore' }),

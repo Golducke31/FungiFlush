@@ -16,6 +16,7 @@
     "sim": "tsx tools/simulate.ts",
     "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
     "sim:board": "tsx tools/boardSim.ts",
+    "sim:hands": "tsx tools/handStats.ts",
     "smoke": "node tools/smoke.mjs",
     "art": "python tools/optimize_art.py && node tools/genArtIndex.mjs",
     "art:index": "node tools/genArtIndex.mjs",

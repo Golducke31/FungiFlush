@@ -49,13 +49,25 @@ const ELEMENT_TIERS: readonly ElementComboTier[] = [
 ];
 
 const FAMILY_TIERS: readonly { cards: number; flat: number; key: string }[] = [
-  { cards: 5, flat: 60, key: 'combo.family.5' },
-  { cards: 4, flat: 30, key: 'combo.family.4' },
-  { cards: 3, flat: 12, key: 'combo.family.3' },
+  { cards: 5, flat: 80, key: 'combo.family.5' },
+  { cards: 4, flat: 40, key: 'combo.family.4' },
+  { cards: 3, flat: 16, key: 'combo.family.3' },
 ];
 
 /** Bonus por jugar 5 elementos distintos en la misma mano. */
 const DIVERSITY_BONUS = { flat: 25, key: 'combo.diversity' } as const;
+
+/**
+ * Rendimiento decreciente por SOLAPAMIENTO de ejes.
+ *
+ * Una mano puede activar Floracion (elemento) y Colonia (familia) con LAS
+ * MISMAS cartas fisicas — pasa siempre que el elemento y la familia vayan 1:1.
+ * Si ambos ejes pegan a la vez, el sustrato plano de la familia se reduce a la
+ * mitad: construir una mano que gane en los dos frentes sin cruzarlos sigue
+ * siendo la jugada optima, pero deja de ser un doble premio gratis. El bonus de
+ * diversidad NO se toca: ese si premia lo opuesto (no solapar).
+ */
+const OVERLAP_FAMILY_FACTOR = 0.5;
 
 function groupBy<K extends string>(
   cards: readonly CardInstance[],
@@ -96,17 +108,30 @@ export function detectCombos(cards: readonly CardInstance[]): ComboResult[] {
       sporeMultiplier: tier.multiplier,
     });
   }
+  const hasElementCombo = results.length > 0;
+  const comboElements = new Set(
+    results.filter((r) => r.id.startsWith('element:')).map((r) => r.id.split(':')[1]),
+  );
 
   // --- Combos por familia ---
   const byFamily = groupBy(cards, (c) => c.def.family);
   for (const [family, group] of byFamily) {
     const tier = FAMILY_TIERS.find((t) => group.length >= t.cards);
     if (!tier) continue;
+    // Solo penalizamos el solapamiento REAL: la familia entera pertenece a un
+    // elemento que ya formo Floracion (mismas cartas fisicas haciendo doble
+    // trabajo). Si las cartas de la familia estan repartidas en varios
+    // elementos, el jugador construyo dos ejes distintos y conserva el valor.
+    const qualifying = group.slice(0, tier.cards);
+    const overlapsElement =
+      hasElementCombo && qualifying.every((c) => comboElements.has(c.def.element));
     results.push({
       id: `family:${family}:${tier.cards}`,
       nameKey: tier.key,
-      cardUids: group.slice(0, tier.cards).map((c) => c.uid),
-      flatSubstrate: tier.flat,
+      cardUids: qualifying.map((c) => c.uid),
+      flatSubstrate: overlapsElement
+        ? Math.round(tier.flat * OVERLAP_FAMILY_FACTOR)
+        : tier.flat,
       sporeMultiplier: 1,
     });
   }

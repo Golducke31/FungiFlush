@@ -185,6 +185,18 @@ export type Condition =
   | { type: 'scored_count_gte'; value: number }
   | { type: 'scored_element_count_gte'; element: ElementType; value: number }
   | { type: 'scored_family_count_gte'; family: FamilyType; value: number }
+  /**
+   * N cartas del elemento dado repartidas en al menos M familias distintas.
+   * Premia reunir un elemento DIVERSIFICANDO la familia, en vez de apilar la
+   * misma carta: es el eje que evita que la Floracion y la Colonia se activen
+   * con la MISMA seleccion (ver `combos.ts`).
+   */
+  | {
+      type: 'scored_element_families_gte';
+      element: ElementType;
+      count: number;
+      families: number;
+    }
   | { type: 'jokers_gte'; value: number }
   | { type: 'is_first_card_of_round' }
   | { type: 'is_last_card_of_hand' }

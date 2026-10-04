@@ -476,10 +476,10 @@ const afterStart = await page.evaluate(() => {
     // la comprobacion del chip va en `afterBlind`, no aca.
     engineDeckSize: ff.engine.deckSize,
     // El arquetipo elegido cambia el mazo inicial (Clasico = 40, cada arquetipo
-    // = 20). La asercion del tamano tiene que comparar contra el mazo del
+    // = 24). La asercion del tamano tiene que comparar contra el mazo del
     // arquetipo realmente elegido, no contra un 40 fijo.
     archetype: ff.engine.run.archetype ?? '',
-    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
+    expectedDeckSize: ff.engine.run.archetype ? 24 : 40,
     blindPanelFit: bp
       ? {
           overflowViewport: Math.round(bp.bottom - window.innerHeight),
@@ -608,7 +608,7 @@ const afterBlind = await page.evaluate(() => {
     // El mazo inicial depende del arquetipo (Clasico 40, arquetipos 20). Las
     // aserciones del chip y del mazo se comparan contra este valor, no contra
     // un 40 fijo, para que el smoke siga valido con cualquier arquetipo.
-    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
+    expectedDeckSize: ff.engine.run.archetype ? 24 : 40,
     deckDraw: ff.engine.deckDraw,
     deckRemaining: ff.engine.run.deck.remaining,
     // Baseline de draw calls de ESCENA en el tier bajo (sin composer, sin sky):
@@ -875,8 +875,16 @@ const jokerChip = await (async () => {
 
   const antes = await page.evaluate(() => window.__fungiflush.engine.run.jokers.length);
   // Toque en el CUERPO de la ficha: 20 px desde el borde izquierdo, bien lejos
-  // del boton de vender (que vive pegado al derecho).
-  await page.mouse.click(chip.x + 20, chip.y + chip.height / 2);
+  // del boton de vender (que vive pegado al derecho). OJO: `chip`/`sell` se
+  // midieron antes; si el HUD se re-renderiza (auto-orden, state:changed), las
+  // coords quedan viejas y el click cae al vacio -> se re-mide justo antes.
+  const chipNow = await page.evaluate(() => {
+    const el = document.querySelector('.joker-chip');
+    if (!el) return null;
+    const b = el.getBoundingClientRect();
+    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  });
+  await page.mouse.click(chipNow.x + 20, chipNow.y + chipNow.height / 2);
   await page.waitForTimeout(500);
 
   const despues = await page.evaluate(() => ({
@@ -887,13 +895,28 @@ const jokerChip = await (async () => {
   // Primer toque en VENDER: tiene que pedir confirmacion, no vender.
   let primerToque = null;
   if (sell) {
-    await page.mouse.click(sell.x + sell.width / 2, sell.y + sell.height / 2);
-    await page.waitForTimeout(450);
-    primerToque = await page.evaluate(() => ({
-      jokers: window.__fungiflush.engine.run.jokers.length,
-      confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
-      etiqueta: document.querySelector('.joker-chip-sell')?.textContent ?? null,
-    }));
+    const sellNow = await page.evaluate(() => {
+      const el = document.querySelector('.joker-chip .joker-chip-sell');
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.x, y: b.y, width: b.width, height: b.height };
+    });
+    if (sellNow) {
+      await page.mouse.click(sellNow.x + sellNow.width / 2, sellNow.y + sellNow.height / 2);
+      // Poll: la clase `is-confirming` la pinta el HUD tras el toque; un
+      // `waitForTimeout` fijo puede leer ANTES de que el handler corra.
+      await page
+        .waitForFunction(
+          () => document.querySelector('.joker-chip')?.classList.contains('is-confirming') === true,
+          { timeout: 2000 },
+        )
+        .catch(() => {});
+      primerToque = await page.evaluate(() => ({
+        jokers: window.__fungiflush.engine.run.jokers.length,
+        confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
+        etiqueta: document.querySelector('.joker-chip-sell')?.textContent ?? null,
+      }));
+    }
   }
 
   return {
@@ -987,7 +1010,7 @@ const afterPlay = await page.evaluate(() => {
     deckSize: ff.engine.deckSize,
     // El mazo depende del arquetipo (Clasico 40, arquetipos 20); las cuentas de
     // "disponible" se hacen contra este valor, no contra un 40 fijo.
-    expectedDeckSize: ff.engine.run.archetype ? 20 : 40,
+    expectedDeckSize: ff.engine.run.archetype ? 24 : 40,
     cardsPlayed: ff.engine.round?.cardsPlayedThisRound ?? 0,
     cardsDiscarded: ff.engine.round?.cardsDiscardedThisRound ?? 0,
     stats: ff.scene.stats(),
@@ -1009,13 +1032,25 @@ await page.evaluate(() => {
   ff.engine.playHand();
 });
 // Mismo motivo que arriba: secuencia de puntaje + aviso antes del panel.
-await page.waitForTimeout(10000);
+// POLL en vez de un wait fijo: bajo carga la animacion de puntaje tarda mas de
+// 10s y el locator de la tienda expiraba. Esperamos a que el gancho REAL
+// (el panel de recompensa o el aviso de ciego superado) exista.
+await page
+  .waitForFunction(
+    () =>
+      Boolean(document.querySelector('.panel.is-reward')) ||
+      Boolean(document.querySelector('.panel.is-cleared [data-act="cleared-continue"]')),
+    { timeout: 30000 },
+  )
+  .catch(() => {});
 
 // ANTES del draft hay un aviso de "Ciego superado" (panel.is-cleared) que el
 // jugador descarta con "Continuar": hay que imitar ese gesto o el draft nunca
 // aparece y el locator de la tienda no matchea.
 await page.evaluate(() => document.querySelector('.panel.is-cleared [data-act="cleared-continue"]')?.click());
-await page.waitForTimeout(700);
+await page
+  .waitForFunction(() => Boolean(document.querySelector('.panel.is-reward')), { timeout: 10000 })
+  .catch(() => {});
 
 // OJO: el estado se lee ANTES de clickear. `chooseReward` resuelve el draft y
 // entra a la tienda en el mismo tick, asi que leer despues devolveria "shop".
@@ -1035,7 +1070,9 @@ await page.screenshot({ path: join(shotsDir, '07-reward.png') });
 // Se toma la primera carta desde la UI, no desde el motor: es el camino real.
 // El aviso de "Ciego superado" ya se descarto arriba; aca solo queda el draft.
 await page.evaluate(() => document.querySelector('.panel.is-reward [data-act="pick"]')?.click());
-await page.waitForTimeout(1200);
+await page
+  .waitForFunction(() => Boolean(document.querySelector('.panel.is-shop .offer')), { timeout: 15000 })
+  .catch(() => {});
 
 const afterWin = await page.evaluate(() => {
   const ff = window.__fungiflush;

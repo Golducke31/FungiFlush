@@ -183,8 +183,9 @@ test('el pack base real carga con el contenido esperado', () => {
   const registry = buildRegistry();
   const bundle = registry.toBundle();
   // 34 cartas base + 5 formas evolucionadas (solo obtenibles evolucionando)
-  // + 10 cartas de arquetipo (puente, motores por elemento y comodin).
-  assert.equal(bundle.cards.length, 49);
+  // + 10 cartas de arquetipo (puente, motores por elemento y comodin)
+  // + 16 cartas puente que cruzan elemento y familia (el eje que antes era 1:1).
+  assert.equal(bundle.cards.length, 65);
   assert.equal(bundle.cards.filter((c) => (c.tags ?? []).includes('evolved')).length, 5);
   assert.equal(bundle.blinds.length, 24);
   // 18 + el legendario del dado (`joker_loaded_die`).

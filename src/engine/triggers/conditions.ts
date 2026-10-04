@@ -68,6 +68,11 @@ export function evaluateCondition(
       return countBy(world.scoredCards, (c) => c.def.element, cond.element) >= cond.value;
     case 'scored_family_count_gte':
       return countBy(world.scoredCards, (c) => c.def.family, cond.family) >= cond.value;
+    case 'scored_element_families_gte': {
+      const ofElement = world.scoredCards.filter((c) => c.def.element === cond.element);
+      if (ofElement.length < cond.count) return false;
+      return new Set(ofElement.map((c) => c.def.family)).size >= cond.families;
+    }
     case 'jokers_gte':
       return world.jokerCount >= cond.value;
     case 'is_first_card_of_round':

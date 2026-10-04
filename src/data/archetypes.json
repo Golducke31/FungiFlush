@@ -9,10 +9,17 @@
     "element": "spore",
     "accentElement": "spore",
     "starter": [
-      { "cardId": "spore_puffball", "copies": 6 },
-      { "cardId": "spore_veilcap", "copies": 6 },
-      { "cardId": "spore_fairycake", "copies": 3 },
-      { "cardId": "spore_archetype_burst_cap", "copies": 3 },
+      { "cardId": "spore_puffball", "copies": 3 },
+      { "cardId": "spore_fairycake", "copies": 2 },
+      { "cardId": "spore_archetype_burst_cap", "copies": 1 },
+      { "cardId": "spore_amanita_veil", "copies": 1 },
+      { "cardId": "spore_boletus_puff", "copies": 1 },
+      { "cardId": "spore_psilocybe_dust", "copies": 1 },
+      { "cardId": "spore_clavaria_spray", "copies": 1 },
+      { "cardId": "symbiosis_boletus", "copies": 4 },
+      { "cardId": "amanita_toxica", "copies": 3 },
+      { "cardId": "mycelium_thread", "copies": 3 },
+      { "cardId": "crystal_glasscap", "copies": 2 },
       { "cardId": "bridge_saprophyte", "copies": 2 }
     ],
     "bias": ["spore", "crystal"]
@@ -27,11 +34,20 @@
     "element": "mycelium",
     "accentElement": "mycelium",
     "starter": [
-      { "cardId": "mycelium_thread", "copies": 6 },
-      { "cardId": "mycelium_webcap", "copies": 6 },
-      { "cardId": "colony_network_node", "copies": 3 },
-      { "cardId": "colony_rhizomorph", "copies": 3 },
-      { "cardId": "bridge_saprophyte", "copies": 2 }
+      { "cardId": "mycelium_thread", "copies": 2 },
+      { "cardId": "mycelium_webcap", "copies": 1 },
+      { "cardId": "colony_network_node", "copies": 1 },
+      { "cardId": "colony_rhizomorph", "copies": 1 },
+      { "cardId": "colony_agaric_thread", "copies": 1 },
+      { "cardId": "colony_boletus_root", "copies": 1 },
+      { "cardId": "colony_amanita_web", "copies": 1 },
+      { "cardId": "colony_clavaria_filament", "copies": 1 },
+      { "cardId": "symbiosis_mycorrhiza", "copies": 3 },
+      { "cardId": "shiitake_hearty", "copies": 3 },
+      { "cardId": "spore_puffball", "copies": 2 },
+      { "cardId": "decay_rotwood", "copies": 2 },
+      { "cardId": "amanita_toxica", "copies": 2 },
+      { "cardId": "bridge_saprophyte", "copies": 3 }
     ],
     "bias": ["mycelium", "symbiosis"]
   },
@@ -45,10 +61,19 @@
     "element": "decay",
     "accentElement": "decay",
     "starter": [
-      { "cardId": "decay_bracket", "copies": 6 },
-      { "cardId": "decay_rotwood", "copies": 6 },
-      { "cardId": "decay_compost_heap", "copies": 3 },
-      { "cardId": "decay_carrion_bloom", "copies": 3 },
+      { "cardId": "decay_bracket", "copies": 2 },
+      { "cardId": "decay_agaric_mould", "copies": 2 },
+      { "cardId": "decay_boletus_slime", "copies": 1 },
+      { "cardId": "decay_amanita_blight", "copies": 1 },
+      { "cardId": "decay_clavaria_ash", "copies": 1 },
+      { "cardId": "decay_compost_heap", "copies": 1 },
+      { "cardId": "decay_carrion_bloom", "copies": 1 },
+      { "cardId": "decay_rotwood", "copies": 1 },
+      { "cardId": "amanita_pantherina", "copies": 3 },
+      { "cardId": "ergot_rye", "copies": 3 },
+      { "cardId": "mycelium_thread", "copies": 2 },
+      { "cardId": "psilocybe_azurea", "copies": 2 },
+      { "cardId": "symbiosis_mycorrhiza", "copies": 2 },
       { "cardId": "bridge_saprophyte", "copies": 2 }
     ],
     "bias": ["decay", "poison"]
@@ -63,11 +88,20 @@
     "element": "crystal",
     "accentElement": "crystal",
     "starter": [
-      { "cardId": "crystal_coralfungus", "copies": 6 },
-      { "cardId": "crystal_glasscap", "copies": 6 },
-      { "cardId": "crystal_prism_gill", "copies": 3 },
-      { "cardId": "crystal_shard_bloom", "copies": 3 },
-      { "cardId": "bridge_saprophyte", "copies": 2 }
+      { "cardId": "crystal_glasscap", "copies": 2 },
+      { "cardId": "crystal_agaric_facet", "copies": 2 },
+      { "cardId": "crystal_boletus_prism", "copies": 1 },
+      { "cardId": "crystal_prism_gill", "copies": 1 },
+      { "cardId": "crystal_shard_bloom", "copies": 1 },
+      { "cardId": "crystal_tricholoma_lens", "copies": 1 },
+      { "cardId": "crystal_amanita_shard", "copies": 1 },
+      { "cardId": "crystal_coralfungus", "copies": 1 },
+      { "cardId": "symbiosis_boletus", "copies": 3 },
+      { "cardId": "psilocybe_azurea", "copies": 2 },
+      { "cardId": "spore_puffball", "copies": 2 },
+      { "cardId": "mycelium_thread", "copies": 2 },
+      { "cardId": "bridge_saprophyte", "copies": 4 },
+      { "cardId": "wild_dung_beetle", "copies": 1 }
     ],
     "bias": ["crystal", "spore"]
   }

@@ -1,0 +1,353 @@
+[
+  {
+    "id": "spore_amanita_veil",
+    "nameKey": "card.spore_amanita_veil.name",
+    "descKey": "card.spore_amanita_veil.desc",
+    "element": "spore",
+    "family": "amanitaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 44, "hue2": 350, "pattern": "radial", "silhouette": "cap", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "amanita_veil_release",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.sporeRelease"
+      }
+    ]
+  },
+  {
+    "id": "spore_boletus_puff",
+    "nameKey": "card.spore_boletus_puff.name",
+    "descKey": "card.spore_boletus_puff.desc",
+    "element": "spore",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 40, "hue2": 90, "pattern": "radial", "silhouette": "cluster", "glow": 0.38 },
+    "effects": [
+      {
+        "id": "boletus_puff_settle",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 3 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 4 }],
+        "labelKey": "effect.synergy"
+      }
+    ]
+  },
+  {
+    "id": "spore_psilocybe_dust",
+    "nameKey": "card.spore_psilocybe_dust.name",
+    "descKey": "card.spore_psilocybe_dust.desc",
+    "element": "spore",
+    "family": "psilocybaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 2,
+    "baseSpores": 4,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 36, "hue2": 300, "pattern": "blotch", "silhouette": "cap", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "psilocybe_dust_bloom",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_element_count_gte", "element": "spore", "value": 2 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.3 }],
+        "labelKey": "effect.sporeBloom"
+      }
+    ]
+  },
+  {
+    "id": "spore_clavaria_spray",
+    "nameKey": "card.spore_clavaria_spray.name",
+    "descKey": "card.spore_clavaria_spray.desc",
+    "element": "spore",
+    "family": "clavariaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 3,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 48, "hue2": 180, "pattern": "crystal", "silhouette": "coral", "glow": 0.65 },
+    "effects": [
+      {
+        "id": "clavaria_spray_shimmer",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 3 }],
+        "labelKey": "effect.refraction"
+      }
+    ]
+  },
+
+  {
+    "id": "colony_agaric_thread",
+    "nameKey": "card.colony_agaric_thread.name",
+    "descKey": "card.colony_agaric_thread.desc",
+    "element": "mycelium",
+    "family": "agaricaceae",
+    "rarity": "common",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 262, "hue2": 40, "pattern": "fibrous", "silhouette": "mold", "glow": 0.36 },
+    "effects": [
+      {
+        "id": "agaric_thread_spread",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 2 }],
+        "labelKey": "effect.network"
+      }
+    ]
+  },
+  {
+    "id": "colony_boletus_root",
+    "nameKey": "card.colony_boletus_root.name",
+    "descKey": "card.colony_boletus_root.desc",
+    "element": "mycelium",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 270, "hue2": 95, "pattern": "fibrous", "silhouette": "truffle", "glow": 0.35 },
+    "effects": [
+      {
+        "id": "boletus_root_anchor",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 4 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 5 }],
+        "labelKey": "effect.synergy"
+      }
+    ]
+  },
+  {
+    "id": "colony_amanita_web",
+    "nameKey": "card.colony_amanita_web.name",
+    "descKey": "card.colony_amanita_web.desc",
+    "element": "mycelium",
+    "family": "amanitaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 6,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 256, "hue2": 5, "pattern": "fibrous", "silhouette": "mold", "glow": 0.32 },
+    "effects": [
+      {
+        "id": "amanita_web_connect",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "scored_family_count_gte", "family": "tricholomataceae", "value": 2 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 4 }],
+        "labelKey": "effect.network"
+      }
+    ]
+  },
+  {
+    "id": "colony_clavaria_filament",
+    "nameKey": "card.colony_clavaria_filament.name",
+    "descKey": "card.colony_clavaria_filament.desc",
+    "element": "mycelium",
+    "family": "clavariaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 274, "hue2": 190, "pattern": "crystal", "silhouette": "coral", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "clavaria_filament_hum",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_family_count_gte", "family": "tricholomataceae", "value": 3 }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 10 }],
+        "labelKey": "effect.colony"
+      }
+    ]
+  },
+
+  {
+    "id": "decay_agaric_mould",
+    "nameKey": "card.decay_agaric_mould.name",
+    "descKey": "card.decay_agaric_mould.desc",
+    "element": "decay",
+    "family": "agaricaceae",
+    "rarity": "common",
+    "baseSubstrate": 4,
+    "baseSpores": 1,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 20, "hue2": 45, "pattern": "blotch", "silhouette": "cap", "glow": 0.28 },
+    "effects": [
+      {
+        "id": "agaric_mould_rot",
+        "trigger": "ON_PLAY",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 1, "turns": -1 }],
+        "labelKey": "effect.compost"
+      }
+    ]
+  },
+  {
+    "id": "decay_boletus_slime",
+    "nameKey": "card.decay_boletus_slime.name",
+    "descKey": "card.decay_boletus_slime.desc",
+    "element": "decay",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 26, "hue2": 88, "pattern": "blotch", "silhouette": "mold", "glow": 0.26 },
+    "effects": [
+      {
+        "id": "boletus_slime_seep",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 6 }],
+        "labelKey": "effect.decayHarvest"
+      }
+    ]
+  },
+  {
+    "id": "decay_clavaria_ash",
+    "nameKey": "card.decay_clavaria_ash.name",
+    "descKey": "card.decay_clavaria_ash.desc",
+    "element": "decay",
+    "family": "clavariaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 16, "hue2": 200, "pattern": "crystal", "silhouette": "coral", "glow": 0.4 },
+    "effects": [
+      {
+        "id": "clavaria_ash_harvest",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "actions": [{ "type": "CONSUME_STATUS", "status": "decay", "gain": "spores", "value": 3, "full": false }],
+        "labelKey": "effect.decayHarvest"
+      }
+    ]
+  },
+  {
+    "id": "decay_amanita_blight",
+    "nameKey": "card.decay_amanita_blight.name",
+    "descKey": "card.decay_amanita_blight.desc",
+    "element": "decay",
+    "family": "amanitaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 6,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 12, "hue2": 350, "pattern": "rings", "silhouette": "cap", "glow": 0.3 },
+    "effects": [
+      {
+        "id": "amanita_blight_spread",
+        "trigger": "ON_PLAY",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": -1 }],
+        "labelKey": "effect.compost"
+      }
+    ]
+  },
+
+  {
+    "id": "crystal_agaric_facet",
+    "nameKey": "card.crystal_agaric_facet.name",
+    "descKey": "card.crystal_agaric_facet.desc",
+    "element": "crystal",
+    "family": "agaricaceae",
+    "rarity": "common",
+    "baseSubstrate": 2,
+    "baseSpores": 3,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 186, "hue2": 46, "pattern": "crystal", "silhouette": "cap", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "agaric_facet_edge",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 4 }],
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.refract"
+      }
+    ]
+  },
+  {
+    "id": "crystal_boletus_prism",
+    "nameKey": "card.crystal_boletus_prism.name",
+    "descKey": "card.crystal_boletus_prism.desc",
+    "element": "crystal",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 192, "hue2": 92, "pattern": "crystal", "silhouette": "cluster", "glow": 0.68 },
+    "effects": [
+      {
+        "id": "boletus_prism_focus",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "ADD_SPORES", "value": 1 }],
+        "labelKey": "effect.refraction"
+      }
+    ]
+  },
+  {
+    "id": "crystal_tricholoma_lens",
+    "nameKey": "card.crystal_tricholoma_lens.name",
+    "descKey": "card.crystal_tricholoma_lens.desc",
+    "element": "crystal",
+    "family": "tricholomataceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 5,
+    "tags": ["archetype", "bridge"],
+    "art": { "hue": 182, "hue2": 264, "pattern": "crystal", "silhouette": "cap", "glow": 0.74 },
+    "effects": [
+      {
+        "id": "tricholoma_lens_clean",
+        "trigger": "ON_BLIND_SELECTED",
+        "actions": [{ "type": "PURGE_COST_DELTA", "value": -1 }],
+        "labelKey": "effect.refraction"
+      }
+    ]
+  },
+  {
+    "id": "crystal_amanita_shard",
+    "nameKey": "card.crystal_amanita_shard.name",
+    "descKey": "card.crystal_amanita_shard.desc",
+    "element": "crystal",
+    "family": "amanitaceae",
+    "rarity": "rare",
+    "baseSubstrate": 2,
+    "baseSpores": 4,
+    "cost": 6,
+    "tags": ["archetype", "bridge", "rare"],
+    "art": { "hue": 176, "hue2": 340, "pattern": "crystal", "silhouette": "coral", "glow": 0.86 },
+    "effects": [
+      {
+        "id": "amanita_shard_perfect",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 5 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2.2 }],
+        "labelKey": "effect.refract"
+      }
+    ]
+  }
+]

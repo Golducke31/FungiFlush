@@ -229,6 +229,7 @@
     "synergy": "Sinergia",
     "sterile": "Esterilidad",
     "sporeBloom": "Floración de esporas",
+    "sporeRelease": "Liberación de esporas",
     "decayHarvest": "Cosecha",
     "fairyRing": "Anillo de hadas",
     "deepStore": "Reserva profunda",
@@ -501,7 +502,7 @@
     },
     "spore_archetype_burst_cap": {
       "name": "Sombrero de Ráfaga",
-      "desc": "Con 3 o más Esporas en la mano, multiplica las Esporas ×1.6."
+      "desc": "Con 3 o más Esporas de al menos 2 Familias distintas, multiplica las Esporas ×1.4."
     },
     "spore_archetype_signal": {
       "name": "Señal Esporada",
@@ -534,6 +535,70 @@
     "wild_dung_beetle": {
       "name": "Escarabajo Pelotero",
       "desc": "Comodín: al jugarse suma +6 de Sustrato y +2 Esporas, sin condiciones."
+    },
+    "spore_amanita_veil": {
+      "name": "Velo de Amanita",
+      "desc": "Espora precoz: al jugarse suma +2 Esporas. Familia prestada de las Amanitáceas."
+    },
+    "spore_boletus_puff": {
+      "name": "Bejín de Boleto",
+      "desc": "Si jugás 3 o más cartas, suma +4 de Sustrato. Espora de familia Boletácea."
+    },
+    "spore_psilocybe_dust": {
+      "name": "Polvo de Psilocibe",
+      "desc": "Con 2 o más Esporas en la mano, multiplica las Esporas ×1.3. Espora parásita."
+    },
+    "spore_clavaria_spray": {
+      "name": "Rocío de Clavaria",
+      "desc": "Al jugarse suma +3 de Sustrato. Espora de familia coralina."
+    },
+    "colony_agaric_thread": {
+      "name": "Hilo Agaricáceo",
+      "desc": "Cada vez que juegues una carta de Micelio, suma +2 de Sustrato. Micelio de familia Agaricácea."
+    },
+    "colony_boletus_root": {
+      "name": "Raíz de Boleto",
+      "desc": "Si jugás 4 o más cartas, suma +5 de Sustrato. Micelio de familia Boletácea."
+    },
+    "colony_amanita_web": {
+      "name": "Red de Amanita",
+      "desc": "Con 2 o más Tricolomatáceas en la mano, suma +4 de Sustrato. Micelio de familia Amanitácea."
+    },
+    "colony_clavaria_filament": {
+      "name": "Filamento de Clavaria",
+      "desc": "Con 3 o más Tricolomatáceas en la mano, suma +10 de Sustrato. Micelio de familia coralina."
+    },
+    "decay_agaric_mould": {
+      "name": "Moho Agaricáceo",
+      "desc": "Al jugarse pudre una carta al azar de la mano. Putrefacción de familia Agaricácea."
+    },
+    "decay_boletus_slime": {
+      "name": "Baba de Boleto",
+      "desc": "Si la mano tiene una carta Pudriéndose, suma +6 de Sustrato. Putrefacción de familia Boletácea."
+    },
+    "decay_clavaria_ash": {
+      "name": "Ceniza de Clavaria",
+      "desc": "Consume 3 puntos de Pudriéndose y los convierte en Esporas. Putrefacción de familia coralina."
+    },
+    "decay_amanita_blight": {
+      "name": "Tizón de Amanita",
+      "desc": "Al jugarse pudre 2 puntos de una carta al azar de la mano. Putrefacción de familia Amanitácea."
+    },
+    "crystal_agaric_facet": {
+      "name": "Faceta Agaricácea",
+      "desc": "Si jugás 4 o más cartas, suma +2 Esporas. Cristal de familia Agaricácea."
+    },
+    "crystal_boletus_prism": {
+      "name": "Prisma de Boleto",
+      "desc": "Al jugarse suma +1 Espora. Cristal de familia Boletácea."
+    },
+    "crystal_tricholoma_lens": {
+      "name": "Lente de Tricoloma",
+      "desc": "Al elegir el ciego, purificar cuesta 1 Fungi menos. Cristal de familia Tricolomatácea."
+    },
+    "crystal_amanita_shard": {
+      "name": "Esquirla de Amanita",
+      "desc": "Con 5 cartas jugadas, multiplica las Esporas ×2.2. Cristal de familia Amanitácea."
     }
   },
   "joker": {

@@ -39,8 +39,10 @@
       {
         "id": "spore_burst_cap_mult",
         "trigger": "ON_HAND_SCORED",
-        "conditions": [{ "type": "scored_element_count_gte", "element": "spore", "value": 3 }],
-        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.6 }],
+        "conditions": [
+          { "type": "scored_element_families_gte", "element": "spore", "count": 3, "families": 2 }
+        ],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.4 }],
         "labelKey": "effect.sporeBloom"
       }
     ]
