@@ -222,25 +222,33 @@ Si se prefiere conservar `Menú` visible, dejar **solo** `Menú` e incluir `Idio
 - `styles.css`: subir tipografía de carta en `pointer: coarse`; separación 4–8px; expansión al tocar.
 - **Aceptación:** nombre/elemento/familia legibles a 915×412 (sin zoom); toque de carta con feedback.
 
-### P1 — Interacción
+### P1 — Interacción ✅ COMPLETADO
 
-- **P1.1** Puntaje estimado en `Jugar Mano · 420`. Requiere un método `previewScore(selected)` en el
-  motor (o reusar el cálculo de `renderPreview()` si ya existe; hoy **no existe** API pública de estimado →
-  sumar `engine.estimatePlay(selectedUids)` puro y testear).
-- **P1.2** Resaltar cartas compatibles con la selección (familia/elemento) mientras se arma la mano.
-- **P1.3** Carta ampliada al tocar-mantener o doble toque (panel con nombre, elemento·familia, +Sustrato,
-  ×Espora, ✦ HABILIDAD y su condición). Resuelve el texto chico sin agrandar todas las cartas.
-- **P1.4** Icono de ayuda contextual `?` (reabre la explicación que salió en P0.2).
-- **P1.5** Persistir estado abierto/plegado de misiones y menú en el perfil (aditivo a `ProfileSave`).
+- **P1.1** ✅ Puntaje estimado en `Jugar Mano · 420`. Reusa `engine.previewSelection()` existente.
+  - Archivos: `src/ui/HUD.ts` (`renderActions`).
+- **P1.2** ✅ Resaltar cartas compatibles con la selección (familia/elemento). Brillo sutil (0.35) en halo.
+  - Archivos: `src/render/Card3D.ts` (`setCompatible`), `src/render/SceneManager.ts` (`syncHand`).
+- **P1.3** ✅ Carta ampliada al tocar-mantener (500ms) o doble toque (350ms). Panel DOM con nombre, stats, abilities.
+  - Archivos: `src/render/Interaction.ts` (`onLongPress`/`onDoubleTap`), `src/render/SceneManager.ts` (`onCardDetail`), `src/ui/HUD.ts` (`showCardDetail`), `src/ui/styles.css` (`.panel.is-card-detail`).
+- **P1.4** ✅ Icono de ayuda contextual `?`. Toggle del aviso de barra.
+  - Archivos: `src/ui/HUD.ts` (`toggleHelp`), `src/ui/styles.css` (`.hud-help`).
+- **P1.5** ✅ Persistir estado de paneles UI en perfil (v3). `ui: { missionsOpen, helpOpen }`.
+  - Archivos: `src/meta/ProfileState.ts` (v3), `src/persistence/migrations.ts` (v2→v3), `src/ui/HUD.ts` (`setUiState`/`onUiStateChange`), `src/main.ts` (wire).
 
-### P2 — Pulido
+### P2 — Pulido (PENDIENTE)
 
 - **P2.1** Animación clara al seleccionar (elevar 20–30px, borde dorado/turquesa, icono de selección, vecinas quietas).
+  - Nota: la selección ya eleva la carta (`SELECT_LIFT = 0.42`) y enciende el halo. Falta: elevar *más* (20–30px en vez de 0.42u), borde dorado/turquesa, icono de check, vecinas quietas.
 - **P2.2** Transición de carta al centro al puntuar.
+  - Nota: ya existe animación de scoring. Falta pulirla para que la carta vuele al centro de forma más dramática.
 - **P2.3** Feedback de combo (cuando se forma Floración/Colonia).
+  - Nota: `detectCombos` ya existe. Falta: feedback visual (flash, popup) cuando se forma un combo.
 - **P2.4** Animación de misión completada.
+  - Nota: falta animación de celebración cuando una misión se completa.
 - **P2.5** Vibración sutil al tocar acción importante (si el dispositivo la soporta).
+  - Nota: `navigator.vibrate` API. Solo en dispositivos que la soporten.
 - **P2.6** Diferenciar visual estados: Estéril / Pudriéndose / Latente.
+  - Nota: los estados de carta ya existen en el motor. Falta representación visual en el render.
 
 ---
 
