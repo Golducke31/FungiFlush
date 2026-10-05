@@ -1629,21 +1629,50 @@ export class HUD {
 
     const heading = document.createElement('div');
     heading.className = 'score-breakdown-title';
-    heading.textContent = t('guide.breakdownTitle');
+    // La cantidad de cartas va en el encabezado. Antes ocupaba una FILA propia
+    // con la unidad equivocada ("1 Mazo", `hud.deck` = "Mazo").
+    const handLabel =
+      data.handSize === 1
+        ? t('guide.breakdownHandOne')
+        : t('guide.breakdownHand', { count: data.handSize });
+    heading.textContent = `${t('guide.breakdownTitle')} · ${handLabel}`;
     wrap.appendChild(heading);
 
-    const substrate = data.breakdown.baseSubstrate + data.breakdown.addedSubstrate;
-    const spores = data.breakdown.baseSpores + data.breakdown.addedSpores;
-    const bonus =
-      data.breakdown.addedSubstrate + data.breakdown.addedSpores * data.breakdown.multipliedSpores;
+    // Fila 1 — QUE combinacion se formo. El motor ahora manda las claves
+    // (`comboKeys`); antes el panel no tenia el dato y lo rellenaba con la
+    // cantidad de cartas.
+    const comboText =
+      data.breakdown.comboKeys.length > 0
+        ? data.breakdown.comboKeys.map((key) => t(key)).join(' · ')
+        : t('guide.breakdownComboNone');
+
+    // Fila 3 — Lo que SUMARON los efectos, no el total. Antes mostraba
+    // `baseSpores + addedSpores` (el total de Esporas) bajo el rotulo
+    // "Bonificaciones": un "+2" que no era un bonus.
+    const addedSubstrate = data.breakdown.addedSubstrate;
+    const addedSpores = data.breakdown.addedSpores;
+    const bonusParts: string[] = [];
+    if (addedSubstrate !== 0) {
+      bonusParts.push(
+        `${addedSubstrate > 0 ? '+' : ''}${formatNumber(addedSubstrate)} ${t('hud.substrate')}`,
+      );
+    }
+    if (addedSpores !== 0) {
+      bonusParts.push(`${addedSpores > 0 ? '+' : ''}${formatNumber(addedSpores)} ${t('hud.spores')}`);
+    }
+    const bonusText = bonusParts.length > 0 ? bonusParts.join(' · ') : '—';
 
     const rows: Array<[string, string, string]> = [
-      [t('guide.breakdownCombo'), `${formatNumber(data.handSize)} ${t('hud.deck')}`, ''],
-      [t('guide.breakdownBase'), `${formatNumber(data.breakdown.baseSubstrate)} × ${formatNumber(data.breakdown.baseSpores)}`, ''],
+      [t('guide.breakdownCombo'), comboText, ''],
+      [
+        t('guide.breakdownBase'),
+        `${formatNumber(data.breakdown.baseSubstrate)} × ${formatNumber(data.breakdown.baseSpores)}`,
+        '',
+      ],
       [
         t('guide.breakdownBonus'),
-        `${bonus >= 0 ? '+' : ''}${formatNumber(spores)} ${t('hud.spores')}`,
-        bonus > 0 ? 'is-positive' : '',
+        bonusText,
+        addedSubstrate > 0 || addedSpores > 0 ? 'is-positive' : '',
       ],
       [
         t('guide.breakdownMult'),
@@ -1651,10 +1680,6 @@ export class HUD {
         data.breakdown.multipliedSpores > 1 ? 'is-positive' : '',
       ],
     ];
-
-    // Se omite la fila "Base" en crudo si coincide con el sustrato: el jugador
-    // solo necesita ver lo que APORTA cada parte, no la aritmetica interna.
-    void substrate;
 
     for (const [label, value, kind] of rows) {
       const row = document.createElement('div');
@@ -1793,7 +1818,11 @@ export class HUD {
    * inferior. En escritorio no se aplica: alli el HUD y el panel conviven bien.
    */
   private syncPanelOpen(): void {
-    this.root.classList.toggle('is-panel-open', this.elOverlay.classList.contains('is-open'));
+    const open = this.elOverlay.classList.contains('is-open');
+    this.root.classList.toggle('is-panel-open', open);
+    // Al cerrarse el panel se sueltan los banners que esperaron (logros que se
+    // desbloquearon mientras estaba abierto).
+    if (!open) this.flushBanners();
   }
 
   /**
@@ -3766,6 +3795,30 @@ export class HUD {
     params?: Record<string, unknown>,
     kind: 'info' | 'warn' | 'success' = 'info',
   ): void {
+    // Con un PANEL abierto el banner se encola. El `.banner-stack` vive por
+    // encima del overlay (`--z-banner` 85 > 80) y esta anclado ABAJO, asi que
+    // caia justo sobre el pie del panel: el "Logro desbloqueado" tapaba el boton
+    // Continuar del aviso de Ciego superado. El panel ocupa toda la pantalla, no
+    // hay posicion donde el banner no tape algo — se muestra al volver a la mesa.
+    if (this.elOverlay.classList.contains('is-open')) {
+      this.bannerQueue.push({ key, params, kind });
+      return;
+    }
+    this.renderBanner(key, params, kind);
+  }
+
+  /** Banners que esperaron a que se cierre el panel. */
+  private bannerQueue: Array<{
+    key: string;
+    params?: Record<string, unknown>;
+    kind: 'info' | 'warn' | 'success';
+  }> = [];
+
+  private renderBanner(
+    key: string,
+    params?: Record<string, unknown>,
+    kind: 'info' | 'warn' | 'success' = 'info',
+  ): void {
     const el = document.createElement('div');
     el.className = `banner${kind === 'info' ? '' : ` is-${kind}`}`;
     el.textContent = t(key, params);
@@ -3776,6 +3829,15 @@ export class HUD {
       el.classList.add('is-leaving');
       window.setTimeout(() => el.remove(), 300);
     }, 4000);
+  }
+
+  /** Suelta los banners encolados. No hace nada si sigue habiendo panel. */
+  private flushBanners(): void {
+    if (this.bannerQueue.length === 0) return;
+    if (this.elOverlay.classList.contains('is-open')) return;
+    const queued = this.bannerQueue;
+    this.bannerQueue = [];
+    for (const item of queued) this.renderBanner(item.key, item.params, item.kind);
   }
 
   /** Bloquea la UI mientras el motor resuelve (evita dobles clicks). */

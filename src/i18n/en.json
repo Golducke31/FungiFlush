@@ -192,9 +192,9 @@
       "5": "Total Eclosion (x3 Spores)"
     },
     "family": {
-      "3": "Colony (+12 Substrate)",
-      "4": "Great Colony (+30 Substrate)",
-      "5": "Supercolony (+60 Substrate)"
+      "3": "Colony (+16 Substrate)",
+      "4": "Great Colony (+40 Substrate)",
+      "5": "Supercolony (+80 Substrate)"
     },
     "diversity": "Diversity (+25 Substrate)"
   },
@@ -1227,7 +1227,9 @@
     "barNotice": "The bar only advances when you play a hand.",
     "breakdownTitle": "How it was scored",
     "breakdownHand": "Hand: {count} cards",
+    "breakdownHandOne": "Hand: 1 card",
     "breakdownCombo": "Combo",
+    "breakdownComboNone": "No combo",
     "breakdownBase": "Base",
     "breakdownBonus": "Bonuses",
     "breakdownMult": "Multiplier",

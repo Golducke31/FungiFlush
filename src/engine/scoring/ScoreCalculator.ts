@@ -280,5 +280,6 @@ export function breakdownOf(res: ResolutionContext): ScoreBreakdown {
     addedSpores: res.sporesFromEffects,
     multipliedSpores: res.sporesMultiplier,
     total: res.total,
+    comboKeys: res.combos.map((combo) => combo.nameKey),
   };
 }

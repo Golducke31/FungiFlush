@@ -7390,4 +7390,227 @@ body {
   .panel.is-settings .settings-toggle {
     min-height: 28px;
   }
+
+  /* --- Ciego superado: el desglose y el pie entran sin recortarse ---
+     El panel es una columna CENTRADA con `overflow: hidden`: si el contenido
+     pasa el alto disponible, se recorta por arriba Y por abajo (el centrado
+     reparte el desborde) y el boton Continuar quedaba cortado. Se comprime el
+     bloque entero para que sobre aire. */
+  .panel.is-cleared {
+    gap: 3px;
+    padding: 8px 14px;
+  }
+
+  .panel.is-cleared .cleared-title {
+    font-size: clamp(24px, 6.5vw, 40px);
+  }
+
+  .panel.is-cleared .cleared-detail {
+    font-size: clamp(16px, 2.4vw, 24px);
+  }
+
+  .panel.is-cleared .cleared-total {
+    font-size: 12px;
+  }
+
+  .panel.is-cleared .score-breakdown {
+    margin-top: 6px;
+    padding: 8px 12px;
+  }
+
+  .panel.is-cleared .score-breakdown-title {
+    margin-bottom: 3px;
+    font-size: 10px;
+  }
+
+  .panel.is-cleared .score-breakdown-row {
+    padding: 1px 0;
+    font-size: 12px;
+  }
+
+  .panel.is-cleared .score-breakdown-row.is-total {
+    margin-top: 4px;
+    padding-top: 4px;
+    font-size: 13px;
+  }
+
+  .panel.is-cleared .score-breakdown-row.is-total .score-breakdown-value {
+    font-size: 15px;
+  }
+
+  .panel.is-cleared .deck-state-line {
+    font-size: 11px;
+  }
+
+  /* --- Marco del carrusel 3D (Mazo / Coleccion): DOS bandas finas ---
+     El anillo dibuja la carta enfocada en el CENTRO de la pantalla. Las bandas
+     de arriba (titulo + orden) y de abajo (detalle + acciones) median 132px y
+     165px: se comian media carta. Se comprimen, y el pie pasa a UNA fila
+     (detalle + acciones al lado) para que la franja central quede libre. */
+  .panel.is-carousel-frame .panel-title {
+    font-size: 19px;
+    margin-bottom: 2px;
+  }
+
+  .panel.is-carousel-frame .panel-subtitle {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .carousel-top {
+    gap: 4px;
+  }
+
+  .deck-toolbar.is-floating {
+    gap: 5px;
+  }
+
+  .deck-toolbar.is-floating .btn {
+    min-height: 28px;
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+
+  .carousel-bottom {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .carousel-detail {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
+    padding: 6px 12px;
+    text-align: left;
+  }
+
+  .carousel-detail-name {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .carousel-detail-meta {
+    margin-top: 0;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .carousel-detail-stats {
+    margin-top: 0;
+    gap: 12px;
+  }
+
+  .carousel-detail-stat {
+    font-size: 11px;
+  }
+
+  .carousel-detail-stat strong {
+    font-size: 14px;
+  }
+
+  .carousel-detail-stat-label {
+    font-size: 8px;
+  }
+
+  .deck-card-actions {
+    flex-wrap: nowrap;
+    margin-top: 0;
+    gap: 6px;
+  }
+
+  .deck-card-actions .btn {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  .carousel-bottom .panel-actions.is-floating {
+    flex: 0 0 auto;
+  }
+
+  .carousel-bottom .panel-actions.is-floating .btn {
+    min-height: 34px;
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+
+  /* --- Interludio (evento entre ciegos): el ARTE empujaba los botones ---
+     Este panel NO tiene `.panel-actions`: el boton "Aceptar" vive DENTRO de cada
+     opcion, asi que el modelo de tres zonas de P8 (que protege el pie) no lo
+     cubre y el `overflow: hidden` del panel le cortaba el boton. Medido a
+     915x412: 4 de los 6 interludios desbordaban 85px y el ultimo boton caia
+     29-41px fuera del viewport. El culpable es la banda de arte (130px de alto a
+     todo el ancho): pasa a franja fina. */
+  .panel.is-interlude .interlude-art {
+    max-height: 54px;
+    margin-bottom: 4px;
+  }
+
+  .panel.is-interlude .interlude-head {
+    gap: 2px;
+    margin-bottom: 6px;
+  }
+
+  .panel.is-interlude .panel-title {
+    font-size: 21px;
+  }
+
+  .panel.is-interlude .panel-subtitle {
+    font-size: 11.5px;
+    margin-bottom: 0;
+  }
+
+  .panel.is-interlude .panel-desc {
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .panel.is-interlude .interlude-choices {
+    gap: 8px;
+    margin-bottom: 0;
+  }
+
+  .panel.is-interlude .interlude-choice {
+    gap: 5px;
+    padding: 9px 11px;
+  }
+
+  .panel.is-interlude .interlude-choice-label {
+    font-size: 13px;
+  }
+
+  .panel.is-interlude .interlude-choice-detail {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .panel.is-interlude .interlude-effects li {
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+
+  .panel.is-interlude .interlude-choice .btn {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  /* RED DE SEGURIDAD: como este panel no tiene pie protegido, si un interludio
+     futuro trae mas texto se puede scrollear en vez de quedar con el boton
+     recortado (sin salida). Si el contenido entra —que es el caso de los 6
+     actuales— no hay barra y no se nota. */
+  .panel.is-interlude {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }

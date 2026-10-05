@@ -552,22 +552,38 @@ function drawChip(
   ctx.stroke();
 
   if (big) {
-    // Cara compacta: SIN la palabra. "SUSTRATO" a un tamano legible no entra en
-    // media carta, y el significado ya lo llevan el GLIFO (▲ sustrato, ✱
-    // esporas), el COLOR y la POSICION fija —que es lo que se compara entre
-    // cartas—. Lo que importa es el numero, asi que va grande.
-    const text = `${glyph ?? ''} ${value}`.trim();
-    const maxW = w - 24 * scale;
-    let px = Math.round(56 * scale);
-    while (px > 24) {
-      ctx.font = `700 ${px}px ${CARD_TEXT_FONT}`;
-      if (ctx.measureText(text).width <= maxW) break;
-      px -= 2;
+    // Cara COMPACTA: la ETIQUETA arriba y el numero abajo, los dos grandes.
+    //
+    // Antes iba solo `glifo + numero` ("▲ +6") y el jugador no reconocia el
+    // dato: se perdio la palabra. En UNA linea no entra —"SUSTRATO" a un tamano
+    // legible ocupa casi todo el ancho del chip y no deja lugar al numero—, asi
+    // que el chip pasa a DOS lineas y cada una se lleva el mayor tamano que
+    // entra. Medido: la carta en la mano mide ~110px de alto en pantalla
+    // (textura->pantalla x0,148), asi que 48px de textura = ~7px reales para la
+    // etiqueta y 80px = ~12px para el numero.
+    const labelText = label.toUpperCase();
+    const labelMaxW = w - 16 * scale;
+    let labelPx = Math.round(24 * scale);
+    ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
+    while (labelPx > 14 && ctx.measureText(labelText).width > labelMaxW) {
+      labelPx -= 1;
+      ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
     }
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = hexToRgba(color, 0.95);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, x + w / 2, y + h / 2 + 2);
+    ctx.fillText(labelText, x + w / 2, y + h * 0.3);
+
+    const valueMaxW = w - 20 * scale;
+    let valuePx = Math.round(40 * scale);
+    ctx.font = `700 ${valuePx}px ${CARD_TEXT_FONT}`;
+    while (valuePx > 22 && ctx.measureText(value).width > valueMaxW) {
+      valuePx -= 1;
+      ctx.font = `700 ${valuePx}px ${CARD_TEXT_FONT}`;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(value, x + w / 2, y + h * 0.72);
+
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     return;
@@ -802,8 +818,11 @@ export function createCardCanvas(
     drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱', chipScale);
   } else {
     // Jokers, mutaciones y vouchers: sin stats, solo un rotulo de tipo.
+    // SIMBIONTE y no "JOKER": es el nombre que usa todo el juego (i18n
+    // `hud.jokers` = "Simbiontes", tienda "Simbionte"). La cara es la ultima
+    // donde quedaba el termino viejo.
     const label =
-      spec.kind === 'joker' ? 'JOKER' : spec.kind === 'voucher' ? 'MEJORA' : 'MUTACION';
+      spec.kind === 'joker' ? 'SIMBIONTE' : spec.kind === 'voucher' ? 'MEJORA' : 'MUTACION';
     // En la cara compacta el rotulo de tipo tambien crece: es el UNICO dato que
     // lleva la carta (los jokers no tienen stats).
     const labelH = compact ? 96 : 52;

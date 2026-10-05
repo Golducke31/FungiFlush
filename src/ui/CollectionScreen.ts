@@ -227,12 +227,10 @@ export function buildCollectionPanel(
   title.className = 'panel-title';
   title.textContent = t('collection.title');
 
-  const seenCount = entries.filter((e) => e.seen && e.state !== 'hidden').length;
   const visible = entries.filter((e) => e.state !== 'hidden');
 
   const subtitle = document.createElement('p');
   subtitle.className = 'panel-subtitle';
-  subtitle.textContent = t('collection.seen', { seen: seenCount, total: visible.length });
 
   const toolbar = document.createElement('div');
   toolbar.className = 'deck-toolbar';
@@ -251,6 +249,12 @@ export function buildCollectionPanel(
       if (filter === 'unlocked') return entry.state === 'unlocked';
       return true;
     });
+
+    // El contador sigue al FILTRO. Antes se calculaba UNA vez con la lista
+    // completa y al elegir "Simbiontes" el subtitulo seguia diciendo "de 90"
+    // (cartas + simbiontes), asi que el "0 de 25" del filtro no aparecia nunca.
+    const seen = list.filter((entry) => entry.seen).length;
+    subtitle.textContent = t('collection.seen', { seen, total: list.length });
 
     for (const entry of list) {
       const cell = document.createElement('div');

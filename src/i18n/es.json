@@ -192,9 +192,9 @@
       "5": "Eclosión Total (x3 Esporas)"
     },
     "family": {
-      "3": "Colonia (+12 Sustrato)",
-      "4": "Gran Colonia (+30 Sustrato)",
-      "5": "Supercolonia (+60 Sustrato)"
+      "3": "Colonia (+16 Sustrato)",
+      "4": "Gran Colonia (+40 Sustrato)",
+      "5": "Supercolonia (+80 Sustrato)"
     },
     "diversity": "Diversidad (+25 Sustrato)"
   },
@@ -1227,7 +1227,9 @@
     "barNotice": "La barra avanza solo al jugar una mano.",
     "breakdownTitle": "Cómo se calculó",
     "breakdownHand": "Mano: {count} cartas",
+    "breakdownHandOne": "Mano: 1 carta",
     "breakdownCombo": "Combinación",
+    "breakdownComboNone": "Sin combinación",
     "breakdownBase": "Base",
     "breakdownBonus": "Bonificaciones",
     "breakdownMult": "Multiplicador",

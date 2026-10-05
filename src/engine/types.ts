@@ -388,6 +388,15 @@ export interface ScoreBreakdown {
   addedSpores: number;
   multipliedSpores: number;
   total: number;
+  /**
+   * `nameKey` de los combos de mano detectados (elemento / familia / diversidad).
+   *
+   * Sin esto el desglose no podia decir QUE combinacion se formo y el panel
+   * rellenaba la fila "Combinacion" con la cantidad de cartas de la mano y la
+   * unidad equivocada ("1 Mazo"). Va como clave y no como texto porque la capa
+   * de puntaje no traduce.
+   */
+  comboKeys: string[];
 }
 
 export interface RoundSnapshot {

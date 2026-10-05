@@ -293,6 +293,16 @@ async function boot(): Promise<void> {
   };
   bus.on('card:drawn', ({ card }) => markSeen(card.def.id));
   bus.on('card:created', ({ card }) => markSeen(card.def.id));
+  // SIMBIONTES: faltaba. La coleccion solo marcaba las CARTAS (`card:drawn` /
+  // `card:created`), asi que comprar un simbionte nunca lo sumaba a
+  // `seenCardIds` y la pestaña "Simbiontes" quedaba en 0/25 para siempre.
+  bus.on('joker:added', ({ joker }) => markSeen(joker.def.id));
+  // Los simbiontes de una partida RESTAURADA (cargar un guardado) entran por
+  // `restore()`, que no emite `joker:added`. Marcarlos al arrancar la run hace
+  // que un perfil viejo se ponga al dia solo.
+  bus.on('run:start', () => {
+    for (const joker of engine.run?.jokers ?? []) markSeen(joker.def.id);
+  });
 
   // --- Estadisticas de perfil ---
   bus.on('game:over', ({ reason, ante }) => {
