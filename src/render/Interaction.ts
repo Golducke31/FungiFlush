@@ -47,6 +47,12 @@ export interface InteractionCallbacks {
   onDrop?: (card: Card3D, zone: DropZoneHandle | null, point: THREE.Vector3) => void;
   /** El gesto se aborto (cancelacion del sistema, perdida de foco...). */
   onDragCancel?: (card: Card3D) => void;
+  /**
+   * Un TAP no cayo sobre ninguna carta: `point` es su posicion sobre la MESA
+   * (plano y=0), no sobre el plano de arrastre. Es lo que permite tocar la pila
+   * de descarte sin arrastrar (alternativa al drag).
+   */
+  onTapEmpty?: (point: THREE.Vector3) => void;
 }
 
 export class Interaction {
@@ -184,7 +190,15 @@ export class Interaction {
 
     this.updatePointer(event);
     const hit = this.pick();
-    if (!hit) return;
+    if (!hit) {
+      // Tap al VACIO: la mesa tambien reacciona (pila de descarte). Se proyecta
+      // sobre el plano de la MESA (y=0), no el de arrastre (y=0.95): la zona de
+      // descarte vive en coordenadas de mesa y con la perspectiva quedaria
+      // corrida unos centimetros.
+      const point = this.pointerOnPlane(0);
+      if (point) this.callbacks.onTapEmpty?.(point);
+      return;
+    }
 
     this.callbacks.onClick(hit);
   };

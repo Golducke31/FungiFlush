@@ -80,7 +80,10 @@ export const DIE_REROLL_STEP = 3;
 /** Valores iniciales de una run. */
 export const RUN_DEFAULTS = {
   money: 4,
-  handSize: 8,
+  // Fase 1 (2026-10-05): la mano inicial baja de 8 a 6. Con 8 cartas el abanico
+  // tenia que abrirse tanto en movil que las cartas se pisaban contra las pilas;
+  // 6 deja aire para mazo y descarte sin achicar la carta hasta lo ilegible.
+  handSize: 6,
   hands: 4,
   discards: 3,
   jokerSlots: 5,

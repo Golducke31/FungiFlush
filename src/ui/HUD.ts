@@ -32,7 +32,6 @@ import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
 import { isCoarsePointer } from '../pointer';
-import { SORT_LABEL_KEY, SORT_MODES, type SortMode } from './handSort';
 import { buildArchetypePanel, buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
@@ -56,7 +55,6 @@ import type { RetentionReward } from '../retention/types';
 
 export interface HudCallbacks {
   onPlay: () => void;
-  onDiscard: () => void;
   onClear: () => void;
   onBuy: (offerId: string) => void;
   onReroll: () => void;
@@ -123,11 +121,6 @@ export interface HudCallbacks {
    * esta lista.
    */
   onUseLoadedDie: () => void;
-  /**
-   * Reordenar la mano (P1.3/P1.4). El criterio lo resuelve el controlador con
-   * `sortHand()`, que es puro; aca solo se avisa QUE criterio se pidio.
-   */
-  onSortHand: (mode: SortMode) => void;
   /** El jugador eligio una opcion del interludio (P2.4). */
   onChooseInterlude: (choiceId: string) => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
@@ -298,8 +291,6 @@ export class HUD {
     total: number;
     handSize: number;
   } | null = null;
-  /** Criterio de orden activo en la mano (P1.3/P1.4). 'default' = orden del mazo. */
-  private sortMode: SortMode = 'default';
 
   // --- Ciego: el panel ya es solo informativo (la ruta del ante) ---
   /** Ultimo valor avisado por `syncArenaCovered`. */
@@ -580,6 +571,13 @@ export class HUD {
         const delta = this.lastDeckDelta ?? { conserved: 0, gained: 0, destroyed: 0 };
         delta.conserved += returned;
         this.lastDeckDelta = delta;
+      }),
+
+      // El descarte se reciclo a la pila de robo. Se avisa EXPLICITAMENTE: sin
+      // esto el contador de "Robables" saltaba de 0 a N sin explicacion y
+      // parecia un bug. La animacion del reciclado la hace el render.
+      bus.on('deck:reshuffle', () => {
+        this.toast(t('hud.reshuffle'), 'info');
       }),
 
       bus.on('score:changed', ({ total, target }) => {
@@ -1093,21 +1091,43 @@ export class HUD {
     // Con el par, el primero BAJA al robar (es lo que el jugador sigue) y el
     // segundo le dice cuanto mide su mazo de verdad. Mismo patron que el chip
     // de jokers, que ya usa "/max" como contexto.
+    // El chip de MAZO se parte en DOS para no mentir: "Robables" es la pila de
+    // robo REAL (lo que se puede robar ahora) y "Descarte" es la pila que se
+    // reciclara cuando el robo se vacie. Antes un solo numero (`deckDraw`, que
+    // descontaba lo jugado) llegaba a "0/25" aunque quedaran cartas por volver:
+    // el jugador veia un mazo agotado que seguia dando cartas.
+    const deckDrawable = this.engine.deckDrawPile;
+    const deckDiscard = this.engine.deckDiscardPile;
     const state: Array<[string, string, string | number, string]> = [
-      ['ui_icon_collection', t('hud.deck'), this.engine.deckDraw, ''],
+      ['ui_icon_collection', t('hud.drawable'), deckDrawable, ''],
+      ['ui_icon_discard', t('hud.discardPile'), deckDiscard, ''],
       ['ui_icon_joker_slot', t('hud.jokers'), run.jokers.length, ''],
     ];
     /** Tope del chip de mazo (el total). Se reusa `counter-cap`, el mismo del de jokers. */
     const deckTotal = this.engine.deckSize;
 
-    for (const [icon, label, value, extra] of [...resources, ...state]) {
+    // El flag de recurso viaja EXPLICITO: antes se inferia por el icono, y como
+    // el chip "Descarte" (pila) reusa el icono del recurso "Descartes", se habria
+    // marcado como recurso y encendido en rojo al vaciarse el descarte.
+    const cells: Array<[string, string, string | number, string, boolean]> = [
+      ...resources.map((r): [string, string, string | number, string, boolean] => [...r, true]),
+      ...state.map((s): [string, string, string | number, string, boolean] => [...s, false]),
+    ];
+
+    for (const [icon, label, value, extra, isResource] of cells) {
       const cell = document.createElement('div');
-      cell.className = `counter${resources.some((r) => r[0] === icon) ? ' is-resource' : ''}`;
+      cell.className = `counter${isResource ? ' is-resource' : ''}`;
+      // Ancla ESTABLE (independiente del idioma) para tests y depuracion: el
+      // `title` cambia con la traduccion, el `data-counter` no.
+      cell.dataset['counter'] = icon;
       cell.title = label;
       // El chip de mazo muestra DOS numeros ("12/42"): se los explica en el
       // aria-label para que el lector de pantalla no lea una fraccion suelta.
       if (icon === 'ui_icon_collection') {
-        cell.setAttribute('aria-label', t('hud.deckFull', { remaining: this.engine.deckDraw, total: deckTotal }));
+        cell.setAttribute(
+          'aria-label',
+          t('hud.deckFull', { remaining: deckDrawable, discard: deckDiscard, total: deckTotal }),
+        );
       }
 
       const iconEl = document.createElement('span');
@@ -1164,7 +1184,8 @@ export class HUD {
       [t(round.blind.nameKey), ''],
       [t('hud.hands'), String(round.handsLeft)],
       [t('hud.discards'), String(round.discardsLeft)],
-      [t('hud.deck'), `${this.engine.deckDraw}/${deckTotal}`],
+      [t('hud.drawable'), `${deckDrawable}/${deckTotal}`],
+      [t('hud.discardPile'), String(deckDiscard)],
       [t('hud.jokerSlots'), `${run.jokers.length}/${run.jokerSlots}`],
       [t('hud.money'), formatNumber(run.money)],
     ];
@@ -1297,32 +1318,6 @@ export class HUD {
       clear.addEventListener('click', () => this.callbacks.onClear());
     }
 
-    // P1.3 / P1.4 — Ordenar. NO reorganiza sola: abre un menu y el jugador
-    // elige. El plan es explicito en que el orden automatico debe ser
-    // opcional, y que el boton no puede tapar la mano.
-    const sort = document.createElement('button');
-    sort.className = 'btn is-ghost is-sort';
-    sort.dataset['act'] = 'sort';
-    sort.textContent = t('action.sort');
-    sort.setAttribute('aria-haspopup', 'menu');
-    sort.setAttribute('aria-expanded', 'false');
-    sort.disabled = round.hand.length < 2;
-    const sortMenu = this.buildSortMenu();
-    sort.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.toggleSortMenu(sort, sortMenu);
-    });
-
-    const discard = document.createElement('button');
-    discard.className = 'btn is-discard';
-    discard.textContent = t('action.discard');
-    // P0.3 — El boton explica el recurso en su propio texto: "Descartar · 3".
-    // El plan pide que quede claro que descartar CONSUME: un numero pegado al
-    // verbo lo dice sin necesitar una leyenda aparte.
-    discard.dataset['act'] = 'discard';
-    discard.disabled = selected === 0 || round.discardsLeft <= 0;
-    discard.addEventListener('click', () => this.callbacks.onDiscard());
-
     const play = document.createElement('button');
     play.className = 'btn is-play';
     play.dataset['act'] = 'play';
@@ -1350,90 +1345,11 @@ export class HUD {
       dieBtn.disabled = !ready;
       dieBtn.title = t('joker.joker_loaded_die.desc');
       dieBtn.addEventListener('click', () => this.callbacks.onUseLoadedDie());
-      this.elActions.append(...(clear ? [clear] : []), sort, dieBtn, discard, play);
+      this.elActions.append(...(clear ? [clear] : []), dieBtn, play);
       return;
     }
 
-    this.elActions.append(...(clear ? [clear] : []), sort, discard, play);
-  }
-
-  /**
-   * Menu emergente de criterios de orden (P1.3/P1.4/P2.1).
-   *
-   * Vive dentro de `elActions` y se posiciona con CSS por encima de la barra:
-   * en movil la fila de botones esta al borde inferior, asi que un menu
-   * desplegado hacia arriba es lo unico que no tapa la mano.
-   */
-  private buildSortMenu(): HTMLElement {
-    const menu = document.createElement('div');
-    menu.className = 'sort-menu';
-    menu.dataset['act'] = 'sort-menu';
-    menu.setAttribute('role', 'menu');
-
-    const title = document.createElement('div');
-    title.className = 'sort-menu-title';
-    title.textContent = t('sort.by');
-    menu.appendChild(title);
-
-    for (const mode of SORT_MODES) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'sort-menu-item';
-      item.dataset['sortMode'] = mode;
-      item.setAttribute('role', 'menuitemradio');
-      item.textContent = t(SORT_LABEL_KEY[mode]);
-      const isActive = mode === this.sortMode;
-      item.classList.toggle('is-active', isActive);
-      item.setAttribute('aria-checked', isActive ? 'true' : 'false');
-      item.addEventListener('click', (event) => {
-        event.stopPropagation();
-        this.callbacks.onSortHand(mode);
-        this.closeSortMenu();
-      });
-      menu.appendChild(item);
-    }
-
-    return menu;
-  }
-
-  private toggleSortMenu(anchor: HTMLElement, menu: HTMLElement): void {
-    const open = this.elActions.querySelector('.sort-menu');
-    if (open === menu) {
-      this.closeSortMenu();
-      return;
-    }
-    this.closeSortMenu();
-    anchor.setAttribute('aria-expanded', 'true');
-    // El menu se cuelga del contenedor de acciones: el ancla puede morir en
-    // cada `renderActions()` (que limpia el innerHTML), y con ella el menu.
-    this.elActions.appendChild(menu);
-    menu.classList.add('is-open');
-    // Cerrar al tocar fuera. `{ once: true }` y el chequeo de contencion evitan
-    // que el propio click de apertura lo cierre al instante.
-    const onDocClick = (event: MouseEvent): void => {
-      if (!menu.contains(event.target as Node)) this.closeSortMenu();
-    };
-    window.setTimeout(() => document.addEventListener('click', onDocClick, { once: true }), 0);
-  }
-
-  private closeSortMenu(): void {
-    const open = this.elActions.querySelector('.sort-menu');
-    if (!open) return;
-    open.remove();
-    const anchor = this.elActions.querySelector('.is-sort');
-    anchor?.setAttribute('aria-expanded', 'false');
-  }
-
-  /** Sincroniza el criterio activo y refresca el menu si esta abierto. */
-  private setSortMode(mode: SortMode): void {
-    this.sortMode = mode;
-    const open = this.elActions.querySelector('.sort-menu');
-    if (!open) return;
-    for (const item of Array.from(open.querySelectorAll('.sort-menu-item'))) {
-      const isActive = item.getAttribute('data-sort-mode') === mode;
-      item.classList.toggle('is-active', isActive);
-      item.setAttribute('aria-checked', isActive ? 'true' : 'false');
-    }
+    this.elActions.append(...(clear ? [clear] : []), play);
   }
 
   // ==========================================================================
@@ -1937,24 +1853,6 @@ export class HUD {
     this.continueLabel = label;
     this.lastStatus = null;
     this.render();
-  }
-
-  /**
-   * Aplica el resultado de ordenar la mano (P1.3/P1.4).
-   *
-   * El controlador ya reordeno el motor con `reorderHand()`; aca solo se
-   * refleja el criterio activo y se confirma con un toast corto, que es lo que
-   * el plan pide ("mostrar una pequeña confirmacion: Ordenado por Familia").
-   */
-  applySortMode(mode: SortMode): void {
-    this.setSortMode(mode);
-    const message =
-      mode === 'default'
-        ? t('sort.confirmDefault')
-        : t('sort.confirm', { criterion: t(SORT_LABEL_KEY[mode]) });
-    // Se confirma SIEMPRE, aunque la mano ya estuviera en ese orden: el jugador
-    // pulso el criterio y espera una respuesta, no silencio.
-    this.toast(message, 'info');
   }
 
   /**

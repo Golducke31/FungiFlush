@@ -37,6 +37,13 @@ export interface ProfileSettings {
    */
   notifyDaily: boolean;
   notifyAchievements: boolean;
+  /**
+   * Orden automatico de la mano (Fase 3, 2026-10-05).
+   *
+   * Criterio: Familia -> Sustrato descendente -> orden original. Arranca en
+   * `true`; apagarlo devuelve la mano al orden en que el motor la entrego.
+   */
+  autoSortHand: boolean;
 }
 
 /**
@@ -233,6 +240,7 @@ export function defaultProfile(): ProfileSave {
       haptics: true,
       notifyDaily: true,
       notifyAchievements: true,
+      autoSortHand: true,
     },
     // Comprar la app otorga el pack base. Nunca se pone detras de otro pago.
     entitlements: {

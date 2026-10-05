@@ -74,7 +74,7 @@ import {
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR } from '@render/palette';
 import { HUD } from '@ui/HUD';
-import { sortHand, type SortMode } from '@ui/handSort';
+import { sortHand } from '@ui/handSort';
 import {
   buildCollectionCarousel,
   type CollectionCarouselFrame,
@@ -565,8 +565,22 @@ async function boot(): Promise<void> {
         }
 
         if (zone === 'discard') {
-          if (!engine.discardCards([uid])) hud?.toast(t('action.noDiscards'), 'warn');
+          // Si la carta arrastrada es parte de una SELECCION multiple, se
+          // descarta toda la seleccion: es lo que el gesto promete. Una carta
+          // suelta (no seleccionada) se descarta sola.
+          const uids = isSelected && round.selected.length > 1 ? [...round.selected] : [uid];
+          if (!engine.discardCards(uids)) hud?.toast(t('action.noDiscards'), 'warn');
         }
+      },
+      /**
+       * El jugador TOCA la pila de descarte, sin arrastrar. Es la alternativa al
+       * drag (mas comoda en pantallas chicas): descarta la seleccion actual. Sin
+       * cartas seleccionadas el gesto no hace nada.
+       */
+      onDiscardPileTap: () => {
+        const round = engine.round;
+        if (!round || round.selected.length === 0) return;
+        if (!engine.discardCards([...round.selected])) hud?.toast(t('action.noDiscards'), 'warn');
       },
       /**
        * El jugador toco la carta que YA estaba centrada en el anillo.
@@ -779,18 +793,6 @@ async function boot(): Promise<void> {
   };
 
   // --- HUD ---
-  /**
-   * Criterio de orden PERSISTENTE de la mano (Task 7).
-   *
-   * Antes ordenar era un acto de un solo uso: al descartar/robar la mano
-   * volvia al orden del motor y habia que reordenar a mano cada vez. Ahora el
-   * criterio elegido se guarda y se RE-APLICA solo cuando cambia la mano, asi
-   * el jugador elige una vez y el orden se mantiene.
-   *
-   * `'default'` = sin orden automatico (es el estado inicial, y volver a
-   * elegirlo lo apaga).
-   */
-  let stickySortMode: SortMode = 'default';
 
   // El HUD se sincroniza con el barrido de pantalla: baja y se desvanece al
   // arrancar, y vuelve con rebote al terminar (ver `HUD.setTransitionProgress`).
@@ -819,33 +821,7 @@ async function boot(): Promise<void> {
         scene.playTransition();
         engine.playHand();
       },
-      onDiscard: () => engine.discardSelected(),
       onClear: () => engine.clearSelection(),
-      /**
-       * Orden de la mano (P1.3/P1.4/P2.1).
-       *
-       * El criterio lo resuelve `sortHand()` (puro, en `ui/handSort.ts`) y el
-       * motor lo aplica con `reorderHand()`, que valida que la lista sea una
-       * permutacion exacta de la mano: si no, no toca nada. Ordenar nunca
-       * consume recursos ni cambia cartas.
-       */
-      onSortHand: (mode) => {
-        const round = engine.round;
-        if (!round) return;
-        // El criterio queda GUARDADO: se vuelve a aplicar cuando la mano cambie
-        // (descartar, robar, jugar). `'default'` lo apaga.
-        stickySortMode = mode;
-        const ordered = sortHand(round.hand, mode);
-        const before = round.hand.map((c) => c.uid).join(',');
-        const after = ordered.map((c) => c.uid).join(',');
-        if (!engine.reorderHand(ordered.map((c) => c.uid))) return;
-        hud?.applySortMode(mode);
-        // El motor emite `state:changed` y el RENDER reordena `handCards` desde
-        // ahi, asi que el abanico se mueve solo. Si la mano ya estaba en ese
-        // orden, no hay nada que mover y se avisa: sin esto el boton parecia
-        // roto en una mano de 2 cartas iguales.
-        if (before === after && mode !== 'default') hud?.toast(t('sort.alreadySorted'), 'info');
-      },
       onBuy: (offerId) => {
         // El motivo del rechazo se calcula ACA, no en el aviso generico: antes
         // cualquier fallo decia "no alcanza el dinero", incluso cuando la oferta
@@ -1105,26 +1081,22 @@ async function boot(): Promise<void> {
 
   hud.bindCollectionProvider(buildCollection);
 
-  // --- Task 7: auto-orden de la mano ---
-  // Con un criterio activo, la mano se reordena SOLA. Se reaplica en
-  // `state:changed`, pero la DECISION de reordenar no se toma por composicion
-  // sino por SECUENCIA: se compara el orden actual contra el que pide el
-  // criterio y solo se actua si difieren.
+  // --- Fase 3: auto-orden de la mano ---
+  // Si el ajuste `autoSortHand` esta activo (por defecto SI), la mano se ordena
+  // SOLA: Familia -> Sustrato descendente -> orden original. Se reaplica en
+  // `state:changed`, y la DECISION de reordenar se toma por SECUENCIA: se
+  // compara el orden actual contra el que pide el criterio y solo se actua si
+  // difieren.
   //
-  // Antes se filtraba por una firma de uids ordenados alfabeticamente (firma
-  // INDEPENDIENTE del orden): eso evitaba el bucle, pero tambien impedia
-  // corregir la mano cuando el orden cambiaba SIN cambiar los miembros — un
-  // descarte que vuelve a entrar, una carta que el motor mueve de lugar. La
-  // mano se quedaba desordenada sin que nadie lo notara.
-  //
-  // Ahora el guard real es `current === after`: si la mano ya esta como el
-  // criterio pide, no se emite estado y el ciclo se corta solo. No hace falta
-  // ninguna firma.
+  // El guard real es `current === after`: si la mano ya esta como el criterio
+  // pide, no se emite estado y el ciclo se corta solo. No hace falta ninguna
+  // firma de uids, que ademas impediria corregir la mano cuando cambia el orden
+  // SIN cambiar los miembros (un descarte que vuelve a entrar).
   bus.on('state:changed', () => {
     const round = engine.round;
     if (!round || engine.run.status !== 'playing') return;
-    if (stickySortMode === 'default') return;
-    const ordered = sortHand(round.hand, stickySortMode);
+    if (!profileStore.current.settings.autoSortHand) return;
+    const ordered = sortHand(round.hand, 'auto');
     const current = round.hand.map((c) => c.uid).join(',');
     const after = ordered.map((c) => c.uid).join(',');
     if (current === after) return;

@@ -12,16 +12,30 @@ export class Deck {
   private drawPile: CardInstance[] = [];
   private discardPile: CardInstance[] = [];
 
+  /**
+   * Veces que el descarte se reciclo a la pila de robo. Se LEE y se RESETEA con
+   * `takeReshuffleCount()`: el motor lo consulta despues de robar y emite
+   * `deck:reshuffle`. El `Deck` es puro (no conoce el bus), asi que el aviso lo
+   * da `GameEngine`, que es quien puede emitir.
+   */
+  private reshuffleCount = 0;
+
   constructor(private readonly rng: RNG) {}
 
   setCards(cards: CardInstance[]): void {
     this.drawPile = [...cards];
     this.discardPile = [];
+    this.reshuffleCount = 0;
     this.rng.shuffle(this.drawPile);
   }
 
   get remaining(): number {
     return this.drawPile.length;
+  }
+
+  /** Cartas en la pila de descartes (vuelven al robo cuando este se vacia). */
+  get discardSize(): number {
+    return this.discardPile.length;
   }
 
   get totalSize(): number {
@@ -40,11 +54,19 @@ export class Deck {
         // Reciclar: el descarte vuelve a ser mazo de robo.
         this.drawPile = this.rng.shuffle(this.discardPile);
         this.discardPile = [];
+        this.reshuffleCount += 1;
       }
       const card = this.drawPile.pop();
       if (card) drawn.push(card);
     }
     return drawn;
+  }
+
+  /** Devuelve cuantas veces se reciclo el descarte desde la ultima consulta. */
+  takeReshuffleCount(): number {
+    const count = this.reshuffleCount;
+    this.reshuffleCount = 0;
+    return count;
   }
 
   discard(card: CardInstance): void {

@@ -885,6 +885,20 @@ export class GameEngine {
     return Math.max(0, this.deckSize - consumed);
   }
 
+  /**
+   * Cartas listas para robar AHORA (pila de robo). Es el numero "Robables" del
+   * HUD: puede llegar a 0 aunque el descarte siga teniendo cartas, porque esas
+   * todavia no se reciclaron (el aviso `deck:reshuffle` lo explica).
+   */
+  get deckDrawPile(): number {
+    return this.run?.deck.remaining ?? 0;
+  }
+
+  /** Cartas en el descarte. Se reciclan al robo cuando la pila de robo se vacia. */
+  get deckDiscardPile(): number {
+    return this.run?.deck.discardSize ?? 0;
+  }
+
   /** Compat: la purga es una de las operaciones de edicion de mazo. */
   canPurge(): boolean {
     return this.canEditDeck();
@@ -1479,7 +1493,7 @@ export class GameEngine {
     const missing = round.handSize - round.hand.length;
     if (missing <= 0) return;
 
-    const drawn = this.run.deck.draw(missing);
+    const drawn = this.drawFromDeck(missing);
     for (let i = 0; i < drawn.length; i++) {
       const card = drawn[i];
       if (!card) continue;
@@ -1493,7 +1507,7 @@ export class GameEngine {
   private drawExtra(count: number): void {
     const round = this.requireRound();
     if (count <= 0) return;
-    const drawn = this.run.deck.draw(count);
+    const drawn = this.drawFromDeck(count);
     for (const card of drawn) {
       if (round.hand.length >= MAX_HAND_SIZE) {
         this.run.deck.discard(card);
@@ -1502,6 +1516,18 @@ export class GameEngine {
       round.hand.push(card);
       bus.emit('card:drawn', { card, index: round.hand.length - 1 });
     }
+  }
+
+  /**
+   * Unico punto por el que pasa el robo. Ademas de robar, consulta al `Deck` si
+   * reciclo el descarte y emite `deck:reshuffle`: asi el aviso no depende de que
+   * cada llamador se acuerde de mirarlo.
+   */
+  private drawFromDeck(count: number): CardInstance[] {
+    const drawn = this.run.deck.draw(count);
+    const reshuffles = this.run.deck.takeReshuffleCount();
+    if (reshuffles > 0) bus.emit('deck:reshuffle', { count: reshuffles });
+    return drawn;
   }
 
   private dispatchGlobal(event: GlobalTriggerEvent): void {

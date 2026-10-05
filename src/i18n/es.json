@@ -25,7 +25,10 @@
     "hands": "Manos",
     "discards": "Descartes",
     "deck": "Mazo",
-    "deckFull": "Mazo: {remaining} cartas disponibles de {total}",
+    "drawable": "Robables",
+    "discardPile": "Descarte",
+    "deckFull": "Robables: {remaining} · Descarte: {discard} · Total: {total}",
+    "reshuffle": "El descarte se baraja de nuevo al mazo",
     "jokers": "Simbiontes",
     "jokerSlots": "Ranuras",
     "handSize": "Cartas en mano",
@@ -759,6 +762,7 @@
     "notifyAchievements": "Avisos de logros",
     "audioSoon": "El audio llega en una próxima actualización",
     "notifications": "Avisos",
+    "autoSort": "Ordenar mano automáticamente",
     "close": "Cerrar"
   },
   "collection": {

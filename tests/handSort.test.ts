@@ -145,8 +145,7 @@ test("'substrate' usa el elemento y la familia solo como desempate", () => {
   );
 });
 
-test("'family' desempata por sustrato base ascendente dentro de la familia", () => {
-  const hand = [
+test("'family' desempata por sustrato base ascendente dentro de la familia", () => {  const hand = [
     card({ element: 'decay', family: 'agaricaceae', substrate: 8 }),
     card({ element: 'spore', family: 'agaricaceae', substrate: 2 }),
     card({ element: 'crystal', family: 'boletaceae', substrate: 5 }),
@@ -181,4 +180,31 @@ test('el auto-orden reaplicado tras un robo deja la mano ordenada', () => {
       'la secuencia de sustratos es ascendente',
     );
   }
+});
+
+/**
+ * CONTRATO del criterio AUTOMATICO (Fase 3, 2026-10-05).
+ *
+ * El orden por defecto de la mano es: Familia A-Z -> Sustrato DESCENDENTE ->
+ * orden original. Este test fija ese contrato: dentro de cada familia, la carta
+ * de mayor sustrato va PRIMERO (a diferencia de 'family', que sube el sustrato).
+ */
+test("'auto' agrupa por Familia y baja el Sustrato dentro de cada grupo", () => {
+  const hand = [
+    card({ element: 'spore', family: 'boletaceae', substrate: 3 }),
+    card({ element: 'decay', family: 'agaricaceae', substrate: 2 }),
+    card({ element: 'spore', family: 'agaricaceae', substrate: 9 }),
+    card({ element: 'crystal', family: 'agaricaceae', substrate: 5 }),
+  ];
+  const ordered = sortHand(hand, 'auto');
+  assert.deepEqual(
+    ordered.map((c) => c.def.family),
+    ['agaricaceae', 'agaricaceae', 'agaricaceae', 'boletaceae'],
+    'la familia agrupa',
+  );
+  assert.deepEqual(
+    ordered.slice(0, 3).map((c) => c.def.baseSubstrate),
+    [9, 5, 2],
+    'dentro de la familia, el sustrato baja',
+  );
 });

@@ -1181,87 +1181,6 @@ body {
   position: relative;
 }
 
-/* --------------------------------------------------------------------------
-   Menu de orden de la mano (P1.3 / P1.4 / P2.1)
-   -------------------------------------------------------------------------- */
-
-.sort-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  z-index: var(--z-popup, 60);
-  display: none;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 190px;
-  padding: 8px;
-  border-radius: var(--radius);
-  /* Mismo material que las losas del HUD: no es un panel nuevo, es una pieza
-     mas del mismo marco. */
-  background: linear-gradient(180deg, var(--frame-body-hi), var(--frame-body-lo));
-  border: 1px solid var(--frame-edge);
-  box-shadow: var(--shadow-3);
-  animation: sort-menu-in var(--dur-2, 180ms) var(--ease-out, ease);
-}
-
-.sort-menu.is-open {
-  display: flex;
-}
-
-@keyframes sort-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-.sort-menu-title {
-  padding: 2px 8px 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--frame-dim);
-}
-
-.sort-menu-item {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sort-menu-item:hover {
-  background: rgba(120, 240, 214, 0.14);
-}
-
-/* El criterio activo lleva marca ADEMAS del color: un punto a la izquierda.
-   El plan insiste en no depender solo del color. */
-.sort-menu-item.is-active {
-  background: rgba(120, 240, 214, 0.2);
-  color: var(--tag-buff);
-}
-
-.sort-menu-item.is-active::before {
-  content: '●';
-  margin-right: 7px;
-  font-size: 9px;
-}
-
-.sort-menu-item:not(.is-active)::before {
-  content: '';
-  margin-right: 7px;
-  width: 9px;
-}
-
 .btn {
   border: 1px solid var(--border-strong);
   background: var(--panel);
@@ -1323,10 +1242,6 @@ body {
   background:
     linear-gradient(180deg, rgba(79, 209, 139, 0.7) 0%, rgba(79, 209, 139, 0.15) 45%),
     linear-gradient(180deg, #14855f 0%, #0c6444 52%, #07422f 100%);
-}
-
-.btn.is-discard {
-  border-color: rgba(224, 92, 138, 0.5);
 }
 
 /* Simbionte legendario del dado: una losa propia, en el violeta del cristal,
@@ -6274,23 +6189,6 @@ body {
     color: #06231c;
     background: linear-gradient(180deg, #9fe9cf 0%, #4aa987 100%);
     box-shadow: none;
-  }
-
-  .hud-actions .btn.is-discard {
-    color: #2a1f06;
-    background: linear-gradient(180deg, #ffd98a 0%, #e0a93b 100%);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-  }
-
-  .hud-actions .btn.is-discard:disabled {
-    opacity: 0.5;
-    color: #2a1f06;
-    background: linear-gradient(180deg, #e6c98f 0%, #b9902f 100%);
-  }
-
-  .hud-actions .btn.is-sort {
-    color: var(--text);
-    border-color: rgba(150, 170, 255, 0.5);
   }
 
   .hud-actions .btn.is-ghost {

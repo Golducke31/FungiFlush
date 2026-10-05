@@ -25,7 +25,10 @@
     "hands": "Hands",
     "discards": "Discards",
     "deck": "Deck",
-    "deckFull": "Deck: {remaining} cards left of {total}",
+    "drawable": "Drawable",
+    "discardPile": "Discard",
+    "deckFull": "Drawable: {remaining} · Discard: {discard} · Total: {total}",
+    "reshuffle": "The discard is shuffled back into the deck",
     "jokers": "Simbionts",
     "jokerSlots": "Slots",
     "handSize": "Hand size",
@@ -759,6 +762,7 @@
     "notifyAchievements": "Achievement notifications",
     "audioSoon": "Audio arrives in a future update",
     "notifications": "Notifications",
+    "autoSort": "Auto-sort hand",
     "close": "Close"
   },
   "collection": {

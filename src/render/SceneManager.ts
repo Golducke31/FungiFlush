@@ -40,7 +40,7 @@ import {
 import { CARD_HALO_WIDTH, CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
-import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
+import { DropZone, rectContains, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
 import { PostFx } from './PostFx';
@@ -272,6 +272,11 @@ export interface SceneCallbacks {
    */
   onCardDrop?: (uid: string, zone: DropZoneId) => void;
   /**
+   * El jugador TOCA la pila de descarte (sin arrastrar). Es la alternativa al
+   * drag: el controlador decide que hacer (descartar la seleccion actual).
+   */
+  onDiscardPileTap?: () => void;
+  /**
    * El monitor de frames bajo el nivel de calidad por su cuenta. El render NO
    * muestra avisos (no es su trabajo): avisa y el controlador decide si
    * mostrarlo por toast y si lo persiste.
@@ -412,6 +417,11 @@ export class SceneManager {
   private deckMesh: THREE.Group | null = null;
   private discardMesh: THREE.Group | null = null;
   private readonly disposables: Array<THREE.Material | THREE.Texture | THREE.BufferGeometry> = [];
+  /** Geometria/material compartidos por las cartas "fantasma" del reciclado. */
+  private ghostGeo: THREE.PlaneGeometry | null = null;
+  private ghostMat: THREE.MeshStandardMaterial | null = null;
+  /** Zona de descarte, para la pista visual y el toque sin arrastre. */
+  private discardZone: DropZone | null = null;
 
   /** 'menu' = escena idle de la pantalla de inicio; 'run' = partida. */
   private mode: 'menu' | 'run' = 'run';
@@ -538,6 +548,7 @@ export class SceneManager {
       onDrag: (card, point, zone) => this.handleDrag(card, point, zone),
       onDrop: (card, zone) => this.handleDrop(card, zone),
       onDragCancel: (card) => this.handleDragCancel(card),
+      onTapEmpty: (point) => this.handleEmptyTap(point),
     });
     this.interaction.setCamera(this.rig.camera);
 
@@ -964,13 +975,31 @@ export class SceneManager {
    * necesita saber para decidir si una zona esta disponible. El SIGNIFICADO de
    * cada zona (que hace el motor al soltar) lo decide el controlador.
    */
+  /**
+   * Rectangulo de la zona de descarte, CENTRADO EN LA PILA.
+   *
+   * `ZONE_DISCARD` (la constante) usa las coords de escritorio (±10.5); en tactil
+   * la pila vive en ±8.5, asi que una zona fija quedaba ~2 unidades a la
+   * izquierda de donde el jugador ve la pila (medido: ~59 px en 915×412). Con la
+   * pista visual encendida eso se nota; el toque directo tambien fallaba.
+   */
+  private discardZoneRect(): ZoneRect {
+    const x = this.discardX;
+    return { minX: x - 1.1, maxX: x + 1.1, minZ: ZONE_DISCARD.minZ, maxZ: ZONE_DISCARD.maxZ };
+  }
+
+  /** Recentra las zonas cuyo rect depende del perfil (hoy, el descarte). */
+  private syncDropZones(): void {
+    this.discardZone?.setRect(this.discardZoneRect());
+  }
+
   private buildDropZones(): void {
     const inPlay = (card: Card3D): boolean =>
       card.kind === 'card' && this.engine.run.status === 'playing';
 
     const discard = new DropZone({
       id: 'discard',
-      rect: ZONE_DISCARD,
+      rect: this.discardZoneRect(),
       color: ZONE_COLOR.discard,
       accepts: (card) => inPlay(card) && (this.engine.round?.discardsLeft ?? 0) > 0,
     });
@@ -988,6 +1017,7 @@ export class SceneManager {
     });
 
     // El descarte primero: su rectangulo cae dentro de la banda de la mano.
+    this.discardZone = discard;
     this.dropZones.push(discard, play, hand);
     for (const zone of this.dropZones) this.scene.add(zone.group);
 
@@ -1579,6 +1609,7 @@ export class SceneManager {
         if (playing && round) this.syncHand(round.hand, this.engine.round?.selected ?? []);
         else this.syncHand([], []);
         this.syncJokers(this.engine.run.jokers, this.engine.run.jokerSlots);
+        this.refreshDiscardHint();
       }),
 
       bus.on('card:played', ({ card, index }) => {
@@ -1593,6 +1624,12 @@ export class SceneManager {
 
       bus.on('card:drawn', ({ card }) => {
         this.queueFx(0.05, () => this.flyInFromDeck(card));
+      }),
+
+      // El descarte se reciclo a la pila de robo: las cartas vuelven al mazo.
+      // Es la respuesta VISUAL al aviso del HUD (el motor lo hace en silencio).
+      bus.on('deck:reshuffle', () => {
+        this.queueFx(0.05, () => this.reshuffleToDeck());
       }),
 
       bus.on('score:step', ({ step }) => this.onScoreStep(step)),
@@ -2111,7 +2148,12 @@ export class SceneManager {
     // spacing y el tope de escala suben juntos para que el abanico se ENSANCHE
     // en vez de pisarse: con el spacing viejo (2.32) la escala quedaba clavada
     // en 1 y no habia forma de agrandar la carta sin que se solaparan.
-    const boost = this.layoutProfile === 'mobile' ? 1.3 : 1;
+    //
+    // Fase 1 (2026-10-05): la mano baja a 6 cartas, asi que el boost se afloja
+    // (1.3 -> 1.2) y el abanico se cierra (ver `spreadMobile`). Con menos cartas
+    // no hace falta que cada una sea tan grande, y el conjunto gana aire para
+    // que mazo y descarte se lean detras.
+    const boost = this.layoutProfile === 'mobile' ? 1.2 : 1;
     const spacing = count <= 1 ? 0 : Math.min(2.32 * boost, this.handSpread / (count - 1));
     const total = spacing * (count - 1);
 
@@ -2347,6 +2389,84 @@ export class SceneManager {
       size: 0.05,
       life: 0.5,
     });
+  }
+
+  /**
+   * Reciclado del descarte: las cartas vuelven a la pila de robo.
+   *
+   * El motor lo hace en silencio (el `Deck` se baraja solo al vaciarse el robo),
+   * asi que sin esta animacion el contador de "Robables" saltaba de 0 a N sin
+   * explicacion. Se dibujan unas cartas "fantasma" que arquean del descarte al
+   * mazo, se pulsa la pila de destino y el descarte "se vacia" un instante.
+   */
+  private reshuffleToDeck(): void {
+    if (!this.ghostGeo) {
+      this.ghostGeo = new THREE.PlaneGeometry(CARD_WIDTH * 0.9, CARD_HEIGHT * 0.9);
+      this.disposables.push(this.ghostGeo);
+    }
+    if (!this.ghostMat) {
+      this.ghostMat = new THREE.MeshStandardMaterial({
+        map: this.backTexture,
+        roughness: 0.7,
+        metalness: 0.2,
+        emissive: new THREE.Color(0x1a3a4a),
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.95,
+      });
+      this.disposables.push(this.ghostMat);
+    }
+
+    const ghosts = 7;
+    for (let i = 0; i < ghosts; i++) {
+      const ghost = new THREE.Mesh(this.ghostGeo, this.ghostMat);
+      ghost.rotation.x = -Math.PI / 2;
+      const startX = this.discardX + (Math.random() - 0.5) * 0.6;
+      const startZ = DISCARD_Z + (Math.random() - 0.5) * 0.5;
+      ghost.position.set(startX, 0.4 + i * 0.01, startZ);
+      this.scene.add(ghost);
+
+      const delay = i * 0.07;
+      const endX = this.deckX + (Math.random() - 0.5) * 0.5;
+      const endZ = DECK_Z + (Math.random() - 0.5) * 0.4;
+      anim
+        .sequence()
+        // Desplazamiento lateral sobre la mesa...
+        .to(ghost.position, { x: endX, z: endZ, duration: anim.d(0.55), ease: anim.EASE.cubicInOut }, delay)
+        // ...con un arco por encima (sube y baja) mientras viaja.
+        .to(
+          ghost.position,
+          {
+            keyframes: [
+              { y: 1.8, duration: anim.d(0.24), ease: anim.EASE.quadOut },
+              { y: 0.35, duration: anim.d(0.31), ease: anim.EASE.quadIn },
+            ],
+          },
+          delay,
+        )
+        .add(() => {
+          this.particles.burst(new THREE.Vector3(endX, 0.4, endZ), 5, {
+            color: 0x5fd8e8,
+            speed: 1.1,
+            upward: 0.9,
+            size: 0.045,
+            life: 0.5,
+          });
+          this.scene.remove(ghost);
+        }, delay);
+    }
+
+    // Feedback de las pilas: el descarte se achata y el mazo late al recibir.
+    if (this.discardMesh) this.pulsePile(this.discardMesh, 0.72, 0.2);
+    if (this.deckMesh) this.pulsePile(this.deckMesh, 1.18, 0.4);
+  }
+
+  /** Pulso de escala de una pila (feedback de "algo entro/salio"). */
+  private pulsePile(group: THREE.Group, peak: number, delay: number): void {
+    anim
+      .sequence()
+      .to(group.scale, { x: peak, y: peak, z: peak, duration: anim.d(0.12), ease: anim.EASE.quadOut }, delay)
+      .to(group.scale, { x: 1, y: 1, z: 1, duration: anim.d(0.26), ease: anim.EASE.backOut });
   }
 
   private onScoreStep(step: ScoreStep): void {
@@ -2603,6 +2723,36 @@ export class SceneManager {
     this.callbacks.onCardClick(card.uid);
   }
 
+  /**
+   * Tap al vacio sobre la MESA. Hoy solo reacciona la pila de descarte: tocarla
+   * descarta la seleccion actual (alternativa al arrastre). Sin seleccion el
+   * controlador no hace nada.
+   */
+  private handleEmptyTap(point: THREE.Vector3): void {
+    if (this.engine.run.status !== 'playing') return;
+    // Se consulta el rect de la ZONA (ya centrado en la pila por perfil), no la
+    // constante: si no, en tactil el toque sobre la pila caia fuera.
+    if (this.discardZone && rectContains(this.discardZone.rect, point.x, point.z)) {
+      this.callbacks.onDiscardPileTap?.();
+    }
+  }
+
+  /**
+   * Pista visual del DESCARTE: con cartas seleccionadas, la zona se enciende
+   * tenue para que se descubra el toque (sin arrastre). Se re-aplica tras cada
+   * drop porque `highlight(false)` apaga la zona.
+   */
+  private refreshDiscardHint(): void {
+    if (!this.discardZone) return;
+    const round = this.engine.round;
+    const on =
+      this.engine.run.status === 'playing' &&
+      !!round &&
+      round.selected.length > 0 &&
+      round.discardsLeft > 0;
+    this.discardZone.setHint(on);
+  }
+
   private handleHover(card: Card3D | null): void {
     for (const candidate of this.handCards.values()) {
       candidate.setHover(candidate === card);
@@ -2652,6 +2802,8 @@ export class SceneManager {
     const card3d = this.handCards.get(card.uid) ?? null;
     this.dragUid = null;
     for (const candidate of this.dropZones) candidate.highlight(false);
+    // El drop apago todas las zonas: si queda seleccion, se restaura la pista.
+    this.refreshDiscardHint();
 
     if (card3d) {
       card3d.setDragging(false);
@@ -2976,9 +3128,12 @@ export class SceneManager {
    * cara en ~2px, ilegible). Un abanico mas ancho deja subir la escala de la
    * carta sin que se pisen (ver el `boost` de `layoutHand`). El ancho extra
    * entra: en un celular apaisado el encuadre lo fija el ALTO, no el ancho.
+   *
+   * Fase 1 (2026-10-05): con la mano en 6 el abanico se cierra un poco; el aire
+   * que sobra deja ver mazo y descarte sin que la mano los tape.
    */
   private spreadMobile(aspect: number): number {
-    return aspect > 1.75 ? 21.5 : aspect > 1.45 ? 18 : 15;
+    return aspect > 1.75 ? 18.5 : aspect > 1.45 ? 16 : 13.5;
   }
 
   /** Rama TABLET del spread. Pantalla alta: el abanico puede abrirse igual. */
@@ -3103,6 +3258,9 @@ export class SceneManager {
     // reajusta solo, porque el bound de ancho sale de ellas.
     this.deckMesh?.position.setX(this.deckX);
     this.discardMesh?.position.setX(this.discardX);
+    // La zona de descarte sigue a la pila: sin esto, en tactil quedaba a la
+    // izquierda de donde el jugador la ve (y el toque directo fallaba).
+    this.syncDropZones();
 
     // El encuadre se DERIVA del layout real, no de un numero a ojo: si se
     // mueve la mano o los jokers, la camara se reajusta sola.

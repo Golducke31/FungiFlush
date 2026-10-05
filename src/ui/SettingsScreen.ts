@@ -141,6 +141,7 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
     return span;
   };
   const reduceMotionLabel = makeLabel('settings.reduceMotion');
+  const autoSortLabel = makeLabel('settings.autoSort');
   const hapticsLabel = makeLabel('settings.haptics');
   const notifyDailyLabel = makeLabel('settings.notifyDaily');
   const notifyAchievementsLabel = makeLabel('settings.notifyAchievements');
@@ -164,6 +165,7 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   body.append(
     field(langLabel, langButton),
     field(reduceMotionLabel, checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
+    field(autoSortLabel, checkbox(settings.autoSortHand, (v) => callbacks.onPatch({ autoSortHand: v }))),
     field(qualityLabel, qualityControl),
     field(hapticsLabel, checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
     notifySection,
@@ -190,6 +192,7 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   // el texto del idioma anterior y el jugador piensa que no cambio nada.
   const allLabels = [
     reduceMotionLabel,
+    autoSortLabel,
     hapticsLabel,
     sfxLabel,
     musicLabel,

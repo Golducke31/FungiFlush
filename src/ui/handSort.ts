@@ -30,10 +30,11 @@
 
 import type { CardInstance } from '@engine/index';
 
-export type SortMode = 'default' | 'family' | 'substrate' | 'value' | 'ability' | 'recommended';
+export type SortMode = 'default' | 'auto' | 'family' | 'substrate' | 'value' | 'ability' | 'recommended';
 
 /** Orden en que se ofrecen los criterios en el menu (el plan pide este orden). */
 export const SORT_MODES: SortMode[] = [
+  'auto',
   'family',
   'substrate',
   'value',
@@ -45,6 +46,7 @@ export const SORT_MODES: SortMode[] = [
 /** Clave i18n de cada criterio, para el boton y la confirmacion. */
 export const SORT_LABEL_KEY: Record<SortMode, string> = {
   default: 'sort.default',
+  auto: 'sort.auto',
   family: 'sort.family',
   substrate: 'sort.substrate',
   value: 'sort.value',
@@ -104,6 +106,12 @@ export function sortHand(hand: readonly CardInstance[], mode: SortMode): CardIns
 
 function comparePrimary(a: CardInstance, b: CardInstance, mode: SortMode): number {
   switch (mode) {
+    case 'auto':
+      // Criterio AUTOMATICO (Fase 3): Familia A-Z y, dentro del grupo, Sustrato
+      // DESCENDENTE (lo que mas aporta primero). El empate final lo resuelve el
+      // indice original en `sortHand`, asi que el orden es ESTABLE.
+      return a.def.family.localeCompare(b.def.family) || b.def.baseSubstrate - a.def.baseSubstrate;
+
     case 'family':
       // Agrupa por Familia y, dentro del grupo, por sustrato base ascendente
       // para que las combinaciones del mismo sustrato queden juntas.

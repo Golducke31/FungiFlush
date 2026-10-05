@@ -195,6 +195,16 @@ export interface GameEventMap {
    * jugador solo ve que su mano cambia y deduce (mal) que perdio cartas.
    */
   'deck:conserved': { returned: number; total: number };
+  /**
+   * El descarte se reciclo a la pila de robo porque esta se vacio. `count` son
+   * las veces que ocurrio en la ultima extraccion (normalmente 1).
+   *
+   * Sin este aviso el HUD mostraba "0 por robar" aunque hubiera cartas a punto
+   * de volver (el descarte se baraja solo, silencioso): el jugador veia un mazo
+   * "agotado" que en realidad seguia dando cartas. La UI lo usa para avisar y
+   * animar el reciclado de vuelta a la pila.
+   */
+  'deck:reshuffle': { count: number };
   /** Una carta subio de nivel (por pago en el constructor de mazo o por efecto). */
   'card:levelup': { card: CardInstance; cost: number; level: number };
   /** Una carta evoluciono a otra especie conservando su uid. */

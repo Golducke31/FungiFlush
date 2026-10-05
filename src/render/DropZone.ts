@@ -163,7 +163,12 @@ export interface DropZoneOptions {
  */
 export class DropZone implements DropZoneHandle {
   readonly id: DropZoneId;
-  readonly rect: ZoneRect;
+  /**
+   * Rectangulo de la zona. NO es `readonly`: el descarte se recentra con el
+   * perfil de layout (en tactil la pila vive en ±8.5, no en ±10.5), y la zona
+   * tiene que caer DONDE EL JUGADOR VE LA PILA. Ver `setRect`.
+   */
+  rect: ZoneRect;
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
 
@@ -214,6 +219,19 @@ export class DropZone implements DropZoneHandle {
     return this.acceptsFn(card);
   }
 
+  /**
+   * Recentra la zona sobre otro rectangulo del MISMO tamano (el layout cambia
+   * con el perfil). Solo mueve el marco: la geometria no cambia.
+   */
+  setRect(rect: ZoneRect): void {
+    this.rect = rect;
+    this.mesh.position.set(
+      (rect.minX + rect.maxX) / 2,
+      ZONE_Y,
+      (rect.minZ + rect.maxZ) / 2,
+    );
+  }
+
   accepts(card: Card3D): boolean {
     return this.armed && this.acceptsFn(card);
   }
@@ -221,6 +239,18 @@ export class DropZone implements DropZoneHandle {
   highlight(on: boolean, active = false): void {
     this.armed = on;
     this.target = on ? (active ? 1 : 0.4) : 0;
+  }
+
+  /**
+   * Brillo TENUE de "aca podes tocar/soltar", cuando NO hay arrastre.
+   *
+   * A diferencia de `highlight`, NO arma la zona: `accepts()` sigue en false, asi
+   * que una pista visual nunca habilita un drop. Es lo que hace descubrible el
+   * gesto de toque sobre el descarte sin arrastrar.
+   */
+  setHint(on: boolean): void {
+    if (this.armed) return;
+    this.target = on ? 0.25 : 0;
   }
 
   /** Apaga la zona del todo (fuera de la partida, o en el menu). */

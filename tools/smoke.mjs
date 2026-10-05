@@ -583,7 +583,9 @@ const afterBlind = await page.evaluate(() => {
   const ff = window.__fungiflush;
   const chips = {};
   for (const c of document.querySelectorAll('.counter')) {
-    chips[c.title] = c.querySelector('.counter-value')?.textContent;
+    // Clave ESTABLE por `data-counter` (no por el `title`, que cambia con el
+    // idioma). Se mantiene el `title` como respaldo.
+    chips[c.dataset.counter || c.title] = c.querySelector('.counter-value')?.textContent;
   }
   // Misiones en tactil (P0.3): ahora son un chip plegable en la barra inferior
   // izquierda, NO una franja que compite con el tablero. Se verifica que el chip
@@ -599,12 +601,15 @@ const afterBlind = await page.evaluate(() => {
     target: ff.engine.round?.target,
     hand: ff.engine.round?.hand.length ?? 0,
     sceneHand: ff.scene.stats().hand,
-    // FIX chip MAZO: ahora muestra DOS numeros "por robar / total". Al REPARTIR
-    // la mano el robo baja (8 cartas salieron de la pila) pero el TOTAL no se
-    // mueve: 32/40, no 40.
-    chipDeck: chips['Mazo'] ?? null,
-    chipDeckTotal: chips['Mazo']?.split('/')[1] ?? null,
+    // Chip MAZO = "ROBABLES / total". `Robables` es la pila de robo REAL, asi
+    // que al REPARTIR la mano baja (6 cartas salieron) pero el TOTAL no se mueve.
+    // Antes el primer numero era "lo consumido" (deckDraw), que mentia cuando el
+    // descarte todavia podia reciclarse: llegaba a 0/40 con cartas por volver.
+    chipDeck: chips['ui_icon_collection'] ?? null,
+    chipDeckTotal: chips['ui_icon_collection']?.split('/')[1] ?? null,
     deckSize: ff.engine.deckSize,
+    deckDrawPile: ff.engine.deckDrawPile,
+    deckDiscardPile: ff.engine.deckDiscardPile,
     // El mazo inicial depende del arquetipo (Clasico 40, arquetipos 20). Las
     // aserciones del chip y del mazo se comparan contra este valor, no contra
     // un 40 fijo, para que el smoke siga valido con cualquier arquetipo.
@@ -637,6 +642,10 @@ console.log(JSON.stringify(afterBlind, null, 2));
 // tweens con stagger que se pisaban. Ahora `layoutHand()` mata el layout
 // anterior antes de crear el nuevo, asi que la posicion final es siempre la del
 // ultimo Map. Se mide el gap MINIMO entre cartas vecinas: si es < 1.9 hay pisa.
+//
+// Fase 3 (2026-10-05): el boton "Ordenar" se retiro. El orden automatico
+// (Familia -> Sustrato descendente) esta ON por defecto, asi que la mano YA
+// viene ordenada y el caso se ejercita igual sin tocar ningun boton.
 const sortOverlap = await page.evaluate(async () => {
   const ff = window.__fungiflush;
   const scene = ff.scene;
@@ -649,10 +658,8 @@ const sortOverlap = await page.evaluate(async () => {
   };
   const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Ordenar por familia, esperar a que el abanico asiente y medir.
-  document.querySelector('[data-act="sort"]')?.click();
-  await settle(150);
-  document.querySelector('[data-sort-mode="family"]')?.click();
+  // La mano llega ya ordenada por el criterio automatico: se espera a que el
+  // abanico asiente y se mide.
   await settle(2200);
   const afterSort = measure();
 
@@ -663,17 +670,6 @@ const sortOverlap = await page.evaluate(async () => {
   document.querySelector('[data-act="play"]')?.click();
   await settle(3200);
   const afterPlay = measure();
-
-  // LIMPIAR EL CRITERIO. `onSortHand` guarda el modo en un `stickySortMode`
-  // privado de `main.ts` que se REAPLICA en cada `state:changed` y NO se apaga
-  // solo. Si esta fase lo deja en "family", todas las fases siguientes cargan
-  // con un `reorderHand()` extra por cada cambio de estado: un redibujado de
-  // mas que no aporta nada al test y ensucia el estado que miran las fases
-  // posteriores. Se vuelve a "default" para no contaminar el resto.
-  document.querySelector('[data-act="sort"]')?.click();
-  await settle(150);
-  document.querySelector('[data-sort-mode="default"]')?.click();
-  await settle(400);
 
   return { afterSort, afterPlay, status: ff.engine.run.status };
 });
@@ -821,11 +817,12 @@ console.log('\n--- Fase 4: arrastre a la zona de juego ---');
 console.log(JSON.stringify(afterDragPlay, null, 2));
 
 // --- Arrastre al descarte: debe descartar ESA carta y respetar la seleccion ---
-// Coords del pilar de descarte: SceneManager las define en `src/render/SceneManager.ts`
-// (DISCARD_X / DISCARD_Z). Si se mueven, hay que mover el target del smoke junto.
-const discardPoint = await page.evaluate(() =>
-  window.__fungiflush.scene.projectPointToScreen(-10.5, 0.95, 1.0),
-);
+// Se apunta a la PILA REAL (`scene.discardX`: ±10.5 escritorio, ±8.5 tactil), no
+// a una constante: la zona de descarte se recentra sobre la pila por perfil.
+const discardPoint = await page.evaluate(() => {
+  const s = window.__fungiflush.scene;
+  return s.projectPointToScreen(s.discardX, 0.95, 1.0);
+});
 const beforeDiscard = await page.evaluate(() => {
   const ff = window.__fungiflush;
   return {
@@ -875,6 +872,45 @@ const afterDragHand = await (async () => {
 })();
 console.log('\n--- Fase 4: arrastre dentro de la mano (devuelve) ---');
 console.log(JSON.stringify(afterDragHand, null, 2));
+
+// --- Fase 2: TAP sobre la pila de descarte (alternativa al drag) ---
+// Con cartas SELECCIONADAS, tocar la pila descarta TODA la seleccion. Se
+// simula un tap real (down+up en el mismo punto, sin movimiento) sobre la pila.
+// Va DESPUES de las pruebas de arrastre para no alterar su seleccion.
+const tapDiscard = await (async () => {
+  const before = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    return { discardsLeft: ff.engine.round.discardsLeft };
+  });
+  const picked = await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff.engine.clearSelection();
+    const uids = ff.engine.round.hand.slice(0, 2).map((c) => c.uid);
+    for (const uid of uids) ff.engine.toggleSelect(uid);
+    return uids;
+  });
+  await page.waitForTimeout(450);
+  const pt = await page.evaluate(() => {
+    const s = window.__fungiflush.scene;
+    // Sobre la PILA (y=0.4, por encima de la mesa) y NO sobre la mano (z=3).
+    return s.projectPointToScreen(s.discardX, 0.4, 1.0);
+  });
+  await page.mouse.move(pt.x, pt.y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  const after = await page.evaluate((uids) => {
+    const ff = window.__fungiflush;
+    return {
+      discardsLeft: ff.engine.round.discardsLeft,
+      gone: uids.every((u) => !ff.engine.round.hand.some((c) => c.uid === u)),
+      selected: ff.engine.round.selected.length,
+    };
+  }, picked);
+  return { before, pickedCount: picked.length, after };
+})();
+console.log('\n--- Fase 2: tap sobre el descarte ---');
+console.log(JSON.stringify(tapDiscard, null, 2));
 
 // --- Ficha de joker: señalar NO vende ---
 // Se le da un joker al run a mano para no depender de que la tienda ofrezca uno.
@@ -1076,7 +1112,9 @@ const afterPlay = await page.evaluate(() => {
   const ff = window.__fungiflush;
   const chips = {};
   for (const c of document.querySelectorAll('.counter')) {
-    chips[c.title] = c.querySelector('.counter-value')?.textContent;
+    // Clave ESTABLE por `data-counter` (no por el `title`, que cambia con el
+    // idioma). Se mantiene el `title` como respaldo.
+    chips[c.dataset.counter || c.title] = c.querySelector('.counter-value')?.textContent;
   }
   return {
     status: ff.engine.run.status,
@@ -1084,9 +1122,11 @@ const afterPlay = await page.evaluate(() => {
     target: ff.engine.round?.target ?? null,
     handsLeft: ff.engine.round?.handsLeft ?? null,
     hand: ff.engine.round?.hand.length ?? 0,
-    // FIX chip MAZO: tras jugar 3 cartas el disponible tiene que haber bajado
-    // EXACTAMENTE en 3 (o mas si ademas se descarto), nunca quedarse clavado.
-    chipDeck: chips['Mazo'] ?? null,
+    // Chip MAZO = "ROBABLES / total": tras jugar cartas, Robables baja de la
+    // pila de robo (y SUBE de nuevo si el descarte se recicla).
+    chipDeck: chips['ui_icon_collection'] ?? null,
+    deckDrawPile: ff.engine.deckDrawPile,
+    deckDiscardPile: ff.engine.deckDiscardPile,
     deckDraw: ff.engine.deckDraw,
     deckSize: ff.engine.deckSize,
     // El mazo depende del arquetipo (Clasico 40, arquetipos 20); las cuentas de
@@ -2028,7 +2068,9 @@ const ok =
   chk('menuState?.particles === 0', menuState?.particles === 0) &&
   chk('menuState?.continueEnabled === false', menuState?.continueEnabled === false) &&
   chk('settingsOpened?.opened === true', settingsOpened?.opened === true) &&
-  chk('settingsOpened?.fields === 8', settingsOpened?.fields === 8) &&
+  // 9 campos: idioma, reducir movimiento, ORDEN AUTO (Fase 3), calidad, vibracion,
+  // 2 de avisos, 2 de volumen.
+  chk('settingsOpened?.fields === 9', settingsOpened?.fields === 9) &&
   // --- Calidad grafica (V0) ---
   chk("qualityBoot?.tier === 'low'", qualityBoot?.tier === 'low') &&
   chk("qualityBoot?.reason === 'software'", qualityBoot?.reason === 'software') &&
@@ -2165,12 +2207,17 @@ const ok =
     afterBlind?.chipDeckTotal === String(afterBlind?.expectedDeckSize),
   ) &&
   chk(
-    'afterBlind?.chipDeck === `${afterBlind?.expectedDeckSize}/${afterBlind?.expectedDeckSize}`',
-    afterBlind?.chipDeck === `${afterBlind?.expectedDeckSize}/${afterBlind?.expectedDeckSize}`,
+    'afterBlind?.chipDeck = `${robables}/${total}`',
+    afterBlind?.chipDeck === `${afterBlind?.deckDrawPile}/${afterBlind?.expectedDeckSize}`,
   ) &&
   chk(
     'afterBlind?.deckSize === afterBlind?.expectedDeckSize',
     afterBlind?.deckSize === afterBlind?.expectedDeckSize,
+  ) &&
+  // Robables = pila de robo = total - mano (al abrir el ciego no hay descarte).
+  chk(
+    'afterBlind?.deckDrawPile + hand = total',
+    (afterBlind?.deckDrawPile ?? -1) + (afterBlind?.hand ?? 0) === afterBlind?.expectedDeckSize,
   ) &&
   chk(
     'afterBlind?.deckDraw === afterBlind?.expectedDeckSize',
@@ -2191,6 +2238,14 @@ const ok =
   chk('afterDiscard?.stillInHand === false', afterDiscard?.stillInHand === false) &&
   chk('afterDiscard?.cardsDiscarded === 1', afterDiscard?.cardsDiscarded === 1) &&
   chk('afterDiscard?.handSize === (afterBlind?.hand ?', afterDiscard?.handSize === (afterBlind?.hand ?? 0)) &&
+  // Fase 2: el TOQUE sobre la pila descarta la seleccion (alternativa al drag).
+  chk(
+    'tapDiscard: descarta la SELECCION al tocar la pila',
+    tapDiscard?.pickedCount === 2 &&
+      tapDiscard?.after?.gone === true &&
+      tapDiscard?.after?.selected === 0 &&
+      tapDiscard?.after?.discardsLeft === (tapDiscard?.before?.discardsLeft ?? 0) - 1,
+  ) &&
   chk('JSON.stringify(afterDiscard?.selected) === JSO', JSON.stringify(afterDiscard?.selected) === JSON.stringify(beforeDiscard?.selected)) &&
   chk('afterDragHand?.selected === false', afterDragHand?.selected === false) &&
   chk('afterDragHand?.count === 1', afterDragHand?.count === 1) &&
@@ -2203,14 +2258,12 @@ const ok =
   chk('afterPlay?.score > 0', afterPlay?.score > 0) &&
   // FIX chip MAZO: el numero visible baja con lo que la ronda consumio. Sin el
   // fix quedaba clavado en el total pese a haber jugado cartas.
+  // El chip muestra la pila de robo REAL: jugar/descartar la baja; si el
+  // descarte se recicla, vuelve a subir. La asercion util es que el numero
+  // visible COINCIDA con `deckDrawPile` (fuente unica del motor).
   chk(
-    'afterPlay?.chipDeck (disponible) = total - jugadas',
-    afterPlay?.chipDeck?.split('/')[0] ===
-      String(
-        (afterPlay?.expectedDeckSize ?? 40) -
-          (afterPlay?.cardsPlayed ?? 0) -
-          (afterPlay?.cardsDiscarded ?? 0),
-      ),
+    'afterPlay?.chipDeck = `${robables}/${total}`',
+    afterPlay?.chipDeck === `${afterPlay?.deckDrawPile}/${afterPlay?.expectedDeckSize}`,
   ) &&
   chk(
     'afterPlay?.deckDraw = total - consumidas',

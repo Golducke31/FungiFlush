@@ -143,6 +143,15 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
 - Los 8 bloques `max-height` de la base ya están gateados por puntero (§3).
 
 **Pendiente para la fase de escritorio:**
+- **Fase 3 de UI (2026-10-05)** — estos cambios son GLOBALES (los pidió el usuario,
+  no son efecto colateral del móvil), pero conviene revisarlos en escritorio:
+  - Mano inicial **8 → 6** (`RUN_DEFAULTS.handSize`) y abanico móvil más cerrado.
+  - **Botones "Descartar" y "Ordenar" retirados** del HUD. El descarte ahora es
+    arrastrar a la pila o **tocar la pila** (la zona se enciende tenue cuando hay
+    selección); el orden es **automático** (Familia → Sustrato desc → orden
+    original), con interruptor en Ajustes.
+  - Verificar en escritorio que el arrastre con mouse y el clic-sobre-la-pila se
+    sientan bien (el hint de la zona y el tap se probaron sobre todo en táctil).
 - **Ventanas de escritorio bajas (<560px de alto)**: al gatear los 8 bloques `max-height`,
   dejaron de recibir la compresión móvil. Si algún layout de escritorio la necesita,
   reintroducirla como bloque `(pointer: fine) and (max-height: ...)`.
