@@ -587,13 +587,14 @@ const afterBlind = await page.evaluate(() => {
     // idioma). Se mantiene el `title` como respaldo.
     chips[c.dataset.counter || c.title] = c.querySelector('.counter-value')?.textContent;
   }
-  // Misiones en tactil (P0.3): ahora son un chip plegable en la barra inferior
-  // izquierda, NO una franja que compite con el tablero. Se verifica que el chip
-  // exista, este visible y quede DENTRO de la barra inferior (no se recorta ni
-  // trepa sobre las cartas).
-  const missions = document.querySelector('.hud-missions-toggle');
-  const mb = missions?.getBoundingClientRect() ?? null;
-  const lastChip = [...document.querySelectorAll('.mission-chip')].pop();
+  // Misiones en tactil: el chip plegable vive arriba a la derecha y abre un
+  // cajon lateral a la derecha (`.hud-missions-panel`). Lo que se mide es el
+  // PANEL, no el chip: queremos que los `.mission-chip` quepan dentro del cajon
+  // sin recortarse contra su propio borde inferior.
+  const missionsToggle = document.querySelector('.hud-missions-toggle');
+  const missionsPanel = document.querySelector('.hud-missions-panel');
+  const mpb = missionsPanel?.getBoundingClientRect() ?? null;
+  const lastChip = [...document.querySelectorAll('.hud-missions-panel .mission-chip')].pop();
   const lb = lastChip?.getBoundingClientRect() ?? null;
   return {
     status: ff.engine.run.status,
@@ -625,11 +626,12 @@ const afterBlind = await page.evaluate(() => {
     // es el "camino de siempre". El camino con post-procesamiento solo suma el
     // sky dome (+1), asi que el alta no debe pasar de este valor + 4.
     drawCalls: ff.scene.stats().drawCalls,
-    missionsClip: missions
+    missionsClip: missionsPanel
       ? {
-          overflow: missions.scrollHeight - missions.clientHeight,
+          overflow: missionsPanel.scrollHeight - missionsPanel.clientHeight,
           lastChipBottom: lb ? Math.round(lb.bottom) : null,
-          panelBottom: mb ? Math.round(mb.bottom) : null,
+          panelBottom: mpb ? Math.round(mpb.bottom) : null,
+          toggleVisible: !!missionsToggle && getComputedStyle(missionsToggle).display !== 'none',
           missionsCount: document.querySelectorAll('.mission-chip').length,
         }
       : null,
@@ -2241,6 +2243,8 @@ const ok =
   // entero entra en su franja).
   chk('(afterBlind?.missionsClip?.overflow ?? 1) <= 0', (afterBlind?.missionsClip?.overflow ?? 1) <= 0) &&
   chk('(afterBlind?.missionsClip?.lastChipBottom ?? 1e9) <= (afterBlind?.missionsClip?.panelBottom ?? 0) + 1', (afterBlind?.missionsClip?.lastChipBottom ?? 1e9) <= (afterBlind?.missionsClip?.panelBottom ?? 0) + 1) &&
+  // Fase F: el chip plegable de misiones vive arriba a la derecha.
+  chk('afterBlind?.missionsClip?.toggleVisible === true', afterBlind?.missionsClip?.toggleVisible === true) &&
   // --- Fase 4: tap, arrastre y flip ---
   chk('afterTap?.selected === true', afterTap?.selected === true) &&
   chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&

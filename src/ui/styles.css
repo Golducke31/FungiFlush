@@ -939,11 +939,11 @@ body {
    control de misiones en tactil. Siempre visible durante la run. */
 .hud-missions-toggle {
   position: fixed;
-  left: calc(10px + var(--safe-l));
-  /* Justo POR ENCIMA de la barra inferior. El ancla sale de `--hud-bottom-h`
-     (alto real de la barra) + 8px: con un px fijo el chip caia sobre la linea
-     de estado ("4 Manos · 3 Descartes · ...") cada vez que la barra crecia. */
-  bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b));
+  /* ARRIBA A LA DERECHA, justo debajo de la barra superior. Antes vivia abajo a
+     la izquierda, sobre el borde de la mano. El ancla sale de `--hud-top-h`
+     (alto REAL de la barra) para no depender de un px fijo. */
+  right: calc(10px + var(--safe-r));
+  top: calc(var(--hud-top-h) + 8px + var(--safe-t));
   z-index: 30;
   display: none;
   align-items: center;
@@ -1172,13 +1172,10 @@ body {
   flex-wrap: wrap;
 }
 
-/* La linea de estado compacta es SOLO-MOVIL: reemplaza a los contadores en
-   tactil (ver el bloque `@media (pointer: coarse)`). El nodo se construye
-   SIEMPRE en el HUD, asi que la base tiene que ocultarlo — si no, en escritorio
-   se dibuja como texto crudo y duplica los contadores. */
-.hud-status {
-  display: none;
-}
+/* La linea de estado compacta se RETIRO: duplicaba lo que ya esta en pantalla
+   (ANTE/FUNGIS en la barra superior, Robables/Descarte en las etiquetas de las
+   pilas). En movil los chips de recursos (manos/descartes) son lo unico que
+   queda y son los que se muestran. */
 
 /* El marco lo pone la regla compartida de `.hud-block, .counter`: aca solo va
    el tamaño y la jerarquia entre recursos y estado. */
@@ -1321,6 +1318,65 @@ body {
   background:
     linear-gradient(180deg, rgba(79, 209, 139, 0.7) 0%, rgba(79, 209, 139, 0.15) 45%),
     linear-gradient(180deg, #14855f 0%, #0c6444 52%, #07422f 100%);
+}
+
+/* --------------------------------------------------------------------------
+   Boton JUGAR MANO con arte propio (texto localizado)
+   --------------------------------------------------------------------------
+   Solo va el TEXTO como imagen — el marco se retiro: el fexition verde del
+   propio boton hace de fondo y el texto se monta encima. Asi cambiar de idioma
+   no obliga a re-exportar nada. Se usa el prefijo `.hud-actions` para ganarle
+   a la regla movil `.hud-actions .btn.is-play` (misma clase, una mas de
+   especificidad) sin depender del orden. */
+.hud-actions .btn.is-play.is-art {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Padding horizontal para que el arte (que ya incluye su sombra) respire
+     contra el borde del boton verde. Vertical en 0 para que el alto lo de la
+     propia imagen del texto (no un px fijo). */
+  padding: 0 18px;
+  height: 56px;
+  min-height: 56px;
+}
+
+.hud-actions .btn.is-play.is-art .btn-play-label {
+  position: relative;
+  z-index: 1;
+  height: 78%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.7));
+}
+
+.hud-actions .btn.is-play.is-art .btn-play-count {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 10px;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(94, 240, 138, 0.95);
+  color: #06170f;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.hud-actions .btn.is-play.is-art:disabled {
+  opacity: 0.55;
+  filter: saturate(0.55);
+}
+
+.hud-actions .btn.is-play.is-art:not(:disabled):active {
+  transform: translateY(1px) scale(0.995);
 }
 
 /* Simbionte legendario del dado: una losa propia, en el violeta del cristal,
@@ -6147,45 +6203,20 @@ body {
     padding: 4px calc(10px + var(--safe-r)) calc(6px + var(--safe-b)) calc(10px + var(--safe-l));
   }
 
-  /* La fila de chips (escritorio) se oculta en movil: la reemplaza la linea de
-     estado compacta (P0.5). Así no hay dos fuentes de los mismos datos. */
+  /* En movil se muestran SOLO los chips de RECURSOS (manos/descartes): lo
+     informativo ya esta en la barra superior (ANTE, FUNGIS) y en las etiquetas
+     de las pilas (Robables, Descarte). Antes esto lo reemplazaba una linea de
+     texto que se retiro. */
   .hud-counters {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .hud-counters .counter[data-kind='state'] {
     display: none;
   }
-
-  .hud-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: nowrap;
-    gap: 8px;
-    min-height: 28px;
-    font-size: 13px;
-    color: var(--frame-dim);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-  }
-
-  .hud-status-part {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 3px;
-    white-space: nowrap;
-  }
-
-  .hud-status-value {
-    font-weight: 900;
-    color: var(--text);
-  }
-
-  .hud-status-sep {
-    color: var(--frame-dim);
-    opacity: 0.6;
-  }
-
-  /* `.hud-counters` ya quedo en `display: none` (arriba): la fila de chips NO se
-     dibuja en movil, la reemplaza `.hud-status`. Declarar layout aca seria
-     codigo muerto. */
 
   .counter {
     /* Se comprimen antes de desbordar. `min-width: 0` es lo que permite que un
@@ -6420,19 +6451,20 @@ body {
        del panel quede apenas por debajo del borde de la barra (sin hueco). */
     top: calc(var(--hud-top-h) - 10px + var(--safe-t));
     bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b));
-    left: 0;
-    right: auto;
+    /* Cajon DERECHO: el chip que lo abre vive arriba a la derecha. */
+    right: 0;
+    left: auto;
     max-width: 70vw;
     width: min(280px, 70vw);
     max-height: none;
-    transform: translateX(-110%);
+    transform: translateX(110%);
     transition: transform 0.22s var(--ease-out, ease);
     pointer-events: none;
     background: linear-gradient(180deg, rgba(14, 21, 30, 0.94), rgba(10, 15, 22, 0.9));
-    border-right: 1px solid var(--frame-edge);
-    border-top-right-radius: 12px;
-    border-bottom-right-radius: 12px;
-    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid var(--frame-edge);
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.5);
     gap: 4px;
   }
 
@@ -6706,11 +6738,6 @@ body {
   .hud-bottom {
     gap: var(--gap);
     padding: 10px calc(14px + var(--safe-r)) calc(12px + var(--safe-b)) calc(14px + var(--safe-l));
-  }
-
-  .hud-status {
-    min-height: 32px;
-    font-size: var(--text-md);
   }
 }
 

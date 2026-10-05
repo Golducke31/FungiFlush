@@ -26,7 +26,7 @@ import {
 } from '@engine/index';
 import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
-import { t } from '@i18n/index';
+import { currentLanguage, t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
@@ -220,8 +220,6 @@ export class HUD {
   /** P1.4 — Icono de ayuda contextual (?). */
   private elHelp = document.createElement('button');
   private elCounters = document.createElement('div');
-  /** P0.5 — Linea de estado compacta (movil): "4 manos · 3 descartes · Mazo 40/40". */
-  private elStatus = document.createElement('div');
   private elJokers = document.createElement('div');
   private elActions = document.createElement('div');
   private elOverlay = document.createElement('div');
@@ -521,11 +519,8 @@ export class HUD {
     const bottom = document.createElement('footer');
     bottom.className = 'hud-bottom';
     this.elCounters.className = 'hud-counters';
-    this.elStatus.className = 'hud-status';
     this.elActions.className = 'hud-actions';
-    // P0.5 (HUD movil): dos bandas distintas en táctil bajo — estado arriba,
-    // acciones abajo — y la fila de chips (escritorio) oculta por CSS.
-    bottom.append(this.elStatus, this.elCounters, this.elActions);
+    bottom.append(this.elCounters, this.elActions);
 
     // --- Capas flotantes ---
     this.elOverlay.className = 'overlay';
@@ -1149,6 +1144,10 @@ export class HUD {
       // Ancla ESTABLE (independiente del idioma) para tests y depuracion: el
       // `title` cambia con la traduccion, el `data-counter` no.
       cell.dataset['counter'] = icon;
+      // `kind` distingue lo que GASTAS (recurso) de lo informativo: en movil
+      // solo se muestran los recursos (lo demas ya esta en la barra superior y
+      // en las etiquetas de las pilas).
+      cell.dataset['kind'] = isResource ? 'resource' : 'state';
       cell.title = label;
       // El chip de mazo muestra DOS numeros ("12/42"): se los explica en el
       // aria-label para que el lector de pantalla no lea una fraccion suelta.
@@ -1193,47 +1192,10 @@ export class HUD {
       this.elCounters.appendChild(cell);
     }
 
-    // P0.5 (HUD movil) — Linea de estado COMPACTA, que reemplaza a los cuatro
-    // chips en pantallas tactiles bajas. Los cuatro numeros (manos, descartes,
-    // mazo, simbiontes) pesan igual en el chip y se comprimen hasta quedar
-    // ilegibles; aqui se leen en una sola frase. La fila de chips sigue existiendo
-    // para el escritorio (que NO entra en la regla pointer:coarse) y se oculta en
-    // movil con CSS, no aqui.
-    //
-    // Orden de prioridad del plan: lo que GASTAS (manos/descartes) primero, luego
-    // el mazo (informacion), y los Simbiontes al FINAL con contexto ("Ranuras"),
-    // nunca como un "0/5" suelto. El mazo muestra el par "por robar / total".
-    // En movil la barra superior se reduce al objetivo, asi que el ANTE y los
-    // FUNGIS se mudan aca: siguen visibles sin costar alto. El orden mantiene la
-    // prioridad del plan (lo que GASTAS primero) y suma el contexto de la run
-    // (ante) y el recurso (fungis) en los extremos.
-    this.elStatus.innerHTML = '';
-    const parts: Array<[string, string]> = [
-      [t('hud.ante'), String(run.ante)],
-      [t(round.blind.nameKey), ''],
-      [t('hud.hands'), String(round.handsLeft)],
-      [t('hud.discards'), String(round.discardsLeft)],
-      [t('hud.drawable'), `${deckDrawable}/${deckTotal}`],
-      [t('hud.discardPile'), String(deckDiscard)],
-      [t('hud.jokerSlots'), `${run.jokers.length}/${run.jokerSlots}`],
-      [t('hud.money'), formatNumber(run.money)],
-    ];
-    parts.forEach(([label, value], i) => {
-      const part = document.createElement('span');
-      part.className = 'hud-status-part';
-      const v = document.createElement('span');
-      v.className = 'hud-status-value';
-      v.textContent = value;
-      part.append(v, document.createTextNode(` ${label}`));
-      this.elStatus.appendChild(part);
-      if (i < parts.length - 1) {
-        const dot = document.createElement('span');
-        dot.className = 'hud-status-sep';
-        dot.setAttribute('aria-hidden', 'true');
-        dot.textContent = '·';
-        this.elStatus.appendChild(dot);
-      }
-    });
+    // La LINEA DE ESTADO de texto se retiro: duplicaba lo que ya esta en
+    // pantalla (ANTE y FUNGIS en la barra superior, Robables/Descarte en las
+    // etiquetas de las pilas) y era un muro de texto en movil. Lo que queda
+    // unico — lo que GASTAS (manos, descartes) — vive en los chips de recursos.
   }
 
   /**
@@ -1417,12 +1379,22 @@ export class HUD {
     }
 
     const play = document.createElement('button');
-    play.className = 'btn is-play';
+    play.className = 'btn is-play is-art';
     play.dataset['act'] = 'play';
-    // El boton NO muestra el puntaje estimado: el bloque de score de arriba es
-    // la unica fuente de puntuacion. Solo anexa cuantas cartas estan elegidas,
-    // que es contexto de la seleccion y no una promesa de puntaje.
-    play.textContent = selected > 0 ? `${t('action.play')} (${selected})` : t('action.play');
+    // Arte del boton: solo el TEXTO localizado. Sin marco: el frame que
+    // envolvia el boton competia con el cromo del HUD y quedaba mejor limpio.
+    const playLabel = document.createElement('img');
+    playLabel.className = 'btn-play-label';
+    playLabel.src = new URL(`art/ui_play_text_${currentLanguage()}.webp`, document.baseURI).href;
+    playLabel.alt = t('action.play');
+    play.append(playLabel);
+    // Cuantas cartas estan elegidas: va como ficha, no dentro del texto.
+    if (selected > 0) {
+      const count = document.createElement('span');
+      count.className = 'btn-play-count';
+      count.textContent = String(selected);
+      play.appendChild(count);
+    }
     play.disabled = selected === 0 || round.handsLeft <= 0;
     play.addEventListener('click', () => this.callbacks.onPlay());
 

@@ -1101,6 +1101,9 @@ async function boot(): Promise<void> {
     const round = engine.round;
     if (!round || engine.run.status !== 'playing') return;
     if (!profileStore.current.settings.autoSortHand) return;
+    // NUNCA reordenar mientras el jugador arrastra: el reacomodo moveria las
+    // cartas bajo el dedo y el gesto se sentiria roto.
+    if (scene.isDragging()) return;
     const ordered = sortHand(round.hand, 'auto');
     const current = round.hand.map((c) => c.uid).join(',');
     const after = ordered.map((c) => c.uid).join(',');

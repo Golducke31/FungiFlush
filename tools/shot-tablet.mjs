@@ -102,7 +102,9 @@ const probe = await page.evaluate(() => {
     hudScore: box('.hud-score'),
     scoreCurrent: box('.hud-score-current'),
     selectHint: box('.hud-select-hint'),
-    hudStatus: box('.hud-status'),
+    // La fila de contadores es lo unico que vive en la banda de estado desde
+    // que se retiro la linea de texto (ver `.hud-status`).
+    counters: box('.hud-counters'),
     // Un HUD "de celular" ocupa ~23% del alto; uno de tablet deberia ser menos.
     hudTopPct: (() => {
       const el = document.querySelector('.hud-top');
@@ -144,12 +146,12 @@ chk(
   `hint.bottom=${probe.selectHint?.bottom} bar.top=${probe.hudBottom?.top}`,
 );
 chk(
-  'el aviso de seleccion no pisa la linea de estado',
+  'el aviso de seleccion no pisa la fila de contadores',
   probe.selectHint == null ||
-    probe.hudStatus == null ||
-    probe.selectHint.bottom <= probe.hudStatus.top ||
-    probe.selectHint.top >= probe.hudStatus.bottom,
-  `hint=${probe.selectHint?.top}-${probe.selectHint?.bottom} status=${probe.hudStatus?.top}-${probe.hudStatus?.bottom}`,
+    probe.counters == null ||
+    probe.selectHint.bottom <= probe.counters.top ||
+    probe.selectHint.top >= probe.counters.bottom,
+  `hint=${probe.selectHint?.top}-${probe.selectHint?.bottom} contadores=${probe.counters?.top}-${probe.counters?.bottom}`,
 );
 
 const failed = checks.filter((c) => !c.ok);

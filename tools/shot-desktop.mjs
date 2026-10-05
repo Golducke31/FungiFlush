@@ -144,9 +144,9 @@ const chk = (name, ok, detail) => {
 };
 
 chk(
-  'escritorio no debe mostrar .hud-status (nodo solo-movil)',
-  probe.hudStatus.present && !probe.hudStatus.visible,
-  probe.hudStatus.present ? `display=${probe.hudStatus.display}` : 'nodo ausente',
+  'escritorio no debe mostrar .hud-status (nodo retirado)',
+  !probe.hudStatus.visible,
+  probe.hudStatus.present ? `display=${probe.hudStatus.display}` : 'nodo ausente (retirado)',
 );
 chk(
   'escritorio no debe mostrar .hud-missions-toggle (control solo-movil)',

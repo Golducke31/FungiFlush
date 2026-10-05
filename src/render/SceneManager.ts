@@ -2180,6 +2180,11 @@ export class SceneManager {
   // ==========================================================================
 
   private layoutHand(): void {
+    // NUNCA reacomodar mientras el jugador ARRASTRA: el tween de layout pelea
+    // con el dedo por `home` y la carta salta. Al soltar, `handleDrop` vuelve a
+    // llamar a `layoutHand()`, asi que el reacomodo no se pierde.
+    if (this.dragUid !== null) return;
+
     const cards = [...this.handCards.values()];
     const count = cards.length;
     if (count === 0) return;
@@ -3209,6 +3214,11 @@ export class SceneManager {
    * Sirve para apuntar un gesto a un punto del tablero (el centro de una zona,
    * por ejemplo) sin tener que construir un Vector3 desde afuera.
    */
+  /** `true` mientras el jugador arrastra una carta de la mano. */
+  isDragging(): boolean {
+    return this.dragUid !== null;
+  }
+
   projectPointToScreen(x: number, y: number, z: number): { x: number; y: number } {
     return this.projectToScreen(new THREE.Vector3(x, y, z));
   }
