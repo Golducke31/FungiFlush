@@ -1321,26 +1321,27 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Boton JUGAR MANO con arte propio (texto localizado)
+   Boton JUGAR MANO con arte propio (SOLO texto localizado, transparente)
    --------------------------------------------------------------------------
-   Solo va el TEXTO como imagen — el marco se retiro: el fexition verde del
-   propio boton hace de fondo y el texto se monta encima. Asi cambiar de idioma
-   no obliga a re-exportar nada. Se usa el prefijo `.hud-actions` para ganarle
-   a la regla movil `.hud-actions .btn.is-play` (misma clase, una mas de
-   especificidad) sin depender del orden. */
+   Sin marco y SIN fondo: el texto (arte del usuario) es el unico contenido,
+   sobre el tablero. Cuando hay cartas elegidas se "arma" (clase is-armed) y
+   hace un zoom para ganar jerarquia como accion primaria. Cambiar de idioma
+   no obliga a re-exportar nada (el texto es su propia imagen). El prefijo
+   `.hud-actions` gana en especificidad a `.hud-actions .btn.is-play`. */
 .hud-actions .btn.is-play.is-art {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Padding horizontal para que el arte (que ya incluye su sombra) respire
-     contra el borde del boton verde. Vertical en 0 para que el alto lo de la
-     propia imagen del texto (no un px fijo). */
+  /* En escritorio el boton conserva el verde del .btn.is-play (el escritorio
+     esta CONGELADO). El look transparente + zoom vive en el media query movil. */
   padding: 0 18px;
   height: 56px;
   min-height: 56px;
+  /* Transicion suave para el zoom al armar la jugada (movil). */
+  transition: transform var(--dur-fast, 0.18s) var(--ease-back, ease-out);
 }
 
 .hud-actions .btn.is-play.is-art .btn-play-label {
@@ -1351,32 +1352,33 @@ body {
   max-width: 100%;
   object-fit: contain;
   pointer-events: none;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.7));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.75));
 }
 
 .hud-actions .btn.is-play.is-art .btn-play-count {
   position: absolute;
   z-index: 2;
-  top: 5px;
-  right: 10px;
-  min-width: 22px;
-  padding: 1px 7px;
+  top: -6px;
+  right: -6px;
+  min-width: 24px;
+  padding: 1px 8px;
   border-radius: 999px;
   background: rgba(94, 240, 138, 0.95);
   color: #06170f;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.4;
   text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .hud-actions .btn.is-play.is-art:disabled {
-  opacity: 0.55;
-  filter: saturate(0.55);
+  opacity: 0.45;
+  filter: saturate(0.55) brightness(0.85);
 }
 
 .hud-actions .btn.is-play.is-art:not(:disabled):active {
-  transform: translateY(1px) scale(0.995);
+  transform: scale(1.02);
 }
 
 /* Simbionte legendario del dado: una losa propia, en el violeta del cristal,
@@ -6302,9 +6304,44 @@ body {
   }
 
   .hud-actions .btn.is-ghost {
-    /* Limpiar: gris, cede peso al resto. */
+    /* Limpiar: gris, cede peso al resto. SOLO-ESCRITORIO: en movil el boton de
+       Limpiar se retiro (tocar una carta elegida la deselecciona). */
     color: var(--frame-dim);
     border-color: var(--border);
+  }
+
+  /* --- Boton JUGAR MANO en movil: transparente, grande y con zoom al armar ---
+     Sin fondo verde: el texto (arte del usuario) flota sobre el tablero. Al
+     elegir cartas se "arma" (is-armed) y hace un zoom de jerarquia. El boton se
+     deja mas angosto que el ancho total (max-width) para que el zoom 1.16 no
+     recorte contra los bordes del viewport. */
+  .hud-actions {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .hud-actions .btn.is-play.is-art {
+    background: none;
+    border: none;
+    box-shadow: none;
+    /* Ancho acotado: deja margen a los costados para el zoom. `flex: 0 1 auto`
+       evita que el `flex: 1 1 auto` de .is-play lo estire a todo el ancho. */
+    flex: 0 1 auto;
+    width: min(78vw, 460px);
+    height: 66px;
+    min-height: 66px;
+    padding: 0 12px;
+  }
+
+  .hud-actions .btn.is-play.is-art .btn-play-label {
+    height: 90%;
+  }
+
+  /* Zoom de jerarquia al armar la jugada (hay cartas seleccionadas). El
+     transform no mueve el layout: la fila no se reacomoda. 1.16 sobre
+     max(78vw,460px) queda dentro del viewport en landscape movil. */
+  .hud-actions .btn.is-play.is-art.is-armed {
+    transform: scale(1.16);
   }
 
   /* --- Barra superior: tres zonas con espaciado parejo --- */
@@ -6694,7 +6731,7 @@ body {
      (`.hud-select-hint`, `.hud-missions-toggle`, `.hud-missions-panel`) se
      reacomodan solos. Los valores son los MEDIDOS a 1180x820 con este bloque. */
   :root {
-    --hud-bottom-h: 112px;
+    --hud-bottom-h: 130px;
     --hud-top-h: 113px;
   }
 

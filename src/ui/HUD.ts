@@ -1367,22 +1367,18 @@ export class HUD {
 
     const selected = round.selected.length;
 
-    // P0.5/P0.6 — "Limpiar" solo aparece cuando hay seleccion. Con 0 cartas no
-    // hay nada que limpiar, asi que el boton fantasma deshabilitado no aporta:
-    // lo omitimos del DOM para dejar espacio al boton protagonista (Jugar).
-    let clear: HTMLButtonElement | null = null;
-    if (selected > 0) {
-      clear = document.createElement('button');
-      clear.className = 'btn is-ghost';
-      clear.textContent = t('action.clear');
-      clear.addEventListener('click', () => this.callbacks.onClear());
-    }
+    // "Limpiar" SE ELIMINA: tocar una carta ya seleccionada la deselecciona
+    // (engine.toggleSelect en el click de carta), asi que un boton aparte
+    // sobra. El boton protagonista (Jugar) se queda solo y, cuando hay
+    // seleccion, "arma" la jugada con un zoom (clase is-armed).
 
     const play = document.createElement('button');
     play.className = 'btn is-play is-art';
     play.dataset['act'] = 'play';
-    // Arte del boton: solo el TEXTO localizado. Sin marco: el frame que
-    // envolvia el boton competia con el cromo del HUD y quedaba mejor limpio.
+    // Arte del boton: solo el TEXTO localizado, sin marco ni fondo. El color
+    // verde del .btn.is-play se anula en el CSS de .is-art: el boton es
+    // transparente y el texto (arte del usuario) es el unico contenido.
+    if (selected > 0) play.classList.add('is-armed');
     const playLabel = document.createElement('img');
     playLabel.className = 'btn-play-label';
     playLabel.src = new URL(`art/ui_play_text_${currentLanguage()}.webp`, document.baseURI).href;
@@ -1415,11 +1411,11 @@ export class HUD {
       dieBtn.disabled = !ready;
       dieBtn.title = t('joker.joker_loaded_die.desc');
       dieBtn.addEventListener('click', () => this.callbacks.onUseLoadedDie());
-      this.elActions.append(...(clear ? [clear] : []), dieBtn, play);
+      this.elActions.append(dieBtn, play);
       return;
     }
 
-    this.elActions.append(...(clear ? [clear] : []), play);
+    this.elActions.append(play);
   }
 
   // ==========================================================================
