@@ -87,6 +87,14 @@ const HAND_Z = 3.0;
 const JOKER_Y = 0.16;
 const JOKER_Z = -3.3;
 /**
+ * Z de la fila de Simbiontes en CELULAR (ver `jokerZ`).
+ *
+ * La barra superior termina justo donde arranca la fila, asi que con el valor
+ * de escritorio las ranuras quedaban DEBAJO del HUD. Corriendolas hacia el
+ * centro de la mesa entran en la franja libre.
+ */
+const JOKER_Z_MOBILE = -2.5;
+/**
  * P6 — Cuanto se hunde el marco de una ranura vacia respecto de la carta que la
  * ocupa. Evita el z-fighting cuando la ranura se llena: la carta manda.
  */
@@ -2163,7 +2171,7 @@ export class SceneManager {
     for (let i = 0; i < this.jokerSlotMeshes.length; i += 1) {
       const mesh = this.jokerSlotMeshes[i];
       if (!mesh) continue;
-      mesh.position.set(slotX(i), JOKER_Y - JOKER_SLOT_DY, JOKER_Z);
+      mesh.position.set(slotX(i), JOKER_Y - JOKER_SLOT_DY, this.jokerZ);
       mesh.rotation.set(-Math.PI / 2, 0, 0);
     }
 
@@ -2176,7 +2184,7 @@ export class SceneManager {
         {
           x: (i: number) => slotX(i),
           y: JOKER_Y,
-          z: JOKER_Z,
+          z: this.jokerZ,
           rx: -Math.PI / 2,
           ry: 0,
           rz: 0,
@@ -3008,6 +3016,11 @@ export class SceneManager {
     return this.layoutProfile === 'desktop' ? DISCARD_X : -TACTILE_PILE_X;
   }
 
+  /** Z de la fila de Simbiontes. En celular va mas adelante: ver `JOKER_Z_MOBILE`. */
+  private get jokerZ(): number {
+    return this.layoutProfile === 'mobile' ? JOKER_Z_MOBILE : JOKER_Z;
+  }
+
   resize(): void {
     const canvas = this.renderer.domElement;
     const width = canvas.clientWidth || window.innerWidth;
@@ -3055,6 +3068,11 @@ export class SceneManager {
 
     const bounds = {
       topZ: HAND_Z + CARD_HALF_DEPTH,
+      // El encuadre se mantiene anclado a la Z de ESCRITORIO aunque en celular
+      // la fila se corra hacia adelante (`jokerZ`): si el bound siguiera a la
+      // fila, la camara se acercaria y las ranuras volverian a subir — el
+      // corrimiento se cancelaria solo. Anclando el encuadre, la fila baja de
+      // verdad y el tablero conserva su tamano.
       bottomZ: JOKER_Z - CARD_HALF_DEPTH * JOKER_SCALE,
       width: halfWidth * 2,
     };

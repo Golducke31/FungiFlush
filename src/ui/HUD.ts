@@ -199,6 +199,12 @@ export class HUD {
   // Referencias cacheadas: buscar en el DOM cada frame es gratis hasta que
   // deja de serlo. Con 60 FPS y 20 nodos, importa.
   private elScore = document.createElement('span');
+  /**
+   * Icono del OBJETIVO (diana). En movil la barra superior se reduce al
+   * objetivo, asi que necesita una marca que diga "esto es la meta de la ronda"
+   * sin depender del texto. Va oculto en escritorio (frente congelado).
+   */
+  private elObjectiveIcon = document.createElement('span');
   private elTarget = document.createElement('span');
   private elProgress = document.createElement('div');
   private elAnte = document.createElement('span');
@@ -401,7 +407,17 @@ export class HUD {
     this.elScore.textContent = '0';
     this.elTarget.className = 'hud-score-target';
     this.elTarget.textContent = '/ 0';
-    scoreMain.append(this.elScore, this.elTarget);
+    this.elObjectiveIcon.className = 'hud-objective-icon';
+    this.elObjectiveIcon.setAttribute('aria-hidden', 'true');
+    // Mismo mecanismo que los iconos de los contadores: el SVG/PNG entra por
+    // `--icon` y el color lo pone `background-color` con `mask-image`. En CSS no
+    // se puede: una `url()` relativa resolveria contra el CSS ya empaquetado
+    // (`assets/`), no contra la raiz.
+    this.elObjectiveIcon.style.setProperty(
+      '--icon',
+      `url("${new URL('art/ui_icon_objective.png', document.baseURI).href}")`,
+    );
+    scoreMain.append(this.elObjectiveIcon, this.elScore, this.elTarget);
     this.elProgress.className = 'hud-progress';
     const progressFill = document.createElement('div');
     progressFill.className = 'hud-progress-fill';
@@ -1118,12 +1134,18 @@ export class HUD {
     // Orden de prioridad del plan: lo que GASTAS (manos/descartes) primero, luego
     // el mazo (informacion), y los Simbiontes al FINAL con contexto ("Ranuras"),
     // nunca como un "0/5" suelto. El mazo muestra el par "por robar / total".
+    // En movil la barra superior se reduce al objetivo, asi que el ANTE y los
+    // FUNGIS se mudan aca: siguen visibles sin costar alto. El orden mantiene la
+    // prioridad del plan (lo que GASTAS primero) y suma el contexto de la run
+    // (ante) y el recurso (fungis) en los extremos.
     this.elStatus.innerHTML = '';
     const parts: Array<[string, string]> = [
+      [t('hud.ante'), String(run.ante)],
       [t('hud.hands'), String(round.handsLeft)],
       [t('hud.discards'), String(round.discardsLeft)],
       [t('hud.deck'), `${this.engine.deckDraw}/${deckTotal}`],
       [t('hud.jokerSlots'), `${run.jokers.length}/${run.jokerSlots}`],
+      [t('hud.money'), formatNumber(run.money)],
     ];
     parts.forEach(([label, value], i) => {
       const part = document.createElement('span');

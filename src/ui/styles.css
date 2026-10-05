@@ -492,6 +492,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Icono del objetivo (diana). SOLO-MOVIL: en movil la barra superior se reduce
+   al objetivo y necesita una marca que lo diga sin depender del texto. En
+   escritorio se queda oculto (frente congelado). El dibujo entra por `--icon`
+   desde HUD.ts. */
+.hud-objective-icon {
+  display: none;
+}
+
 /* Ranura tallada en la losa: el bisel va AL REVES que el de los paneles
    (sombra arriba, luz abajo) para que se lea hundida en la madera y no
    apoyada encima. */
@@ -6546,6 +6554,45 @@ body {
      "Mazo" y las pestañas de orden, y la barra inferior + misiones se colaban
      por debajo del detalle del carrusel (ver Reordenar.PNG). El panel es la
      unica pantalla; el cromo de la run vuelve al cerrarlo. */
+  /* --- Barra superior reducida al OBJETIVO ---
+     En movil la barra pasa a ser UNA cosa: la meta de la ronda. La diana, los
+     numeros bien marcados y la barra de progreso. ANTE y FUNGIS se mudan a la
+     linea de estado de abajo (siguen visibles, no roban alto) y los botones de
+     sistema se achican. La barra baja lo suficiente para que las ranuras de
+     simbionte dejen de quedarle debajo. */
+  .hud-ante,
+  .hud-money {
+    display: none;
+  }
+
+  .hud-objective-icon {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    background-color: var(--tag-score);
+    -webkit-mask-image: var(--icon);
+    mask-image: var(--icon);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    mask-position: center;
+  }
+
+  .hud-score-main {
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Botones de sistema (Idioma / Menu) compactos: siguen alcanzables pero dejan
+     de marcar el alto de la barra. */
+  .hud-top .btn.is-small {
+    padding: 4px 9px;
+    font-size: 12.5px;
+  }
+
   /* --- Tooltip de carta: es DONDE SE LEE la descripcion en tactil ---
      La cara de la carta en la mano muestra solo nombre + numeros (para que
      entren a ~14px reales de pantalla); el texto de reglas y la habilidad viven
