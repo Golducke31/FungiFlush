@@ -44,6 +44,43 @@ La **base es el escritorio**. El móvil se define por encima, con dos mecanismos
 | `@media (pointer: coarse) and (max-height: 520px)` | ~6580, ~6795 y ~6911 | Táctil **de poca altura** (celular landscape). Son **TRES bloques separados** con la misma condición, cada uno con selectores distintos (`.blind-card` / `.archetype-*` / `.history-stats`) — **no son duplicados, no fusionar**. |
 | `@media (pointer: coarse) and (max-height: 560/430/460px)` | 8 bloques | Compresiones de HUD y paneles para landscape bajo. **Ya gateados por puntero** (Fase 0, ítem 0.3): antes vivían en la base y le aplicaban el layout móvil a una ventana de escritorio baja sin que nadie lo probara. |
 | `@media (pointer: coarse) and (min-height: 600px)` | 1 bloque | **TABLET táctil**: DEVUELVE los valores cómodos (barra de ~113px, marcador de 36px) que el bloque de celular había comprimido. Sin él, una tablet de 820px de alto recibía el HUD de un celular de 412px. Gate: `tools/shot-tablet.mjs`. |
+| **P8 — paneles** `@media (pointer: coarse)` + `(pointer: coarse) and (max-height: 560px)` | **final del archivo** | **Paneles a pantalla completa.** El overlay deja de scrollear y el panel pasa a ser una COLUMNA flex acotada al viewport (encabezado fijo / cuerpo flexible con `min-height: 0` / pie fijo). Ver §3.1. |
+
+### 3.1 Paneles: el modelo de tres zonas (P8, 2026-10-05)
+
+**Problema.** El overlay scrolleaba (`overflow-y: auto`) y el panel era un bloque que crecía
+con el contenido. En landscape (412px de alto) los botones (`.panel-actions`) quedaban por
+debajo del pliegue y había que **bajar la pantalla** para llegar a Cerrar / Elegir / Comprar /
+Continuar. Pasaba en Recompensa, Tienda, Ciego, Arquetipo, Ascensión, Ajustes y Mazo.
+
+**Modelo.** Todo el arreglo vive en `(pointer: coarse)` (bloque **P8**, al final de
+`styles.css`), así el escritorio queda intacto:
+
+1. `.overlay { overflow: hidden }` — el overlay **nunca** scrollea.
+2. `.panel:not(.is-menu):not(.is-carousel-frame)` → `display: flex; flex-direction: column;
+   max-height: 100%; min-height: 0; overflow: hidden`.
+3. Zonas de **alto fijo**: `.panel-title`, `.panel-subtitle`, `.shop-tabs`, `.deck-toolbar`,
+   `.panel-actions` → `flex: 0 0 auto` (el pie no se comprime nunca).
+4. Zona **flexible**: el cuerpo de cada panel (`> .reward-grid`, `.shop-body`, `.deck-grid`,
+   `.stat-grid`, …) → `flex: 1 1 auto; min-height: 0; overflow-y: auto`.
+
+`min-height: 0` es la pieza clave: sin ella un hijo flex no puede encogerse por debajo de su
+contenido y vuelve a empujar el pie fuera de la pantalla.
+
+**Que el contenido ENTRE (no solo que scrollee).** P8.1 (`(pointer: coarse) and
+(max-height: 560px)`) comprime lo secundario para que Recompensa y Tienda entren **enteras**:
+la cara de la carta ya trae nombre/elemento impresos (no se repiten debajo), el arte se acota
+por alto (`clamp(96px, 27vh, 118px)` de ancho de tarjeta, `min(10vh, 44px)` en las ofertas) y
+las descripciones se recortan con `-webkit-line-clamp`.
+
+**Scroll interno permitido (lista larga):** Mazo, Colección, Historial, Guía, Logros y las
+listas de Arquetipos/Ascensión conservan scroll **dentro del cuerpo** — el pie sigue visible.
+En Recompensa, Tienda, Ciego, Ajustes, Arquetipo (cabecera/pie) y Ciego superado **no hay
+scroll de ningún tipo**.
+
+**Gate:** `node tools/probe-panel-overflow.mjs` recorre **todas** las pantallas (móvil
+915×412, `FF_VIEWPORT=smoke` 844×390, `FF_VIEWPORT=tablet` 1180×820) y falla si algún panel
+tiene scroll de página o deja las acciones fuera del viewport. Salida: `tools/shots/probe-*.png`.
 
 **Regla de oro:** un cambio pensado para móvil va **dentro de un bloque `(pointer: coarse)`**,
 no en la base. Un cambio en la base **afecta a los dos** y por lo tanto contradice la

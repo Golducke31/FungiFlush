@@ -7156,3 +7156,238 @@ body {
        rebote de llegada. */
     transform 420ms var(--ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
+
+/* ==========================================================================
+   P8 — PANELES A PANTALLA COMPLETA (movil tactil)
+   ==========================================================================
+   PROBLEMA. El overlay scrollea (`overflow-y: auto`, ver la base) y el panel
+   era un bloque que crecia con el contenido: en un celular landscape (412px de
+   alto) los botones (`.panel-actions`) quedaban por debajo del pliegue y habia
+   que BAJAR LA PANTALLA para llegar a Cerrar / Elegir / Comprar / Continuar.
+   En Recompensa, Tienda, Ciego, Arquetipo, Ascension, Ajustes y Mazo.
+
+   MODELO. El overlay deja de scrollear; el panel pasa a ser una COLUMNA flex
+   acotada al viewport, con tres zonas:
+     - ENCABEZADO (`.panel-title` / `.panel-subtitle`): alto fijo.
+     - CUERPO (la grilla o el shell de cada panel): ocupa el resto y scrollea
+       POR DENTRO solo si de verdad no entra (mazo, coleccion, historial,
+       listas de arquetipos/ascension).
+     - PIE (`.panel-actions`): alto fijo, SIEMPRE visible.
+
+   `min-height: 0` es la pieza que hace todo el trabajo: sin ella un hijo flex
+   NO puede encogerse por debajo de su contenido y vuelve a empujar el pie fuera
+   de la pantalla. Es el error clasico que este bloque evita.
+
+   Va SOLO dentro de `(pointer: coarse)`: el escritorio queda congelado (ver
+   `docs/CONVENCION_MOVIL_PRIMERO.md`).
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  /* El overlay ya no scrollea: el scroll, si hace falta, vive en el cuerpo del
+     panel. Un scroll de PAGINA que empuja los botones deja de ser posible. */
+  .overlay {
+    overflow: hidden;
+  }
+
+  /* El panel: columna acotada al alto disponible. Se excluyen el menu (arte a
+     pantalla completa con hijos absolutos) y el marco del carrusel 3D (que
+     necesita `display: block` y el centro libre para el anillo). */
+  .panel:not(.is-menu):not(.is-carousel-frame) {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Menos aire: en 412px de alto cada px cuenta. Los paneles que ya fijan su
+     propio padding (menu, historial) tienen mas especificidad y no se tocan. */
+  .panel {
+    padding: 16px 18px;
+  }
+
+  /* Zonas de alto FIJO: encabezado, barras de herramientas y pie. Nunca se
+     comprimen ni se empujan fuera de la pantalla. */
+  .panel-title,
+  .panel-subtitle,
+  .shop-tabs,
+  .deck-toolbar,
+  .panel-actions {
+    flex: 0 0 auto;
+  }
+
+  /* Zona flexible: el cuerpo de cada panel ocupa el espacio que sobra y
+     scrollea por dentro si el contenido no entra. `overscroll-behavior:
+     contain` evita que el gesto se propague a la pagina (que ya no scrollea,
+     pero el rebote del sistema igual se notaria). */
+  .panel > .reward-grid,
+  .panel > .settings-grid,
+  .panel > .shop-body,
+  .panel > .deck-grid,
+  .panel > .collection-grid,
+  .panel > .achievement-grid,
+  .panel > .stat-grid,
+  .panel > .cosmetics-grid,
+  .panel > .daily-ladder,
+  .panel > .blind-grid,
+  .panel > .board-grid,
+  .panel > .tutorial-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* El aire inferior lo pone el pie, no la grilla. */
+    margin-bottom: 0;
+  }
+
+  /* Paneles con "shell" propio: una sola pieza que ya trae su cabecera, lista y
+     pie (arquetipos, ascension, historial, cosmeticos). El shell crece y sus
+     listas internas son las que scrollean. */
+  .panel > .archetypes-shell,
+  .panel > .ascension-shell,
+  .panel > .history-shell,
+  .panel > .cosmetics-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .ascension-list,
+  .history-list,
+  .archetypes-list {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   P8.1 — Recompensa y Tienda: que las tarjetas ENTREN completas
+   --------------------------------------------------------------------------
+   El modelo flex de arriba ya garantiza que el pie (Elegir / Salir) no se
+   pierda. Lo que faltaba era que el CONTENIDO no tuviera que scrollear: en
+   landscape la tarjeta de recompensa mostraba media cara y los botones de la
+   tienda quedaban bajo el corte. Aca se achica lo secundario (arte, padding,
+   texto) para que las tres caras y las tres ofertas entren enteras.
+
+   La CARA de la carta ya trae impresos el nombre, el elemento y la familia: en
+   la recompensa no se repiten debajo (era el mismo dato dos veces). Si en el
+   futuro se quiere el detalle, va a un boton "Ver detalles", no a la tarjeta.
+   -------------------------------------------------------------------------- */
+
+@media (pointer: coarse) and (max-height: 560px) {
+  /* --- Recompensa: tres caras 2:3 en fila, con su boton --- */
+  .panel.is-reward .reward-grid {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  /* Ancho FIJO y chico: en landscape el alto es el recurso escaso, asi que la
+     cara se achica hasta entrar. Sin un ancho fijo la descripcion (una linea
+     larga) estira la tarjeta y vuelve a desbordar. */
+  .panel.is-reward .reward-card {
+    flex: 0 0 auto;
+    /* El ancho sigue al ALTO del viewport: en landscape el alto es el recurso
+       escaso. Asi la cara entra tanto a 412px como a 390px (el smoke). */
+    width: clamp(96px, 27vh, 118px);
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .panel.is-reward .reward-art {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 3;
+  }
+
+  .panel.is-reward .reward-element,
+  .panel.is-reward .reward-name {
+    display: none;
+  }
+
+  .panel.is-reward .reward-desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .panel.is-reward .reward-card .btn {
+    min-height: 30px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+
+  /* --- Tienda: ofertas completas con su boton de compra --- */
+  .panel.is-shop .offer-grid {
+    gap: 8px;
+    margin-bottom: 0;
+  }
+
+  .panel.is-shop .offer {
+    padding: 7px;
+    gap: 3px;
+  }
+
+  .panel.is-shop .offer-art {
+    height: min(10vh, 44px);
+    margin-bottom: 0;
+  }
+
+  .panel.is-shop .offer-name {
+    font-size: 13px;
+  }
+
+  .panel.is-shop .offer-desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .panel.is-shop .offer-impact li {
+    font-size: 9.5px;
+    line-height: 1.25;
+  }
+
+  .panel.is-shop .offer-price {
+    font-size: 14px;
+  }
+
+  .panel.is-shop .btn {
+    min-height: 32px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+  }
+
+  .panel.is-shop .shop-body {
+    min-height: 0;
+  }
+
+  /* --- Ajustes: 8 campos + 2 deslizadores en una pantalla de 412px --- */
+  .panel.is-settings .settings-grid {
+    gap: 6px;
+    margin-bottom: 0;
+  }
+
+  .panel.is-settings .settings-field {
+    padding: 6px 10px;
+  }
+
+  .panel.is-settings .settings-section {
+    margin: 2px 0 0;
+    padding-top: 5px;
+  }
+
+  .panel.is-settings .settings-label {
+    font-size: 12px;
+  }
+
+  .panel.is-settings .settings-toggle {
+    min-height: 28px;
+  }
+}
