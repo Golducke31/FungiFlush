@@ -1634,7 +1634,16 @@ export class SceneManager {
 
       bus.on('card:played', ({ card, index }) => {
         // Primer carta de la mano: se reinicia la secuencia de puntuacion.
-        if (index === 0) this.stepIndex = 0;
+        if (index === 0) {
+          this.stepIndex = 0;
+          // Red de seguridad: si la timeline anterior se corto y quedaron cartas
+          // en el centro, se las manda al descarte antes de la mano nueva.
+          this.flyScoredToDiscard(0);
+        }
+        // RECLAMO SINCRONO (ver `claimScoredCard`): la carta sale de la mano y
+        // entra a la zona de puntuacion YA, para que el `state:changed` que el
+        // motor emite al final de `playHand` no la destruya.
+        this.claimScoredCard(card.uid);
         this.queueFx(index * 0.085, () => this.moveToPlayZone(card.uid));
       }),
 
@@ -1654,9 +1663,10 @@ export class SceneManager {
 
       bus.on('score:step', ({ step }) => this.onScoreStep(step)),
 
-      // Al cerrar la mano, las cartas de la zona de puntuacion se retiran.
-      // Sin esto se acumularian en la mesa partida tras partida.
-      bus.on('score:hand', () => this.retireScoringCards(0.9)),
+      // El RENDER termina de animar el puntaje: recien AHI las cartas jugadas
+      // vuelven al descarte. Antes se hundian a los 0.9 s, en mitad del conteo,
+      // y parecia que desaparecian.
+      bus.on('score:settled', () => this.flyScoredToDiscard(0.3)),
 
       bus.on('trigger:chain', ({ fromId, toId, depth }) => {
         this.queueFx(0.02, () => this.drawChain(fromId, toId, depth));
@@ -1669,7 +1679,13 @@ export class SceneManager {
       }),
 
       bus.on('round:win', () => this.celebrate()),
-      bus.on('round:loss', () => this.doom()),
+      bus.on('round:loss', () => {
+        this.doom();
+        // Si la timeline del puntaje se corta en la mano que da la derrota,
+        // `score:settled` no llega nunca: se manda igual lo que quedo en el
+        // centro, para que las cartas no queden colgadas en la mesa.
+        this.flyScoredToDiscard(0.6);
+      }),
 
       bus.on('card:destroyed', ({ card }) => {
         const target = this.handCards.get(card.uid);
@@ -2270,14 +2286,30 @@ export class SceneManager {
     }
   }
 
-  private moveToPlayZone(uid: string): void {
+  /**
+   * Pasa una carta de la MANO a la ZONA DE PUNTUACION, en el acto.
+   *
+   * TIENE que ser sincrono. `playHand` emite `state:changed` al terminar, y ese
+   * `syncHand` destruye toda carta que ya no esta en la mano y todavia no fue
+   * reclamada por la secuencia de puntaje. Si el reclamo se hiciera en la
+   * animacion ENCOLADA, la carta llegaria tarde y se destruiria: el jugador veia
+   * la mano "desaparecer" al tocar Jugar, sin viajar al centro.
+   */
+  private claimScoredCard(uid: string): void {
     const card3d = this.handCards.get(uid);
     if (!card3d) return;
-
     this.handCards.delete(uid);
     this.scoringCards.push(card3d);
     card3d.setSelected(false);
+    card3d.setSelectIndex(null);
     card3d.setBaseScale(PLAY_SCALE);
+  }
+
+  private moveToPlayZone(uid: string): void {
+    // La carta YA fue reclamada en el handler de `card:played` (ver
+    // `claimScoredCard`): aca solo se la anima al centro.
+    const card3d = this.scoringCards.find((c) => c.uid === uid);
+    if (!card3d) return;
 
     // Se re-acomoda TODA la fila, no solo la carta que llega.
     //
@@ -2648,7 +2680,7 @@ export class SceneManager {
           life: 1.7,
         });
       }, anim.d(0.14))
-      .add(() => this.retireScoringCards(0.4), 0);
+      .add(() => this.flyScoredToDiscard(0.4), 0);
   }
 
   private doom(): void {
@@ -2715,11 +2747,84 @@ export class SceneManager {
       });
   }
 
-  private retireScoringCards(delay = 0.6): void {
-    this.queueFx(delay, () => {
-      for (const card of this.scoringCards) this.retire(card);
+  /**
+   * Las cartas JUGADAS vuelven a la PILA DE DESCARTE.
+   *
+   * Antes se hundian en la mesa a los 0.9 s —EN MITAD del conteo— y
+   * "desaparecian": el jugador no veia a donde iban. Ahora, cuando TERMINA la
+   * animacion del puntaje, vuelan al descarte con arco y stagger, que es donde
+   * el motor las manda de verdad.
+   *
+   * Es IDEMPOTENTE: si ya no quedan cartas en el centro no hace nada, asi que se
+   * la puede llamar desde varios puntos (el aviso del render, y redes de
+   * seguridad por si la timeline se corta).
+   */
+  private flyScoredToDiscard(delay = 0.3): void {
+    const run = (): void => {
+      if (this.scoringCards.length === 0) return;
+      const cards = [...this.scoringCards];
       this.scoringCards.length = 0;
-    });
+
+      cards.forEach((card3d, i) => {
+        const jitter = (Math.random() - 0.5) * 0.5;
+        const rz = (Math.random() - 0.5) * 0.5;
+        const stagger = i * 0.07;
+        // Al descarte van boca abajo.
+        card3d.setFaceUp(false, { tweens: this.tweens, duration: 0.3 });
+        anim
+          .sequence()
+          .to(
+            card3d.home,
+            {
+              x: this.discardX + jitter,
+              y: 0.4,
+              z: DISCARD_Z,
+              // `rx`/`ry` explicitos: la carta viene del centro y sin esto
+              // volaria torcida al descarte.
+              rx: -Math.PI / 2,
+              ry: 0,
+              rz,
+              duration: anim.d(0.5),
+              ease: anim.EASE.quadOut,
+            },
+            stagger,
+          )
+          // Arco por encima del borde de la mesa.
+          .to(
+            card3d.home,
+            {
+              keyframes: [
+                { arc: 0.9, duration: anim.d(0.2), ease: anim.EASE.quadOut },
+                { arc: 0, duration: anim.d(0.3), ease: anim.EASE.quadIn },
+              ],
+            },
+            stagger,
+          )
+          // Se achica al aterrizar y se libera.
+          .to(card3d.home, { sx: 0.7, sy: 0.7, sz: 0.7, duration: anim.d(0.12) }, stagger + 0.5)
+          .add(() => {
+            this.particles.burst(card3d.worldPosition(), 6, {
+              color: 0x7a8794,
+              speed: 1.0,
+              upward: 0.8,
+              size: 0.05,
+              life: 0.5,
+            });
+            this.water?.ripple(this.discardX + jitter, DISCARD_Z, 0.95);
+            card3d.dispose();
+            this.scene.remove(card3d.group);
+          }, stagger + 0.62);
+      });
+
+      // La pila del descarte late al recibirlas.
+      if (this.discardMesh) this.pulsePile(this.discardMesh, 1.14, 0.5);
+    };
+
+    // `delay <= 0` corre EN EL ACTO: lo necesita la red de seguridad de
+    // `card:played` (indice 0), que tiene que vaciar el centro ANTES de reclamar
+    // las cartas de la mano nueva. Encolada llegaria tarde y las borraria.
+    if (delay <= 0) run();
+    else this.queueFx(delay, run);
   }
 
   private rebuildTextures(): void {
