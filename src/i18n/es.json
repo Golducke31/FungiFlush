@@ -42,6 +42,12 @@
     "remaining": "Te quedan: {hands} manos · {discards} descartes",
     "remainingPrefix": "Te quedan:"
   },
+  "pile": {
+    "deck": "Mazo",
+    "discard": "Descarte",
+    "drawable": "{count} robables",
+    "discardCount": "{count} cartas"
+  },
   "blindCard": {
     "mult": "Multiplicador",
     "target": "Objetivo",

@@ -42,6 +42,12 @@
     "remaining": "Remaining: {hands} hands · {discards} discards",
     "remainingPrefix": "Remaining:"
   },
+  "pile": {
+    "deck": "Deck",
+    "discard": "Discard",
+    "drawable": "{count} drawable",
+    "discardCount": "{count} cards"
+  },
   "blindCard": {
     "mult": "Multiplier",
     "target": "Target",

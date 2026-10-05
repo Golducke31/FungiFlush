@@ -53,6 +53,17 @@ import type { RetentionReward } from '../retention/types';
 // La tirada de dado por gesto se retiro del flujo de ciego: cada ante juega sus
 // 3 ciegos en orden. El dado sobrevive como habilidad del Simbionte legendario.
 
+/**
+ * Etiqueta de pila vacia, con su clase ya puesta (el texto lo llena el HUD).
+ * El tamano y la posicion los fija `positionPileLabels` con la caja proyectada
+ * del dorso.
+ */
+function createPileLabelEl(): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'pile-label';
+  return el;
+}
+
 export interface HudCallbacks {
   onPlay: () => void;
   onClear: () => void;
@@ -250,6 +261,18 @@ export class HUD {
   private elMissionsToggle = document.createElement('button');
   /** Estado plegado/abierto del panel de misiones (solo el chip lo controla). */
   private missionsOpen = false;
+  /**
+   * Etiquetas FISICAS de las pilas ("MAZO / 18 ROBABLES", "DESCARTE / 0
+   * CARTAS"). Sin ellas los dorsos de mazo y descarte se leen como decoracion.
+   * Se anclan a la proyeccion real de cada pila (`setPileAnchors`), asi que
+   * siguen al encuadre sin numeros a ojo.
+   */
+  private elPileDeck = createPileLabelEl();
+  private elPileDiscard = createPileLabelEl();
+  private pileAnchors: {
+    deck: { x: number; y: number; w: number; h: number };
+    discard: { x: number; y: number; w: number; h: number };
+  } | null = null;
   /** Contador grande: aparece durante la secuencia y suma en vivo. */
   private elTicker = document.createElement('div');
   private elTickerOp = document.createElement('span');
@@ -545,6 +568,8 @@ export class HUD {
       this.elJokers,
       this.elMissionsToggle,
       this.elMissions,
+      this.elPileDeck,
+      this.elPileDiscard,
       bottom,
       this.elSelectHint,
       this.elTicker,
@@ -578,6 +603,9 @@ export class HUD {
       // parecia un bug. La animacion del reciclado la hace el render.
       bus.on('deck:reshuffle', () => {
         this.toast(t('hud.reshuffle'), 'info');
+        // Las dos pilas "se sacuden": la animacion 3D la hace el render, y las
+        // etiquetas destellan para que el aviso se lea tambien sobre la mesa.
+        this.flashPileLabels();
       }),
 
       bus.on('score:changed', ({ total, target }) => {
@@ -783,6 +811,7 @@ export class HUD {
     }
 
     this.renderCounters();
+    this.renderPileLabels();
     this.renderJokers();
     this.renderMissions();
     this.renderActions();
@@ -1205,6 +1234,75 @@ export class HUD {
         this.elStatus.appendChild(dot);
       }
     });
+  }
+
+  /**
+   * Ancla las etiquetas de las pilas a la CAJA proyectada de mazo y descarte,
+   * para que queden DENTRO del dorso y ajustadas a su tamano. Lo llama el render.
+   */
+  setPileAnchors(anchors: {
+    deck: { x: number; y: number; w: number; h: number };
+    discard: { x: number; y: number; w: number; h: number };
+  }): void {
+    this.pileAnchors = anchors;
+    this.positionPileLabels();
+  }
+
+  private positionPileLabels(): void {
+    if (!this.pileAnchors) return;
+    const place = (el: HTMLElement, a: { x: number; y: number; w: number; h: number }): void => {
+      el.style.left = `${a.x}px`;
+      el.style.top = `${a.y}px`;
+      // Un piso minimo para que el texto entre aunque la pila quede muy chica.
+      el.style.width = `${Math.max(70, a.w)}px`;
+      el.style.height = `${Math.max(46, a.h)}px`;
+    };
+    place(this.elPileDeck, this.pileAnchors.deck);
+    place(this.elPileDiscard, this.pileAnchors.discard);
+  }
+
+  /**
+   * Texto de las etiquetas de pila. Solo visibles jugando: en el menu o con un
+   * panel abierto no hay pilas que etiquetar.
+   */
+  private renderPileLabels(): void {
+    const playing = this.engine.run?.status === 'playing' && !!this.engine.round;
+    this.elPileDeck.classList.toggle('is-visible', playing);
+    this.elPileDiscard.classList.toggle('is-visible', playing);
+    if (!playing) return;
+    this.setPileLabel(
+      this.elPileDeck,
+      t('pile.deck'),
+      t('pile.drawable', { count: formatNumber(this.engine.deckDrawPile) }),
+    );
+    this.setPileLabel(
+      this.elPileDiscard,
+      t('pile.discard'),
+      t('pile.discardCount', { count: formatNumber(this.engine.deckDiscardPile) }),
+    );
+    this.positionPileLabels();
+  }
+
+  private setPileLabel(el: HTMLElement, name: string, count: string): void {
+    el.innerHTML = '';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'pile-label-name';
+    nameEl.textContent = name;
+    const countEl = document.createElement('span');
+    countEl.className = 'pile-label-count';
+    countEl.textContent = count;
+    el.append(nameEl, countEl);
+  }
+
+  /** Destello corto de las dos etiquetas (al reciclarse el descarte). */
+  private flashPileLabels(): void {
+    for (const el of [this.elPileDeck, this.elPileDiscard]) {
+      el.classList.remove('is-flash');
+      // Reinicia la animacion aunque la clase ya estuviera puesta.
+      void el.offsetWidth;
+      el.classList.add('is-flash');
+      window.setTimeout(() => el.classList.remove('is-flash'), 700);
+    }
   }
 
   /**

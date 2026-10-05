@@ -583,6 +583,11 @@ async function boot(): Promise<void> {
         if (!engine.discardCards([...round.selected])) hud?.toast(t('action.noDiscards'), 'warn');
       },
       /**
+       * Posicion en pantalla de las pilas: el HUD cuelga sus etiquetas ("MAZO /
+       * N ROBABLES", "DESCARTE / N CARTAS") de ahi. Se emite al reencuadrar.
+       */
+      onPileAnchors: (anchors) => hud?.setPileAnchors(anchors),
+      /**
        * El jugador toco la carta que YA estaba centrada en el anillo.
        *
        * El render solo reporta el indice; que hacer con el lo decide la pantalla

@@ -75,6 +75,14 @@ import { ABILITY_COLOR, ELEMENT_COLOR, UI_COLORS } from './palette';
 const HAND_Y = 0.16;
 const HAND_Z = 3.0;
 /**
+ * Boost de escala de las cartas de la MANO en celular.
+ *
+ * A 412px de alto una carta a escala nominal deja el texto de la cara en ~2px,
+ * asi que en tactil se agranda. Lo lee tambien `handSpreadClearOfPiles` para
+ * calcular cuanto ocupa una carta al acotar el ancho del abanico.
+ */
+const HAND_BOOST = 1.2;
+/**
  * Fila de jokers.
  *
  * El tope de atras lo pone la fila de cartas JUGADAS (`PLAY_Z` - 0.6 con escala
@@ -129,7 +137,7 @@ const DISCARD_Z = 1.0;
  * la mesa llena la pantalla. Sigue siendo > que el semiancho del abanico para
  * que los montones no compartan pantalla con las cartas de los extremos.
  */
-const TACTILE_PILE_X = 8.5;
+const TACTILE_PILE_X = 9.4;
 /**
  * Alto minimo de viewport (px) para tratar un dispositivo tactil como TABLET.
  * Espeja el `@media (pointer: coarse) and (min-height: 600px)` del CSS: si uno
@@ -276,6 +284,14 @@ export interface SceneCallbacks {
    * drag: el controlador decide que hacer (descartar la seleccion actual).
    */
   onDiscardPileTap?: () => void;
+  /**
+   * CAJA proyectada de cada pila (centro + tamano en pantalla). El HUD mete la
+   * etiqueta "MAZO / N ROBABLES" DENTRO del dorso, ajustada a su tamano.
+   */
+  onPileAnchors?: (anchors: {
+    deck: { x: number; y: number; w: number; h: number };
+    discard: { x: number; y: number; w: number; h: number };
+  }) => void;
   /**
    * El monitor de frames bajo el nivel de calidad por su cuenta. El render NO
    * muestra avisos (no es su trabajo): avisa y el controlador decide si
@@ -1610,6 +1626,10 @@ export class SceneManager {
         else this.syncHand([], []);
         this.syncJokers(this.engine.run.jokers, this.engine.run.jokerSlots);
         this.refreshDiscardHint();
+        // Anclajes de las pilas para las etiquetas del HUD. Se emiten tambien
+        // aca (no solo en `resize`) porque el primer `resize` corre ANTES de que
+        // el HUD exista y sus etiquetas quedarian sin posicion.
+        this.callbacks.onPileAnchors?.(this.pileAnchors());
       }),
 
       bus.on('card:played', ({ card, index }) => {
@@ -2157,7 +2177,7 @@ export class SceneManager {
     // (1.3 -> 1.2) y el abanico se cierra (ver `spreadMobile`). Con menos cartas
     // no hace falta que cada una sea tan grande, y el conjunto gana aire para
     // que mazo y descarte se lean detras.
-    const boost = this.layoutProfile === 'mobile' ? 1.2 : 1;
+    const boost = this.layoutProfile === 'mobile' ? HAND_BOOST : 1;
     const spacing = count <= 1 ? 0 : Math.min(2.32 * boost, this.handSpread / (count - 1));
     const total = spacing * (count - 1);
 
@@ -3088,6 +3108,38 @@ export class SceneManager {
     return this.projectToScreen(new THREE.Vector3(x, y, z));
   }
 
+  /**
+   * CAJA proyectada de cada pila en pantalla (CSS px): centro + ancho/alto.
+   *
+   * El HUD la usa para meter la etiqueta DENTRO del dorso visible, ajustada a su
+   * tamano (no flotando al lado). Se proyectan las cuatro esquinas del plano de
+   * la pila (esta acostada en el plano XZ) y se toma su bounding box: con
+   * perspectiva el trapecio se aproxima bien por su caja.
+   */
+  pileAnchors(): {
+    deck: { x: number; y: number; w: number; h: number };
+    discard: { x: number; y: number; w: number; h: number };
+  } {
+    const box = (cx: number, cz: number): { x: number; y: number; w: number; h: number } => {
+      const pw = CARD_WIDTH * 0.92;
+      const ph = CARD_HEIGHT * 0.92;
+      const corners = [
+        this.projectPointToScreen(cx - pw / 2, 0, cz - ph / 2),
+        this.projectPointToScreen(cx + pw / 2, 0, cz - ph / 2),
+        this.projectPointToScreen(cx - pw / 2, 0, cz + ph / 2),
+        this.projectPointToScreen(cx + pw / 2, 0, cz + ph / 2),
+      ];
+      const xs = corners.map((p) => p.x);
+      const ys = corners.map((p) => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
+    };
+    return { deck: box(this.deckX, DECK_Z), discard: box(this.discardX, DISCARD_Z) };
+  }
+
   // ==========================================================================
   // Resize
   // ==========================================================================
@@ -3133,16 +3185,34 @@ export class SceneManager {
    * carta sin que se pisen (ver el `boost` de `layoutHand`). El ancho extra
    * entra: en un celular apaisado el encuadre lo fija el ALTO, no el ancho.
    *
-   * Fase 1 (2026-10-05): con la mano en 6 el abanico se cierra un poco; el aire
-   * que sobra deja ver mazo y descarte sin que la mano los tape.
+   * Pero SIEMPRE acotado por `handSpreadClearOfPiles`: el abanico no puede
+   * invadir las columnas de mazo/descarte.
    */
   private spreadMobile(aspect: number): number {
-    return aspect > 1.75 ? 18.5 : aspect > 1.45 ? 16 : 13.5;
+    const base = aspect > 1.75 ? 18.5 : aspect > 1.45 ? 16 : 13.5;
+    return Math.min(base, this.handSpreadClearOfPiles());
   }
 
   /** Rama TABLET del spread. Pantalla alta: el abanico puede abrirse igual. */
   private spreadTablet(aspect: number): number {
-    return aspect > 1.75 ? 21.5 : aspect > 1.45 ? 18 : 15;
+    const base = aspect > 1.75 ? 21.5 : aspect > 1.45 ? 18 : 15;
+    return Math.min(base, this.handSpreadClearOfPiles());
+  }
+
+  /**
+   * Ancho MAXIMO del abanico para que NO invada las columnas de mazo/descarte.
+   *
+   * Se DERIVA de la posicion real de las pilas (no de un numero a ojo): si se
+   * mueven, el abanico se ajusta solo. Antes el abanico tactil (18.5) llegaba a
+   * x = ±10.5 mientras la pila vive en ±9.4: las cartas de las puntas TAPABAN
+   * el mazo y el descarte (el bug que reporto el usuario: "nunca permitir que
+   * la mano se expanda sobre esas columnas").
+   */
+  private handSpreadClearOfPiles(): number {
+    const pileHalf = (CARD_WIDTH * 0.92) / 2; // media pila
+    const inner = Math.abs(this.discardX) - pileHalf; // borde interno de la columna
+    const cardHalf = (CARD_WIDTH / 2) * HAND_BOOST; // media carta con el boost tactil
+    return Math.max(8, (inner - cardHalf - 0.25) * 2);
   }
 
   /** Rama ESCRITORIO del spread (congelada hasta la fase de escritorio). */
@@ -3187,10 +3257,15 @@ export class SceneManager {
    * PENDIENTE: en el CELULAR el abanico (mas ancho desde el boost de cartas)
    * llega a cubrir las pilas. Ver la §6 del doc de convencion.
    */
+  /**
+   * X de la pila de MAZO: a la DERECHA del area central (y el descarte a la
+   * izquierda). Es el orden historico, que el usuario pidio conservar.
+   */
   private get deckX(): number {
     return this.layoutProfile === 'desktop' ? DECK_X : TACTILE_PILE_X;
   }
 
+  /** X de la pila de DESCARTE: a la IZQUIERDA. Ver `deckX`. */
   private get discardX(): number {
     return this.layoutProfile === 'desktop' ? DISCARD_X : -TACTILE_PILE_X;
   }
@@ -3298,6 +3373,10 @@ export class SceneManager {
 
     this.layoutHand();
     this.layoutJokers();
+
+    // El HUD cuelga sus etiquetas de pila de estas coordenadas (la camara esta
+    // quieta durante la partida: alcanza con recalcularlas al reencuadrar).
+    this.callbacks.onPileAnchors?.(this.pileAnchors());
   }
 
   dispose(): void {

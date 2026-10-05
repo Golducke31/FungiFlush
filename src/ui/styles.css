@@ -309,6 +309,75 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   Etiquetas de las pilas (mazo / descarte)
+   --------------------------------------------------------------------------
+   Se anclan a la proyeccion real de cada pila (el HUD las posiciona por
+   `left/top` en px). NO entran en la lista de `pointer-events: auto` de arriba:
+   son decorativas y tienen que dejar pasar el toque hacia el canvas (la pila de
+   descarte es una zona de drop/tap). */
+.pile-label {
+  position: absolute;
+  /* `left/top` = CENTRO de la caja proyectada del dorso; `width/height` los fija
+     el HUD con esa misma caja, asi que la etiqueta queda DENTRO del dorso. */
+  transform: translate(-50%, -50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: rgba(5, 11, 15, 0.55);
+  border: 1px solid rgba(120, 240, 214, 0.32);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  text-align: center;
+  overflow: hidden;
+  z-index: 4;
+}
+
+.pile-label.is-visible {
+  display: flex;
+}
+
+.pile-label-name {
+  font-family: var(--font-display, inherit);
+  font-size: 11px;
+  line-height: 1.1;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9fe9cf;
+}
+
+.pile-label-count {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #eaf6f1;
+}
+
+/* Destello al reciclarse el descarte: la mesa avisa que las DOS pilas cambiaron. */
+.pile-label.is-flash {
+  animation: pile-label-flash 0.7s var(--ease-out, ease-out);
+}
+
+@keyframes pile-label-flash {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    border-color: rgba(120, 240, 214, 0.32);
+  }
+  35% {
+    transform: translate(-50%, -50%) scale(1.14);
+    border-color: rgba(120, 240, 214, 1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    border-color: rgba(120, 240, 214, 0.32);
+  }
+}
+
+/* --------------------------------------------------------------------------
    Barra superior
    -------------------------------------------------------------------------- */
 
@@ -6561,6 +6630,7 @@ body {
   #ui-root.is-panel-open > .hud-jokers,
   #ui-root.is-panel-open > .hud-missions-panel,
   #ui-root.is-panel-open > .hud-missions-toggle,
+  #ui-root.is-panel-open > .pile-label,
   #ui-root.is-panel-open > .hud-bottom {
     display: none;
   }

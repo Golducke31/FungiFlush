@@ -610,6 +610,11 @@ const afterBlind = await page.evaluate(() => {
     deckSize: ff.engine.deckSize,
     deckDrawPile: ff.engine.deckDrawPile,
     deckDiscardPile: ff.engine.deckDiscardPile,
+    // Etiquetas FISICAS de las pilas ("MAZO / N ROBABLES", "DESCARTE / N
+    // CARTAS"): sin ellas los dorsos se confunden con decoracion.
+    pileLabels: [...document.querySelectorAll('.pile-label.is-visible')].map((el) =>
+      (el.textContent ?? '').trim(),
+    ),
     // El mazo inicial depende del arquetipo (Clasico 40, arquetipos 20). Las
     // aserciones del chip y del mazo se comparan contra este valor, no contra
     // un 40 fijo, para que el smoke siga valido con cualquier arquetipo.
@@ -2226,6 +2231,11 @@ const ok =
   chk(
     'afterBlind?.deckDraw === afterBlind?.expectedDeckSize',
     afterBlind?.deckDraw === afterBlind?.expectedDeckSize,
+  ) &&
+  // Etiquetas de pila: las DOS visibles, con el nombre y el conteo.
+  chk(
+    'afterBlind?.pileLabels: 2 etiquetas visibles (mazo y descarte)',
+    afterBlind?.pileLabels?.length === 2,
   ) &&
   // Misiones tactiles: ninguna se corta contra la barra inferior (el bloque
   // entero entra en su franja).
