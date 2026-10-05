@@ -108,7 +108,13 @@ export class ResolutionContext {
   }
 
   get total(): number {
-    return Math.round(this.substrate * this.spores);
+    // SUELO DE CERO. El desglose (substrate/spores) SI puede quedar en negativo:
+    // la podredumbre resta Substrato por cada disparo (TriggerEngine) y el
+    // impuesto de la Reina Esporada tambien. Pero el score JUGABLE nunca puede
+    // ser negativo: sin este `Math.max`, una mano podrida o el impuesto del jefe
+    // producian "Score: -24", un estado matematicamente invalido que ademas se
+    // propagaba a `round.score` (GameEngine lo acumula con `+=`) y a la barra.
+    return Math.max(0, Math.round(this.substrate * this.spores));
   }
 
   /** Suma Substrate plano y registra el paso. */

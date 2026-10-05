@@ -68,7 +68,7 @@
       {
         "id": "a3_boss_tax",
         "trigger": "ON_HAND_SCORED",
-        "actions": [{ "type": "ADD_SUBSTRATE", "value": -30 }]
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.75 }]
       }
     ]
   },

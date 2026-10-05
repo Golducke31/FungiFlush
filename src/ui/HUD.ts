@@ -277,6 +277,13 @@ export class HUD {
   private scoreSettleDeadline = 0;
   /** Habia un panel esperando a que la secuencia terminara. */
   private panelPending = false;
+  /**
+   * Respaldo del panel pendiente. El vencimiento (`scoreSettleDeadline`) solo se
+   * comprobaba al volver a llamar a `renderOverlay`, y si `score:settled` no
+   * llegaba NO habia ninguna otra llamada que lo re-evaluara: el panel quedaba
+   * invisible para siempre. Este timer dispara el render solo al vencer.
+   */
+  private panelTimer: number | null = null;
   /** El aviso de "ciego superado" ya se mostro para esta ronda. */
   private clearedShown = false;
   /** El jugador ya apreto "Continuar" en el aviso de ciego superado. */
@@ -579,7 +586,9 @@ export class HUD {
         this.elScore.textContent = formatNumber(total);
         this.elScore.classList.toggle('is-hot', total >= target * 0.75);
         const fill = this.elProgress.firstElementChild as HTMLElement | null;
-        if (fill) fill.style.width = `${Math.min(100, (total / Math.max(1, target)) * 100)}%`;
+        // El score jugable ya viene con suelo de cero, pero la barra se protege
+        // igual: un ancho negativo la rompe y el desglose puede traer negativos.
+        if (fill) fill.style.width = `${Math.max(0, Math.min(100, (total / Math.max(1, target)) * 100))}%`;
       }),
 
       // El motor emite TODOS los pasos del calculo juntos y despues el total.
@@ -601,12 +610,23 @@ export class HUD {
         // timeline: una cola agregada por paso se apilaba, y si la timeline se
         // mataba el aviso nunca llegaba y el HUD quedaba sin mostrar paneles.
         this.scoreSettling = false;
+        this.clearPanelTimer();
         if (!this.panelPending) return;
         window.setTimeout(() => {
           if (!this.panelPending) return;
           this.panelPending = false;
           this.render();
         }, 1200);
+      }),
+
+      // El Game Over tiene AUTORIDAD ABSOLUTA sobre la animacion de puntaje.
+      // El motor ya cambio de estado, pero `renderOverlay` bloquea el panel
+      // mientras `scoreSettling` siga vivo; si la timeline del render se corta
+      // (derrota en la ultima mano), `score:settled` nunca llega y el jugador se
+      // queda mirando la partida congelada. Aca se fuerza el panel final sin
+      // depender de `score:settled`, de las particulas ni de ningun overlay.
+      bus.on('game:over', ({ reason }) => {
+        this.forceGameOver(reason);
       }),
 
       bus.on('score:hand', ({ breakdown, total }) => {
@@ -754,7 +774,7 @@ export class HUD {
       this.elScore.classList.toggle('is-hot', round.score >= round.target * 0.75);
       this.elTarget.textContent = `/ ${formatNumber(round.target)}`;
       const fill = this.elProgress.firstElementChild as HTMLElement | null;
-      if (fill) fill.style.width = `${Math.min(100, (round.score / Math.max(1, round.target)) * 100)}%`;
+      if (fill) fill.style.width = `${Math.max(0, Math.min(100, (round.score / Math.max(1, round.target)) * 100))}%`;
       this.elBlind.textContent = t(round.blind.nameKey);
       this.renderObjective(round);
     } else {
@@ -1436,6 +1456,10 @@ export class HUD {
       status !== 'menu'
     ) {
       this.panelPending = true;
+      // El deadline solo se miraba al volver a `renderOverlay`. Si nada volvia
+      // a disparar un render (timeline cortada), el panel no aparecia nunca:
+      // este timer re-evalua al vencer.
+      this.schedulePendingPanel();
       return;
     }
     // Vencio el bloqueo (o no habia secuencia): se limpia y se sigue.
@@ -1476,6 +1500,59 @@ export class HUD {
         break;
       default:
         this.hideOverlay();
+    }
+  }
+
+  /**
+   * Fuerza el panel final SIN esperar a `score:settled`.
+   *
+   * `game:over` tiene autoridad absoluta: si el ciego que da la derrota termina
+   * mientras la animacion de puntaje sigue viva, `renderOverlay` bloquea el
+   * panel (`panelPending`) esperando un aviso que puede no llegar nunca (la
+   * timeline la emite el render y se corta al cambiar de fase). Aca se limpia
+   * TODO el estado de bloqueo y se pinta el panel en el acto, sin depender de
+   * `score:settled`, de las particulas ni del cierre de un overlay previo.
+   */
+  forceGameOver(reason: 'loss' | 'victory'): void {
+    // Si el panel final ya esta en pantalla, no se reconstruye: `game:over`
+    // puede reemitirse (restaurar una run terminada) y no queremos perder el
+    // foco del boton "Nueva partida".
+    if (this.elOverlay.querySelector('.panel.is-gameover')) return;
+    this.scoreSettling = false;
+    this.panelPending = false;
+    this.scoreSettleDeadline = 0;
+    this.clearPanelTimer();
+    this.cancelPendingClose();
+    // Se fija el estado ANTES de pintar: un `state:changed` posterior no debe
+    // volver a reconstruir el mismo panel.
+    this.lastStatus = reason === 'victory' ? 'victory' : 'game_over';
+    this.clearedShown = false;
+    this.showGameOver(reason);
+  }
+
+  /**
+   * Respaldo del panel pendiente: cuando `renderOverlay` bloquea un panel por la
+   * animacion de puntaje, programa un render para el vencimiento del bloqueo.
+   * Sin esto, un `score:settled` que nunca llega dejaba el panel invisible.
+   */
+  private schedulePendingPanel(): void {
+    if (this.panelTimer !== null) return;
+    const wait = Math.max(0, this.scoreSettleDeadline - performance.now()) + 50;
+    this.panelTimer = window.setTimeout(() => {
+      this.panelTimer = null;
+      if (!this.panelPending) return;
+      // Vencio el bloqueo: se libera y se re-renderiza para que `renderOverlay`
+      // muestre el panel que estaba esperando.
+      this.scoreSettling = false;
+      this.panelPending = false;
+      this.render();
+    }, wait);
+  }
+
+  private clearPanelTimer(): void {
+    if (this.panelTimer !== null) {
+      clearTimeout(this.panelTimer);
+      this.panelTimer = null;
     }
   }
 

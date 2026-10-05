@@ -277,7 +277,7 @@
     },
     "blind_a3_boss": {
       "name": "La Reina Esporada",
-      "desc": "Cada mano paga un impuesto de 30 de Sustrato."
+      "desc": "Cada mano reduce tus Esporas un 25%."
     },
     "blind_a4_small": {
       "name": "Piedra Seca",

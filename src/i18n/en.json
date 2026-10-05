@@ -277,7 +277,7 @@
     },
     "blind_a3_boss": {
       "name": "The Spore Queen",
-      "desc": "Every hand is taxed 30 Substrate."
+      "desc": "Every hand cuts your Spores by 25%."
     },
     "blind_a4_small": {
       "name": "Dry Stone",
