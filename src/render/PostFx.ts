@@ -42,6 +42,7 @@ import { LUTPass } from 'three/examples/jsm/postprocessing/LUTPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { createNightLut } from './Lut';
+import { TransitionPass } from './Transition';
 
 // ---------------------------------------------------------------------------
 // Shaders de los pases propios
@@ -415,6 +416,12 @@ export class PostFx {
   private readonly lutPass: LUTPass | null = null;
   private readonly lutTexture: THREE.Data3DTexture | null = null;
   private readonly renderPass: RenderPass;
+  /**
+   * Transicion de pantalla (estilo Balatro). Va JUSTO DESPUES del render de la
+   * escena: mezcla el frame viejo con el nuevo sobre el color de escena, asi el
+   * bloom y el grade de la cadena se siguen aplicando igual durante el barrido.
+   */
+  private readonly transitionPass: TransitionPass;
   private sceneCalls = 0;
 
   constructor(options: PostFxOptions) {
@@ -437,6 +444,11 @@ export class PostFx {
     // Snapshot justo despues del render de la escena: es el unico momento en
     // que `info.render.calls` es el numero de la escena y no el de los pases.
     this.composer.addPass(new SnapshotPass(() => (this.sceneCalls = renderer.info.render.calls)));
+
+    // Arranca deshabilitado (el composer lo saltea): solo se prende durante una
+    // transicion.
+    this.transitionPass = new TransitionPass(width, height);
+    this.composer.addPass(this.transitionPass);
 
     if (options.bloom) {
       this.bloomPass = new BloomPass({
@@ -482,6 +494,13 @@ export class PostFx {
   setSize(width: number, height: number, pixelRatio: number): void {
     this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(width, height);
+    // El pase de transicion guarda su propio target: el composer no lo conoce.
+    this.transitionPass.setSize(width, height);
+  }
+
+  /** Pase de transicion de pantalla (ver `Transition.ts`). */
+  get transition(): TransitionPass {
+    return this.transitionPass;
   }
 
   /** Draw calls de la escena (sin los pases de pantalla completa). */
@@ -494,6 +513,7 @@ export class PostFx {
     this.bloomPass?.dispose();
     this.gradePass?.dispose();
     this.lutTexture?.dispose();
+    this.transitionPass.dispose();
     this.renderPass.dispose();
   }
 }

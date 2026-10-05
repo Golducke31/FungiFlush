@@ -44,6 +44,7 @@ import { DropZone, type DropZoneHandle, type DropZoneId, type ZoneRect } from '.
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
 import { PostFx } from './PostFx';
+import { TRANSITION_SECONDS } from './Transition';
 import {
   FrameMonitor,
   TIER_CONFIG,
@@ -3019,6 +3020,27 @@ export class SceneManager {
   /** Z de la fila de Simbiontes. En celular va mas adelante: ver `JOKER_Z_MOBILE`. */
   private get jokerZ(): number {
     return this.layoutProfile === 'mobile' ? JOKER_Z_MOBILE : JOKER_Z;
+  }
+
+  /**
+   * Barrido de pantalla entre dos estados (ver `Transition.ts`).
+   *
+   * IMPORTANTE: se llama ANTES de mutar el motor. La captura del frame viejo
+   * tiene que ocurrir con la escena todavia en el estado ANTERIOR; si se llama
+   * despues, A y B son el mismo frame y no se ve nada.
+   *
+   * En el tier `low` no hay composer, asi que no hace nada: el cambio es seco.
+   * Con `reduceMotion` la duracion se acorta a ~0 (ver `anim.d`), o sea que el
+   * estado final se alcanza igual pero sin barrido.
+   */
+  playTransition(seconds: number = TRANSITION_SECONDS): void {
+    if (!this.postFx) return;
+    this.postFx.transition.begin(this.renderer, this.scene, this.rig.camera, seconds);
+  }
+
+  /** Hay un barrido en curso. */
+  get transitionRunning(): boolean {
+    return this.postFx?.transition.running === true;
   }
 
   resize(): void {

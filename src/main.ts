@@ -807,7 +807,12 @@ async function boot(): Promise<void> {
       skipped: content.skipped,
     },
     callbacks: {
-      onPlay: () => engine.playHand(),
+      // El barrido va ANTES de la accion: la captura del frame viejo tiene que
+      // ocurrir con la escena todavia en el estado anterior (ver `playTransition`).
+      onPlay: () => {
+        scene.playTransition();
+        engine.playHand();
+      },
       onDiscard: () => engine.discardSelected(),
       onClear: () => engine.clearSelection(),
       /**
@@ -859,10 +864,16 @@ async function boot(): Promise<void> {
        * quedaba flotando delante del carrusel.
        */
       onArenaCovered: (covered: boolean) => scene.setDieVisible(!covered),
-      onLeaveShop: () => engine.leaveShop(),
+      onLeaveShop: () => {
+        scene.playTransition();
+        engine.leaveShop();
+      },
       // Los 3 ciegos del ante son una RUTA, no una eleccion: sin argumento, el
       // motor arranca el ciego que toca por `blindIndex`.
-      onStartBlind: () => engine.chooseBlind(),
+      onStartBlind: () => {
+        scene.playTransition();
+        engine.chooseBlind();
+      },
       // P2.4 — El HUD dibuja la decision; el MOTOR aplica los efectos. Si la
       // opcion no se puede pagar, `chooseInterlude` devuelve false y el panel
       // se queda abierto (el boton ya esta deshabilitado, pero esto cubre el
