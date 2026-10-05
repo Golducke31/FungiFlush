@@ -62,6 +62,16 @@ export const UI_COLORS = {
  */
 export const ABILITY_COLOR = 0xc4a8ff;
 
+/**
+ * Verde de SELECCION.
+ *
+ * Es el color del anillo/borde de una carta elegida y del badge con su numero
+ * de orden (1-5). Deliberadamente distinto del verde de `symbiosis`/
+ * `overgrowth` (0x4fd18b): si compartieran tono, una carta de simbiosis
+ * seleccionada no se distinguiria de una solo resaltada por elemento.
+ */
+export const SELECT_COLOR = 0x5ef08a;
+
 /** 0xRRGGBB -> '#rrggbb' */
 export function hexToCss(hex: number): string {
   return `#${hex.toString(16).padStart(6, '0')}`;

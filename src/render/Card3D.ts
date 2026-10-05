@@ -26,7 +26,7 @@ import {
   type CardTextureSpec,
 } from './CardTexture';
 import { createHaloMaterial, tickShader } from './Shaders';
-import { ELEMENT_COLOR, RARITY_COLOR } from './palette';
+import { ELEMENT_COLOR, RARITY_COLOR, SELECT_COLOR, hexToCss } from './palette';
 import * as anim from './anim';
 import type { TweenHandle, TweenManager } from './Tween';
 
@@ -134,6 +134,48 @@ const HALO_GEO = new THREE.PlaneGeometry(
  */
 export const CARD_HALO_WIDTH = CARD_WIDTH * 1.3 * HALO_SPREAD;
 
+/**
+ * Badge con el NUMERO DE ORDEN de la seleccion (1-5).
+ *
+ * Va en la esquina superior derecha de la cara. Se dibuja en un canvas (una
+ * textura por digito, COMPARTIDA entre cartas) y se muestra solo cuando la
+ * carta esta seleccionada, boca arriba y no se la esta arrastrando: es la
+ * respuesta visual a "cuantas cartas llevo elegidas y en que orden".
+ */
+const BADGE_SIZE = CARD_WIDTH * 0.32;
+const BADGE_GEO = new THREE.PlaneGeometry(BADGE_SIZE, BADGE_SIZE);
+const BADGE_TEXTURES = new Map<number, THREE.CanvasTexture>();
+
+function badgeTexture(index: number): THREE.CanvasTexture {
+  const cached = BADGE_TEXTURES.get(index);
+  if (cached) return cached;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const c = size / 2;
+    // Disco verde con borde oscuro: legible sobre cualquier arte de carta.
+    ctx.beginPath();
+    ctx.arc(c, c, size * 0.44, 0, Math.PI * 2);
+    ctx.fillStyle = hexToCss(SELECT_COLOR);
+    ctx.fill();
+    ctx.lineWidth = size * 0.08;
+    ctx.strokeStyle = 'rgba(6, 20, 14, 0.92)';
+    ctx.stroke();
+    ctx.fillStyle = '#07140e';
+    ctx.font = `bold ${Math.round(size * 0.64)}px "Fredoka", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(index), c, c + size * 0.035);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  BADGE_TEXTURES.set(index, texture);
+  return texture;
+}
+
 /** Posicion/rotacion "en reposo": es lo unico que animan los tweens. */
 export interface CardHome {
   x: number;
@@ -223,15 +265,17 @@ export class Card3D {
   private readonly topMaterial: THREE.MeshStandardMaterial;
   private readonly halo: THREE.Mesh;
   private readonly haloMaterial: THREE.ShaderMaterial;
+  /** Badge con el numero de orden de la seleccion (1-5). */
+  private readonly badge: THREE.Mesh;
+  private readonly badgeMaterial: THREE.MeshBasicMaterial;
+  /** Indice de seleccion (1-5), o null si la carta no esta elegida. */
+  private selectIndex: number | null = null;
   /** Cuanto foil le corresponde por rareza. 0 = no lleva. */
   private readonly foilAmount: number;
-
-  private rarity: Rarity = 'common';
 
   constructor(uid: string, kind: CardKind, element: number, rarity: Rarity, compactFace = false) {
     this.uid = uid;
     this.kind = kind;
-    this.rarity = rarity;
     this.compactFace = compactFace;
 
     this.faceMaterial = new THREE.MeshStandardMaterial({
@@ -285,8 +329,11 @@ export class Card3D {
     this.foilAmount = rarity === 'mythic' ? 1.0 : rarity === 'legendary' ? 0.7 : 0;
     this.haloMaterial = createHaloMaterial({
       color: element,
-      ringColor: element,
-      intensity: 0.55,
+      // El anillo es SIEMPRE el borde verde de seleccion: se quito el tinte por
+      // elemento/rareza. El halo (uColor) queda en 0 de intensidad: la carta ya
+      // no brilla, solo se le dibuja el borde.
+      ringColor: SELECT_COLOR,
+      intensity: 0,
       falloff: 9,
       foil: this.foilAmount,
     });
@@ -294,6 +341,27 @@ export class Card3D {
     // El halo FLOTA delante de la cara, y lo bastante lejos como para que los
     // picos del relieve (CARD_RELIEF) no lo atraviesen.
     this.halo.position.z = CARD_TOP_OFFSET + 0.025;
+
+    // --- Badge del numero de seleccion ---
+    // Por delante del halo, en la esquina superior derecha de la cara. El
+    // material es `Basic` (sin luz) y `toneMapped:false`: el numero tiene que
+    // leerse siempre, sin depender del encuadre ni del tone mapping de la escena.
+    this.badgeMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.badge = new THREE.Mesh(BADGE_GEO, this.badgeMaterial);
+    const badgeInset = BADGE_SIZE * 0.62;
+    this.badge.position.set(
+      CARD_WIDTH / 2 - badgeInset,
+      CARD_HEIGHT / 2 - badgeInset,
+      CARD_TOP_OFFSET + 0.05,
+    );
+    this.badge.visible = false;
+    // El badge se dibuja SIEMPRE por encima del halo (que es aditivo y lo
+    // lavaria): `renderOrder` alto gana el orden de transparencias.
+    this.badge.renderOrder = 20;
 
     // --- Capa de TEXTO (parallax) ---
     // Va por DELANTE de la cara: al inclinar la carta, el texto se corre
@@ -309,6 +377,7 @@ export class Card3D {
     this.top.position.z = CARD_TOP_OFFSET;
 
     this.group.add(this.halo);
+    this.group.add(this.badge);
     this.group.add(this.top);
     this.group.add(this.edge);
     this.group.add(this.face);
@@ -324,7 +393,6 @@ export class Card3D {
 
   setCard(card: CardInstance, cache: CardTextureCache, lang: string, art?: HTMLImageElement): void {
     this.card = card;
-    this.rarity = card.def.rarity;
 
     const statuses = card.statuses.map((s) => s.type);
     const key = [
@@ -378,7 +446,6 @@ export class Card3D {
     art?: HTMLImageElement,
   ): void {
     this.joker = joker;
-    this.rarity = joker.def.rarity;
 
     const key = ['joker', joker.def.id, lang, this.compactFace ? 'c' : 'f'].join('|');
     const isMutation = (joker.def.tags ?? []).includes('mutation');
@@ -436,11 +503,14 @@ export class Card3D {
     this.faceMaterial.needsUpdate = true;
 
     const elementColor = ELEMENT_COLOR[element as keyof typeof ELEMENT_COLOR] ?? 0x9aa5b1;
-    const rarityColor = RARITY_COLOR[this.rarity];
+    // Color del halo: el de RAREZA cuando lo hay (es lo que distingue a un
+    // joker legendario), con el del elemento como respaldo. OJO: en las cartas
+    // de la MANO el halo esta apagado (`uIntensity = 0`), asi que este color
+    // solo se ve en los jokers.
+    const rarity = this.joker?.def.rarity ?? this.card?.def.rarity ?? 'common';
     (this.haloMaterial.uniforms['uColor'] as { value: THREE.Color }).value.setHex(
-      rarityColor ?? elementColor,
+      RARITY_COLOR[rarity] ?? elementColor,
     );
-    (this.haloMaterial.uniforms['uRingColor'] as { value: THREE.Color }).value.setHex(elementColor);
   }
 
   /**
@@ -462,6 +532,20 @@ export class Card3D {
 
   setSelected(value: boolean): void {
     this.selected = value;
+  }
+
+  /**
+   * Numero de orden dentro de la seleccion (1-5). `null` lo oculta.
+   *
+   * Lo empuja el SceneManager desde `round.selected`, que es la fuente de
+   * verdad del orden: la carta que el jugador eligio primero lleva el 1.
+   */
+  setSelectIndex(index: number | null): void {
+    this.selectIndex = index;
+    if (index !== null && index >= 1) {
+      this.badgeMaterial.map = badgeTexture(index);
+      this.badgeMaterial.needsUpdate = true;
+    }
   }
 
   /** P1.2 — Resaltar compatibles: cartas que comparten familia/elemento con
@@ -579,11 +663,25 @@ export class Card3D {
     tickShader(this.haloMaterial, time);
 
     // Intensidad del halo: base + hover/seleccion + compatible + foil.
+    //
+    // La SELECCION aporta poco al halo (0.5 en vez de 1.5): su señal es el
+    // BORDE VERDE (el anillo), no un resplandor que lava la ilustracion. Con el
+    // aporte viejo, una carta elegida quedaba irreconocible bajo la luz.
+    // HALO: apagado en las CARTAS de la mano (la unica señal de estado es el
+    // BORDE VERDE del anillo y el badge del numero). Los JOKERS conservan su
+    // halo por rareza: viven en una fila y es lo que los hace destacar.
     const base = this.kind === 'joker' ? 0.42 : 0.3;
-    const pulse = 0.55 + this.selectGlow * 1.5 + this.compatibleGlow * 0.6 + this.lift * 0.7;
-    (this.haloMaterial.uniforms['uIntensity'] as { value: number }).value = base + pulse * 0.55;
+    const pulse = 0.5 + this.compatibleGlow * 0.45 + this.lift * 0.4;
+    (this.haloMaterial.uniforms['uIntensity'] as { value: number }).value =
+      this.kind === 'joker' ? base + pulse * 0.55 : 0;
+    // Borde verde: fuerte con la seleccion, tenue con el "compatible" (pista de
+    // combo, P1.2). El color del anillo es SELECT_COLOR desde el material.
     (this.haloMaterial.uniforms['uRingIntensity'] as { value: number }).value =
-      this.selectGlow * 0.85 + this.compatibleGlow * 0.4;
+      this.selectGlow * 0.9 + this.compatibleGlow * 0.3;
+
+    // Badge del numero: solo con la carta elegida, boca arriba y quieta.
+    this.badge.visible =
+      this.selected && this.selectIndex !== null && this.selectIndex >= 1 && !this.dragging && this.home.flip < 0.5;
     // El foil es un holograma sobre la CARA: boca abajo no tiene sentido. Ahora
     // que vive en el mismo shader que el halo, se apaga por uniform en vez de
     // por `.visible`.
@@ -674,6 +772,7 @@ export class Card3D {
     this.edgeMaterial.dispose();
     this.topMaterial.dispose();
     this.haloMaterial.dispose();
+    this.badgeMaterial.dispose();
     this.group.clear();
   }
 }
@@ -684,4 +783,7 @@ export function disposeSharedGeometry(): void {
   CARD_FACE_GEO.dispose();
   HALO_GEO.dispose();
   CARD_EDGE_GEO.dispose();
+  BADGE_GEO.dispose();
+  for (const texture of BADGE_TEXTURES.values()) texture.dispose();
+  BADGE_TEXTURES.clear();
 }

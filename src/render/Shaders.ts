@@ -141,7 +141,10 @@ export function createHaloMaterial(options: {
       uInnerHalo: { value: new THREE.Vector2(HALO_INNER_HALO, HALO_INNER_HALO) },
       uInnerRing: { value: new THREE.Vector2(HALO_INNER_RING, HALO_INNER_RING) },
       uFalloff: { value: options.falloff ?? 9 },
-      uRingFalloff: { value: 6.5 },
+      // Anillo mas ESTRECHO (antes 6.5): con el borde verde de seleccion, una
+      // banda ancha hacia que los anillos de dos cartas vecinas se solaparan en
+      // un reventon. Mas fino se lee como "borde" y no como mancha.
+      uRingFalloff: { value: 9.5 },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,

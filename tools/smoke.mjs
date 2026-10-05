@@ -771,11 +771,15 @@ const afterTap = await page.evaluate((uid) => {
   // una carta seleccionada, no solo durante la primera mano. Antes se ocultaba
   // despues de la primera mano jugada y el jugador perdia la cuenta.
   const hint = document.querySelector('[data-act="select-hint"]');
+  // Fase A: la carta seleccionada lleva BADGE con su numero de orden (1-5).
+  const card3d = ff.scene.handCards.get(uid);
   return {
     selected: Boolean(card?.selected),
     count: ff.engine.round.selected.length,
     hintVisible: hint ? hint.classList.contains('is-visible') : false,
     hintText: (hint?.textContent ?? '').trim(),
+    badgeVisible: Boolean(card3d?.badge?.visible),
+    badgeIndex: card3d?.selectIndex ?? null,
   };
 }, tapCard.uid);
 console.log('\n--- Fase 4: tap-to-select ---');
@@ -2231,6 +2235,9 @@ const ok =
   chk('afterTap?.selected === true', afterTap?.selected === true) &&
   chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&
   chk('afterTap?.count === 1', afterTap?.count === 1) &&
+  // Fase A: la primera carta elegida lleva el badge con el numero 1.
+  chk('afterTap?.badgeVisible === true', afterTap?.badgeVisible === true) &&
+  chk('afterTap?.badgeIndex === 1', afterTap?.badgeIndex === 1) &&
   chk('afterDragPlay?.selected === true', afterDragPlay?.selected === true) &&
   chk('afterDragPlay?.count === 2', afterDragPlay?.count === 2) &&
   chk('afterDragPlay?.backInHand === true', afterDragPlay?.backInHand === true) &&

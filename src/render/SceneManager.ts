@@ -1780,7 +1780,11 @@ export class SceneManager {
       } else {
         card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
       }
-      card3d.setSelected(selectedUids.includes(card.uid));
+      // El ORDEN de `selectedUids` es el de la seleccion del jugador: la
+      // primera carta elegida lleva el badge 1, la segunda el 2...
+      const selIndex = selectedUids.indexOf(card.uid);
+      card3d.setSelected(selIndex >= 0);
+      card3d.setSelectIndex(selIndex >= 0 ? selIndex + 1 : null);
     }
 
     // REPARTO DE MANO NUEVA: llegaron cartas cuando la mano YA tenia cartas.
