@@ -464,6 +464,13 @@ export class SceneManager {
   private perf: { samples: number[]; target: number } | null = null;
   /** Cadena de post-procesamiento. Null en `low`, que renderiza directo. */
   private postFx: PostFx | null = null;
+  /**
+   * Suscriptor del avance del barrido. La UI lo usa para sincronizar el HUD por
+   * CSS (baja y se desvanece al arrancar, vuelve con rebote al terminar) sin
+   * tener que animar el DOM a mano. Recibe -1 cuando el barrido termina.
+   */
+  private transitionListener: ((progress: number) => void) | null = null;
+  private transitionWasRunning = false;
   /** Sombras de contacto: un solo mesh instanciado para todas las cartas. */
   private shadowMesh: THREE.InstancedMesh | null = null;
   private readonly shadowDummy = new THREE.Object3D();
@@ -2798,6 +2805,18 @@ export class SceneManager {
       // `info` se resetea a mano porque `autoReset` esta apagado: el composer
       // hace un `render()` por pase y el conteo se pisaria.
       this.renderer.info.reset();
+
+      // El HUD se sincroniza con el barrido por CSS: se le avisa el avance una
+      // vez por frame, y con -1 cuando termina (ver `onTransitionProgress`).
+      const transition = this.postFx?.transition;
+      if (transition?.running) {
+        this.transitionWasRunning = true;
+        this.transitionListener?.(transition.progress);
+      } else if (this.transitionWasRunning) {
+        this.transitionWasRunning = false;
+        this.transitionListener?.(-1);
+      }
+
       if (this.postFx) this.postFx.render();
       else this.renderer.render(this.scene, this.rig.camera);
 
@@ -3041,6 +3060,14 @@ export class SceneManager {
   /** Hay un barrido en curso. */
   get transitionRunning(): boolean {
     return this.postFx?.transition.running === true;
+  }
+
+  /**
+   * La UI se suscribe para sincronizar el HUD con el barrido. Se llama una vez
+   * por frame mientras dura (con 0..1) y una ultima vez con -1 al terminar.
+   */
+  onTransitionProgress(cb: ((progress: number) => void) | null): void {
+    this.transitionListener = cb;
   }
 
   resize(): void {

@@ -792,6 +792,12 @@ async function boot(): Promise<void> {
    */
   let stickySortMode: SortMode = 'default';
 
+  // El HUD se sincroniza con el barrido de pantalla: baja y se desvanece al
+  // arrancar, y vuelve con rebote al terminar (ver `HUD.setTransitionProgress`).
+  // Se registra ANTES de crear el HUD a proposito: el callback lee `hud` cuando
+  // corre, no cuando se registra.
+  scene.onTransitionProgress((p) => hud?.setTransitionProgress(p));
+
   hud = new HUD({
     engine,
     root: uiRoot,

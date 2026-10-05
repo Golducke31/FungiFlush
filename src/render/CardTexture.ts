@@ -749,18 +749,31 @@ export function createCardCanvas(
   // textura ≈ 13px reales en pantalla) y con un velo oscuro detras para que
   // gane sobre la ilustracion. En la cara completa queda como siempre.
   if (compact) {
-    const scrim = ctx.createLinearGradient(0, 0, 0, 300);
+    const scrim = ctx.createLinearGradient(0, 0, 0, 210);
     scrim.addColorStop(0, 'rgba(4, 8, 13, 0.92)');
     scrim.addColorStop(0.62, 'rgba(4, 8, 13, 0.7)');
     scrim.addColorStop(1, 'rgba(4, 8, 13, 0)');
     ctx.fillStyle = scrim;
-    ctx.fillRect(0, 0, W, 300);
+    ctx.fillRect(0, 0, W, 210);
+  }
+  // El nombre va en UNA sola linea y se achica solo si no entra. En DOS lineas
+  // se comia la ilustracion: la carta es de 112px en pantalla y el nombre es
+  // contexto, no el contenido.
+  const nameMaxW = W - pad * 2 - 24;
+  if (compact) {
+    let px = 68;
+    while (px > 30) {
+      ctx.font = `700 ${px}px ${CARD_DISPLAY_FONT}`;
+      if (ctx.measureText(spec.name).width <= nameMaxW) break;
+      px -= 2;
+    }
+  } else {
+    ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
   }
   ctx.fillStyle = '#f2f6fb';
-  ctx.font = compact ? `700 92px ${CARD_DISPLAY_FONT}` : `400 31px ${CARD_DISPLAY_FONT}`;
-  const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 24, 2);
-  const nameLineH = compact ? 100 : 36;
-  const nameY = compact ? 66 : 56;
+  const nameLines = wrapText(ctx, spec.name, nameMaxW, compact ? 1 : 2);
+  const nameLineH = compact ? 78 : 36;
+  const nameY = compact ? 48 : 56;
   nameLines.forEach((line, i) => ctx.fillText(line, W / 2, nameY + i * nameLineH));
 
   // --- 5. Pie: chips de stats + descripcion ---
@@ -776,9 +789,9 @@ export function createCardCanvas(
   // En la cara COMPACTA los chips son el SEGUNDO dato principal: ocupan el pie
   // entero y crecen. No hay panel de descripcion, asi que `descHeight` es 0 y
   // los statuses suben a pegarse a los chips.
-  const chipsTop = compact ? 500 : 466;
-  const chipsHeight = compact ? 168 : 72;
-  const chipScale = compact ? 2.2 : 1;
+  const chipsTop = compact ? 540 : 466;
+  const chipsHeight = compact ? 132 : 72;
+  const chipScale = compact ? 2.0 : 1;
   const descTop = chipsTop + chipsHeight + 14;
   const descHeight = compact ? 0 : 126;
   const statusTop = descTop + descHeight + 10;

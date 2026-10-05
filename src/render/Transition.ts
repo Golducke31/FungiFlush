@@ -192,6 +192,12 @@ export class TransitionPass extends Pass {
     return this.enabled === true;
   }
 
+  /** Avance del barrido (0 = frame viejo, 1 = frame nuevo). La UI lo lee para
+   *  sincronizar el HUD por CSS. */
+  get progress(): number {
+    return this.material.uniforms['uProgress']!.value as number;
+  }
+
   /**
    * Captura el frame actual y arranca el barrido.
    *

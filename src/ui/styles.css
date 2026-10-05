@@ -6308,6 +6308,10 @@ body {
        baja a 4px para que el hud-top quede <= 64px en 915x412. */
     align-items: flex-start;
     padding: calc(4px + var(--safe-t)) calc(10px + var(--safe-r)) 4px calc(10px + var(--safe-l));
+    /* Contexto de posicionamiento para el marcador (`.hud-score`), que se
+       centra en el viewport con `position: absolute; left: 50%`. Asi no
+       depende del ancho relativo de los bloques laterales. */
+    position: relative;
   }
 
   .hud-ante {
@@ -6329,7 +6333,28 @@ body {
      entera: numero, barra, aviso, objetivo y nombre del ciego con margenes
      ajustados. Se sigue leyendo todo, pero ocupa ~78px. */
   .hud-score {
+    /* BIEN CENTRADO: el marcador va flotando en el centro horizontal del
+       viewport, no en el medio del flujo flex (que se desbalancea porque el
+       bloque de FUNGIS + IDIOMA + MENU a la derecha es mas ancho que el de
+       ANTE a la izquierda). Se saca del flujo (`position: absolute`) y se
+       ancla al 50% del ancho de la barra; `translateX(-50%)` lo centra sobre
+       su propio ancho. La vertical coincide con el padding-top para quedar a
+       la misma altura de siempre. */
+    position: absolute;
+    left: 50%;
+    top: calc(4px + var(--safe-t));
+    transform: translateX(-50%);
+    flex: 0 0 auto;
     max-width: 58vw;
+    /* El marcador queda SIN la losa ("HUD" = cuadro verde de fondo): solo el
+       icono de diana, los numeros y la barra de progreso, centrados sobre la
+       arena. ANTE (izquierda) y FUNGIS (al lado de IDIOMA) conservan sus
+       losas a los costados. */
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
   }
 
   .hud-score-main {
@@ -6554,14 +6579,21 @@ body {
      "Mazo" y las pestañas de orden, y la barra inferior + misiones se colaban
      por debajo del detalle del carrusel (ver Reordenar.PNG). El panel es la
      unica pantalla; el cromo de la run vuelve al cerrarlo. */
-  /* --- Barra superior reducida al OBJETIVO ---
-     En movil la barra pasa a ser UNA cosa: la meta de la ronda. La diana, los
-     numeros bien marcados y la barra de progreso. ANTE y FUNGIS se mudan a la
-     linea de estado de abajo (siguen visibles, no roban alto) y los botones de
-     sistema se achican. La barra baja lo suficiente para que las ranuras de
-     simbionte dejen de quedarle debajo. */
-  .hud-ante,
-  .hud-money {
+  /* --- Barra superior: ANTE a la izquierda, marcador CENTRADO sin losa,
+     FUNGIS al lado de IDIOMA ---
+     La diana + score objetivo van arriba al CENTRO sin la losa de fondo
+     ("HUD" = cuadro verde): solo icono, numeros y barra de progreso,
+     flotando sobre la arena. ANTE vuelve a su lugar a la izquierda y FUNGIS
+     al lado de IDIOMA, como estaban (con sus losas). Siguen ocultos: la
+     linea "Faltan N puntos · Ciego" (redundante con "0 / 1100") y el "?"
+     (ayuda, no estado). El NOMBRE DEL CIEGO se mudo a la linea de estado
+     del pie.
+     OJO con la especificidad: la base muestra la linea con `.hud-objective
+     .is-visible` (0,2,0), asi que apagarla con `.hud-objective` (0,1,0) NO
+     alcanza — la regla de la base gana y la linea sigue apareciendo. */
+  .hud-objective.is-visible,
+  .hud-objective,
+  .hud-help {
     display: none;
   }
 
@@ -7041,4 +7073,44 @@ body {
   .history-stats {
     display: none;
   }
+}
+
+/* ==========================================================================
+   HUD sincronizado con el barrido de pantalla
+   ==========================================================================
+   Mientras el shader hace el wipe (ver `src/render/Transition.ts`), el cromo de
+   la partida BAJA y se desvanece, y vuelve con un rebote cuando el barrido
+   termina — acompana el "pop" de la escena.
+
+   Se maneja con DOS CLASES que pone `HUD.setTransitionProgress`, no animando el
+   DOM por frame: el CSS ya tiene la curva y el trabajo por frame es cambiar una
+   clase. La clase de vuelta se saca al terminar, y como su estado final es el
+   mismo que el de reposo, no hay salto.
+
+   Solo el CROMO de la partida: los paneles y el overlay tienen sus propias
+   transiciones y pisarlas las rompe (`.hud-missions-panel` se desliza con un
+   `transform` propio, por eso no entra en la lista).
+   -------------------------------------------------------------------------- */
+#ui-root.is-transition-out > .hud-top,
+#ui-root.is-transition-out > .hud-bottom,
+#ui-root.is-transition-out > .hud-jokers,
+#ui-root.is-transition-out > .hud-missions-toggle {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--dur-2, 180ms) var(--ease-out, ease),
+    transform var(--dur-2, 180ms) var(--ease-out, ease);
+}
+
+#ui-root.is-transition-in > .hud-top,
+#ui-root.is-transition-in > .hud-bottom,
+#ui-root.is-transition-in > .hud-jokers,
+#ui-root.is-transition-in > .hud-missions-toggle {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 340ms var(--ease-out, ease),
+    /* `--ease-back` se pasa un poco del destino antes de asentarse: es el
+       rebote de llegada. */
+    transform 420ms var(--ease-back, cubic-bezier(0.34, 1.56, 0.64, 1));
 }

@@ -1,5 +1,16 @@
 # 🍄 FungiFlush
 
+> ⚠️ **CONVENCIÓN ACTUAL — MÓVIL PRIMERO (mobile-first only).** En esta etapa el
+> desarrollo se centra **exclusivamente en la versión MÓVIL** (viewport de
+> referencia 915×412, `pointer: coarse`). **No modificar la versión de
+> escritorio** hasta que se cierre el frente móvil: cualquier cambio de UI/HUD
+> debe apuntar al móvil. Si un cambio mejora el móvil pero empeora el
+> escritorio, se hace igual pero se registra el impacto.
+> *Current stage: work on the **mobile version only**. Do **not** touch the
+> desktop build until the mobile front is done. Any UI/HUD change must target
+> mobile.*
+> Regla completa en [`docs/CONVENCION_MOVIL_PRIMERO.md`](docs/CONVENCION_MOVIL_PRIMERO.md).
+
 **A roguelite deckbuilder about mushrooms** — where **Substrate** is your base score and **Spores** is your multiplier.
 
 FungiFlush is a Balatro-style deckbuilder with a mycology theme. You build a deck of

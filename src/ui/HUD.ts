@@ -1141,6 +1141,7 @@ export class HUD {
     this.elStatus.innerHTML = '';
     const parts: Array<[string, string]> = [
       [t('hud.ante'), String(run.ante)],
+      [t(round.blind.nameKey), ''],
       [t('hud.hands'), String(round.handsLeft)],
       [t('hud.discards'), String(round.discardsLeft)],
       [t('hud.deck'), `${this.engine.deckDraw}/${deckTotal}`],
@@ -1734,6 +1735,30 @@ export class HUD {
    */
   private syncPanelOpen(): void {
     this.root.classList.toggle('is-panel-open', this.elOverlay.classList.contains('is-open'));
+  }
+
+  /**
+   * Sincroniza el HUD con el barrido de pantalla (ver `Transition.ts`).
+   *
+   * `progress` va de 0 a 1; **-1 marca el FIN**. No se anima nada por frame: se
+   * cambian CLASES y el CSS hace el resto (bajar + desvanecerse, y volver con
+   * rebote). Es lo barato: el DOM no se toca mientras el shader corre.
+   *
+   * El texto cambia solo en el medio, cuando el HUD ya es invisible: asi el
+   * cambio de fase no se ve como un parpadeo de numeros.
+   */
+  setTransitionProgress(progress: number): void {
+    if (progress < 0) {
+      this.root.classList.remove('is-transition-out', 'is-transition-in');
+      return;
+    }
+    if (progress < 0.55) {
+      this.root.classList.add('is-transition-out');
+      this.root.classList.remove('is-transition-in');
+    } else {
+      this.root.classList.remove('is-transition-out');
+      this.root.classList.add('is-transition-in');
+    }
   }
 
   /**
