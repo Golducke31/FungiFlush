@@ -318,19 +318,19 @@ body {
 .pile-label {
   position: absolute;
   /* `left/top` = CENTRO de la caja proyectada del dorso; `width/height` los fija
-     el HUD con esa misma caja, asi que la etiqueta queda DENTRO del dorso. */
+     el HUD con esa misma caja. */
   transform: translate(-50%, -50%);
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
   padding: 3px;
   box-sizing: border-box;
-  border-radius: 10px;
-  background: rgba(5, 11, 15, 0.55);
-  border: 1px solid rgba(120, 240, 214, 0.32);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  /* SIN caja: el arte del DORSO tiene que verse. Solo va la leyenda encima. */
+  background: none;
+  border: none;
+  box-shadow: none;
   pointer-events: none;
   text-align: center;
   overflow: hidden;
@@ -341,20 +341,30 @@ body {
   display: flex;
 }
 
+/* Contorno oscuro: el texto tiene que leerse sobre la ILUSTRACION del dorso,
+   que es clara y con detalle. Sin esto la leyenda desaparece sobre el arte. */
 .pile-label-name {
   font-family: var(--font-display, inherit);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.1;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #9fe9cf;
+  color: #d6fff2;
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 12px rgba(0, 0, 0, 0.8);
 }
 
 .pile-label-count {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1.15;
-  color: #eaf6f1;
+  color: #ffffff;
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 12px rgba(0, 0, 0, 0.8);
 }
 
 /* Destello al reciclarse el descarte: la mesa avisa que las DOS pilas cambiaron. */
@@ -365,15 +375,15 @@ body {
 @keyframes pile-label-flash {
   0% {
     transform: translate(-50%, -50%) scale(1);
-    border-color: rgba(120, 240, 214, 0.32);
+    filter: none;
   }
   35% {
-    transform: translate(-50%, -50%) scale(1.14);
-    border-color: rgba(120, 240, 214, 1);
+    transform: translate(-50%, -50%) scale(1.16);
+    filter: drop-shadow(0 0 10px rgba(120, 240, 214, 0.95));
   }
   100% {
     transform: translate(-50%, -50%) scale(1);
-    border-color: rgba(120, 240, 214, 0.32);
+    filter: none;
   }
 }
 
