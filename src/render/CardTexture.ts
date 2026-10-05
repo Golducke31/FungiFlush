@@ -85,6 +85,19 @@ export interface CardTextureSpec {
    */
   elementLabel?: string;
   familyLabel?: string;
+  /**
+   * Cara COMPACTA (solo tactil).
+   *
+   * La carta en la mano mide ~112px de alto en pantalla, y la textura se
+   * proyecta con escala ~0,15: un texto de 31px en la textura se ve a 4,7px, o
+   * sea ilegible. Para llegar al minimo de 12-14px REALES hay que sacar
+   * contenido, no escalarlo — la carta entera no entra a ese tamano.
+   *
+   * Compacta = nombre + los dos numeros, grandes. La descripcion y la habilidad
+   * NO se pierden: se leen en el `.hud-tooltip`, que aparece al seleccionar la
+   * carta (y en el mazo/coleccion/tienda, donde la carta se muestra grande).
+   */
+  compact?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,17 +535,43 @@ function drawChip(
   value: string,
   color: number,
   glyph?: string,
+  scale = 1,
 ): void {
+  // `scale > 1` = cara COMPACTA (tactil). Ver el bloque de abajo.
+  const big = scale > 1;
+  const radius = 12 * Math.min(scale, 2);
   const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, hexToRgba(color, 0.28));
-  g.addColorStop(1, hexToRgba(color, 0.1));
+  g.addColorStop(0, hexToRgba(color, big ? 0.42 : 0.28));
+  g.addColorStop(1, hexToRgba(color, big ? 0.16 : 0.1));
   ctx.fillStyle = g;
-  roundRect(ctx, x, y, w, h, 12);
+  roundRect(ctx, x, y, w, h, radius);
   ctx.fill();
-  ctx.strokeStyle = hexToRgba(color, 0.7);
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, x, y, w, h, 12);
+  ctx.strokeStyle = hexToRgba(color, big ? 0.9 : 0.7);
+  ctx.lineWidth = 2.5 * Math.min(scale, 2);
+  roundRect(ctx, x, y, w, h, radius);
   ctx.stroke();
+
+  if (big) {
+    // Cara compacta: SIN la palabra. "SUSTRATO" a un tamano legible no entra en
+    // media carta, y el significado ya lo llevan el GLIFO (▲ sustrato, ✱
+    // esporas), el COLOR y la POSICION fija —que es lo que se compara entre
+    // cartas—. Lo que importa es el numero, asi que va grande.
+    const text = `${glyph ?? ''} ${value}`.trim();
+    const maxW = w - 24 * scale;
+    let px = Math.round(56 * scale);
+    while (px > 24) {
+      ctx.font = `700 ${px}px ${CARD_TEXT_FONT}`;
+      if (ctx.measureText(text).width <= maxW) break;
+      px -= 2;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + w / 2, y + h / 2 + 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    return;
+  }
 
   // Zona FIJA del dato: el valor siempre a la DERECHA y la etiqueta siempre a
   // la izquierda, con un glifo propio delante. Asi comparar dos cartas es un
@@ -593,6 +632,12 @@ export function createCardCanvas(
   // juegues ni un joker que ocupa slot, es una REGLA. Se pinta con el acento
   // dorado para que no se confunda con una carta comun en la tienda.
   const accent = spec.kind === 'voucher' ? 0xffc857 : elementColor;
+
+  /**
+   * Cara compacta: nombre + numeros grandes, sin taxonomia ni descripcion.
+   * Ver `CardTextureSpec.compact`.
+   */
+  const compact = spec.compact === true;
 
   // Fondo + tinte + arte: SOLO en la capa completa. En la de texto se omite
   // todo esto a proposito, para que quede transparente y deje ver la capa de
@@ -658,47 +703,65 @@ export function createCardCanvas(
   // crudo ("SPORE"); ahora van los dos datos traducidos, separados por un punto
   // medio, para que Familia (lo que agrupa los combos) se vea sin abrir el
   // tooltip. Cada palabra lleva el color del elemento como ancla visual.
-  const elementLabel = (spec.elementLabel ?? (spec.kind === 'voucher' ? 'MEJORA' : spec.element)).toUpperCase();
-  const familyLabel = (spec.familyLabel ?? '').toUpperCase();
-  if (familyLabel && spec.kind === 'card') {
-    const sep = ' · ';
-    // La linea tiene que entrar en el ancho util: familias largas
-    // ("TRICOLOMATACEAS") con elementos largos ("SIMBIOSIS") se salian del
-    // marco. Se busca el tamano mas grande que entra, de 17px para abajo.
-    const maxWidth = W - pad * 2 - 24;
-    let fontPx = 17;
-    while (fontPx > 11) {
-      ctx.font = `400 ${fontPx}px ${CARD_DISPLAY_FONT}`;
-      const width =
-        ctx.measureText(elementLabel).width +
-        ctx.measureText(sep).width +
-        ctx.measureText(familyLabel).width;
-      if (width <= maxWidth) break;
-      fontPx -= 1;
+  // En la cara COMPACTA no hay taxonomia: el elemento ya lo dice el color del
+  // marco y el tinte, y el espacio se necesita para que el nombre entre grande.
+  if (!compact) {
+    const elementLabel = (spec.elementLabel ?? (spec.kind === 'voucher' ? 'MEJORA' : spec.element)).toUpperCase();
+    const familyLabel = (spec.familyLabel ?? '').toUpperCase();
+    if (familyLabel && spec.kind === 'card') {
+      const sep = ' · ';
+      // La linea tiene que entrar en el ancho util: familias largas
+      // ("TRICOLOMATACEAS") con elementos largos ("SIMBIOSIS") se salian del
+      // marco. Se busca el tamano mas grande que entra, de 17px para abajo.
+      const maxWidth = W - pad * 2 - 24;
+      let fontPx = 17;
+      while (fontPx > 11) {
+        ctx.font = `400 ${fontPx}px ${CARD_DISPLAY_FONT}`;
+        const width =
+          ctx.measureText(elementLabel).width +
+          ctx.measureText(sep).width +
+          ctx.measureText(familyLabel).width;
+        if (width <= maxWidth) break;
+        fontPx -= 1;
+      }
+      const elementWidth = ctx.measureText(elementLabel).width;
+      const sepWidth = ctx.measureText(sep).width;
+      let cursor = W / 2 - (elementWidth + sepWidth + ctx.measureText(familyLabel).width) / 2;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = hexToRgba(accent, 0.95);
+      ctx.fillText(elementLabel, cursor, 30);
+      cursor += elementWidth;
+      ctx.fillStyle = hexToRgba(accent, 0.5);
+      ctx.fillText(sep, cursor, 30);
+      cursor += sepWidth;
+      ctx.fillStyle = 'rgba(214, 226, 236, 0.85)';
+      ctx.fillText(familyLabel, cursor, 30);
+      ctx.textAlign = 'center';
+    } else {
+      ctx.fillStyle = hexToRgba(accent, 0.95);
+      ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
+      ctx.fillText(elementLabel, W / 2, 30);
     }
-    const elementWidth = ctx.measureText(elementLabel).width;
-    const sepWidth = ctx.measureText(sep).width;
-    let cursor = W / 2 - (elementWidth + sepWidth + ctx.measureText(familyLabel).width) / 2;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = hexToRgba(accent, 0.95);
-    ctx.fillText(elementLabel, cursor, 30);
-    cursor += elementWidth;
-    ctx.fillStyle = hexToRgba(accent, 0.5);
-    ctx.fillText(sep, cursor, 30);
-    cursor += sepWidth;
-    ctx.fillStyle = 'rgba(214, 226, 236, 0.85)';
-    ctx.fillText(familyLabel, cursor, 30);
-    ctx.textAlign = 'center';
-  } else {
-    ctx.fillStyle = hexToRgba(accent, 0.95);
-    ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
-    ctx.fillText(elementLabel, W / 2, 30);
   }
 
+  // --- Nombre ---
+  // En la cara COMPACTA es EL dato principal: va mucho mas grande (84px de
+  // textura ≈ 13px reales en pantalla) y con un velo oscuro detras para que
+  // gane sobre la ilustracion. En la cara completa queda como siempre.
+  if (compact) {
+    const scrim = ctx.createLinearGradient(0, 0, 0, 300);
+    scrim.addColorStop(0, 'rgba(4, 8, 13, 0.92)');
+    scrim.addColorStop(0.62, 'rgba(4, 8, 13, 0.7)');
+    scrim.addColorStop(1, 'rgba(4, 8, 13, 0)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, W, 300);
+  }
   ctx.fillStyle = '#f2f6fb';
-  ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
-  const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 20, 2);
-  nameLines.forEach((line, i) => ctx.fillText(line, W / 2, 56 + i * 36));
+  ctx.font = compact ? `700 92px ${CARD_DISPLAY_FONT}` : `400 31px ${CARD_DISPLAY_FONT}`;
+  const nameLines = wrapText(ctx, spec.name, W - pad * 2 - 24, 2);
+  const nameLineH = compact ? 100 : 36;
+  const nameY = compact ? 66 : 56;
+  nameLines.forEach((line, i) => ctx.fillText(line, W / 2, nameY + i * nameLineH));
 
   // --- 5. Pie: chips de stats + descripcion ---
   //
@@ -710,35 +773,42 @@ export function createCardCanvas(
   // descripcion podia llegar a y=712 y los statuses se dibujaban en y=698, o
   // sea ENCIMA de la ultima linea. Con la pila, mover una fila mueve las de
   // abajo y el traslape no puede volver por descuido.
-  const chipsTop = 466;
-  const chipsHeight = 72;
+  // En la cara COMPACTA los chips son el SEGUNDO dato principal: ocupan el pie
+  // entero y crecen. No hay panel de descripcion, asi que `descHeight` es 0 y
+  // los statuses suben a pegarse a los chips.
+  const chipsTop = compact ? 500 : 466;
+  const chipsHeight = compact ? 168 : 72;
+  const chipScale = compact ? 2.2 : 1;
   const descTop = chipsTop + chipsHeight + 14;
-  const descHeight = 126;
+  const descHeight = compact ? 0 : 126;
   const statusTop = descTop + descHeight + 10;
 
   if (spec.kind === 'card') {
     const chipW = (W - pad * 2 - 18) / 2;
-    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', `+${spec.substrate ?? 0}`, 0xf2a63b, '▲');
-    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱');
+    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', `+${spec.substrate ?? 0}`, 0xf2a63b, '▲', chipScale);
+    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱', chipScale);
   } else {
     // Jokers, mutaciones y vouchers: sin stats, solo un rotulo de tipo.
     const label =
       spec.kind === 'joker' ? 'JOKER' : spec.kind === 'voucher' ? 'MEJORA' : 'MUTACION';
-    const g = ctx.createLinearGradient(0, chipsTop, 0, chipsTop + 52);
+    // En la cara compacta el rotulo de tipo tambien crece: es el UNICO dato que
+    // lleva la carta (los jokers no tienen stats).
+    const labelH = compact ? 96 : 52;
+    const g = ctx.createLinearGradient(0, chipsTop, 0, chipsTop + labelH);
     g.addColorStop(0, hexToRgba(accent, 0.34));
     g.addColorStop(1, hexToRgba(accent, 0.12));
     ctx.fillStyle = g;
-    roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
+    roundRect(ctx, pad, chipsTop, W - pad * 2, labelH, 12);
     ctx.fill();
     ctx.strokeStyle = hexToRgba(accent, 0.75);
     ctx.lineWidth = 2.5;
-    roundRect(ctx, pad, chipsTop, W - pad * 2, 52, 12);
+    roundRect(ctx, pad, chipsTop, W - pad * 2, labelH, 12);
     ctx.stroke();
     ctx.fillStyle = hexToCss(accent);
-    ctx.font = `400 24px ${CARD_DISPLAY_FONT}`;
+    ctx.font = `400 ${compact ? 56 : 24}px ${CARD_DISPLAY_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, W / 2, chipsTop + 27);
+    ctx.fillText(label, W / 2, chipsTop + labelH / 2);
     ctx.textBaseline = 'top';
   }
 
@@ -759,6 +829,10 @@ export function createCardCanvas(
   const abilityColor = ABILITY_COLOR;
   const panelBorder = hasAbility ? abilityColor : elementColor;
 
+  // Cara COMPACTA: sin descripcion. El texto de reglas y la habilidad NO se
+  // pierden — se leen en el `.hud-tooltip` al seleccionar la carta, y en el
+  // mazo/coleccion/tienda donde la carta se muestra grande.
+  if (!compact) {
   ctx.fillStyle = hasAbility ? 'rgba(26, 18, 42, 0.62)' : 'rgba(6, 10, 16, 0.55)';
   roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
   ctx.fill();
@@ -804,6 +878,8 @@ export function createCardCanvas(
   ctx.textBaseline = 'middle';
   descLines.forEach((line, i) => ctx.fillText(line, W / 2, descFirstLineY + i * descLineHeight));
   ctx.textBaseline = 'top';
+  }
+  ctx.textBaseline = 'top';
 
   // --- 7. Gema de rareza (esquina superior derecha) ---
   ctx.save();
@@ -814,6 +890,21 @@ export function createCardCanvas(
   ctx.shadowBlur = 18;
   ctx.fillRect(-13, -13, 26, 26);
   ctx.restore();
+
+  // --- 7b. Marca de HABILIDAD (solo cara compacta) ---
+  // En la cara completa la habilidad se anuncia con la etiqueta "✦ HABILIDAD"
+  // dentro del panel de texto. En la compacta no hay panel, asi que la marca va
+  // suelta: es la senal de que esa carta tiene reglas que conviene leer en el
+  // tooltip.
+  if (compact && spec.hasAbility) {
+    ctx.fillStyle = hexToCss(ABILITY_COLOR);
+    ctx.font = `700 46px ${CARD_TEXT_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✦', W - 100, 46);
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+  }
 
   // --- 8. Nivel (esquina superior izquierda) ---
   if ((spec.level ?? 1) > 1) {

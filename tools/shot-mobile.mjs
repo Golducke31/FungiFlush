@@ -111,7 +111,19 @@ await page.evaluate(() => {
   ff.engine.chooseBlind(ff.engine.availableBlinds()[0]?.id);
 });
 await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, { timeout: 15000 });
-await page.waitForTimeout(1200);
+// El reparto TERMINA con el destape: si se captura antes, la mano sale BOCA
+// ABAJO (dorsos). Con SwiftShader (~12 FPS, `dt` acotado) el destape arranca
+// ~1.5s despues de repartir, asi que hay que esperar a que se de vuelta.
+await page
+  .waitForFunction(
+    () => {
+      const hs = window.__fungiflush?.scene?.handState?.() ?? [];
+      return hs.length > 0 && hs.every((c) => c.flip < 0.5);
+    },
+    { timeout: 20000 },
+  )
+  .catch(() => {});
+await page.waitForTimeout(500);
 await page.screenshot({ path: join(shotsDir, 'mob-playing.png') });
 
 // Medicion: ¿algo se sale del viewport?

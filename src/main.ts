@@ -36,6 +36,7 @@ import { currentLanguage, initI18n, setLanguage, t, toggleLanguage, validateDict
 import { ProfileStore } from '@persistence/ProfileStore';
 import { RunStore } from '@persistence/RunStore';
 import { Storage } from '@persistence/Storage';
+import { isTouchOnly } from './pointer';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
 import { HISTORY_CAP } from '@meta/ProfileState';
@@ -154,7 +155,9 @@ function buildRotateNotice(): void {
   notice.append(icon, text);
   document.body.appendChild(notice);
 
-  const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+  // El aviso de rotar es para dispositivos que se sostienen: se usa el umbral
+  // "sin raton" (`isTouchOnly`), no el de layout (`isCoarsePointer`).
+  const isTouch = isTouchOnly();
   if (isTouch) notice.classList.add('is-enabled');
 }
 

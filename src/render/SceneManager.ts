@@ -27,6 +27,7 @@ import {
 } from '@engine/index';
 
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor, type ArtKey } from './ArtAssets';
+import { isCoarsePointer, isTouchOnly } from '../pointer';
 import {
   ARENA_GLOW_BASE,
   ARENA_GLOW_ENVIRONMENT,
@@ -110,6 +111,22 @@ const DECK_X = 10.5;
 const DECK_Z = 1.0;
 const DISCARD_X = -10.5;
 const DISCARD_Z = 1.0;
+/**
+ * X de las pilas en TACTIL. Mas adentro que en escritorio (ver `deckX`).
+ *
+ * Con una pantalla mas alta que ancha, el ancho de la mesa —que mandan las
+ * pilas— es lo que fija la distancia de camara; el alto que sobra se convierte
+ * en una franja negra abajo. Acercandolas, el encuadre pasa a fijarlo el ALTO y
+ * la mesa llena la pantalla. Sigue siendo > que el semiancho del abanico para
+ * que los montones no compartan pantalla con las cartas de los extremos.
+ */
+const TACTILE_PILE_X = 8.5;
+/**
+ * Alto minimo de viewport (px) para tratar un dispositivo tactil como TABLET.
+ * Espeja el `@media (pointer: coarse) and (min-height: 600px)` del CSS: si uno
+ * cambia, el otro tambien.
+ */
+const TABLET_MIN_H = 600;
 const PLAY_Y = 0.18;
 const PLAY_Z = -0.6;
 const PLAY_SCALE = 0.86;
@@ -375,6 +392,12 @@ export class SceneManager {
   private running = false;
   private readonly isTouch: boolean;
   private readonly isMobile: boolean;
+  /**
+   * Puntero primario GRUESO. Se cachea porque no cambia en runtime: un equipo
+   * no gana ni pierde tactil. El ALTO si cambia (rotar), por eso el perfil de
+   * layout se evalua EN VIVO (ver `layoutProfile`).
+   */
+  private readonly isCoarse: boolean;
   private handSpread = 16.5;
 
   private deckMesh: THREE.Group | null = null;
@@ -454,8 +477,9 @@ export class SceneManager {
     this.assets = options.assets;
     this.callbacks = options.callbacks;
 
-    this.isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+    this.isTouch = isTouchOnly();
     this.isMobile = this.isTouch || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    this.isCoarse = isCoarsePointer();
 
     const width = options.canvas.clientWidth || window.innerWidth;
     const height = options.canvas.clientHeight || window.innerHeight;
@@ -804,8 +828,8 @@ export class SceneManager {
     this.disposables.push(this.backTexture);
 
     // --- Mazo y descarte ---
-    this.deckMesh = this.buildPile(DECK_X, DECK_Z, 7);
-    this.discardMesh = this.buildPile(DISCARD_X, DISCARD_Z, 4);
+    this.deckMesh = this.buildPile(this.deckX, DECK_Z, 7);
+    this.discardMesh = this.buildPile(this.discardX, DISCARD_Z, 4);
     this.scene.add(this.deckMesh, this.discardMesh);
 
     this.buildShadows();
@@ -886,6 +910,10 @@ export class SceneManager {
   /** Pila de cartas (mazo o descarte): N planos apilados con el dorso. */
   private buildPile(x: number, z: number, layers: number): THREE.Group {
     const group = new THREE.Group();
+    // La posicion de la pila vive en el GRUPO, no en cada capa: asi se puede
+    // mover la pila entera cuando cambia el perfil de layout (rotar una tablet)
+    // sin tocar las capas. Las capas solo llevan el jitter.
+    group.position.set(x, 0, z);
 
     const geometry = new THREE.PlaneGeometry(CARD_WIDTH * 0.92, CARD_HEIGHT * 0.92);
     const material = new THREE.MeshStandardMaterial({
@@ -904,9 +932,9 @@ export class SceneManager {
       layer.rotation.x = -Math.PI / 2;
       layer.rotation.z = (Math.random() - 0.5) * 0.05;
       layer.position.set(
-        x + (Math.random() - 0.5) * 0.06,
+        (Math.random() - 0.5) * 0.06,
         0.05 + i * 0.012,
-        z + (Math.random() - 0.5) * 0.06,
+        (Math.random() - 0.5) * 0.06,
       );
       group.add(layer);
     }
@@ -1690,7 +1718,7 @@ export class SceneManager {
         card3d = this.createCard3D(card);
         this.handCards.set(card.uid, card3d);
         // Aparece desde el mazo.
-        card3d.home.x = DECK_X;
+        card3d.home.x = this.deckX;
         card3d.home.y = 0.05;
         card3d.home.z = DECK_Z;
         newHomes.push(card3d.home);
@@ -1929,7 +1957,16 @@ export class SceneManager {
     const elementColor = card ? ELEMENT_COLOR[card.def.element] : 0x8fd8e8;
     const rarity = card?.def.rarity ?? joker?.def.rarity ?? 'common';
 
-    const card3d = new Card3D(uid, isJoker ? 'joker' : 'card', elementColor, rarity);
+    // Cara compacta en tactil: la carta de la mano mide ~112px y la textura se
+    // proyecta con escala ~0,15, asi que la cara completa es ilegible ahi. Ver
+    // `CardTextureSpec.compact`. El escritorio conserva la cara completa.
+    const card3d = new Card3D(
+      uid,
+      isJoker ? 'joker' : 'card',
+      elementColor,
+      rarity,
+      this.layoutProfile !== 'desktop',
+    );
     if (this.backTexture) card3d.setBackTexture(this.backTexture);
     if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
     if (joker) card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
@@ -2054,13 +2091,18 @@ export class SceneManager {
     const count = cards.length;
     if (count === 0) return;
 
-    const spacing = count <= 1 ? 0 : Math.min(2.32, this.handSpread / (count - 1));
+    // Las cartas de la mano CRECEN en movil (ver `handCardBoost`). El tope de
+    // spacing y el tope de escala suben juntos para que el abanico se ENSANCHE
+    // en vez de pisarse: con el spacing viejo (2.32) la escala quedaba clavada
+    // en 1 y no habia forma de agrandar la carta sin que se solaparan.
+    const boost = this.layoutProfile === 'mobile' ? 1.3 : 1;
+    const spacing = count <= 1 ? 0 : Math.min(2.32 * boost, this.handSpread / (count - 1));
     const total = spacing * (count - 1);
 
     // Si el espaciado no alcanza para el ancho de la CARTA, se ACHICAN en vez de
-    // pisarse. Pasa a partir de 9-10 cartas: a tamano completo no entran en el
-    // abanico, y ensancharlo chocaria con las pilas (x=+-10.5).
-    const fit = spacing > 0 ? Math.min(1, spacing / CARD_WIDTH) : 1;
+    // pisarse. Pasa con manos grandes: a tamano completo no entran en el abanico,
+    // y ensancharlo chocaria con las pilas (x=+-10.5).
+    const fit = spacing > 0 ? Math.min(boost, spacing / CARD_WIDTH) : 1;
     for (const card of cards) card.setBaseScale(fit);
 
     const half = total / 2;
@@ -2242,7 +2284,7 @@ export class SceneManager {
       .to(
         card3d.home,
         {
-          x: DISCARD_X + jitter,
+          x: this.discardX + jitter,
           y: 0.4,
           z: DISCARD_Z,
           // `rx` explicito: si la carta venia de un arrastre esta inclinada, y
@@ -2273,7 +2315,7 @@ export class SceneManager {
           size: 0.05,
           life: 0.6,
         });
-        this.water?.ripple(DISCARD_X + jitter, DISCARD_Z, 0.95);
+        this.water?.ripple(this.discardX + jitter, DISCARD_Z, 0.95);
         this.retire(card3d);
       });
   }
@@ -2282,7 +2324,7 @@ export class SceneManager {
     const card3d = this.handCards.get(card.uid);
     if (!card3d) return;
     // `layoutHand` ya lo mueve a su lugar; esto solo agrega el destello de salida.
-    this.particles.burst(new THREE.Vector3(DECK_X, 0.5, DECK_Z), 6, {
+    this.particles.burst(new THREE.Vector3(this.deckX, 0.5, DECK_Z), 6, {
       color: 0x5fd8e8,
       speed: 1.2,
       upward: 1.0,
@@ -2866,6 +2908,106 @@ export class SceneManager {
   // Resize
   // ==========================================================================
 
+  /**
+   * Perfil de LAYOUT (no de GPU), evaluado EN VIVO.
+   *
+   * Se deriva del PUNTERO y del ALTO, igual que el CSS (`@media (pointer:
+   * coarse)` y `(pointer: coarse) and (min-height: 600px)`), para que el layout
+   * 3D se pueda ajustar por dispositivo sin arrastrar a los demas. Distinto de
+   * `isMobile`: ese mezcla puntero + user-agent y decide GPU (antialias,
+   * calidad, particulas). Aca solo importa el encuadre.
+   *
+   * Es un getter y no un campo porque ROTAR una tablet cambia el alto: el CSS
+   * re-evalua su media query y el JS tiene que hacer lo mismo.
+   */
+  private get layoutProfile(): 'mobile' | 'tablet' | 'desktop' {
+    if (!this.isCoarse) return 'desktop';
+    return window.innerHeight >= TABLET_MIN_H ? 'tablet' : 'mobile';
+  }
+
+  /**
+   * Ancho del abanico de la mano (unidades de mundo).
+   *
+   * Se elige por PERFIL, no por aspect. Antes se derivaba SOLO del aspect y el
+   * escritorio 16:9 (1.7778) caia en la MISMA rama que un celular (2.2213), a
+   * 0.028 del umbral `1.75`: afinar el 3D para movil movia el encuadre del
+   * escritorio.
+   */
+  private spreadFor(aspect: number): number {
+    const profile = this.layoutProfile;
+    if (profile === 'tablet') return this.spreadTablet(aspect);
+    if (profile === 'mobile') return this.spreadMobile(aspect);
+    return this.spreadDesktop(aspect);
+  }
+
+  /**
+   * Rama CELULAR del spread.
+   *
+   * Mas ancha que la de escritorio a proposito: el celular necesita cartas
+   * GRANDES (a 412px de alto, una carta a escala nominal deja el texto de la
+   * cara en ~2px, ilegible). Un abanico mas ancho deja subir la escala de la
+   * carta sin que se pisen (ver el `boost` de `layoutHand`). El ancho extra
+   * entra: en un celular apaisado el encuadre lo fija el ALTO, no el ancho.
+   */
+  private spreadMobile(aspect: number): number {
+    return aspect > 1.75 ? 21.5 : aspect > 1.45 ? 18 : 15;
+  }
+
+  /** Rama TABLET del spread. Pantalla alta: el abanico puede abrirse igual. */
+  private spreadTablet(aspect: number): number {
+    return aspect > 1.75 ? 21.5 : aspect > 1.45 ? 18 : 15;
+  }
+
+  /** Rama ESCRITORIO del spread (congelada hasta la fase de escritorio). */
+  private spreadDesktop(aspect: number): number {
+    return aspect > 1.75 ? 16.5 : aspect > 1.45 ? 14 : 12;
+  }
+
+  /**
+   * Corrimiento del encuadre hacia la mano (fraccion del alto visible del HUD
+   * inferior). Misma separacion por perfil que `spreadFor()`.
+   */
+  private biasFor(): number {
+    const profile = this.layoutProfile;
+    if (profile === 'tablet') return this.biasTablet();
+    if (profile === 'mobile') return this.biasMobile();
+    return this.biasDesktop();
+  }
+
+  /** Rama CELULAR del bias. */
+  private biasMobile(): number {
+    return 0.72;
+  }
+
+  /** Rama TABLET del bias. */
+  private biasTablet(): number {
+    return 0.72;
+  }
+
+  /** Rama ESCRITORIO del bias (congelada hasta la fase de escritorio). */
+  private biasDesktop(): number {
+    return 0.72;
+  }
+
+  /**
+   * X de las pilas (mazo y descarte).
+   *
+   * En TACTIL van MAS ADENTRO. Con una pantalla mas alta que ancha, el bound de
+   * ancho —que las pilas mandan— obliga a la camara a alejarse y deja una franja
+   * negra abajo: acercandolas, el encuadre pasa a fijarlo el ALTO y la mesa llena
+   * la pantalla. El escritorio conserva sus constantes.
+   *
+   * PENDIENTE: en el CELULAR el abanico (mas ancho desde el boost de cartas)
+   * llega a cubrir las pilas. Ver la §6 del doc de convencion.
+   */
+  private get deckX(): number {
+    return this.layoutProfile === 'desktop' ? DECK_X : TACTILE_PILE_X;
+  }
+
+  private get discardX(): number {
+    return this.layoutProfile === 'desktop' ? DISCARD_X : -TACTILE_PILE_X;
+  }
+
   resize(): void {
     const canvas = this.renderer.domElement;
     const width = canvas.clientWidth || window.innerWidth;
@@ -2892,7 +3034,13 @@ export class SceneManager {
     }
 
     // En pantallas anchas la mano puede abrirse; en angostas se compacta.
-    this.handSpread = aspect > 1.75 ? 16.5 : aspect > 1.45 ? 14 : 12;
+    // El ancho sale del PERFIL (movil/tablet/escritorio), no del aspect crudo.
+    this.handSpread = this.spreadFor(aspect);
+
+    // Las pilas siguen al perfil: rotar una tablet las mueve y el encuadre se
+    // reajusta solo, porque el bound de ancho sale de ellas.
+    this.deckMesh?.position.setX(this.deckX);
+    this.discardMesh?.position.setX(this.discardX);
 
     // El encuadre se DERIVA del layout real, no de un numero a ojo: si se
     // mueve la mano o los jokers, la camara se reajusta sola.
@@ -2901,7 +3049,7 @@ export class SceneManager {
     // piles viven en X=±10.5 (mas alla de los ±8.25 de la mano), el ancho
     // efectivo lo mandan los piles. Si no se ensancha el bound, los pillars
     // quedan fuera de cuadro y el jugador no los ve.
-    const pileHalfWidth = Math.max(Math.abs(DECK_X), Math.abs(DISCARD_X)) + CARD_WIDTH * 0.5;
+    const pileHalfWidth = Math.max(Math.abs(this.deckX), Math.abs(this.discardX)) + CARD_WIDTH * 0.5;
     const handHalfWidth = this.handSpread * 0.5 + CARD_WIDTH * 0.5;
     const halfWidth = Math.max(pileHalfWidth, handHalfWidth) + 0.3;
 
@@ -2913,7 +3061,8 @@ export class SceneManager {
 
     // Corrimiento del encuadre hacia la mano. 0.72 del alto visible del HUD
     // inferior (que en un celular en landscape es ~19% de la pantalla).
-    const bias = 0.72;
+    // Por perfil, para poder atarlo al HUD movil sin tocar el escritorio.
+    const bias = this.biasFor();
     const biasZ = bounds.bottomZ + (bounds.topZ - bounds.bottomZ) * bias;
 
     this.rig.fit(aspect, bounds, biasZ);

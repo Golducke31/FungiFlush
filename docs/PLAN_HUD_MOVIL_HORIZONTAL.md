@@ -218,7 +218,7 @@ Si se prefiere conservar `Menú` visible, dejar **solo** `Menú` e incluir `Idio
   el canvas o la carta, **nunca** un nodo de `.hud-missions` / `.hud-select-hint`.
 - **Aceptación:** la guarda pasa a 844×390 (viewport del smoke).
 
-**P0.8 — Legibilidad de carta (O7)**
+**P0.8 — Legibilidad de carta (O7)** — **PENDIENTE** (no implementado todavía)
 - `styles.css`: subir tipografía de carta en `pointer: coarse`; separación 4–8px; expansión al tocar.
 - **Aceptación:** nombre/elemento/familia legibles a 915×412 (sin zoom); toque de carta con feedback.
 
@@ -228,8 +228,13 @@ Si se prefiere conservar `Menú` visible, dejar **solo** `Menú` e incluir `Idio
   - Archivos: `src/ui/HUD.ts` (`renderActions`).
 - **P1.2** ✅ Resaltar cartas compatibles con la selección (familia/elemento). Brillo sutil (0.35) en halo.
   - Archivos: `src/render/Card3D.ts` (`setCompatible`), `src/render/SceneManager.ts` (`syncHand`).
-- **P1.3** ✅ Carta ampliada al tocar-mantener (500ms) o doble toque (350ms). Panel DOM con nombre, stats, abilities.
-  - Archivos: `src/render/Interaction.ts` (`onLongPress`/`onDoubleTap`), `src/render/SceneManager.ts` (`onCardDetail`), `src/ui/HUD.ts` (`showCardDetail`), `src/ui/styles.css` (`.panel.is-card-detail`).
+- **P1.3** ❌ **ELIMINADO a propósito** (NO está implementado). El panel de detalle de carta al
+  tocar-mantener/doble-toque resultó **redundante** y se removió por completo en una tanda
+  posterior: ya **no existen** `onLongPress`/`onDoubleTap` (`src/render/Interaction.ts`),
+  `onCardDetail` (`src/render/SceneManager.ts`), `showCardDetail`/`hideCardDetail`
+  (`src/ui/HUD.ts`) ni `.panel.is-card-detail` (`src/ui/styles.css`). También se llevó puestos
+  los strings sin traducir `card.noAbility`/`action.close` (una de las causas del CI rojo).
+  Si el rediseño móvil quiere una carta ampliada, será un **ítem nuevo** con otro nombre.
 - **P1.4** ✅ Icono de ayuda contextual `?`. Toggle del aviso de barra.
   - Archivos: `src/ui/HUD.ts` (`toggleHelp`), `src/ui/styles.css` (`.hud-help`).
 - **P1.5** ✅ Persistir estado de paneles UI en perfil (v3). `ui: { missionsOpen, helpOpen }`.

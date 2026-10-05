@@ -190,6 +190,12 @@ export class Card3D {
    * no recalcula, asi que sobrevive al frame.
    */
   private baseScale = 1;
+  /**
+   * Cara COMPACTA: nombre + numeros grandes, sin descripcion (solo tactil).
+   * Ver `CardTextureSpec.compact`. Se fija al construir y entra en la clave de
+   * cache, asi que una carta compacta y una completa nunca comparten textura.
+   */
+  private readonly compactFace: boolean;
 
   hovering = false;
   selected = false;
@@ -222,10 +228,11 @@ export class Card3D {
 
   private rarity: Rarity = 'common';
 
-  constructor(uid: string, kind: CardKind, element: number, rarity: Rarity) {
+  constructor(uid: string, kind: CardKind, element: number, rarity: Rarity, compactFace = false) {
     this.uid = uid;
     this.kind = kind;
     this.rarity = rarity;
+    this.compactFace = compactFace;
 
     this.faceMaterial = new THREE.MeshStandardMaterial({
       roughness: 0.58,
@@ -328,6 +335,7 @@ export class Card3D {
       statuses.join(','),
       card.bonusSubstrate,
       card.bonusSpores,
+      this.compactFace ? 'c' : 'f',
     ].join('|');
 
     // P1.1/P1.2 — Una carta "tiene habilidad" si declara efectos propios. Es el
@@ -354,6 +362,7 @@ export class Card3D {
       statuses,
       level: card.level,
       hasAbility,
+      compact: this.compactFace,
     };
 
     // Dos capas: el ARTE (compartido por archivo) y el TEXTO (por estado). El
@@ -371,7 +380,7 @@ export class Card3D {
     this.joker = joker;
     this.rarity = joker.def.rarity;
 
-    const key = ['joker', joker.def.id, lang].join('|');
+    const key = ['joker', joker.def.id, lang, this.compactFace ? 'c' : 'f'].join('|');
     const isMutation = (joker.def.tags ?? []).includes('mutation');
     // Mismo razonamiento que en `setCard`: hornear el texto exige traducir
     // primero, no la clave cruda.
@@ -384,6 +393,7 @@ export class Card3D {
       rarity: joker.def.rarity,
       art: joker.def.art,
       cost: joker.def.cost,
+      compact: this.compactFace,
     };
 
     const artKey = art?.src ?? `proc|${spec.kind}|neutral|${spec.rarity}`;

@@ -234,9 +234,23 @@
      literales y se documentan aca para no tener que adivinarlos:
        560px de alto -> celular en landscape (con barra de navegacion)
        430px de alto -> landscape apretado (chips y botones se compactan)
+       460px de alto -> paneles largos (mazo, tablero, ascension, historial)
+     OJO: estos breakpoints van SIEMPRE con `(pointer: coarse) and (...)`. Son
+     compresiones pensadas para TACTIL; sin el gate se disparaban tambien en una
+     ventana de ESCRITORIO baja y le aplicaban el layout movil sin que nadie lo
+     probara (ver `docs/CONVENCION_MOVIL_PRIMERO.md`).
      ------------------------------------------------------------------------- */
   --touch-min: 46px;
   --panel-max-w: 920px;
+
+  /* Alto REAL de la barra inferior (`.hud-bottom`). Todo lo que se ancla por
+     ENCIMA de ella (`.hud-select-hint`, `.hud-missions-toggle`,
+     `.hud-missions-panel`) lo usa en vez de un px suelto: antes eran tres
+     numeros magicos (98/104/126) que habia que subir a mano cada vez que la
+     barra crecia, y ya se habian desincronizado una vez (el aviso de seleccion
+     caia sobre la linea de estado). Si la barra cambia de alto, se cambia ACA.
+     El bloque `(pointer: coarse)` lo redefine para tactil. */
+  --hud-bottom-h: 68px;
 }
 
 * {
@@ -642,8 +656,9 @@ body {
 .hud-select-hint {
   position: fixed;
   left: 50%;
-  /* Justo encima de la fila de acciones, que es el hueco libre de la mesa. */
-  bottom: calc(126px + var(--safe-b, 0px));
+  /* Justo encima de la fila de acciones, que es el hueco libre de la mesa.
+     El ancla sale del alto de la barra inferior (`--hud-bottom-h`) + un margen. */
+  bottom: calc(var(--hud-bottom-h) + 58px + var(--safe-b, 0px));
   transform: translate(-50%, 8px);
   display: none;
   align-items: center;
@@ -838,10 +853,10 @@ body {
 .hud-missions-toggle {
   position: fixed;
   left: calc(10px + var(--safe-l));
-  /* Justo POR ENCIMA de la barra inferior. La barra crecio a ~90px con la
-     tipografia mas grande, asi que el ancla sube de 64 a 98px: a 64 el chip
-     caia sobre la linea de estado ("4 Manos · 3 Descartes · ..."). */
-  bottom: calc(98px + var(--safe-b));
+  /* Justo POR ENCIMA de la barra inferior. El ancla sale de `--hud-bottom-h`
+     (alto real de la barra) + 8px: con un px fijo el chip caia sobre la linea
+     de estado ("4 Manos · 3 Descartes · ...") cada vez que la barra crecia. */
+  bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b));
   z-index: 30;
   display: none;
   align-items: center;
@@ -860,9 +875,10 @@ body {
   font-family: var(--font-ui, inherit);
 }
 
-.hud-missions-toggle.is-visible {
-  display: inline-flex;
-}
+/* `.hud-missions-toggle.is-visible` NO se declara aca a proposito: es un control
+   SOLO-MOVIL y su `display: inline-flex` vive dentro del bloque
+   `@media (pointer: coarse)`. Declararlo en la base lo encendia tambien en
+   escritorio, duplicando la franja de misiones. */
 
 .hud-missions-toggle.is-open {
   background: var(--frame-body-lo);
@@ -1067,6 +1083,14 @@ body {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* La linea de estado compacta es SOLO-MOVIL: reemplaza a los contadores en
+   tactil (ver el bloque `@media (pointer: coarse)`). El nodo se construye
+   SIEMPRE en el HUD, asi que la base tiene que ocultarlo — si no, en escritorio
+   se dibuja como texto crudo y duplica los contadores. */
+.hud-status {
+  display: none;
 }
 
 /* El marco lo pone la regla compartida de `.hud-block, .counter`: aca solo va
@@ -2363,8 +2387,9 @@ body {
   color: var(--frame-dim);
 }
 
-/* En pantallas anchas, el glosario se reparte en dos columnas para no exigir
-   scroll en el panel. En landscape movil (el objetivo real) queda a una. */
+/* Reparto a DOS columnas por ANCHO (>=700px). OJO: es una regla COMPARTIDA, no
+   de escritorio — el celular en landscape (844-915px de ancho) tambien la
+   recibe. Si hay que afinarla, mirar los dos frentes. */
 @media (min-width: 700px) {
   .tutorial-sections {
     display: grid;
@@ -2625,7 +2650,10 @@ body {
    ancho parte la grilla en 3 columnas y deja al jefe solo en una fila de 2
    huecos: el marco desalineado se lee como un error, no como jerarquia. Por eso
    el ensanche vive detras de un media query, y por debajo el jefe se distingue
-   por borde y por halo. */
+   por borde y por halo.
+
+   Regla COMPARTIDA por ancho (no de escritorio): el celular landscape
+   (844-915px) tambien entra. */
 @media (min-width: 640px) {
   .blind-card.is-boss {
     grid-column: span 2;
@@ -4358,7 +4386,7 @@ body {
    Compactado para pantallas bajas (celular en landscape: ~360-420px de alto)
    -------------------------------------------------------------------------- */
 
-@media (max-height: 560px) {
+@media (pointer: coarse) and (max-height: 560px) {
   .hud-score-current {
     font-size: 27px;
   }
@@ -4468,7 +4496,7 @@ body {
   }
 }
 
-@media (max-height: 430px) {
+@media (pointer: coarse) and (max-height: 430px) {
   .hud-blind-name {
     display: none;
   }
@@ -4491,7 +4519,7 @@ body {
 /* Pantallas muy bajas (celular en landscape con barra de navegacion): el menu
    se compacta pero sigue siendo tocable. Va al final para ganarles a las
    reglas generales de .btn.is-large. */
-@media (max-height: 430px) {
+@media (pointer: coarse) and (max-height: 430px) {
   /* Landscape de celular: achicar los chips secundarios. */
   .menu-ghost {
     padding: 0.3em 0.8em;
@@ -4533,7 +4561,7 @@ body {
    Va al final del archivo a proposito: necesita ganarle a las reglas
    generales de .deck-grid y .btn.
    -------------------------------------------------------------------------- */
-@media (max-height: 560px) {
+@media (pointer: coarse) and (max-height: 560px) {
   .deck-grid {
     /* Columnas mas angostas que en pantalla normal: la celda lleva la
        ilustracion 2:3, asi que su alto lo manda el ANCHO. Sin achicar el ancho
@@ -4979,7 +5007,7 @@ body {
 
 /* En pantallas muy bajas (landscape de celular) la mano se achica antes de
    empujar el tablero fuera de cuadro. */
-@media (max-height: 460px) {
+@media (pointer: coarse) and (max-height: 460px) {
   .board-hand-card {
     width: 50px;
     height: 58px;
@@ -5675,7 +5703,7 @@ body {
 
 /* Landscape bajo (844x390, el que usa el smoke): una sola columna con el badge
    y el texto mas apretados, o las ocho filas no entran ni scrolleando comodo. */
-@media (max-height: 460px) {
+@media (pointer: coarse) and (max-height: 460px) {
   .ascension-shell {
     gap: 8px;
     padding: 10px 14px;
@@ -5837,7 +5865,7 @@ body {
   background: rgba(46, 178, 164, 0.24);
 }
 
-@media (max-height: 460px) {
+@media (pointer: coarse) and (max-height: 460px) {
   .cosmetics-shell {
     gap: 8px;
     padding: 10px 14px;
@@ -6012,7 +6040,7 @@ body {
   background: rgba(46, 178, 164, 0.24);
 }
 
-@media (max-height: 460px) {
+@media (pointer: coarse) and (max-height: 460px) {
   .history-shell {
     gap: 8px;
     padding: 10px 14px;
@@ -6059,19 +6087,23 @@ body {
    ========================================================================== */
 
 @media (pointer: coarse) {
+  /* Alto REAL de las dos barras en tactil de celular (medido a 915x412:
+     `.hud-top` 0->66px, `.hud-bottom` 322->412px). Los elementos que se anclan
+     a ellas (`.hud-select-hint`, `.hud-missions-toggle`, `.hud-missions-panel`)
+     los leen en vez de repetir un px suelto. Ver `:root`. */
+  :root {
+    --hud-bottom-h: 90px;
+    --hud-top-h: 66px;
+  }
+
   /* --- Barra superior: la mitad de alto (P0.1 / HUD movil) ---
      En movil horizontal el viewport es bajo (412px típico) y la barra de arriba
      se comia ~23% de la pantalla con marcador + objetivo + aviso + barra. Aqui
      se aplana: padding mínimo, marcador grande pero en una sola linea, objetivo
      a una frase corta y SIN el aviso permanente de la barra (salió del HUD en
      HUD.ts). El resultado medido: ~56–64px en vez de 96px. */
-  .hud-top {
-    /* P0.1 (re-ajuste CA1): la franja tiene que quedar <= 64px de alto en
-       915x412. Bajamos el padding a 4px y el gap a 6px: con el bloque de
-       score compacto eso da ~60px, no los 80px previos. */
-    padding: 4px calc(10px + var(--safe-r)) 4px calc(10px + var(--safe-l));
-    gap: 6px;
-  }
+  /* `.hud-top` NO se declara aca: su unica declaracion vive mas abajo, en la
+     seccion "Barra superior: tres zonas con espaciado parejo". */
 
   .hud-block.hud-score {
     /* Menos aire interno: el marcador, la barra y el objetivo en un bloque
@@ -6080,40 +6112,10 @@ body {
     gap: 2px;
   }
 
-  .hud-score-main {
-    gap: 5px;
-  }
-
-  .hud-score-current {
-    /* Numero grande sigue, pero no gigante: en pantallas bajas un texto de 36px
-       ya domina la franja sin necesidad de mas. Para CA1 ACAPILLAMOS el
-       line-height: el numero heredaba ~1.5 y su caja de linea media 33px, lo
-       que disparaba el hud-top por encima de 64px. Con line-height:1 la caja
-       mide lo que la fuente. Subido de 20 a 23px por legibilidad. */
-    font-size: 23px;
-    line-height: 1;
-  }
-
-  .hud-score-target {
-    font-size: 13px;
-  }
-
-  .hud-progress {
-    margin-top: 2px;
-    height: 4px;
-  }
-
-  .hud-blind-name {
-    margin-top: 2px;
-    font-size: 12px;
-  }
-
-  /* El objetivo ahora es UNA frase corta ("Faltan 540 puntos"), no el puntaje
-     repetido. Ocupa una linea chica y se centra con el marcador. */
-  .hud-objective {
-    margin-top: 2px;
-    font-size: 12px;
-  }
+  /* El bloque de score (`.hud-score-main/-current/-target`, `.hud-progress`,
+     `.hud-objective`, `.hud-blind-name`) se define UNA sola vez mas abajo, en
+     la seccion "Bloque de score: compacto". Aquellas son las declaraciones que
+     ganan; aca no se repiten. */
 
   /* P0.1 (CA1) — En movil el nombre del ciego se FUNDE en la linea del objetivo
      (lo hace HUD.ts: añade ".hud-objective-blind" con el nombre). Asi no ocupa
@@ -6179,16 +6181,9 @@ body {
     opacity: 0.6;
   }
 
-  .hud-counters {
-    /* SIN wrap: los contadores viven en una fila. Si el ancho no alcanza, se
-       comprimen (abajo se achica el padding), no saltan de linea. El wrap era
-       justo lo que dejaba el ultimo chip debajo de la barra del sistema. */
-    flex-wrap: nowrap;
-    min-width: 0;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 5px;
-  }
+  /* `.hud-counters` ya quedo en `display: none` (arriba): la fila de chips NO se
+     dibuja en movil, la reemplaza `.hud-status`. Declarar layout aca seria
+     codigo muerto. */
 
   .counter {
     /* Se comprimen antes de desbordar. `min-width: 0` es lo que permite que un
@@ -6234,16 +6229,16 @@ body {
 
   /* P0.4 (HUD movil) — La guia de seleccion flota JUSTO ENCIMA de la barra de
      acciones, en la franja libre entre las cartas y los botones. Antes estaba a
-     `bottom: 126px` fijo y caia sobre las cartas. Ahora se ancla al borde de la
-     barra inferior para no tapar jamas el tablero. La altura de la barra
-     movil (estado + acciones) ronda los ~64px + safe-bottom. */
+     un `bottom` fijo y caia sobre las cartas. Ahora se ancla al alto real de la
+     barra inferior (`--hud-bottom-h`), asi que no tapa jamas el tablero ni la
+     linea de estado. */
   .hud-select-hint {
     /* Se ancla POR ENCIMA de toda la barra inferior (status + acciones), no
-       solo de los botones. Antes usaba 70px y con la tipografia mas grande la
-       barra inferior pasa a ~90px: el aviso caia ENCIMA de la linea de estado
-       ("4 Manos · 3 Descartes · ...") y la tapaba. 104px deja el aviso limpio
-       sobre la barra. */
-    bottom: calc(104px + var(--safe-b, 0px));
+       solo de los botones. El alto de la barra sale de `--hud-bottom-h`: antes
+       era un 104px fijo que habia que subir a mano cada vez que la barra
+       crecia, y ya se habia desincronizado (el aviso caia ENCIMA de la linea
+       de estado "4 Manos · 3 Descartes · ..." y la tapaba). */
+    bottom: calc(var(--hud-bottom-h) + 14px + var(--safe-b, 0px));
     /* P0.8 — Legibilidad: el texto mas cercano a las cartas (badge "N
        seleccionadas") no baja de 14px en tactil, asi se lee sin zoom. */
     font-size: 14px;
@@ -6320,10 +6315,6 @@ body {
     font-size: 19px;
   }
 
-  .hud-score-current {
-    font-size: 23px;
-  }
-
   /* --- Bloque de score: compacto, para que no domine la pantalla --- */
   /* En celular el bloque de score llegaba a 103px de alto (casi un tercio de
      los 412px del viewport) y tapaba el area de juego. Se comprime la pila
@@ -6356,11 +6347,8 @@ body {
     height: 4px;
   }
 
-  .hud-bar-notice {
-    margin-top: 2px;
-    font-size: 9.5px;
-    line-height: 1.2;
-  }
+  /* `.hud-bar-notice` esta en `display: none !important` (arriba): no se dibuja
+     en movil, asi que su tipografia no se declara aca (codigo muerto). */
 
   .hud-objective {
     margin-top: 2px;
@@ -6368,10 +6356,8 @@ body {
     gap: 2px 6px;
   }
 
-  .hud-blind-name {
-    margin-top: 3px;
-    font-size: 10.5px;
-  }
+  /* `.hud-blind-name` esta en `display: none` (arriba): el nombre del ciego se
+     funde en `.hud-objective-blind`. No se declara tipografia aca. */
 
   .hud-preview {
     margin-top: 4px;
@@ -6409,18 +6395,21 @@ body {
           en confirmacion). Se deja `pointer-events: none`, como el resto del
           cromo informativo.
        2. Anclada abajo del todo se solapaba con la barra inferior y, segun el
-          alto, trepaba sobre los jokers. Se la ancla justo ENCIMA de la barra
-          inferior (`bottom: 58px + safe`, el alto real de la barra) y su tope de
-          alto (`100dvh - 260px`) la mantiene por debajo de la columna de jokers
-          (que en este viewport ocupa hasta y=213) para que el ULTIMO chip no se
-          corte contra la barra. */
+          alto, trepaba sobre los jokers. Ahora cuelga de las DOS barras: el
+          `top` sale de `--hud-top-h` y el `bottom` de `--hud-bottom-h`, asi que
+          el panel vive siempre en la franja libre entre la barra superior y la
+          inferior. Antes eran dos px sueltos (58px / un tope de
+          `100dvh - 260px` que ya no existe) que habia que recalcular a mano
+          cada vez que una barra cambiaba de alto. */
   /* P0.3 (HUD movil) — El panel de misiones se vuelve lateral y se desliza
      desde la izquierda. Cuando esta plegado (`is-open` ausente) queda fuera de
      pantalla por transform, asi que NO tapa el tablero ni come toques. El chip
      plegable (`hud-missions-toggle`) es el que lo abre. */
   .hud-missions-panel {
-    top: calc(56px + var(--safe-t));
-    bottom: calc(98px + var(--safe-b));
+    /* Cuelga de la barra superior: `--hud-top-h` menos 10px, para que el borde
+       del panel quede apenas por debajo del borde de la barra (sin hueco). */
+    top: calc(var(--hud-top-h) - 10px + var(--safe-t));
+    bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b));
     left: 0;
     right: auto;
     max-width: 70vw;
@@ -6446,6 +6435,13 @@ body {
   .hud-missions-panel.is-open {
     transform: translateX(0);
     pointer-events: auto;
+  }
+
+  /* El chip plegable de misiones es SOLO-MOVIL: su `display` se declara aca y NO
+     en la base. Declararlo en la base encendia el chip tambien en escritorio,
+     donde ya existe la franja `.hud-missions-panel` (control duplicado). */
+  .hud-missions-toggle.is-visible {
+    display: inline-flex;
   }
 
   .hud-missions-title {
@@ -6550,12 +6546,114 @@ body {
      "Mazo" y las pestañas de orden, y la barra inferior + misiones se colaban
      por debajo del detalle del carrusel (ver Reordenar.PNG). El panel es la
      unica pantalla; el cromo de la run vuelve al cerrarlo. */
+  /* --- Tooltip de carta: es DONDE SE LEE la descripcion en tactil ---
+     La cara de la carta en la mano muestra solo nombre + numeros (para que
+     entren a ~14px reales de pantalla); el texto de reglas y la habilidad viven
+     aca. Por eso el tooltip tiene que cumplir el minimo de legibilidad movil:
+     cuerpo 14px, micro no por debajo de 12px. Antes iba de 9px a 12.5px, o sea
+     que el unico lugar donde se lee la carta era justo el que no se leia. */
+  .hud-tooltip {
+    /* Un poco mas ancho: con la tipografia mas grande, 290px partia palabras. */
+    max-width: min(360px, 62vw);
+  }
+
+  .tooltip-name {
+    font-size: 19px;
+  }
+
+  .tooltip-desc {
+    font-size: 14px;
+  }
+
+  .tooltip-meta,
+  .tooltip-badge {
+    font-size: 12.5px;
+  }
+
+  .tooltip-badge-glyph {
+    font-size: 13px;
+  }
+
+  .tooltip-rarity,
+  .tooltip-ability-tag,
+  .tooltip-stat-label {
+    font-size: 12px;
+  }
+
   #ui-root.is-panel-open > .hud-top,
   #ui-root.is-panel-open > .hud-jokers,
   #ui-root.is-panel-open > .hud-missions-panel,
   #ui-root.is-panel-open > .hud-missions-toggle,
   #ui-root.is-panel-open > .hud-bottom {
     display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TABLET TACTIL (coarse + ALTA)
+   --------------------------------------------------------------------------
+   El bloque `(pointer: coarse)` de arriba comprime el HUD para un CELULAR en
+   landscape (412px de alto). Una tablet tambien es `pointer: coarse`, asi que
+   recibia la MISMA compresion: barra superior de 68px (8% de 820px) y marcador
+   de 23px en una pantalla donde sobra lugar. Aca se DEVUELVEN los valores
+   comodos cuando hay alto de sobra.
+   No afecta a nadie mas: el celular (412px) no llega al `min-height`, y el
+   escritorio es `pointer: fine` (su base ya son estos valores).
+   -------------------------------------------------------------------------- */
+@media (pointer: coarse) and (min-height: 600px) {
+  /* La barra inferior recupera su aire; los anclajes que la leen
+     (`.hud-select-hint`, `.hud-missions-toggle`, `.hud-missions-panel`) se
+     reacomodan solos. Los valores son los MEDIDOS a 1180x820 con este bloque. */
+  :root {
+    --hud-bottom-h: 112px;
+    --hud-top-h: 113px;
+  }
+
+  .hud-top {
+    gap: var(--gap);
+    padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) 10px calc(14px + var(--safe-l));
+  }
+
+  .hud-block,
+  .hud-block.hud-score {
+    padding: 10px 14px;
+  }
+
+  .hud-score {
+    max-width: 460px;
+  }
+
+  .hud-score-main {
+    gap: 10px;
+  }
+
+  .hud-score-current {
+    font-size: var(--text-xxl);
+  }
+
+  .hud-score-target {
+    font-size: 17px;
+  }
+
+  .hud-progress {
+    margin-top: 7px;
+    height: 8px;
+  }
+
+  .hud-objective {
+    margin-top: 4px;
+    font-size: 12px;
+    gap: 4px 8px;
+  }
+
+  .hud-bottom {
+    gap: var(--gap);
+    padding: 10px calc(14px + var(--safe-r)) calc(12px + var(--safe-b)) calc(14px + var(--safe-l));
+  }
+
+  .hud-status {
+    min-height: 32px;
+    font-size: var(--text-md);
   }
 }
 

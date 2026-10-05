@@ -2,6 +2,22 @@
 
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder. Repo: Golducke31/FungiFlush (main).
 
+## ⚠️ CONVENCIÓN VIGENTE — MÓVIL PRIMERO (desde 2026-10-04)
+- **Todo cambio de UI/HUD apunta al MÓVIL landscape.** Doc: `docs/CONVENCION_MOVIL_PRIMERO.md`.
+- Viewport de referencia **915×412** (`pointer: coarse`); smoke corre a **844×390** (mismo perfil).
+- **Escritorio CONGELADO** hasta cerrar el móvil; lo pendiente se anota en la §6 del doc (no se "arregla de paso").
+- Si un cambio mejora móvil y empeora escritorio → **se hace igual**, pero se registra el impacto.
+- **Preview SIEMPRE en móvil**: `tools/shot-mobile.mjs` (915×412) + `tools/probe-mobile-hud.mjs`. OJO: `tools/shot-joker-slots.mjs` es de **ESCRITORIO** (1440×810), no usarlo como preview móvil.
+- **Gate de escritorio**: `node tools/shot-desktop.mjs` (1440×810) **falla con `exit 1`** si el escritorio se degrada (6 aserciones). Correrlo en TODO cambio que toque la base, los `@media` compartidos o el 3D.
+- CSS móvil: `@media (pointer: coarse)` (styles.css ~6090), `(pointer: coarse) and (max-height:520px)` (~6580/6795/6911, tres bloques con selectores distintos), los `max-height` 560/430/460 (8 bloques, **ya gateados por puntero**) y `(pointer: coarse) and (min-height:600px)` (1 bloque, **TABLET**: devuelve los valores cómodos). **La base es escritorio**: tocarla afecta a los dos. Compartidos por ANCHO (no gatear, el móvil los usa): `min-width:700px` (tutorial 2 col) y `min-width:640px` (`.blind-card.is-boss`).
+- **Tokens de altura de barra**: `--hud-bottom-h` y `--hud-top-h` (`:root`, redefinidos en cada bloque coarse). `.hud-select-hint`/`.hud-missions-toggle`/`.hud-missions-panel` los leen. NO volver a hardcodear 98/104/126.
+- **Gates de viewport**: `tools/shot-desktop.mjs` (1440×810, fine, 6 checks) y `tools/shot-tablet.mjs` (1180×820, coarse+alto, 5 checks). Ambos fallan con `exit 1`. Preview móvil: `tools/shot-mobile.mjs` + `tools/probe-mobile-hud.mjs`.
+- **Trampa del destape**: el reparto TERMINA con la animación de `flip`; una captura tomada apenas aparece la mano sale con los DORSOS. Los visores esperan `handState().every(c => c.flip < 0.5)`. Con SwiftShader (~12 FPS, `dt` acotado) el destape arranca ~1,5 s después.
+- **Puntero**: `src/pointer.ts` es la fuente ÚNICA — `isCoarsePointer()` para LAYOUT (espeja el CSS), `isTouchOnly()` para GPU/aviso de rotar. No usar `matchMedia` suelto (grep debe dar solo `pointer.ts`).
+- **3D por perfil**: `SceneManager.layoutProfile` = `'mobile'|'tablet'|'desktop'`, **getter EN VIVO** (puntero + `TABLET_MIN_H=600`, porque rotar cambia el alto), separado de `isMobile` (que mezcla UA y decide GPU). Ramas `spreadMobile/Tablet/Desktop`, `biasMobile/Tablet/Desktop`, y `deckX`/`discardX` (`TACTILE_PILE_X=±8.5` en táctil vs ±10.5 escritorio → el encuadre pasa a fijarlo el ALTO y la mesa llena la pantalla). **Boost de escala de carta 1.3 en táctil** (en `layoutHand`, con el tope de spacing subido junto). Escritorio congelado.
+- Verificación: typecheck + validate + smoke + **mirar la captura** (un verde no dice que se vea bien).
+
+
 ## Invariants
 - Engine pure: no DOM/Three.js. `src/retention/**` may import `src/engine/**`, never reverse. Seeded mulberry32; VFX never consume engine RNG.
 - Strings via `t()`; content via `nameKey`/`descKey`. Balance in JSON packs. Saves migrate; profiles never null.
@@ -42,6 +58,15 @@ Deck: `engine.deckSize` = piles+hand; **classic = 40, each archetype starter = 2
 
 ## Art rule
 All new art AI-generated img2img (never procedural/SVG); anchor `art-source/art_card_<element>_common.png`. `cardFaceUrl`/`offerFaceUrl` single source. **Every card NEEDS its own `art_card_own_<id>.webp`** — validator FAILS if two cards share an illustration (49 cards / 49 distinct as of Tanda 7). Pipeline: `art-source/*.png` → `npm run art` (= optimize_art.py + genArtIndex.mjs) → `public/art/*.webp` + manifest.
+- **TRAMPA del pipeline**: `fit()` de `optimize_art.py` **RECORTA** el sobrante si el ratio de la fuente no coincide con el target (`art_arena` = 1024×512 = 2:1). Reencuadrar el PNG ANTES de correrlo, o se pierde contenido (nos pasó con el wordmark del arena, cortado dos veces).
+- `art_arena` es la cara SUPERIOR de la plataforma, mapeada 1:1 (losa 24×12 = 2:1). El wordmark "FungiFlush" está **horneado en la textura**: si se ve cortado, el problema es el ASSET, no el código.
+
+## Tipografía y legibilidad (referencia validada)
+- Guía móvil: cuerpo **16px**, títulos **24–32** (hasta 40), subtítulos **18–28**, micro **≥12–14** con alto contraste, táctil **≥44px**.
+- **La cara de la carta NO es CSS**: es una textura 512×744 proyectada en 3D → escala **0,1505** (carta de 112px en pantalla). Para 14px en pantalla hacen falta **93px en la textura** (12,5% del alto). **Agrandar la carta NO agranda el texto.**
+- **CARA COMPACTA (táctil, implementada)**: `CardTextureSpec.compact` + `Card3D.compactFace` (5º param del constructor, entra en la clave de caché como `'c'`/`'f'`); `SceneManager.createCard3D` lo activa con `layoutProfile !== 'desktop'`. Sin taxonomía ni descripción: nombre **92px** (→13,8px reales) con velo detrás, y los 2 chips a `chipScale 2.2` mostrando **glifo + número** (→12px). `drawChip(ctx,…,scale)` con `scale>1` omite la palabra y auto-encoge el valor. Escritorio conserva la cara completa.
+- **Dónde se lee la descripción en móvil: el `.hud-tooltip`** (`HUD.showTooltip`), que aparece al SELECCIONAR la carta y ya trae nombre, taxonomía, rareza, descripción, stats y habilidad. Su tipografía móvil se subió a nombre 19 / desc 14 / micro 12. NO inventar otro panel.
+
 
 ## Fonts / UI stack / typography
 - `--font-ui` = Fredoka SemiCondensed (HUD/body); `--font-display` = Gasoek One (titles/score/card names); Pirata One = wordmark only. Only stylesheet: `src/ui/styles.css`.

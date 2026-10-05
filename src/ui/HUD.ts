@@ -31,6 +31,7 @@ import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
+import { isCoarsePointer } from '../pointer';
 import { SORT_LABEL_KEY, SORT_MODES, type SortMode } from './handSort';
 import { buildArchetypePanel, buildAscensionPanel, buildMenuPanel } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
@@ -883,7 +884,7 @@ export class HUD {
     // por debajo de 64px. El umbral es el mismo que usa el CSS (coarse), asi que
     // desktop y movil coinciden. En escritorio el nombre del ciego queda en su
     // linea aparte (.hud-blind-name, visible).
-    if (window.matchMedia('(pointer: coarse)').matches) {
+    if (isCoarsePointer()) {
       const blind = document.createElement('span');
       blind.className = 'hud-objective-blind';
       blind.textContent = ` · ${t(round.blind.nameKey)}`;

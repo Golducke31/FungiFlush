@@ -48,3 +48,8 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Backups locales de assets fuente. NO son data del proyecto: los originales
+# viven en art-source/ (ya ignorado) y estos son copias de seguridad para poder
+# revertir un asset sin volver a generarlo.
+.workbuddy-ai/*.OLD.*
