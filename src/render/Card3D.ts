@@ -638,6 +638,45 @@ export class Card3D {
     this.faceMaterial.emissiveIntensity = 0.32 + Math.max(0, amount) * 1.6;
   }
 
+  /**
+   * POP de puntuacion: squash & stretch + un destello del borde en el COLOR del
+   * efecto. Es el "golpe" por carta del combo.
+   *
+   * Squash & stretch = un resorte amortiguado (del prototipo de combo): la carta
+   * se estira y se aplasta, oscilando cada vez menos. `home.sy` se compensa con
+   * `2 - s` para que "conservar volumen": si X crece, Y baja, que es lo que hace
+   * que se lea como goma y no como un simple zoom.
+   *
+   * El canal es `home.s*`, NO `group.scale`: `applyTransform()` lo multiplica
+   * por la escala base y por el boost tactil, asi que un `setScalar` aca
+   * aplastaria el boost 1.3 del movil.
+   *
+   * El destello tinta `emissive` (el material usa la cara como emissiveMap). Al
+   * terminar se restaura TODO: si una mano larga interrumpiera el tween, la
+   * carta no puede quedar deformada.
+   */
+  pop(tint: number): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const restore = () => {
+      this.home.sx = 1;
+      this.home.sy = 1;
+      this.home.sz = 1;
+      this.faceMaterial.emissive.setHex(0xffffff);
+      this.faceMaterial.emissiveIntensity = 0.32;
+      this.applyTransform();
+    };
+    this.faceMaterial.emissive.setHex(tint);
+    return anim.fxTween(450, (p) => {
+      const t = p * 0.45;
+      const s = 1 + 0.3 * Math.exp(-7 * t) * Math.cos(18 * t);
+      this.home.sx = s;
+      this.home.sy = 2 - s;
+      this.home.sz = s;
+      this.faceMaterial.emissiveIntensity = 0.32 + (1 - p) * (1 - p) * 1.9;
+      this.applyTransform();
+    }).then(restore, restore);
+  }
+
   /** Fuerza el estado visual al instante (al repartir, para evitar saltos). */
   snapToHome(): void {
     this.lift = this.selected ? 1 : 0;

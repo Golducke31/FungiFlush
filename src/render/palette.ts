@@ -47,6 +47,12 @@ export const UI_COLORS = {
   substrate: 0xf2a63b,
   spores: 0x4fd18b,
   money: 0xffc857,
+  /**
+   * Dorado del MULTIPLICADOR (el `x2`, `x1.5`...). Distingue el paso que
+   * MULTIPLICA del que SUMA: sumar sustrato es ambar, sumar esporas es verde,
+   * multiplicar es dorado. Hoy un `x2` se pintaba igual que cualquier "+4".
+   */
+  xmult: 0xffd36b,
   background: 0x080b10,
   table: 0x0d141c,
   tableLine: 0x1b2b38,

@@ -584,7 +584,7 @@ async function boot(): Promise<void> {
         showCardTooltip(card);
       },
       onLongPressChange: (card) => showCardTooltip(card),
-      onScorePopup: (x, y, text, color) => hud?.popup(x, y, text, color),
+      onScorePopup: (x, y, text, color, combo) => hud?.popup(x, y, text, color, combo ?? 0),
       onScoreTick: (info) => hud?.scoreTick(info),
       // El monitor de frames bajo el nivel solo. El render no muestra avisos:
       // avisa y el controlador decide. NO se persiste en el perfil a proposito:

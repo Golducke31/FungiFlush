@@ -252,7 +252,17 @@ export interface SceneCallbacks {
    */
   onLongPressChange?: (card: CardInstance) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
-  onScorePopup?: (screenX: number, screenY: number, text: string, color: number) => void;
+  /**
+   * Numero flotante. `combo` (0..1) escala su tamaño: el combo se SIENTE porque
+   * los numeros crecen hacia el final.
+   */
+  onScorePopup?: (
+    screenX: number,
+    screenY: number,
+    text: string,
+    color: number,
+    combo?: number,
+  ) => void;
   /**
    * Un paso del calculo ACABA de aparecer en pantalla.
    *
@@ -277,6 +287,11 @@ export interface SceneCallbacks {
     /** Posicion en pantalla de la carta que origina el paso, para los efectos. */
     x: number;
     y: number;
+    /**
+     * Escala del numero (0..1). Crece con el lugar que ocupa el paso dentro del
+     * combo, asi que la ultima carta se dibuja mas grande que la primera.
+     */
+    combo: number;
   }) => void;
   /**
    * El jugador solto una carta sobre una zona. El render sabe QUE zona es; el
@@ -2561,16 +2576,37 @@ export class SceneManager {
     {
       const origin = this.findWorldPosition(step.sourceId, step.targetUid);
       const color = this.colorForAction(step.action, origin.color);
+      const isMult = step.action === 'MULTIPLY_SUBSTRATE' || step.action === 'MULTIPLY_SPORES';
 
-      this.particles.burst(origin.position, step.action === 'MULTIPLY_SPORES' ? 18 : 10, {
+      // ESCALADO DEL COMBO. `c` va de 0 (primer paso) a 1 (ultimo) y maneja
+      // cuantas esporas salen, a que velocidad, cuanto sacude la camara y que
+      // tan grande se dibuja el numero. Es lo que hace que una mano larga se
+      // SIENTA distinta de una corta: antes cada paso era identico al anterior.
+      //
+      // El total se lee de `stepIndex` y funciona porque el primer paso corre
+      // con 0.6 s de delay (`onScoreStep`): para ese entonces el motor ya emitio
+      // todos los `score:step` y `stepIndex` vale el total de la mano.
+      const total = Math.max(1, this.stepIndex);
+      const c = total > 1 ? Math.min(1, index / (total - 1)) : 0;
+
+      this.particles.burst(origin.position, Math.round(14 + c * 40), {
         color,
-        speed: step.action === 'MULTIPLY_SPORES' ? 2.6 : 1.8,
+        speed: 1.8 + c * 2.4,
         upward: 1.8,
-        size: step.action === 'MULTIPLY_SPORES' ? 0.09 : 0.065,
+        size: 0.06 + c * 0.05,
         life: 0.9,
       });
 
-      if (step.action === 'MULTIPLY_SPORES') this.rig.addShake(0.05);
+      // Multiplicar golpea mas fuerte que sumar, y los dos escalan con el combo.
+      this.rig.addShake(isMult ? 0.06 + c * 0.12 : 0.02 + c * 0.04);
+
+      // POP de la carta que origina el paso: squash & stretch + destello en el
+      // color del efecto. No se awaitea: es un adorno que corre en paralelo (los
+      // pasos se escalonan cada 0.18 s y el pop dura 0.45).
+      const source = this.handCards.get(step.sourceId) ?? this.scoringCards.find((x) => x.uid === step.sourceId);
+      if (source && !step.sourceId.startsWith('combo:') && !step.sourceId.startsWith('order:')) {
+        void source.pop(color);
+      }
 
       // HABILIDAD ACTIVADA. Si la carta que origina este paso trae efectos
       // propios (no un combo ni un bonus generico), se marca con un destello en
@@ -2586,7 +2622,7 @@ export class SceneManager {
       const screen = this.projectToScreen(origin.position);
 
       if (this.callbacks.onScorePopup) {
-        this.callbacks.onScorePopup(screen.x, screen.y, text, color);
+        this.callbacks.onScorePopup(screen.x, screen.y, text, color, c);
       }
 
       // El contador en vivo: el HUD necesita saber QUE paso se esta viendo
@@ -2600,6 +2636,7 @@ export class SceneManager {
         negative: step.value < 0,
         x: screen.x,
         y: screen.y,
+        combo: c,
       });
     }
   }
@@ -3234,10 +3271,14 @@ export class SceneManager {
   private colorForAction(action: ScoreStep['action'], fallback: number): number {
     switch (action) {
       case 'ADD_SUBSTRATE':
-      case 'MULTIPLY_SUBSTRATE':
         return UI_COLORS.substrate;
-      case 'ADD_SPORES':
+      // MULTIPLICAR no se pinta como sumar: un `x2` es un momento distinto de un
+      // `+20`, y hasta ahora compartian color. Va en dorado, que ademas no
+      // compite con el ambar del sustrato ni con el verde de las esporas.
+      case 'MULTIPLY_SUBSTRATE':
       case 'MULTIPLY_SPORES':
+        return UI_COLORS.xmult;
+      case 'ADD_SPORES':
       case 'SET_SPORES':
         return UI_COLORS.spores;
       case 'GAIN_MONEY':

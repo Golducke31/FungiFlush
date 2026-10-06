@@ -7,7 +7,7 @@
 > |---|---|
 > | **F1 · Audio** | ✅ **hecha** — ver §B.8 |
 > | **F2 · Núcleo de FX** (`fxTween`, `sleep`, `hitStop`) | ✅ **hecha** — ver §A.11 |
-> | F3 · Combo (`c`, pop, números) | pendiente |
+> | **F3 · Combo** (`c`, pop, números) | ✅ **hecha** — ver §A.12 |
 > | F4 · Micelio | pendiente |
 > | F5 · Cierre + bloom | pendiente |
 > | F6 · Borrar los pixel-art | pendiente (bloqueada por F3-F5) |
@@ -331,6 +331,41 @@ no lo que el framerate permita.
 ⚠️ **Nota de entorno**: GSAP deja un handle vivo en Node, así que la suite de tests se
 colgaba al terminar. `npm test` ahora usa `--test-force-exit` (Node 22). Si se agrega otro
 test que importe GSAP, ya está cubierto.
+
+### A.12 ✅ F3 implementada — el combo
+
+**`SceneManager.runScoreStep`** ahora calcula **`c`** (0 en el primer paso, 1 en el último) y
+con él escala todo:
+
+| Qué | Fórmula |
+|---|---|
+| Esporas | `Math.round(14 + c * 40)` |
+| Velocidad | `1.8 + c * 2.4` |
+| Tamaño de partícula | `0.06 + c * 0.05` |
+| Shake | multiplicador `0.06 + c*0.12`, suma `0.02 + c*0.04` |
+
+**Cómo se saca el total** (no hay `steps` en el payload): el primer paso corre con **0,6 s de
+delay**, así que para cuando arranca el motor ya emitió todos los `score:step` y `stepIndex`
+vale el total de la mano. `c = index / (total - 1)`, con guarda para `total === 1`.
+
+**`Card3D.pop(tint)`** — squash & stretch + destello:
+- `home.sx = 1 + 0.3 * exp(-7t) * cos(18t)` y `home.sy = 2 - sx` (conserva "volumen": si X
+  crece, Y baja, que es lo que se lee como goma y no como un zoom).
+- Usa el canal `home.s*`, **no** `group.scale`: `applyTransform()` lo multiplica por la escala
+  base y por el boost táctil, así que un `setScalar` aplastaría el 1.3 del móvil.
+- El destello tinta `emissive` (el material usa la cara como emissiveMap). **Restaura todo al
+  terminar** y también si el tween se rechaza: una mano larga no puede dejar cartas deformadas.
+
+**Paleta respetada** (`UI_COLORS`): sustrato ámbar, esporas verde, y **`xmult` dorado
+(`0xffd36b`)** para los multiplicadores. Hasta ahora un `x2` se pintaba igual que un `+4`.
+
+**Número flotante**: `.score-popup` ya tenía el keyframe de subida con su rebote; se le agregó
+`--pop-scale` (1 → 1.5) que el render pasa en cada paso.
+
+**Verificación** — `tools/probe-combo.mjs` (nuevo, sirve de gate) juega una mano de 5 cartas y
+mide: **escalas 1 → 1,083 → 1,167 → 1,25 → 1,333 → 1,417 → 1,5** (17 px → 26 px), los `+N` en
+ámbar `rgb(242,166,59)`, los `x1.25` en dorado `rgb(255,211,107)`, squash máximo **0,3** y
+**`sx/sy` de vuelta en 1** al terminar. 0 errores de consola.
 
 ### A.10 `prefers-reduced-motion`
 

@@ -45,83 +45,82 @@ await page.goto(URL_TO_TEST, { waitUntil: 'load', timeout: 45000 });
 await page.waitForFunction(() => Boolean(window.__fungiflush?.engine?.run), { timeout: 30000 });
 await page.waitForTimeout(2000);
 
-/** Muestrea dt y clock por frame durante `ms`, disparando el hit-stop al arrancar. */
-async function sample(hitMs, windowMs = 500) {
-  return page.evaluate(({ hit, win }) => new Promise((resolve) => {
+/**
+ * Muestrea `frames` frames seguidos, opcionalmente tras pedir un hit-stop.
+ *
+ * El headless con SwiftShader oscila entre ~0.7 y ~10 FPS segun la corrida, asi
+ * que NO se puede contar frames congelados (a 0.7 FPS un solo frame consume el
+ * presupuesto entero). La estrategia es otra: pedir un hit-stop MUY largo
+ * (segundos) y mirar los primeros frames, que tienen que estar congelados si o
+ * si. Eso es invariante al framerate.
+ */
+async function sample(hitMs, frames = 4) {
+  return page.evaluate(({ hit, n }) => new Promise((resolve) => {
     const scene = window.__fungiflush.scene;
-    const t0 = performance.now();
-    const startClock = scene.clock;
     if (hit > 0) scene.hitStop(hit);
-    const frames = [];
+    const out = [];
     const tick = () => {
-      const t = performance.now() - t0;
-      frames.push({ t: Math.round(t), dt: Number(scene.lastFrameDt.toFixed(4)) });
-      if (t < win) requestAnimationFrame(tick);
-      else resolve({ frames, clockDelta: Number((scene.clock - startClock).toFixed(3)) });
+      out.push({ dt: Number(scene.lastFrameDt.toFixed(4)), left: Number((scene['hitStopLeft'] ?? 0).toFixed(3)) });
+      if (out.length < n) requestAnimationFrame(tick);
+      else resolve(out);
     };
     requestAnimationFrame(tick);
-  }), { hit: hitMs, win: windowMs });
+  }), { hit: hitMs, n: frames });
 }
 
-function summarize(r, label) {
-  const frozen = r.frames.filter((f) => f.dt === 0);
-  const moving = r.frames.filter((f) => f.dt > 0);
-  console.log(`${label}: ${r.frames.length} frames · congelados ${frozen.length} · moviendo ${moving.length} · clock +${r.clockDelta}s`);
-  return { frozen: frozen.length, moving: moving.length, clockDelta: r.clockDelta };
-}
-
-// El headless con SwiftShader corre a ~3 FPS, asi que las ventanas son largas a
-// proposito: con ventanas cortas entran 1-2 frames y no se mide nada.
-const WINDOW = 1500;
-const HIT = 700;
+const HIT = 3000;
 
 // --- 1. Baseline: sin hit-stop todo avanza ---
-const base = summarize(await sample(0, WINDOW), '1) baseline      ');
+const base = await sample(0, 3);
+console.log(`1) baseline       : dt=${base.map((f) => f.dt).join(', ')} (todos > 0)`);
 
-// --- 2. Hit-stop: la ventana se congela y despues retoma ---
-const hit = summarize(await sample(HIT, WINDOW), '2) hitStop(700)  ');
+// --- 2. Hit-stop largo: los primeros frames quedan congelados ---
+const hit = await sample(HIT, 4);
+console.log(`2) hitStop(3000)  : dt=${hit.map((f) => f.dt).join(', ')} · restante=${hit.map((f) => f.left).join(', ')}`);
+console.log('   (dt tiene que ser 0 en todos, y el restante tiene que seguir > 0)');
 
-// --- 3. La cuenta atras NO se traba (el juego retoma solo) ---
-const after = await page.evaluate(() => new Promise((resolve) => {
+// --- 3. Se libera solo: despues de los 3 s vuelve a moverse ---
+const after = await page.evaluate((ms) => new Promise((resolve) => {
   const scene = window.__fungiflush.scene;
-  const t0 = performance.now();
-  const tick = () => {
-    if (performance.now() - t0 > 400) resolve({ dt: scene.lastFrameDt, left: scene['hitStopLeft'] });
-    else requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}));
-console.log(`3) tras el stop  : dt=${after.dt.toFixed(4)} (tiene que ser > 0) · restante=${after.left}`);
+  setTimeout(() => {
+    const tick = () => {
+      if (scene.lastFrameDt > 0) resolve({ dt: scene.lastFrameDt, left: scene['hitStopLeft'] });
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, ms);
+}), HIT + 400);
+console.log(`3) se libera solo : dt=${after.dt.toFixed(4)} (> 0) · restante=${after.left} (0)`);
 
 // --- 4. reduceMotion lo desactiva ---
-// Se usa el MISMO camino que el juego (`setMode` es lo que propaga el ajuste al
-// render). Tocar el perfil a mano NO alcanza: el SceneManager no lo lee solo.
+// Se usa el MISMO camino que el juego (`setMode` propaga el ajuste al render).
+// Tocar el perfil a mano NO alcanza: el SceneManager no lo lee solo.
 const rmMode = await page.evaluate(() => {
   const scene = window.__fungiflush.scene;
   scene.setMode(scene.mode, { reduceMotion: true });
   return scene.reduceMotion;
 });
-const rm = summarize(await sample(HIT, WINDOW), '4) reduceMotion  ');
+const rm = await sample(HIT, 3);
+console.log(`4) reduceMotion   : scene.reduceMotion=${rmMode} · dt=${rm.map((f) => f.dt).join(', ')} (ninguno congelado)`);
 
-// --- 5. Con reduceMotion el hitStop es un no-op ---
+// --- 5. Con reduceMotion, hitStop es un no-op ---
 const noop = await page.evaluate(() => {
   const scene = window.__fungiflush.scene;
   scene.hitStop(200);
   return scene['hitStopLeft'];
 });
-console.log(`5) reduceMotion  : scene.reduceMotion=${rmMode} · hitStop(200) deja hitStopLeft=${noop}`);
+console.log(`5) reduceMotion   : hitStop(200) deja hitStopLeft=${noop} (tiene que ser 0)`);
 
 console.log('\nerrores de consola:', errors.length ? errors.slice(0, 5) : 'ninguno');
 
 const ok =
-  base.moving > 0 &&
-  base.frozen === 0 &&
-  hit.frozen > 0 &&
-  hit.moving > 0 &&
+  base.every((f) => f.dt > 0) &&
+  hit.every((f) => f.dt === 0) &&
+  hit[hit.length - 1].left > 0 &&   // el presupuesto sigue vivo: no se consumio solo
   after.dt > 0 &&
-  after.left === 0 &&
+  after.left === 0 &&               // y se libera: sin deadlock
   rmMode === true &&
-  rm.frozen === 0 &&
+  rm.every((f) => f.dt > 0) &&
   noop === 0 &&
   errors.length === 0;
 console.log(ok ? '\nOK HIT-STOP FUNCIONANDO' : '\nXX HAY ALGO MAL');

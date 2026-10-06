@@ -3762,6 +3762,8 @@ export class HUD {
     negative: boolean;
     x: number;
     y: number;
+    /** 0..1 segun el lugar del paso en la mano. Escala el tamaño del numero. */
+    combo?: number;
   }): void {
     const steps = Math.max(1, this.scoreStepCount);
     // El puntaje no se acumula de forma lineal, pero repartirlo entre los pasos
@@ -3823,13 +3825,18 @@ export class HUD {
     window.setTimeout(() => el.remove(), kind === 'poison' ? 1700 : 700);
   }
 
-  popup(x: number, y: number, text: string, color: number): void {
+  /**
+   * Numero flotante. `combo` (0..1, segun el lugar del paso en la mano) escala
+   * el tamaño via `--pop-scale`: el combo crece hacia el final.
+   */
+  popup(x: number, y: number, text: string, color: number, combo = 0): void {
     const el = document.createElement('div');
     el.className = 'score-popup';
     el.textContent = text;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.color = hexToCss(color);
+    el.style.setProperty('--pop-scale', (1 + Math.max(0, Math.min(1, combo)) * 0.5).toFixed(3));
     this.elPopups.appendChild(el);
     // Autolimpieza: sin esto el DOM crece sin techo a lo largo de una partida.
     window.setTimeout(() => el.remove(), 1200);
