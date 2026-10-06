@@ -3058,24 +3058,40 @@ export class SceneManager {
       // reloj (y con el, el de GSAP).
       const dt = Math.min(0.05, Math.max(0, rawDt));
       last = now;
-      this.clock += dt;
-      this.lastFrameDt = dt;
+
+      // HIT-STOP: durante unos ms TODO el update recibe dt = 0, asi que los
+      // tweens, las particulas, la cola de FX y la camara se congelan JUNTOS y
+      // en el mismo frame. Congelar solo una parte desincronizaria la secuencia
+      // (el golpe se "siente" justamente porque nada se mueve).
+      //
+      // La cuenta atras va sobre el dt SIN ACOTAR, o sea tiempo de pared:
+      //   - con el dt ya congelado nunca llegaria a cero (juego trabado);
+      //   - con el dt ACOTADO a 0.05, en un equipo a 4 FPS el presupuesto se
+      //     consumiria de a 50 ms por frame y un hit-stop de 90 ms duraria ~4
+      //     frames, o sea medio segundo real. El golpe tiene que durar lo que
+      //     dice, no lo que el framerate permita.
+      // La entrada NO se congela: los eventos de puntero no pasan por aca.
+      this.hitStopLeft = Math.max(0, this.hitStopLeft - rawDt);
+      const step = this.hitStopLeft > 0 ? 0 : dt;
+
+      this.clock += step;
+      this.lastFrameDt = step;
 
       this.runFxQueue();
-      this.tweens.update(dt);
+      this.tweens.update(step);
       // GSAP con el MISMO dt acotado, antes del update de las cartas: asi las
       // secuencias se aplican a `home` y `applyTransform()` las compone en el
       // mismo frame que se dibuja (sin un frame de atraso).
-      anim.updateAnim(dt);
+      anim.updateAnim(step);
       if (this.carouselActive) {
         // Modo carrusel: la mano y los jokers estan ocultos y no se actualizan.
         // Lo unico que se mueve es el anillo.
-        this.carousel?.update(dt, this.clock);
+        this.carousel?.update(step, this.clock);
       } else {
-        for (const card3d of this.handCards.values()) card3d.update(dt, this.clock);
-        for (const card3d of this.jokerCards.values()) card3d.update(dt, this.clock);
-        for (const card3d of this.scoringCards) card3d.update(dt, this.clock);
-        if (this.mode === 'menu') this.updateMenuDecor(dt);
+        for (const card3d of this.handCards.values()) card3d.update(step, this.clock);
+        for (const card3d of this.jokerCards.values()) card3d.update(step, this.clock);
+        for (const card3d of this.scoringCards) card3d.update(step, this.clock);
+        if (this.mode === 'menu') this.updateMenuDecor(step);
       }
 
       // Las zonas solo existen mientras se puede jugar: fuera de 'playing' no
@@ -3083,16 +3099,16 @@ export class SceneManager {
       const zonesActive = this.mode === 'run' && this.engine.run.status === 'playing';
       for (const zone of this.dropZones) {
         if (!zonesActive) zone.setEnabled(false);
-        zone.update(dt, this.clock);
+        zone.update(step, this.clock);
       }
 
       this.updateShadows();
-      this.particles.update(dt);
+      this.particles.update(step);
       // La fisica del dado va con el MISMO dt acotado: es lo que impide que un
       // tiron de frames la mande al infinito.
-      this.die3d?.update(dt);
+      this.die3d?.update(step);
       this.water?.update(this.clock);
-      this.rig.update(dt, this.clock);
+      this.rig.update(step, this.clock);
 
       // Se renderiza SIEMPRE, tambien en el menu.
       //
@@ -3153,6 +3169,26 @@ export class SceneManager {
   stop(): void {
     this.running = false;
     cancelAnimationFrame(this.frameId);
+  }
+
+  /** Segundos de hit-stop que quedan. Ver `hitStop`. */
+  private hitStopLeft = 0;
+
+  /**
+   * Congela la escena unos milisegundos. Es el "golpe" que hace que un cierre de
+   * combo se sienta: la accion se detiene y despues sigue.
+   *
+   * Congela el UPDATE COMPLETO (tweens de GSAP, `TweenManager`, particulas,
+   * cola de FX, cartas y camara), no solo una parte: si solo se frenaran las
+   * particulas, las secuencias seguirian corriendo por detras y al reanudar se
+   * veria el salto.
+   *
+   * Se ignora con `reduceMotion`: es exactamente el tipo de efecto que la gente
+   * pide apagar.
+   */
+  hitStop(ms: number): void {
+    if (this.reduceMotion) return;
+    this.hitStopLeft = Math.max(this.hitStopLeft, ms / 1000);
   }
 
   private queueFx(delay: number, run: () => void): void {

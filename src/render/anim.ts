@@ -77,6 +77,43 @@ export function d(seconds: number): number {
   return reduce ? 0.001 : seconds;
 }
 
+/**
+ * Tween de un solo valor 0→1 que devuelve PROMESA. Es el `tween(ms, fn)` del
+ * prototipo de combo, y existe por una razon concreta: permite escribir las
+ * secuencias con `await` y leerlas de arriba a abajo.
+ *
+ *   await mycelium(a, b);
+ *   activate(i);
+ *   await sleep(420 - i * 70);
+ *
+ * POR QUE NO `setTimeout`: un timeout corre con el reloj REAL y seguiria
+ * avanzando durante el hit-stop, asi que la secuencia se desincronizaria de lo
+ * que se ve. Alimentado por GSAP —y GSAP por `updateAnim(dt)`— el `sleep` se
+ * congela junto con todo lo demas. Esa es toda la gracia.
+ */
+export function fxTween(ms: number, fn: (p: number) => void): Promise<void> {
+  const proxy = { p: 0 };
+  return new Promise((resolve) => {
+    tweenOf(proxy, {
+      p: 1,
+      duration: d(ms / 1000),
+      // Lineal: la curva la pone `fn`. Con un ease aca, `p` dejaria de ser el
+      // progreso real y las formulas del tipo `exp(-7t)` se deformarian.
+      ease: EASE.linear,
+      onUpdate: () => fn(proxy.p),
+      onComplete: () => resolve(),
+    });
+  });
+}
+
+/**
+ * `sleep` ES un tween, no un timer. Es lo que hace que el hit-stop congele
+ * tambien las pausas de una secuencia (ver `fxTween`).
+ */
+export function sleep(ms: number): Promise<void> {
+  return fxTween(ms, () => {});
+}
+
 /** Crea una timeline registrada (para `activeCount`). */
 export function sequence(vars?: gsap.TimelineVars): gsap.core.Timeline {
   const tl = gsap.timeline(vars);

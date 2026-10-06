@@ -6,7 +6,7 @@
 > | Fase | Estado |
 > |---|---|
 > | **F1 · Audio** | ✅ **hecha** — ver §B.8 |
-> | F2 · Núcleo de FX (`fxTween`, `sleep`, `hitStop`) | pendiente |
+> | **F2 · Núcleo de FX** (`fxTween`, `sleep`, `hitStop`) | ✅ **hecha** — ver §A.11 |
 > | F3 · Combo (`c`, pop, números) | pendiente |
 > | F4 · Micelio | pendiente |
 > | F5 · Cierre + bloom | pendiente |
@@ -297,6 +297,40 @@ la carta, el anillo de selección, el shake, el popup y el ticker.
 `grep -rn "fx_burst\|fx_poison\|fx-sprite" src/` devuelve vacío; el bundle no incluye los webp.
 
 ---
+
+### A.11 ✅ F2 implementada — el núcleo
+
+**`src/render/anim.ts`**: `fxTween(ms, fn)` (promesa, progreso 0→1) y `sleep(ms)`.
+Los dos son **GSAP**, no `setTimeout`, y esa es toda la gracia: GSAP lo mueve
+`updateAnim(dt)` desde el loop, así que **el hit-stop los congela junto con todo lo demás**.
+Un `setTimeout` correría con el reloj real y la secuencia se desincronizaría de lo que se ve.
+El `ease` es lineal a propósito: la curva la pone `fn`, y un ease acá deformaría las fórmulas
+del tipo `exp(-7t)`.
+
+**`src/render/SceneManager.ts`**: `hitStop(ms)` + `hitStopLeft`. En el loop se descuenta el
+presupuesto y se pasa `step` (0 o `dt`) a **todo** el update: `clock`, `tweens`, `anim`,
+cartas, carrusel, zonas, partículas, dado, agua y cámara. La entrada **no** se congela (los
+eventos de puntero no pasan por el loop). Con `reduceMotion` es un no-op.
+
+**🐞 BUG que cazó el probe**: la cuenta atrás usaba el `dt` **acotado a 0.05**. A 60 FPS da
+igual, pero en un equipo lento el presupuesto se consume de a 50 ms por frame: un hit-stop de
+90 ms duraba ~4 frames, o sea **medio segundo real**, y en el headless a ~8 FPS se midió un
+congelamiento que se comía la ventana entera. Ahora descuenta el `dt` **sin acotar** (tiempo
+de pared), que es lo que hace el prototipo con `performance.now()`. El golpe dura lo que dice,
+no lo que el framerate permita.
+
+**Verificación**:
+- `tests/fx.test.ts` (nuevo, 4 tests): que `fxTween` recorra 0→1 y resuelva; y sobre todo que
+  **`sleep` NO avance con el reloj real** — se espera 180 ms de verdad y sigue pendiente, y
+  recién con `updateAnim` resuelve. Es la propiedad que hace posible el hit-stop, y sin test
+  se puede romper sin que ningún smoke lo note.
+- `tools/probe-hitstop.mjs` (nuevo): en el loop real, `hitStop(700)` deja el `clock` clavado y
+  todos los frames con `dt = 0`; después **retoma solo** (`hitStopLeft` vuelve a 0, sin
+  deadlock); y con `reduceMotion` no congela nada.
+
+⚠️ **Nota de entorno**: GSAP deja un handle vivo en Node, así que la suite de tests se
+colgaba al terminar. `npm test` ahora usa `--test-force-exit` (Node 22). Si se agrega otro
+test que importe GSAP, ya está cubierto.
 
 ### A.10 `prefers-reduced-motion`
 
