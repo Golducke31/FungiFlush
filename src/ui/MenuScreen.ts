@@ -52,6 +52,10 @@ export interface MenuCallbacks {
   onSelectArchetype: (archetypeId: string) => void;
   /** Abre el panel de arquetipos (boton "Nueva partida"). */
   onOpenArchetypes: () => void;
+  /** Abre el panel de PERFIL (esquina superior izquierda). */
+  onOpenProfile: () => void;
+  /** Abre el panel de DESAFIOS (menu de la esquina superior derecha). */
+  onOpenChallenges: () => void;
 }
 
 /**
@@ -95,46 +99,85 @@ export interface MenuState {
   archetypes?: MenuArchetype[];
   /** Id del arquetipo elegido actualmente (`''` = clasico). */
   selectedArchetype?: string;
+  /**
+   * Nivel de la Colonia Fungi (meta-progresion futura). 0/ausente = todavia no
+   * existe: el icono de Perfil se dibuja igual, sin insignia.
+   */
+  colonyLevel?: number;
 }
 
 /**
- * Marcos de los 4 botones en el arte, en % de 1376x768.
- * Salen de detectar los bordes de cada cartel de madera en la imagen.
+ * Iconos SVG inline del menu (trazo = currentColor, sin dependencias de red).
+ * El arte ya no trae marcos horneados: las acciones secundarias viven en
+ * iconos de esquina, asi que necesitan su propio set.
  */
-const FRAMES = {
-  play: { left: 32.7, top: 69.01, width: 16.13, height: 8.85 },
-  settings: { left: 50.44, top: 69.01, width: 16.13, height: 8.85 },
-  gallery: { left: 32.7, top: 79.69, width: 16.13, height: 9.64 },
-  exit: { left: 50.44, top: 79.69, width: 16.13, height: 9.64 },
+const MENU_ICONS = {
+  // Perfil: una seta (identidad de la cuenta).
+  profile:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11c0-4 3.6-7 8-7s8 3 8 7z"/><path d="M9.5 11v6.2a2.5 2.5 0 0 0 5 0V11"/></svg>',
+  // Menu: hamburguesa (agrupa Ajustes / Coleccion / Desafios).
+  menu:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
 } as const;
 
-type FrameId = keyof typeof FRAMES;
-
-/** Boton principal: fondo = recorte del marco del arte, texto encima. */
-function artButton(frame: FrameId, label: string, act: string, onClick: () => void): HTMLButtonElement {
+/** Boton de icono de esquina (Perfil, Menu). */
+function iconButton(
+  glyph: string,
+  act: string,
+  label: string,
+  onClick: () => void,
+  extraClass = '',
+): HTMLButtonElement {
   const el = document.createElement('button');
   el.type = 'button';
-  el.className = `menu-btn menu-btn--${frame}`;
+  el.className = `menu-icon ${extraClass}`.trim();
   el.dataset['act'] = act;
-  const f = FRAMES[frame];
-  el.style.left = `${f.left}%`;
-  el.style.top = `${f.top}%`;
-  el.style.width = `${f.width}%`;
-  el.style.height = `${f.height}%`;
-
-  const span = document.createElement('span');
-  span.className = 'menu-btn-label';
-  span.textContent = label;
-  el.appendChild(span);
+  el.setAttribute('aria-label', label);
+  el.title = label;
+  el.innerHTML = glyph;
   el.addEventListener('click', onClick);
   return el;
 }
 
-interface ChipOptions {
-  disabled?: boolean;
-  hidden?: boolean;
-  title?: string;
-  mod: string;
+/** Item del desplegable del menu (Ajustes / Coleccion / Desafios). */
+function dropItem(label: string, act: string, onClick: () => void): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'menu-drop-item';
+  el.dataset['act'] = act;
+  el.textContent = label;
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+/**
+ * Boton HEROE: la tipografia del juego como boton, sin caja.
+ *
+ * El logotipo (`menu-logo.png` / `menu-logo-continue.png`) ES el boton: la
+ * imagen es la cara visible y el `aria-label` dice que hace. Se usan `<img>`
+ * (y no `background`) porque los dos logos tienen proporciones distintas y asi
+ * cada uno conserva la suya.
+ */
+function heroButton(
+  mod: string,
+  src: string,
+  label: string,
+  act: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = `menu-hero-cta menu-hero-cta--${mod}`;
+  el.dataset['act'] = act;
+  el.setAttribute('aria-label', label);
+  const img = document.createElement('img');
+  img.className = 'menu-hero-logo';
+  img.src = src;
+  img.alt = '';
+  img.draggable = false;
+  el.appendChild(img);
+  el.addEventListener('click', onClick);
+  return el;
 }
 
 /** Clave i18n del nombre de un nivel de ascension. A0 = base. */
@@ -147,20 +190,6 @@ export function ascensionDescKey(level: number): string {
   return level > 0 ? `ascension.a${level}.desc` : 'ascension.a0.desc';
 }
 
-/** Pill secundario para acciones que NO van sobre uno de los 4 marcos. */
-function chip(label: string, act: string, onClick: () => void, opts: ChipOptions): HTMLButtonElement {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = `menu-ghost ${opts.mod}`;
-  el.dataset['act'] = act;
-  el.textContent = label;
-  if (opts.disabled) el.classList.add('is-disabled');
-  if (opts.hidden) el.classList.add('is-hidden');
-  if (opts.title) el.title = opts.title;
-  el.addEventListener('click', onClick);
-  return el;
-}
-
 export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'panel is-menu';
@@ -171,15 +200,16 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   srTitle.textContent = t('ui.title');
   panel.appendChild(srTitle);
 
+  // --- Capa base: el arte (bosque + titulo horneado). Ya NO trae marcos. ---
   const art = document.createElement('div');
   art.className = 'menu-art';
+  art.setAttribute('aria-hidden', 'true');
 
-  // --- Capa 1: atmosfera (esporas que suben) ---
-  // Math.random() es correcto aca: son decorativas y NUNCA deben tocar el RNG
-  // del motor (el determinismo de las semillas es un invariante del juego).
+  // Esporas flotantes. Math.random() es correcto aca: son decorativas y NUNCA
+  // deben tocar el RNG del motor (el determinismo de las semillas es un
+  // invariante del juego).
   const atmosphere = document.createElement('div');
   atmosphere.className = 'menu-atmosphere';
-  atmosphere.setAttribute('aria-hidden', 'true');
   for (let i = 0; i < 24; i++) {
     const spore = document.createElement('span');
     spore.className = 'menu-spore';
@@ -190,123 +220,380 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
     spore.style.setProperty('--drift', `${(Math.random() * 80 - 40).toFixed(0)}px`);
     atmosphere.appendChild(spore);
   }
-
-  // --- Capa 2: halo del titulo ---
-  const glow = document.createElement('div');
-  glow.className = 'menu-title-glow';
-  glow.setAttribute('aria-hidden', 'true');
-
-  // --- Capa 3: los 4 botones principales (alineados a los marcos) ---
-  // "Nueva partida" abre el selector de ARQUETIPO (la forma de puntuar) en vez
-  // de arrancar directo. El arquetipo es una decision de run, no un ajuste: si
-  // se pudiera cambiar despues, dejaria de ser una identidad.
-  const hasArchetypes = (state.archetypes?.length ?? 0) > 0;
-  const play = artButton(
-    'play',
-    t('menu.newRun'),
-    'new',
-    hasArchetypes ? callbacks.onOpenArchetypes : callbacks.onStartRun,
-  );
-  const settings = artButton('settings', t('menu.settings'), 'settings', callbacks.onOpenSettings);
-  const gallery = artButton('gallery', t('menu.collection'), 'collection', callbacks.onOpenCollection);
-  const credits = artButton('exit', t('menu.about'), 'about', callbacks.onOpenAbout);
-
-  // "Continuar" SOLO aparece si hay partida guardada, como chip pegado arriba
-  // del marco de "Nueva partida". Se deja SIEMPRE en el DOM (con is-disabled +
-  // is-hidden) porque el smoke lee su clase `is-disabled` para saber que no hay
-  // partida en curso (ver tools/smoke.mjs).
-  const hasSave = state.continueLabel !== null;
-  const continueChip = chip(t('menu.continue'), 'continue', callbacks.onContinueRun, {
-    mod: 'menu-ghost--continue',
-    disabled: !hasSave,
-    hidden: !hasSave,
-    ...(hasSave ? {} : { title: t('menu.noSave') }),
-  });
-
-  art.append(atmosphere, glow, play, settings, gallery, credits, continueChip);
+  art.appendChild(atmosphere);
   panel.appendChild(art);
 
-  // --- Chips de la esquina superior izquierda ---
-  // Van en una FILA (no cada uno posicionado a mano) porque son tres y el
-  // ancho de cada uno depende del idioma. Siguen fuera del arte para que el
-  // `cover` nunca los recorte, y respetan safe-area: en landscape el notch
-  // muerde justo ahi.
-  const chips = document.createElement('div');
-  chips.className = 'menu-chips';
+  // --- Capa de UI: layout anclado al VIEWPORT (ya no al arte) ---
+  // La jerarquia responde una sola pregunta: "que deberia hacer ahora?".
+  //   1. heroe (Continuar / Nueva partida)  2. recomendacion  3. perfil  4. resto.
+  const layout = document.createElement('div');
+  layout.className = 'menu-layout';
 
-  if (state.showBoard && state.onOpenBoard) {
-    chips.appendChild(chip(t('board.title'), 'board', state.onOpenBoard, { mod: 'menu-ghost--board' }));
+  // ---- Fila superior: Perfil (izq) + menu hamburguesa (der) ----
+  const top = document.createElement('div');
+  top.className = 'menu-top';
+
+  const profileBtn = iconButton(
+    MENU_ICONS.profile,
+    'profile',
+    t('menu.profile'),
+    callbacks.onOpenProfile,
+    'menu-icon--profile',
+  );
+  // Nivel de la Colonia Fungi (meta-progresion futura): si todavia no existe
+  // (0), el icono se dibuja igual, sin insignia.
+  if ((state.colonyLevel ?? 0) > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'menu-icon-badge';
+    badge.textContent = String(state.colonyLevel);
+    profileBtn.appendChild(badge);
   }
 
-  // Ascension: el chip LLEVA EL NIVEL PUESTO (A3, A0...), porque es un estado
-  // persistente que cambia las reglas. Si no hay contenido de ascension o el
-  // jugador no desbloqueo nada, no aparece: un chip "A0" permanente es ruido.
-  if (state.ascension && state.ascension.max > 0 && state.onOpenAscension) {
+  const topRight = document.createElement('div');
+  topRight.className = 'menu-top-right';
+
+  // Desplegable SIEMPRE en el DOM (oculto): las acciones secundarias siguen
+  // siendo alcanzables y testeables aunque el jugador no lo abra.
+  const drop = document.createElement('div');
+  drop.className = 'menu-drop';
+  drop.appendChild(dropItem(t('menu.settings'), 'settings', callbacks.onOpenSettings));
+  drop.appendChild(dropItem(t('menu.collection'), 'collection', callbacks.onOpenCollection));
+  drop.appendChild(dropItem(t('menu.challenges'), 'challenges', callbacks.onOpenChallenges));
+
+  const menuBtn = iconButton(
+    MENU_ICONS.menu,
+    'menu-toggle',
+    t('menu.openMenu'),
+    () => {
+      const open = drop.classList.toggle('is-open');
+      menuBtn.setAttribute('aria-expanded', String(open));
+    },
+    'menu-icon--menu',
+  );
+  menuBtn.setAttribute('aria-expanded', 'false');
+  menuBtn.setAttribute('aria-haspopup', 'true');
+
+  topRight.append(drop, menuBtn);
+  top.append(profileBtn, topRight);
+  layout.appendChild(top);
+
+  // ---- Heroe: el logotipo-boton ----
+  // La recomendacion contextual se retiro de aca (competia con el logotipo y se
+  // superponia): el dato sigue en `HUD.setMenuMeta`, listo para reubicarlo.
+  const hero = document.createElement('div');
+  hero.className = 'menu-hero';
+
+  const hasSave = state.continueLabel !== null;
+  const hasArchetypes = (state.archetypes?.length ?? 0) > 0;
+  const ctaWrap = document.createElement('div');
+  ctaWrap.className = `menu-hero-cta-wrap${hasSave ? ' is-has-save' : ''}`;
+
+  // Halo que respira detras del logotipo: da profundidad al boton sin caja.
+  const glow = document.createElement('div');
+  glow.className = 'menu-hero-glow';
+  glow.setAttribute('aria-hidden', 'true');
+  ctaWrap.appendChild(glow);
+
+  // "Nueva partida" abre el selector de ARQUETIPO (la forma de puntuar) en vez
+  // de arrancar directo: el arquetipo es una decision de run, no un ajuste.
+  ctaWrap.appendChild(
+    heroButton(
+      'new',
+      'menu-logo.png',
+      t('menu.newRun'),
+      'new',
+      hasArchetypes ? callbacks.onOpenArchetypes : callbacks.onStartRun,
+    ),
+  );
+
+  // "Continuar" SOLO se ve si hay partida guardada, pero SIEMPRE vive en el DOM
+  // con `is-disabled`: el smoke lee esa clase para saber que no hay partida en
+  // curso (ver tools/smoke.mjs).
+  const continueBtn = heroButton(
+    'continue',
+    'menu-logo-continue.png',
+    t('menu.continue'),
+    'continue',
+    callbacks.onContinueRun,
+  );
+  if (!hasSave) {
+    continueBtn.classList.add('is-disabled', 'is-hidden');
+    continueBtn.title = t('menu.noSave');
+  }
+  ctaWrap.appendChild(continueBtn);
+  hero.appendChild(ctaWrap);
+
+  const status = document.createElement('p');
+  status.className = 'menu-hero-status';
+  status.textContent = hasSave ? (state.continueLabel ?? '') : t('menu.noSave');
+  hero.appendChild(status);
+
+  layout.appendChild(hero);
+
+  // ---- Version (abajo-derecha) ----
+  const version = document.createElement('span');
+  version.className = 'menu-version';
+  version.textContent = t('menu.version', { version: state.version });
+  layout.appendChild(version);
+
+  panel.appendChild(layout);
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Panel de Perfil (esquina superior izquierda)
+// ---------------------------------------------------------------------------
+
+export interface ProfilePanelCallbacks {
+  onOpenAchievements: () => void;
+  onOpenHistory: () => void;
+  onClose: () => void;
+}
+
+export interface ProfilePanelState {
+  /** Nivel de la Colonia Fungi (meta-progresion futura). 0/ausente = aun no existe. */
+  colonyLevel?: number;
+  bestAnte?: number;
+  wins?: number;
+  streak?: number;
+  achievements?: { unlocked: number; total: number };
+}
+
+/**
+ * Panel de PERFIL: la identidad de la cuenta.
+ *
+ * Agrupa lo que "es tuyo" y no "que vas a jugar": el nivel de la Colonia Fungi
+ * (meta-progresion futura, hoy en placeholder), el progreso y los accesos a
+ * Logros e Historial. La Coleccion NO vive aca: es contenido y tiene su propia
+ * puerta en el menu desplegable.
+ */
+export function buildProfilePanel(
+  state: ProfilePanelState,
+  callbacks: ProfilePanelCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-profile';
+
+  const title = document.createElement('h2');
+  title.className = 'panel-title';
+  title.textContent = t('menu.profile');
+
+  const sub = document.createElement('p');
+  sub.className = 'panel-subtitle';
+  sub.textContent = t('menu.profileSubtitle');
+
+  const body = document.createElement('div');
+  body.className = 'profile-body';
+
+  // --- Colonia Fungi (meta-progresion futura) ---
+  const level = state.colonyLevel ?? 0;
+  const colony = document.createElement('div');
+  colony.className = 'profile-colony is-soon';
+  const colonyTop = document.createElement('div');
+  colonyTop.className = 'profile-colony-top';
+  const colonyName = document.createElement('span');
+  colonyName.className = 'profile-colony-name';
+  colonyName.textContent =
+    level > 0 ? `${t('menu.colony')} · ${t('menu.colonyLevel', { level })}` : t('menu.colony');
+  const soon = document.createElement('span');
+  soon.className = 'profile-colony-soon';
+  soon.textContent = t('menu.colonySoon');
+  colonyTop.append(colonyName, soon);
+  const bar = document.createElement('div');
+  bar.className = 'profile-colony-bar';
+  const fill = document.createElement('div');
+  fill.className = 'profile-colony-fill';
+  fill.style.width = '0%';
+  bar.appendChild(fill);
+  colony.append(colonyTop, bar);
+
+  // --- Progreso actual (hoy: ante / victorias / racha) ---
+  const stats = document.createElement('div');
+  stats.className = 'profile-stats';
+  const stat = (label: string, value: string): HTMLElement => {
+    const el = document.createElement('div');
+    el.className = 'profile-stat';
+    const v = document.createElement('span');
+    v.className = 'profile-stat-value';
+    v.textContent = value;
+    const l = document.createElement('span');
+    l.className = 'profile-stat-label';
+    l.textContent = label;
+    el.append(v, l);
+    return el;
+  };
+  stats.append(
+    stat(t('menu.progress.bestAnte'), String(state.bestAnte ?? 0)),
+    stat(t('menu.progress.wins'), String(state.wins ?? 0)),
+    stat(t('menu.progress.streak'), String(state.streak ?? 0)),
+  );
+
+  // --- Accesos: Logros + Historial ---
+  const grid = document.createElement('div');
+  grid.className = 'profile-grid';
+  const card = (label: string, detail: string, act: string, onClick: () => void): HTMLButtonElement => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'profile-card';
+    el.dataset['act'] = act;
+    const name = document.createElement('span');
+    name.className = 'profile-card-name';
+    name.textContent = label;
+    const det = document.createElement('span');
+    det.className = 'profile-card-detail';
+    det.textContent = detail;
+    el.append(name, det);
+    el.addEventListener('click', onClick);
+    return el;
+  };
+  const ach = state.achievements;
+  grid.append(
+    card(
+      t('menu.achievements'),
+      ach ? `${ach.unlocked}/${ach.total}` : '',
+      'achievements',
+      callbacks.onOpenAchievements,
+    ),
+    card(t('menu.history'), '', 'history', callbacks.onOpenHistory),
+  );
+
+  body.append(colony, stats, grid);
+
+  const actions = document.createElement('div');
+  actions.className = 'panel-actions';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'btn';
+  close.dataset['act'] = 'profile-close';
+  close.textContent = t('ui.close');
+  close.addEventListener('click', callbacks.onClose);
+  actions.appendChild(close);
+
+  panel.append(title, sub, body, actions);
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Panel de Desafios (menu de la esquina superior derecha)
+// ---------------------------------------------------------------------------
+
+export interface ChallengesPanelCallbacks {
+  onOpenDaily: () => void;
+  onOpenAscension: () => void;
+  onOpenArchetypes: () => void;
+  onOpenBoard: () => void;
+  onClose: () => void;
+}
+
+export interface ChallengesPanelState {
+  dailyPending?: boolean;
+  ascension?: { unlocked: number; selected: number; max: number };
+  archetypes?: MenuArchetype[];
+  selectedArchetype?: string;
+  showBoard?: boolean;
+}
+
+/**
+ * Panel de DESAFIOS: "como queres jugar".
+ *
+ * Reune los modos que cambian las reglas o la forma de puntuar: el desafio
+ * diario, la Ascension (dificultad) y el Arquetipo (forma de puntuar), mas el
+ * Duelo micelial cuando el contenido lo trae. Antes eran chips sueltos en el
+ * menu; ahora viven juntos y el centro queda libre para la accion principal.
+ */
+export function buildChallengesPanel(
+  state: ChallengesPanelState,
+  callbacks: ChallengesPanelCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-challenges';
+
+  const title = document.createElement('h2');
+  title.className = 'panel-title';
+  title.textContent = t('menu.challenges');
+
+  const sub = document.createElement('p');
+  sub.className = 'panel-subtitle';
+  sub.textContent = t('menu.challengesSubtitle');
+
+  const body = document.createElement('div');
+  body.className = 'challenges-body';
+  const grid = document.createElement('div');
+  grid.className = 'challenges-grid';
+
+  const card = (
+    label: string,
+    detail: string,
+    act: string,
+    onClick: () => void,
+    pending = false,
+  ): HTMLButtonElement => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = `challenges-card${pending ? ' is-pending' : ''}`;
+    el.dataset['act'] = act;
+    const name = document.createElement('span');
+    name.className = 'challenges-card-name';
+    name.textContent = label;
+    const det = document.createElement('span');
+    det.className = 'challenges-card-detail';
+    det.textContent = detail;
+    el.append(name, det);
+    el.addEventListener('click', onClick);
+    return el;
+  };
+
+  grid.appendChild(
+    card(
+      t('menu.daily'),
+      state.dailyPending ? t('daily.ready') : '',
+      'daily',
+      callbacks.onOpenDaily,
+      Boolean(state.dailyPending),
+    ),
+  );
+
+  if (state.ascension && state.ascension.max > 0) {
     const lvl = state.ascension.selected;
-    const label = lvl > 0 ? `A${lvl}` : t('ascension.off');
-    chips.appendChild(
-      chip(label, 'ascension', state.onOpenAscension, {
-        mod: `menu-ghost--ascension${lvl > 0 ? ' is-active' : ''}`,
-        ...(lvl > 0 ? { title: t(ascensionNameKey(lvl)) } : { title: t('ascension.title') }),
-      }),
-    );
-  }
-
-  // Arquetipo: el chip dice CON QUE se va a jugar. Sin arquetipos en el
-  // contenido no aparece, para no ofrecer una puerta a un panel vacio.
-  {
-    const archetypes = state.archetypes ?? [];
-    const selected = archetypes.find((a) => a.id === (state.selectedArchetype ?? ''));
-    const classic = !selected;
-    chips.appendChild(
-      chip(
-        classic ? t('archetype.classic.name') : t(selected.nameKey),
-        'archetype',
-        callbacks.onOpenArchetypes,
-        {
-          mod: `menu-ghost--archetype${classic ? '' : ' is-active'}`,
-          ...(classic
-            ? { title: t('archetype.classic.tagline') }
-            : { title: t(selected.taglineKey) }),
-          hidden: archetypes.length === 0,
-        },
+    grid.appendChild(
+      card(
+        t('ascension.title'),
+        lvl > 0 ? t(ascensionNameKey(lvl)) : t('ascension.off'),
+        'ascension',
+        callbacks.onOpenAscension,
       ),
     );
   }
 
-  chips.appendChild(
-    chip(t('menu.daily'), 'daily', callbacks.onOpenDaily, {      mod: `menu-ghost--daily${state.dailyPending ? ' is-pending' : ''}`,
-      ...(state.dailyPending ? { title: t('daily.ready') } : {}),
-    }),
-  );
-  chips.appendChild(
-    chip(t('menu.achievements'), 'achievements', callbacks.onOpenAchievements, {
-      mod: 'menu-ghost--achievements',
-    }),
-  );
-  chips.appendChild(
-    chip(t('menu.cosmetics'), 'cosmetics', callbacks.onOpenCosmetics, {
-      mod: 'menu-ghost--cosmetics',
-    }),
-  );
-  chips.appendChild(
-    chip(t('menu.history'), 'history', callbacks.onOpenHistory, {
-      mod: 'menu-ghost--history',
-    }),
-  );
-  chips.appendChild(
-    chip(t('menu.guide'), 'guide', callbacks.onOpenGuide, {
-      mod: 'menu-ghost--guide',
-    }),
-  );
-  panel.appendChild(chips);
+  if ((state.archetypes?.length ?? 0) > 0) {
+    const selected = (state.archetypes ?? []).find((a) => a.id === (state.selectedArchetype ?? ''));
+    grid.appendChild(
+      card(
+        t('archetype.title'),
+        selected ? t(selected.nameKey) : t('archetype.classic.name'),
+        'archetype',
+        callbacks.onOpenArchetypes,
+      ),
+    );
+  }
 
-  // Version (esquina superior derecha).
-  const version = document.createElement('span');
-  version.className = 'menu-version';
-  version.textContent = t('menu.version', { version: state.version });
-  panel.appendChild(version);
+  if (state.showBoard) {
+    grid.appendChild(card(t('board.title'), t('menu.modes'), 'board', callbacks.onOpenBoard));
+  }
 
+  body.appendChild(grid);
+
+  const actions = document.createElement('div');
+  actions.className = 'panel-actions';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'btn';
+  close.dataset['act'] = 'challenges-close';
+  close.textContent = t('ui.close');
+  close.addEventListener('click', callbacks.onClose);
+  actions.appendChild(close);
+
+  panel.append(title, sub, body, actions);
   return panel;
 }
 

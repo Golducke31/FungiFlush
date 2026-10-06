@@ -14,6 +14,10 @@ export interface SettingsCallbacks {
   onPatch: (patch: Partial<ProfileSettings>) => void;
   onToggleLanguage: () => void;
   onClose: () => void;
+  /** Opcional: la Guia vive dentro de Ajustes (antes era un chip del menu). */
+  onOpenGuide?: () => void;
+  /** Opcional: "Acerca de" vive dentro de Ajustes. */
+  onOpenAbout?: () => void;
 }
 
 function field(label: HTMLElement, control: HTMLElement, mod?: string): HTMLDivElement {
@@ -181,6 +185,26 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
 
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
+
+  // Guia y "Acerca de" viven aca: son informacion de la app, no modos de juego.
+  // Antes eran botones sueltos del menu principal y competian con la accion.
+  if (callbacks.onOpenGuide) {
+    const guide = document.createElement('button');
+    guide.className = 'btn is-ghost';
+    guide.textContent = t('menu.guide');
+    guide.dataset['act'] = 'guide';
+    guide.addEventListener('click', () => callbacks.onOpenGuide?.());
+    actions.appendChild(guide);
+  }
+  if (callbacks.onOpenAbout) {
+    const about = document.createElement('button');
+    about.className = 'btn is-ghost';
+    about.textContent = t('menu.about');
+    about.dataset['act'] = 'about';
+    about.addEventListener('click', () => callbacks.onOpenAbout?.());
+    actions.appendChild(about);
+  }
+
   const close = document.createElement('button');
   close.className = 'btn is-play';
   close.textContent = t('settings.close');

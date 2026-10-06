@@ -209,22 +209,73 @@ async function visit(label, name) {
 await click('[data-act="tutorial-close"]');
 await visit('menu', 'menu');
 
-const menuPanels = [
-  ['settings', 'settings', '[data-act="close"]'],
-  ['collection', 'collection', '[data-act="close"]'],
-  ['about', 'about', '[data-act="close"]'],
-  ['history', 'history', '[data-act="history-close"]'],
-  ['guide', 'guide', '[data-act="tutorial-close"]'],
-  ['achievements', 'achievements', '[data-act="achievements-close"]'],
-  ['cosmetics', 'cosmetics', '[data-act="cosmetics-close"]'],
-  ['daily', 'daily', '[data-act="daily-close"]'],
-  ['archetype', 'archetypes', '[data-act="archetypes-close"]'],
-  ['ascension', 'ascension', '[data-act="ascension-close"]'],
-  ['board', 'board', '[data-act="close"]'],
-];
-for (const [act, name, close] of menuPanels) {
-  if (!(await has(`.panel.is-menu [data-act="${act}"]`))) continue;
+// El menu agrupa las acciones secundarias: un desplegable (Ajustes /
+// Coleccion / Desafios) y el panel de Perfil. Cada entrada declara por donde
+// LLEGAR hasta su boton antes de auditarlo.
+const openDrop = async () => {
+  await click('.panel.is-menu [data-act="menu-toggle"]');
+  await page.waitForTimeout(200);
+};
+const openMenuAction = async (act) => {
+  await openDrop();
   await click(`.panel.is-menu [data-act="${act}"]`);
+  await page.waitForTimeout(500);
+};
+/** Vuelve al menu desde cualquier panel (y apaga el carrusel 3D). */
+const backToMenu = async () => {
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    ff?.scene?.setCarousel?.(null);
+    ff?.hud?.showMenu();
+  });
+  await page.waitForTimeout(400);
+};
+
+const PANEL_OF = {
+  menu: '.panel.is-menu',
+  profile: '.panel.is-profile',
+  settings: '.panel.is-settings',
+  collection: '.panel.is-collection',
+  challenges: '.panel.is-challenges',
+};
+
+const menuPanels = [
+  // [act, nombre, close, padre]  padre: drop | menu | profile | settings | collection | challenges
+  ['settings', 'settings', '[data-act="close"]', 'drop'],
+  ['collection', 'collection', '[data-act="close"]', 'drop'],
+  ['challenges', 'challenges', '[data-act="challenges-close"]', 'drop'],
+  ['profile', 'profile', '[data-act="profile-close"]', 'menu'],
+  // Dentro de PERFIL
+  ['history', 'history', '[data-act="history-close"]', 'profile'],
+  ['achievements', 'achievements', '[data-act="achievements-close"]', 'profile'],
+  // Dentro de AJUSTES
+  ['guide', 'guide', '[data-act="tutorial-close"]', 'settings'],
+  ['about', 'about', '[data-act="close"]', 'settings'],
+  // Dentro de COLECCION
+  ['cosmetics', 'cosmetics', '[data-act="cosmetics-close"]', 'collection'],
+  // Dentro de DESAFIOS
+  ['daily', 'daily', '[data-act="daily-close"]', 'challenges'],
+  ['archetype', 'archetypes', '[data-act="archetypes-close"]', 'challenges'],
+  ['ascension', 'ascension', '[data-act="ascension-close"]', 'challenges'],
+  ['board', 'board', '[data-act="close"]', 'challenges'],
+];
+for (const [act, name, close, parent] of menuPanels) {
+  await backToMenu();
+  if (parent === 'drop') {
+    await openMenuAction(act);
+  } else {
+    // Abrir el panel padre y despues el boton interno.
+    if (parent === 'profile') {
+      await click('.panel.is-menu [data-act="profile"]');
+      await page.waitForTimeout(500);
+    } else if (parent !== 'menu') {
+      await openMenuAction(parent);
+    }
+    const sel = `${PANEL_OF[parent] ?? '.panel.is-menu'} [data-act="${act}"]`;
+    if (!(await has(sel))) continue;
+    await click(sel);
+    await page.waitForTimeout(600);
+  }
   await visit(name, name);
   // El TABLERO arranca con la cortina de "pasa el dispositivo" (modal a
   // proposito). Taparla y volver a auditar: lo que importa es que DESPUES los
@@ -243,7 +294,8 @@ for (const [act, name, close] of menuPanels) {
 }
 
 // Sub-paneles de COLECCION (tienda de expansiones y pase)
-await click('.panel.is-menu [data-act="collection"]');
+await backToMenu();
+await openMenuAction('collection');
 await page.waitForTimeout(700);
 for (const [act, name] of [['expansions', 'store'], ['pass', 'pass']]) {
   if (!(await has(`.panel.is-collection [data-act="${act}"]`))) continue;

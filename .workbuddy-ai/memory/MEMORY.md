@@ -11,6 +11,15 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo: Goldu
 ## Top HUD (estado final 73d6e74)
 `.hud-top` relative; `.hud-score` SIN losa, `position:absolute;left:50%;translateX(-50%)` → diana+score centrados. ANTE (izq) y FUNGIS (junto a IDIOMA) conservan losas. `scene.onTransitionProgress`→`HUD.setTransitionProgress` alterna `is-transition-out`(<0.55)/`is-transition-in`(≥0.55).
 
+## Menú principal (rediseño 2026-10-06)
+- UI **DESACOPLADA del arte**: `.menu-layout` (flex anclado al viewport) → `.menu-top` (Perfil izq + hamburguesa der) + `.menu-hero` (recomendación + logotipo-botón + estado). El arte es solo fondo.
+- **HÉROE = el logotipo como botón**, sin caja, con halo + velo: `public/menu-logo.png` (Nueva partida) y `public/menu-logo-continue.png` (Continuar, solo si hay partida). `[data-act="continue"]` SIEMPRE en el DOM con `is-disabled` sin guardado (lo lee el smoke).
+- Secundarias: **Perfil** (arriba-izq → `buildProfilePanel`: Colonia placeholder + stats + Logros + Historial) y **desplegable** `[data-act="menu-toggle"]` → Ajustes (con Guía y Acerca de), Colección (con Cosméticos), Desafíos (`buildChallengesPanel`: Diaria, Ascensión, Arquetipo, Duelo).
+- `public/menu-bg.jpg` regenerado SIN los 4 marcos pero **CON el título cian**: el "FUNGI FLUSH" del fondo **ES el logo** (arriba). El botón (logotipo de hongos) va **DEBAJO**, acotado a `min(64vw, 38vh*1.83)` para no pisarlo, con **placa difusa + neón** (el bosque es cian y se lo comía).
+- La **recomendación contextual** se RETIRÓ del menú (competía con el logotipo); el dato sigue calculándose en `HUD.setMenuMeta().recommendation`.
+- Estado meta: `HUD.setMenuMeta()` + `main.ts syncMenuMeta()`. **Empujarlo ANTES de `engine.enterMenu()`** o el panel no se redibuja.
+- "Nueva partida" abre el selector de arquetipo YA en el primer render: las tools que clickean `[data-act="new"]` deben añadir el paso `archetypes-start`.
+
 ## Invariants / Checks
 - Engine puro (sin DOM/Three). `retention/**` importa `engine/**`. mulberry32 sembrado; VFX NO usa RNG engine. Strings `t()`; `nameKey`/`descKey`; balance en JSON. Render cada rAF; solo HUD/overlay `pointer-events:auto`. Tap ≤6px/700ms.
 - `typecheck`/`test`/`validate`/`smoke`/`build:release`. Prefijar dev/smoke/build con `CODEBUDDY_SAFE_DELETE_ENABLED=0`. NUNCA `sed -i` Win (mata casing). `tools/simulate.ts` corre 100 partidas al importar; si el engine gana fase, DEBE ganar branch o aborta. `sim:balance`(500)+`sim:board` verde.

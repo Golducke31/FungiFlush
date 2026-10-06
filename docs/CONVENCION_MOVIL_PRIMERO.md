@@ -180,6 +180,33 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
 - Los 8 bloques `max-height` de la base ya están gateados por puntero (§3).
 
 **Pendiente para la fase de escritorio:**
+- **Rediseño del MENÚ PRINCIPAL (2026-10-06)** — cambio GLOBAL (lo pidió el usuario):
+  - El menú ya **no se alinea al arte**: la UI es un layout flex anclado al viewport
+    (`.menu-layout` → `.menu-top` + `.menu-hero`). Ver `src/ui/MenuScreen.ts`.
+  - `public/menu-bg.jpg` se regeneró **sin los 4 marcos**, pero **CONSERVA el título cian**:
+    el "FUNGI FLUSH" del fondo ES el logo de la pantalla (decisión del usuario).
+  - El botón principal (el logotipo de hongos, `public/menu-logo.png` = Nueva partida,
+    `public/menu-logo-continue.png` = Continuar) va **DEBAJO del título**, más chico, para
+    no pisarlo, con **placa difusa + neón** (el bosque es cian y se lo comía).
+  - La **recomendación contextual** (la píldora "Empezá tu primera partida") se RETIRÓ del
+    menú: competía con el logotipo y se superponía. El dato sigue calculándose en
+    `HUD.setMenuMeta().recommendation`, listo para reubicarlo cuando se decida dónde.
+  - Las funciones secundarias viven en: **Perfil** (arriba-izq: nivel de Colonia futuro,
+    Logros, Historial), y el **desplegable hamburguesa** (arriba-der: Ajustes —con Guía y
+    Acerca de—, Colección —con Cosméticos—, Desafíos —con Diaria, Ascensión, Arquetipo y
+    Duelo—).
+  - **Verificar en escritorio**: tamaño del logotipo (`.menu-hero-cta-wrap`), iconos de
+    esquina (`.menu-icon`), desplegable (`.menu-drop`) y velo del héroe
+    (`.menu-hero::before`). El gate `shot-desktop.mjs` solo cubre el HUD de partida.
+  - Se eliminaron `.menu-btn*`, `.menu-ghost*` y `.menu-chips`; los `public/menu-btn-*.png`
+    quedaron huérfanos (inocuos).
+  - **Trampa**: el estado meta del menú (progreso + recomendación) se empuja ANTES de
+    `engine.enterMenu()`. Si se empuja después, el panel no se redibuja y la recomendación
+    no aparece (el panel se construye una sola vez al entrar al estado `menu`).
+  - **Trampa**: "Nueva partida" ahora abre el selector de arquetipo ya en el primer render
+    (antes el panel llegaba vacío y arrancaba directo). Las herramientas de `tools/*.mjs`
+    que hacían `click([data-act="new"])` tuvieron que añadir el paso
+    `archetypes-start`.
 - **Fase 3 de UI (2026-10-05)** — estos cambios son GLOBALES (los pidió el usuario,
   no son efecto colateral del móvil), pero conviene revisarlos en escritorio:
   - Mano inicial **8 → 6** (`RUN_DEFAULTS.handSize`) y abanico móvil más cerrado.

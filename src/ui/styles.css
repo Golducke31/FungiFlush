@@ -3372,17 +3372,13 @@ body {
   }
 }
 
-/* --- Capa 2: halo del titulo --- */
-.menu-title-glow {
+/* --- Capa 2: halo del heroe (ilumina el logotipo-boton) --- */
+.menu-hero-glow {
   position: absolute;
-  left: 50%;
-  top: 31%;
-  width: 66%;
-  height: 46%;
-  transform: translate(-50%, -50%);
+  inset: -22% -10%;
   pointer-events: none;
   background: radial-gradient(ellipse at center, rgba(95, 216, 232, 0.3), rgba(95, 216, 232, 0.09) 46%, transparent 72%);
-  filter: blur(16px);
+  filter: blur(18px);
   animation: menu-glow-breathe 5.5s ease-in-out infinite;
 }
 
@@ -3390,180 +3386,438 @@ body {
   0%,
   100% {
     opacity: 0.5;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
   50% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.05);
+    transform: scale(1.05);
   }
 }
 
-/* --- Capa 3: botones principales --- */
-.menu-btn {
+/* --- Capa 3: UI anclada al VIEWPORT ---
+   El arte ya no trae marcos: la jerarquia (heroe -> perfil -> resto) es un
+   layout flex propio, no una alineacion por porcentajes del fondo. Asi el
+   logotipo-boton queda centrado en cualquier relacion de aspecto. */
+.menu-layout {
   position: absolute;
+  inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) calc(10px + var(--safe-b))
+    calc(14px + var(--safe-l));
+  pointer-events: none;
+  z-index: 3;
+}
+/* El contenedor no come toques (deja ver el bosque); los hijos SI. */
+.menu-layout > * {
+  pointer-events: auto;
+}
+
+/* --- Fila superior: Perfil (izq) + menu hamburguesa (der) --- */
+.menu-top {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.menu-top-right {
+  position: relative;
+  display: flex;
+}
+
+.menu-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border: 0;
-  background-color: transparent;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100% 100%;
-  cursor: pointer;
-  transition: filter var(--dur-base) var(--ease-out);
-  -webkit-tap-highlight-color: transparent;
-}
-.menu-btn--play {
-  background-image: url('/menu-btn-play.png');
-}
-.menu-btn--settings {
-  background-image: url('/menu-btn-settings.png');
-}
-.menu-btn--gallery {
-  background-image: url('/menu-btn-gallery.png');
-}
-.menu-btn--exit {
-  background-image: url('/menu-btn-exit.png');
-}
-
-.menu-btn:hover,
-.menu-btn:focus-visible {
-  outline: none;
-  filter: brightness(1.28) drop-shadow(0 0 14px rgba(95, 216, 232, 0.85));
-}
-.menu-btn:active {
-  filter: brightness(1.45) drop-shadow(0 0 18px rgba(157, 245, 198, 0.9));
-}
-
-/* Texto tallado en el marco. Va ABSOLUTO a 62% del alto del boton (no al 50%)
-   porque la cara del cartel cae por debajo del borde de musgo: al 50% el texto
-   se veia pegado arriba. Ver el perfil de brillo que lo confirma. */
-.menu-btn-label {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 62%;
-  transform: translateY(-50%);
-  padding: 0 7%;
-  text-align: center;
-  font-family: var(--font-display);
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  font-size: clamp(10px, 1.05vw, 19px);
-  color: #f0fff9;
-  text-shadow:
-    0 0 10px rgba(95, 216, 232, 0.9),
-    0 1px 0 rgba(0, 0, 0, 0.85),
-    0 -1px 1px rgba(0, 0, 0, 0.6);
-}
-
-/* La fila de abajo tiene el marco un poco mas alto: la cara cae mas abajo. */
-.menu-btn--gallery .menu-btn-label,
-.menu-btn--exit .menu-btn-label {
-  top: 66%;
-}
-
-/* --- Chips secundarios (acciones que no van sobre los 4 marcos) --- */
-.menu-ghost {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5em;
-  padding: 0.45em 1.1em;
-  font-size: clamp(9px, 0.92vw, 13px);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #cfe6f2;
-  background: rgba(6, 12, 18, 0.55);
   border: 1px solid rgba(95, 216, 232, 0.24);
-  border-radius: 999px;
+  border-radius: 12px;
+  background: rgba(6, 12, 18, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  color: #cfe6f2;
   cursor: pointer;
-  white-space: nowrap;
-  z-index: 3;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out);
   -webkit-tap-highlight-color: transparent;
 }
-.menu-ghost:hover:not(.is-disabled) {
+.menu-icon:hover,
+.menu-icon:focus-visible {
+  outline: none;
   background: rgba(95, 216, 232, 0.16);
   border-color: rgba(95, 216, 232, 0.6);
   color: #fff;
 }
-.menu-ghost.is-disabled {
-  opacity: 0.4;
-  pointer-events: none;
+.menu-icon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
 }
-.menu-ghost.is-hidden {
+
+/* Insignia del nivel de Colonia (meta-progresion futura). */
+.menu-icon-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent, #4fd18b);
+  color: #04140c;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* --- Desplegable del menu (Ajustes / Coleccion / Desafios) --- */
+.menu-drop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 184px;
+  padding: 6px;
+  border: 1px solid rgba(95, 216, 232, 0.24);
+  border-radius: 14px;
+  background: rgba(6, 12, 18, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  z-index: 4;
+}
+.menu-drop.is-open {
+  display: flex;
+}
+
+.menu-drop-item {
+  padding: 0.6em 0.9em;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #cfe6f2;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-drop-item:hover,
+.menu-drop-item:focus-visible {
+  outline: none;
+  background: rgba(95, 216, 232, 0.16);
+  color: #fff;
+}
+
+/* --- Heroe: recomendacion + logotipo-boton --- */
+.menu-hero {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* El boton va ABAJO: el "FUNGI FLUSH" del fondo es el logo (arriba) y el
+     boton no debe tocar sus letras. */
+  justify-content: flex-end;
+  gap: 4px;
+  padding-bottom: 0;
+}
+
+/* Foco: un velo radial suave que separa el logotipo-boton del fondo, sin
+   dibujar una caja. */
+.menu-hero::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 52%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 62% 92% at 50% 76%,
+    rgba(2, 5, 9, 0.7),
+    rgba(2, 5, 9, 0.32) 48%,
+    transparent 80%
+  );
+}
+
+.menu-hero-cta-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  /* Atado a vw Y vh: en landscape movil el alto es el recurso escaso.
+     Acotado para caer DEBAJO del "FUNGI FLUSH" del fondo, sin tocarlo. */
+  width: min(48vw, calc(30vh * 1.83), 560px);
+}
+
+/* Placa de apoyo: el bosque es tan cian y tan tupido como las letras de hongos
+   y sin una base el boton se pierde. Es un halo difuso (borde desenfocado),
+   no una caja dura: no hay marco ni esquina recta visible. */
+.menu-hero-cta-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -14% -11%;
+  border-radius: 30px;
+  pointer-events: none;
+  background: rgba(2, 6, 10, 0.86);
+  filter: blur(9px);
+}
+
+.menu-hero-cta {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-hero-cta:hover,
+.menu-hero-cta:focus-visible {
+  outline: none;
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.18) drop-shadow(0 0 22px rgba(95, 216, 232, 0.7));
+}
+.menu-hero-cta:active {
+  transform: translateY(0) scale(0.99);
+}
+.menu-hero-cta.is-hidden {
   display: none;
 }
-
-/* "Continuar": pegado arriba del marco de "Nueva partida". */
-.menu-ghost--continue {
-  left: 40.75%;
-  top: 67.4%;
-  transform: translate(-50%, -50%);
+.menu-hero-cta.is-disabled {
+  pointer-events: none;
 }
 
-/*
- * Fila de chips secundarios: duelo, recompensa diaria y logros.
- *
- * Antes cada chip se posicionaba solo con top/left. Con tres chips eso no
- * escala: el ancho depende del idioma, y apilarlos a mano es adivinar. Van en
- * una fila que se posiciona UNA vez, fuera del arte (el `cover` no la recorta)
- * y respetando safe-area, que en landscape muerde justo esa esquina.
- */
-.menu-chips {
-  position: absolute;
-  top: calc(10px + var(--safe-t));
-  left: calc(14px + var(--safe-l));
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  max-width: calc(100% - var(--safe-l) - var(--safe-r) - 28px);
-  z-index: 3;
+.menu-hero-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Mas presencia: se sube brillo y saturacion (el bosque es cian y se comia
+     las letras), un contorno oscuro que las despega y un doble halo cian. */
+  filter:
+    brightness(1.38)
+    saturate(1.45)
+    contrast(1.12)
+    drop-shadow(0 0 5px rgba(205, 255, 255, 0.6))
+    drop-shadow(0 0 18px rgba(95, 216, 232, 0.8))
+    drop-shadow(0 0 50px rgba(70, 180, 220, 0.55));
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
-.menu-chips .menu-ghost {
-  position: static;
+/* Con partida guardada, "Continuar" manda y "Nueva partida" pasa a secundario. */
+.menu-hero-cta-wrap.is-has-save .menu-hero-cta--new {
+  width: 58%;
+  opacity: 0.9;
 }
 
-/* Recompensa diaria sin reclamar: el chip respira. Es el unico pulso de la
-   pantalla de inicio y esta a proposito: sin el, la racha pasa desapercibida
-   y la recompensa diaria no existe para el jugador. */
-.menu-ghost.is-pending {
-  border-color: rgba(255, 200, 87, 0.7);
-  color: var(--money);
-  animation: chip-pulse 2.6s var(--ease-out) infinite;
-}
-
-@keyframes chip-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 200, 87, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 7px rgba(255, 200, 87, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 200, 87, 0);
-  }
+.menu-hero-status {
+  margin: 0;
+  font-size: clamp(10px, 1vw, 13px);
+  color: rgba(207, 230, 242, 0.72);
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .menu-version {
   position: absolute;
-  top: calc(10px + var(--safe-t));
+  bottom: calc(8px + var(--safe-b));
   right: calc(14px + var(--safe-r));
   z-index: 2;
   font-size: 10.5px;
   color: rgba(207, 230, 242, 0.5);
   pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   Panel de PERFIL y panel de DESAFIOS.
+   Los dos entran en el modelo de panel P8 (cabecera fija / cuerpo flexible /
+   pie fijo): el cuerpo scrollea antes que recortar la accion del pie.
+   -------------------------------------------------------------------------- */
+.profile-body,
+.challenges-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.profile-colony {
+  padding: 12px 14px;
+  border: 1px solid rgba(95, 216, 232, 0.2);
+  border-radius: 14px;
+  background: rgba(6, 12, 18, 0.45);
+}
+.profile-colony-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.profile-colony-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--text);
+}
+.profile-colony-soon {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(207, 230, 242, 0.6);
+}
+.profile-colony-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.profile-colony-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4fd18b, #5fd8e8);
+}
+
+.profile-stats {
+  display: flex;
+  gap: 10px;
+}
+.profile-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: rgba(6, 12, 18, 0.4);
+  border: 1px solid rgba(95, 216, 232, 0.14);
+}
+.profile-stat-value {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.profile-stat-label {
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(207, 230, 242, 0.6);
+  text-align: center;
+}
+
+.profile-grid,
+.challenges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.profile-card,
+.challenges-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid rgba(95, 216, 232, 0.22);
+  border-radius: 14px;
+  background: rgba(6, 12, 18, 0.5);
+  color: var(--text);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+.profile-card:hover,
+.profile-card:focus-visible,
+.challenges-card:hover,
+.challenges-card:focus-visible {
+  outline: none;
+  background: rgba(95, 216, 232, 0.14);
+  border-color: rgba(95, 216, 232, 0.55);
+}
+.profile-card-name,
+.challenges-card-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+.profile-card-detail,
+.challenges-card-detail {
+  font-size: 12px;
+  color: rgba(207, 230, 242, 0.66);
+}
+.challenges-card.is-pending {
+  border-color: rgba(255, 200, 87, 0.7);
+}
+.challenges-card.is-pending .challenges-card-detail {
+  color: var(--money);
+}
+
+/* --- Menu: ajustes TACTILES ---
+   Regla de oro: lo que solo aplica al movil va DENTRO de un bloque
+   (pointer: coarse), nunca en la base (la base tambien afecta al escritorio). */
+@media (pointer: coarse) {
+  .menu-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .menu-hero-cta-wrap {
+    width: min(64vw, calc(38vh * 1.83));
+  }
+}
+
+@media (pointer: coarse) and (max-height: 430px) {
+  .menu-layout {
+    gap: 4px;
+  }
+  .menu-hero {
+    gap: 3px;
+  }
+  .menu-hero-cta-wrap {
+    width: min(62vw, calc(36vh * 1.83));
+  }
+  .menu-drop-item {
+    font-size: 13px;
+    padding: 0.5em 0.8em;
+  }
+}
+
+@media (pointer: coarse) and (min-height: 600px) {
+  .menu-icon {
+    width: 56px;
+    height: 56px;
+  }
+  .menu-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+  .menu-hero-cta-wrap {
+    width: min(44vw, calc(30vh * 1.83));
+  }
 }
 
 /* Texto solo para lectores de pantalla. */
@@ -4589,16 +4843,12 @@ body {
 /* --------------------------------------------------------------------------
    Piso tactil en CUALQUIER dispositivo tactil (celular Y tablet)
 
-   Los chips del menu y los sliders de Ajustes se ajustaban por ALTO de pantalla
+   Los iconos del menu y los sliders de Ajustes se ajustaban por ALTO de pantalla
    (`max-height`), asi que en una TABLET con 820px de alto se quedaban en el
-   tamano del escritorio: chips de 24px y sliders de 16px. El criterio tiene que
+   tamano del escritorio: iconos de 24px y sliders de 16px. El criterio tiene que
    ser el PUNTERO, no el alto.
    -------------------------------------------------------------------------- */
 @media (pointer: coarse) {
-  .menu-ghost {
-    min-height: 30px;
-  }
-
   /* El slider nativo mide ~16px: el pulgar no se agarra con el dedo. Se agranda
      el AREA (la pista sigue fina, se dibuja centrada). */
   .settings-slider {
@@ -4607,14 +4857,6 @@ body {
 }
 
 @media (pointer: coarse) and (max-height: 430px) {
-  /* Landscape de celular: los chips secundarios se compactan, pero NO por debajo
-     del minimo tactil. Con `font-size: 9px` + `padding: 0.3em` quedaban en 17px
-     de alto: se ven, pero no se pueden tocar. */
-  .menu-ghost {
-    padding: 0.5em 0.85em;
-    font-size: 11px;
-    min-height: 30px;
-  }
   .menu-version {
     display: none;
   }
@@ -5611,9 +5853,8 @@ body {
 
 /* Chip del nivel puesto: el unico dorado del menu, porque es el unico estado
    del jugador que CAMBIA las reglas de la partida siguiente. */
-.menu-ghost--ascension.is-active {
+.challenges-card.is-pending {
   border-color: rgba(255, 200, 87, 0.6);
-  color: var(--money);
 }
 
 .panel.is-ascension {
@@ -6861,8 +7102,7 @@ body {
    decoracion: es la identidad del arquetipo.
    -------------------------------------------------------------------------- */
 
-.menu-ghost--archetype.is-active {
-  border-color: rgba(196, 168, 255, 0.6);
+.challenges-card[data-act='archetype'] .challenges-card-detail {
   color: var(--tag-ability);
 }
 
@@ -7291,6 +7531,8 @@ body {
   .panel > .daily-ladder,
   .panel > .blind-grid,
   .panel > .board-grid,
+  .panel > .profile-body,
+  .panel > .challenges-body,
   .panel > .tutorial-body {
     flex: 1 1 auto;
     min-height: 0;

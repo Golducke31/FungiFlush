@@ -32,7 +32,13 @@ import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
 import { isCoarsePointer } from '../pointer';
-import { buildArchetypePanel, buildAscensionPanel, buildMenuPanel } from './MenuScreen';
+import {
+  buildArchetypePanel,
+  buildAscensionPanel,
+  buildChallengesPanel,
+  buildMenuPanel,
+  buildProfilePanel,
+} from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
@@ -62,6 +68,25 @@ function createPileLabelEl(): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'pile-label';
   return el;
+}
+
+/**
+ * Estado meta que alimenta el menu principal: progreso del jugador, la
+ * recomendacion contextual ("que deberia hacer ahora?") y el nivel de la
+ * Colonia Fungi (meta-progresion futura). El HUD no conoce el perfil: el
+ * controlador lo empuja antes de `showMenu`.
+ */
+export interface MenuMetaState {
+  /** Nivel de Colonia (0 = todavia no existe). */
+  colonyLevel: number;
+  bestAnte: number;
+  wins: number;
+  streak: number;
+  achievements: { unlocked: number; total: number };
+  /** Hay recompensa diaria sin reclamar. */
+  dailyPending: boolean;
+  /** Clave i18n de la recomendacion, o null si no hay ninguna. */
+  recommendation: { key: string; params?: Record<string, string | number> } | null;
 }
 
 export interface HudCallbacks {
@@ -322,6 +347,22 @@ export class HUD {
   private lastStatus: string | null = null;
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
+  /**
+   * Estado meta del menu (progreso + recomendacion + Colonia). Lo empuja el
+   * controlador antes de `showMenu`, igual que ascension/cosmeticos: el HUD no
+   * conoce el perfil.
+   */
+  private menuMeta: MenuMetaState = {
+    colonyLevel: 0,
+    bestAnte: 0,
+    wins: 0,
+    streak: 0,
+    achievements: { unlocked: 0, total: 0 },
+    dailyPending: false,
+    recommendation: null,
+  };
+  /** Logros ya redactados por el controlador, para abrirlos desde el Perfil. */
+  private achievementsState: AchievementView[] = [];
   /** Ascension (R1): se la empuja el controlador desde el perfil. */
   private ascensionState: {
     unlocked: number;
@@ -2083,6 +2124,8 @@ export class HUD {
         onOpenAscension: () => this.showAscension(),
         archetypes: this.archetypeState.list,
         selectedArchetype: this.archetypeState.selected,
+        colonyLevel: this.menuMeta.colonyLevel,
+        dailyPending: this.menuMeta.dailyPending,
       },
       {
         onStartRun: () => this.callbacks.onStartRun(),
@@ -2094,15 +2137,76 @@ export class HUD {
         onOpenAbout: () => this.callbacks.onOpenAbout(),
         onToggleLanguage: () => this.callbacks.onToggleLanguage(),
         onOpenDaily: () => this.callbacks.onOpenDaily(),
-        onOpenAchievements: () => this.callbacks.onOpenAchievements(),
+        onOpenAchievements: () => this.showAchievements(this.achievementsState, () => this.showProfile()),
         onOpenCosmetics: () => this.callbacks.onOpenCosmetics(),
-        onOpenHistory: () => this.showHistory(),
+        onOpenHistory: () => this.showHistory(() => this.showProfile()),
         onOpenGuide: () => this.callbacks.onOpenGuide(),
         onSelectArchetype: () => {
           // Solo se usa desde el panel (que llama a `onStart` con el id); el
-          // chip del menu abre el panel. Se deja por completitud del contrato.
+          // boton principal del menu abre el panel. Se deja por completitud.
         },
         onOpenArchetypes: () => this.showArchetypes(),
+        onOpenProfile: () => this.showProfile(),
+        onOpenChallenges: () => this.showChallenges(),
+      },
+    );
+    this.openOverlay(panel);
+  }
+
+  /** Empuja el estado meta del menu (progreso + recomendacion + Colonia). */
+  setMenuMeta(meta: Partial<MenuMetaState>): void {
+    this.menuMeta = { ...this.menuMeta, ...meta };
+  }
+
+  /** Logros ya redactados por el controlador, para abrirlos desde el Perfil. */
+  setAchievementsState(entries: AchievementView[]): void {
+    this.achievementsState = entries;
+  }
+
+  /**
+   * Panel de PERFIL (esquina superior izquierda): progreso, Colonia (futura),
+   * Logros e Historial. Los dos ultimos vuelven a Perfil al cerrarse, para no
+   * tirar al jugador al menu cada vez que mira un detalle.
+   */
+  showProfile(): void {
+    const meta = this.menuMeta;
+    const panel = buildProfilePanel(
+      {
+        colonyLevel: meta.colonyLevel,
+        bestAnte: meta.bestAnte,
+        wins: meta.wins,
+        streak: meta.streak,
+        achievements: { ...meta.achievements },
+      },
+      {
+        onOpenAchievements: () => this.showAchievements(this.achievementsState, () => this.showProfile()),
+        onOpenHistory: () => this.showHistory(() => this.showProfile()),
+        onClose: () => this.showMenu(),
+      },
+    );
+    this.openOverlay(panel);
+  }
+
+  /**
+   * Panel de DESAFIOS (menu de la esquina superior derecha): los modos que
+   * cambian las reglas o la forma de puntuar (diaria, ascension, arquetipo y
+   * duelo).
+   */
+  showChallenges(): void {
+    const panel = buildChallengesPanel(
+      {
+        dailyPending: this.menuMeta.dailyPending,
+        ascension: this.ascensionState,
+        archetypes: this.archetypeState.list,
+        selectedArchetype: this.archetypeState.selected,
+        showBoard: this.boardAvailable,
+      },
+      {
+        onOpenDaily: () => this.callbacks.onOpenDaily(),
+        onOpenAscension: () => this.showAscension(),
+        onOpenArchetypes: () => this.showArchetypes(),
+        onOpenBoard: () => this.callbacks.onOpenBoard(),
+        onClose: () => this.showMenu(),
       },
     );
     this.openOverlay(panel);
@@ -2348,7 +2452,7 @@ export class HUD {
   }
 
   /** Abre el panel de cosméticos (dorso de carta / tapete). */
-  showCosmetics(): void {
+  showCosmetics(returnTo?: () => void): void {
     // Igual que la ascension: el `openOverlay` limpia las referencias del panel,
     // asi que se toma el estado ANTES de abrirlo.
     const state: CosmeticsState = {
@@ -2359,9 +2463,9 @@ export class HUD {
       onEquip: (kind: CosmeticKind, id: string) => {
         this.callbacks.onEquip(kind, id);
         // Reabre para reflejar la nueva selección (el equipado se marca).
-        this.showCosmetics();
+        this.showCosmetics(returnTo);
       },
-      onClose: () => this.showMenu(),
+      onClose: () => (returnTo ? returnTo() : this.showMenu()),
     });
     this.openOverlay(panel);
   }
@@ -2375,10 +2479,12 @@ export class HUD {
   }
 
   /** Abre el panel de historial de partidas. */
-  showHistory(): void {
+  showHistory(returnTo?: () => void): void {
     // Misma trampa que ascension/cosméticos: `openOverlay` limpia el panel.
     const entries = this.historyState.map((e) => ({ ...e }));
-    const panel = buildHistoryPanel(entries, { onClose: () => this.showMenu() });
+    const panel = buildHistoryPanel(entries, {
+      onClose: () => (returnTo ? returnTo() : this.showMenu()),
+    });
     this.openOverlay(panel);
   }
   private boardAvailable = false;
@@ -2420,12 +2526,14 @@ export class HUD {
     this.hideOverlay();
   }
 
-  showSettings(settings: ProfileSettings): void {
+  showSettings(settings: ProfileSettings, returnTo?: () => void): void {
     this.showPanel(
       buildSettingsPanel(settings, {
         onPatch: (patch) => this.settingsPatch?.(patch),
         onToggleLanguage: () => this.callbacks.onToggleLanguage(),
-        onClose: () => this.showMenu(),
+        onOpenGuide: () => this.callbacks.onOpenGuide(),
+        onOpenAbout: () => this.callbacks.onOpenAbout(),
+        onClose: () => (returnTo ? returnTo() : this.showMenu()),
       }),
     );
   }
@@ -2556,6 +2664,7 @@ export class HUD {
         },
         onOpenStore: () => this.callbacks.onOpenExpansions(),
         onOpenPass: () => this.callbacks.onOpenPass(),
+        onOpenCosmetics: () => this.showCosmetics(() => this.showCollection()),
       }),
     );
   }
@@ -2596,15 +2705,18 @@ export class HUD {
     );
   }
 
-  showAchievements(entries: AchievementView[]): void {
-    this.showPanel(
-      buildAchievementsPanel(entries, {
-        onClose: () => {
-          this.lastStatus = null;
-          this.render();
-        },
-      }),
-    );
+  /**
+   * Panel de logros. `returnTo` permite volver al panel que lo abrio (el
+   * Perfil) en vez de al menu; sin el, conserva el comportamiento de siempre.
+   */
+  showAchievements(entries: AchievementView[], returnTo?: () => void): void {
+    const back =
+      returnTo ??
+      (() => {
+        this.lastStatus = null;
+        this.render();
+      });
+    this.showPanel(buildAchievementsPanel(entries, { onClose: () => back() }));
   }
 
   // ==========================================================================

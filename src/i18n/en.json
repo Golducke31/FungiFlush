@@ -745,6 +745,28 @@
     "achievements": "Achievements",
     "cosmetics": "Cosmetics",
     "history": "History",
+    "profile": "Profile",
+    "profileSubtitle": "Your progress and collection",
+    "colony": "Colony",
+    "colonyLevel": "Level {level}",
+    "colonySoon": "Coming soon",
+    "openMenu": "Menu",
+    "challenges": "Challenges",
+    "challengesSubtitle": "Choose how you want to play",
+    "modes": "Game modes",
+    "heroHintNew": "Tap to start",
+    "heroHintContinue": "Tap to continue",
+    "progress": {
+      "bestAnte": "Best ante",
+      "wins": "Wins",
+      "streak": "Streak"
+    },
+    "recommend": {
+      "daily": "Claim your daily reward",
+      "continue": "Continue your run at ante {ante}",
+      "first": "Start your first run",
+      "beatBest": "Your best ante is {ante} — beat it"
+    },
     "quitTitle": "Back to menu",
     "quitBody": "You are about to abandon this run. Run progress will be lost.",
     "quitConfirm": "Abandon and exit"

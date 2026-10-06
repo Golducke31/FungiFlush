@@ -98,6 +98,34 @@ const context = await browser.newContext({
 
 const page = await context.newPage();
 
+// --- Helpers de navegacion del MENU ---
+// Las acciones secundarias ya no son chips sueltos: viven en el desplegable
+// (Ajustes / Coleccion / Desafios) o dentro de los paneles de Perfil y
+// Coleccion. Estos helpers reproducen el camino real del jugador.
+const menuDrop = async () => {
+  await page.evaluate(() =>
+    document.querySelector('.panel.is-menu [data-act="menu-toggle"]')?.click(),
+  );
+  await page.waitForTimeout(200);
+};
+/** Abre una accion del desplegable (Ajustes / Coleccion / Desafios). */
+const menuDropAction = async (act) => {
+  await menuDrop();
+  await page.evaluate(
+    (a) => document.querySelector(`.panel.is-menu [data-act="${a}"]`)?.click(),
+    act,
+  );
+  await page.waitForTimeout(400);
+};
+/** Abre una accion dentro de un sub-panel ya visible. */
+const subPanelAction = async (panelSel, act) => {
+  await page.evaluate(
+    ([p, a]) => document.querySelector(`${p} [data-act="${a}"]`)?.click(),
+    [panelSel, act],
+  );
+  await page.waitForTimeout(400);
+};
+
 const consoleErrors = [];
 const consoleWarnings = [];
 const pageErrors = [];
@@ -172,6 +200,8 @@ console.log(JSON.stringify(menuState, null, 2));
 await page.screenshot({ path: join(shotsDir, '01-menu.png') });
 
 // --- Ajustes: abrir, capturar y volver (ejercita el panel y el perfil) ---
+// Ajustes vive en el desplegable: primero se abre el menu, despues la accion.
+await menuDrop();
 const settingsOpened = await page.evaluate(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   document.querySelector('.panel.is-menu [data-act="settings"]')?.click();
@@ -246,7 +276,10 @@ const center = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 }
 const isBoardModule = (url) => /\/src\/engine\/board\/|\/assets\/board-/.test(url);
 const boardChunkBeforeOpen = requestedUrls.filter(isBoardModule).length;
 
-const boardButton = await page.locator('.panel.is-menu [data-act="board"]').boundingBox();
+// El duelo vive en el panel de Desafios: menu -> Desafios -> Duelo.
+await menuDropAction('challenges');
+await page.waitForSelector('.panel.is-challenges', { timeout: 5000 });
+const boardButton = await page.locator('.panel.is-challenges [data-act="board"]').boundingBox();
 if (boardButton) await page.mouse.click(center(boardButton).x, center(boardButton).y);
 // El motor del tablero se carga con `await import()`: hay que darle tiempo.
 await page.waitForTimeout(1400);
@@ -1407,8 +1440,12 @@ const ascensionPanel = await (async () => {
   await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
   await page.waitForTimeout(600);
 
+  // La ascension vive en el panel de Desafios: menu -> Desafios -> Ascension.
+  await menuDropAction('challenges');
+  await page.waitForSelector('.panel.is-challenges', { timeout: 5000 });
+
   const chip = await page.evaluate(() => {
-    const el = document.querySelector('.panel.is-menu [data-act="ascension"]');
+    const el = document.querySelector('.panel.is-challenges [data-act="ascension"]');
     return {
       present: Boolean(el),
       label: el?.textContent ?? null,
@@ -1416,8 +1453,8 @@ const ascensionPanel = await (async () => {
     };
   });
 
-  // Abrir el panel con un click REAL sobre el chip.
-  const chipBox = await page.locator('.panel.is-menu [data-act="ascension"]').boundingBox();
+  // Abrir el panel con un click REAL sobre la tarjeta.
+  const chipBox = await page.locator('.panel.is-challenges [data-act="ascension"]').boundingBox();
   if (chipBox) {
     await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   }
@@ -1481,13 +1518,17 @@ const cosmeticsPanel = await (async () => {
   await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
   await page.waitForTimeout(400);
 
+  // Los cosmeticos viven en la Coleccion: menu -> Coleccion -> Cosmeticos.
+  await menuDropAction('collection');
+  await page.waitForSelector('.panel.is-collection', { timeout: 5000 });
+
   const chip = await page.evaluate(() => {
-    const el = document.querySelector('.panel.is-menu [data-act="cosmetics"]');
+    const el = document.querySelector('.panel.is-collection [data-act="cosmetics"]');
     return { present: Boolean(el), label: el?.textContent ?? null };
   });
 
-  // Abrir el panel con un click REAL sobre el chip.
-  const chipBox = await page.locator('.panel.is-menu [data-act="cosmetics"]').boundingBox();
+  // Abrir el panel con un click REAL sobre el boton.
+  const chipBox = await page.locator('.panel.is-collection [data-act="cosmetics"]').boundingBox();
   if (chipBox) {
     await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   }
@@ -1547,13 +1588,17 @@ const historyPanel = await (async () => {
   await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
   await page.waitForTimeout(400);
 
+  // El historial vive en el Perfil: menu -> Perfil -> Historial.
+  await subPanelAction('.panel.is-menu', 'profile');
+  await page.waitForSelector('.panel.is-profile', { timeout: 5000 });
+
   const chip = await page.evaluate(() => {
-    const el = document.querySelector('.panel.is-menu [data-act="history"]');
+    const el = document.querySelector('.panel.is-profile [data-act="history"]');
     return { present: Boolean(el), label: el?.textContent ?? null };
   });
 
-  // Abrir el panel con un click REAL sobre el chip.
-  const chipBox = await page.locator('.panel.is-menu [data-act="history"]').boundingBox();
+  // Abrir el panel con un click REAL sobre la tarjeta.
+  const chipBox = await page.locator('.panel.is-profile [data-act="history"]').boundingBox();
   if (chipBox) {
     await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
   }

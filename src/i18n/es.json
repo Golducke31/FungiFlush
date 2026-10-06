@@ -745,6 +745,28 @@
     "achievements": "Logros",
     "cosmetics": "Cosméticos",
     "history": "Historial",
+    "profile": "Perfil",
+    "profileSubtitle": "Tu progreso y tu colección",
+    "colony": "Colonia",
+    "colonyLevel": "Nivel {level}",
+    "colonySoon": "Próximamente",
+    "openMenu": "Menú",
+    "challenges": "Desafíos",
+    "challengesSubtitle": "Elegí cómo querés jugar",
+    "modes": "Modos de juego",
+    "heroHintNew": "Tocá para empezar",
+    "heroHintContinue": "Tocá para continuar",
+    "progress": {
+      "bestAnte": "Mejor ante",
+      "wins": "Victorias",
+      "streak": "Racha"
+    },
+    "recommend": {
+      "daily": "Reclamá tu recompensa diaria",
+      "continue": "Seguí tu partida en el ante {ante}",
+      "first": "Empezá tu primera partida",
+      "beatBest": "Tu mejor ante es {ante} — superalo"
+    },
     "quitTitle": "Volver al menú",
     "quitBody": "Vas a abandonar esta partida. Se pierde el progreso de la run.",
     "quitConfirm": "Abandonar y salir"

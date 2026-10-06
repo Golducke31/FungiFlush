@@ -106,6 +106,9 @@ const report = async (label) => {
 await page.evaluate(() => document.querySelector('[data-act="tutorial-close"]')?.click());
 await page.waitForTimeout(300);
 await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+await page.waitForTimeout(1200);
+// "Nueva partida" abre el selector de ARQUETIPO: el jugador elige y arranca.
+await page.evaluate(() => document.querySelector('.panel.is-archetypes [data-act="archetypes-start"]')?.click());
 await page.waitForTimeout(1500);
 
 // Elegir ciego (el flujo secuencial no toma argumento, pero se acepta por compat)

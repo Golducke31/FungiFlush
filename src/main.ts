@@ -954,6 +954,9 @@ async function boot(): Promise<void> {
         savedRun = null;
         hud?.setContinueAvailable(null);
         void runStore.clear();
+        // El estado meta se empuja ANTES de `enterMenu`: el panel del menu se
+        // construye en ese cambio de estado y no se vuelve a dibujar.
+        syncMenuMeta();
         engine.enterMenu();
         scene.setMode('menu', { reduceMotion: profileStore.current.settings.reduceMotion });
       },
@@ -1046,6 +1049,13 @@ async function boot(): Promise<void> {
           onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
           onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
           onOpenPass: () => showPass(),
+          // Los Cosméticos viven dentro de la Coleccion: apagar el carrusel 3D
+          // antes de abrir su panel, o el anillo seguiria vivo por detras.
+          onOpenCosmetics: () => {
+            carouselActivate = null;
+            scene.setCarousel(null);
+            hud?.showCosmetics();
+          },
         });
         // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
         carouselActivate = (index) => frame.setFocus(index);
@@ -1100,6 +1110,7 @@ async function boot(): Promise<void> {
           t('daily.claimDone', { name: claim.reward ? rewardName(claim.reward) : '—' }),
           'info',
         );
+        syncMenuMeta();
         openDaily();
       },
       onOpenAchievements: () => hud?.showAchievements(achievementViews()),
@@ -1221,6 +1232,7 @@ async function boot(): Promise<void> {
       if (!evaluateDaily(profileStore.current, Date.now(), dailyTable).alreadyClaimedToday) {
         bus.emit('banner:show', { key: 'banner.daily.ready', kind: 'info' });
       }
+      syncMenuMeta();
       hud?.showMenu();
     });
   };
@@ -1263,6 +1275,39 @@ async function boot(): Promise<void> {
         rewardLabel: def.reward ? rewardName(def.reward) : null,
       };
     });
+
+  /**
+   * Empuja al HUD el estado meta del menu: progreso, Colonia (futura) y la
+   * RECOMENDACION contextual — la que responde "que deberia hacer ahora?".
+   *
+   * Se llama antes de dibujar el menu y cada vez que el jugador vuelve a el.
+   * El HUD no conoce el perfil, asi que el estado siempre viaja empujado.
+   */
+  const syncMenuMeta = (): void => {
+    const p = profileStore.current;
+    const views = achievementViews();
+    const daily = evaluateDaily(p, Date.now(), dailyTable);
+    // Prioridad de la recomendacion: primera vez > diaria > continuar > superar.
+    const recommendation = !p.stats.runs
+      ? { key: 'menu.recommend.first' }
+      : !daily.alreadyClaimedToday
+        ? { key: 'menu.recommend.daily' }
+        : savedRun
+          ? { key: 'menu.recommend.continue', params: { ante: savedRun.ante } }
+          : { key: 'menu.recommend.beatBest', params: { ante: p.stats.bestAnte } };
+    hud?.setAchievementsState(views);
+    hud?.setMenuMeta({
+      // Colonia Fungi: meta-progresion futura (esporas, niveles, cosmeticos).
+      // Hoy todavia no existe: el icono de Perfil se dibuja sin insignia.
+      colonyLevel: 0,
+      bestAnte: p.stats.bestAnte,
+      wins: p.stats.wins,
+      streak: p.daily.streak,
+      achievements: { unlocked: views.filter((v) => v.unlocked).length, total: views.length },
+      dailyPending: !daily.alreadyClaimedToday,
+      recommendation,
+    });
+  };
 
   /**
    * Contexto de partida para los predicados de logros. Es un snapshot y no el
@@ -1474,6 +1519,7 @@ async function boot(): Promise<void> {
       onClose: () => {
         match = null;
         hud?.closeBoard();
+        syncMenuMeta();
         hud?.showMenu();
       },
     };
@@ -1552,20 +1598,25 @@ async function boot(): Promise<void> {
 
   // --- Arrancar en el MENU ---
   scene.start();
-  engine.enterMenu();
-  scene.setMode('menu', { reduceMotion: profile.settings.reduceMotion });
-  // Antes de dibujar el menu: el chip de ascension lee este estado.
-  syncAscension();
-  // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.
-  syncCosmetics();
-  syncHistory();
-  // Arquetipos: el chip del menu y el panel de "Nueva partida" leen esto.
-  syncArchetypes();
 
+  // El estado meta se empuja ANTES de dibujar el menu: la recomendacion y el
+  // boton "Continuar" dependen de que exista (o no) una partida guardada, y el
+  // panel se construye UNA sola vez al entrar al estado `menu`.
   savedRun = await runStore.load();
   if (savedRun) {
     hud.setContinueAvailable(`${t('hud.ante')} ${savedRun.ante} · ${t('ui.seed')} ${savedRun.seed}`);
   }
+  // Antes de dibujar el menu: el icono de Perfil lee este estado.
+  syncAscension();
+  // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.
+  syncCosmetics();
+  syncHistory();
+  // Arquetipos: el panel de Desafios y el de "Nueva partida" leen esto.
+  syncArchetypes();
+  syncMenuMeta();
+
+  engine.enterMenu();
+  scene.setMode('menu', { reduceMotion: profile.settings.reduceMotion });
 
   loader.setProgress(1);
   loader.hide();

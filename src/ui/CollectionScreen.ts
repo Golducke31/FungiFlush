@@ -46,6 +46,8 @@ export interface CollectionCallbacks {
   onOpenStore?: () => void;
   /** Opcional: abrir el pase de temporada. */
   onOpenPass?: () => void;
+  /** Opcional: los Cosméticos viven dentro de la Coleccion. */
+  onOpenCosmetics?: () => void;
 }
 
 type Filter = 'all' | 'cards' | 'jokers' | 'locked' | 'unlocked';
@@ -87,6 +89,7 @@ export function buildCollectionCarousel(
     onFiltered: (filtered: CollectionEntry[]) => void;
     onOpenStore?: () => void;
     onOpenPass?: () => void;
+    onOpenCosmetics?: () => void;
   },
 ): CollectionCarouselFrame {
   const panel = document.createElement('div');
@@ -191,6 +194,14 @@ export function buildCollectionCarousel(
     pass.dataset['act'] = 'pass';
     pass.addEventListener('click', () => callbacks.onOpenPass?.());
     actions.appendChild(pass);
+  }
+  if (callbacks.onOpenCosmetics) {
+    const cos = document.createElement('button');
+    cos.className = 'btn is-ghost';
+    cos.textContent = t('menu.cosmetics');
+    cos.dataset['act'] = 'cosmetics';
+    cos.addEventListener('click', () => callbacks.onOpenCosmetics?.());
+    actions.appendChild(cos);
   }
 
   const close = document.createElement('button');
@@ -347,6 +358,14 @@ export function buildCollectionPanel(
     pass.dataset['act'] = 'pass';
     pass.addEventListener('click', () => callbacks.onOpenPass?.());
     actions.appendChild(pass);
+  }
+  if (callbacks.onOpenCosmetics) {
+    const cos = document.createElement('button');
+    cos.className = 'btn is-ghost';
+    cos.textContent = t('menu.cosmetics');
+    cos.dataset['act'] = 'cosmetics';
+    cos.addEventListener('click', () => callbacks.onOpenCosmetics?.());
+    actions.appendChild(cos);
   }
 
   const close = document.createElement('button');

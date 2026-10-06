@@ -78,6 +78,10 @@ await page.screenshot({ path: join(shotsDir, 'mob-menu.png') });
 // Panel de ciego (antes de elegir). El tutorial ya se cerro en el menu, asi que
 // aca se ve la GRILLA de ciegos de verdad.
 await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"]')?.click());
+await page.waitForTimeout(1200);
+// "Nueva partida" abre el selector de ARQUETIPO: el jugador elige y arranca
+// (antes el panel llegaba vacio y el boton arrancaba directo).
+await page.evaluate(() => document.querySelector('.panel.is-archetypes [data-act="archetypes-start"]')?.click());
 await page.waitForTimeout(1400);
 await page.evaluate(() => document.querySelector('[data-act="tutorial-close"]')?.click());
 await page.waitForTimeout(600);
