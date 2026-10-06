@@ -1,0 +1,50 @@
+{
+  "music": {
+    "ingame": {
+      "file": "music_ingame.ogg",
+      "bytes": 417285
+    },
+    "menu": {
+      "file": "music_menu.ogg",
+      "bytes": 312131
+    }
+  },
+  "sfx": {
+    "discard_1": {
+      "file": "sfx_discard_1.ogg",
+      "bytes": 9630
+    },
+    "discard_2": {
+      "file": "sfx_discard_2.ogg",
+      "bytes": 9946
+    },
+    "discard_3": {
+      "file": "sfx_discard_3.ogg",
+      "bytes": 9713
+    },
+    "discard_many": {
+      "file": "sfx_discard_many.ogg",
+      "bytes": 18658
+    },
+    "select_1": {
+      "file": "sfx_select_1.ogg",
+      "bytes": 7856
+    },
+    "select_2": {
+      "file": "sfx_select_2.ogg",
+      "bytes": 8042
+    },
+    "select_3": {
+      "file": "sfx_select_3.ogg",
+      "bytes": 7853
+    },
+    "select_4": {
+      "file": "sfx_select_4.ogg",
+      "bytes": 8099
+    },
+    "select_5": {
+      "file": "sfx_select_5.ogg",
+      "bytes": 8259
+    }
+  }
+}

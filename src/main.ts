@@ -89,7 +89,7 @@ import {
 } from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
 import type { BoardScreen } from '@ui/BoardScreen';
-import { attachAudioHooks } from '@audio/AudioBus';
+import { attachAudioHooks, audio } from '@audio/AudioBus';
 import en from '@i18n/en.json';
 import es from '@i18n/es.json';
 
@@ -257,8 +257,46 @@ async function boot(): Promise<void> {
     missions: missionDefs,
   });
 
-  // --- Audio (no-op, con los ganchos ya conectados) ---
+  // --- Audio ---
   attachAudioHooks();
+
+  /**
+   * Los sliders de Ajustes escriben `sfxVolume`/`musicVolume` en el perfil, pero
+   * hasta ahora NADIE los leia: eran decorativos. Aca se aplican al grafo, al
+   * arrancar y en cada cambio.
+   */
+  const applyAudioVolumes = (): void => {
+    const settings = profileStore.current.settings;
+    audio.setVolume('sfx', settings.sfxVolume);
+    audio.setVolume('music', settings.musicVolume);
+  };
+  applyAudioVolumes();
+
+  /** Musica por estado: el tema del menu en el menu, el de partida en el resto. */
+  const syncMusic = (): void => {
+    audio.playMusic((engine.run?.status ?? 'menu') === 'menu' ? 'menu' : 'ingame');
+  };
+  bus.on('state:changed', syncMusic);
+
+  /**
+   * El navegador arranca el `AudioContext` SUSPENDIDO hasta el primer gesto, asi
+   * que la musica no puede sonar antes del primer tap. Se desbloquea una sola
+   * vez y ahi si arranca.
+   */
+  const unlockAudio = (): void => {
+    audio.unlock();
+    applyAudioVolumes();
+    // `playMusic(null)` limpia el estado que quedo pendiente mientras no habia
+    // contexto; sin esto, el guard de "misma musica" impediria arrancar.
+    audio.playMusic(null, 0);
+    syncMusic();
+    void audio.load();
+  };
+  window.addEventListener('pointerdown', unlockAudio, { once: true, passive: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+
+  // En movil, ocultar la pestana tiene que pausar: si no, sigue sonando atras.
+  document.addEventListener('visibilitychange', () => audio.handleVisibility(document.hidden));
 
   // --- Autoguardado ---
   // Se escribe 1.5 s despues del ultimo cambio de estado, asi que una mano
@@ -1460,6 +1498,8 @@ async function boot(): Promise<void> {
     // jugador volvio a `auto`.
     if (patch.quality !== undefined) applyQualitySetting();
     if (patch.reduceMotion !== undefined) applyReduceMotionClass(profileStore.current.settings.reduceMotion);
+    // Volumen en vivo: mover el slider tiene que cambiar el sonido YA.
+    if (patch.sfxVolume !== undefined || patch.musicVolume !== undefined) applyAudioVolumes();
     scene.setMode(engine.run?.status === 'menu' ? 'menu' : 'run', {
       reduceMotion: profileStore.current.settings.reduceMotion,
     });
@@ -1559,6 +1599,9 @@ async function boot(): Promise<void> {
         profileStore,
         runStore,
         achievements,
+        // Bus de audio: permite verificar desde un probe que el contexto se
+        // desbloqueo, que los buffers se decodificaron y que el volumen se aplica.
+        audio,
         // Puertas de contenido (R2): el smoke necesita comprobar que una carta
         // bloqueada por jugar NO entra al pool y que se sabe explicar el motivo.
         unlocks,

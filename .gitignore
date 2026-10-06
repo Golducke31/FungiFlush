@@ -10,6 +10,12 @@ dist-ssr/
 art-source/
 fonts-source/
 
+# WAV de audio originales (~11 MB: 2 temas de 32 s + 9 SFX). Lo que se shipea
+# son los .ogg de public/audio (0.8 MB, -93%). Igual que art-source/: los
+# fuentes quedan para reprocesar con `python tools/build_audio.py` sin volver a
+# pedir los archivos.
+audio-source/
+
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
