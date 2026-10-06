@@ -202,6 +202,40 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
   carta nominal deja el texto de la cara en ~2px). El escritorio queda en 1.
 - **`tools/shot-desktop.mjs`** cubre solo `desk-blind` y `desk-playing`. Falta extenderlo a los
   demás paneles (tienda, mazo, colección, historial, ascensión, cosméticos).
+- **Mejoras de UI/UX (2026-10-06)** — cambios GLOBALES (los pidió el usuario) que conviene
+  mirar en escritorio. El gate `shot-desktop.mjs` da 6/6, pero eso solo cubre las 6
+  invariantes de la barra; el aspecto fino no está revisado:
+  - **Fungis sin caja**: se le quitó `.hud-block` al bloque de dinero y la etiqueta "FUNGIS".
+    Queda **icono + número** en las dos plataformas (`src/ui/HUD.ts`, `src/ui/styles.css`
+    `.hud-money`). En escritorio el hueco liberado lo ocupa el bloque de al lado: revisar que
+    la barra superior no quede descompensada.
+  - **Botón "Jugar Mano" deshabilitado**: `opacity .45 → .78`, `saturate .55 → .8`,
+    `brightness .85 → .92` y sombra recortada (`styles.css`, `.hud-actions .btn.is-play.is-art:disabled`).
+  - **Glow de selección**: `SELECT_COLOR` `0x5ef08a → 0x52e07f`, `uRingIntensity`
+    `0.9 → 0.55` (`src/render/Card3D.ts`) y bloom global `high 0.9 → 0.78` /
+    `medium 0.7 → 0.62` (`src/render/Quality.ts`). El escritorio comparte estos tres valores.
+  - **Badge del número de selección**: `BADGE_SIZE` `0.32 → 0.22` del ancho de carta
+    (`Card3D.ts`) y el nombre de la cara COMPACTA reserva su carril. La cara completa no
+    cambió, así que en escritorio el badge se ve más chico: verificar que el 1-5 siga legible.
+  - **Idioma**: se retiró de la barra superior y del panel de game over. Queda en **Ajustes**
+    (menú principal) y en el **MENU INGAME** (panel de confirmación de salida). En escritorio
+    ya no hay botón de idioma en partida: salir al menú es el único camino.
+  - **Etiqueta de habilidad**: el `✦` pasó a ser **prefijo del nombre** en la cara compacta
+    (antes iba suelto arriba a la derecha, tapado por el badge). El tooltip en táctil se ancla
+    ARRIBA y oculta taxonomía/rareza; el de escritorio (hover) queda como estaba.
+- **Auditoría de botones (2026-10-06)** — `tools/audit-mobile-buttons.mjs` recorre las 26
+  pantallas y valida CADA control (fuera de vista, tapado, piso táctil). Sirve de gate
+  (`exit 1`). Verde en 915×412, 844×390 y tablet 1180×820.
+  - **Ajustes, campo "Calidad gráfica"**: ahora ocupa **dos columnas**
+    (`.settings-field--wide`). En una sola, la 4ª opción ("Alta") quedaba **recortada** por
+    el `overflow: hidden` del segmentado. Es una regla BASE: en escritorio también cambia
+    (debería verse mejor, pero conviene mirarlo).
+  - **Menú, chips secundarios**: `min-height: 30px` en `(pointer: coarse)`. En una tablet
+    quedaban en 24px y en celular landscape en 17px (intocables).
+  - **Ajustes**: toggles 30px y sliders 30px de alto; se pagó apretando el grid
+    (`gap: 4px`, `padding: 4px 10px`) para no meter scroll.
+  - **Cortina del duelo**: es un modal a propósito (se destapa con "Listo"), NO un botón
+    tapado. El gate lo clasifica como informativo.
 
 ---
 

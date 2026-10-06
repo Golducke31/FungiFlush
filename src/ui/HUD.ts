@@ -87,7 +87,8 @@ export interface HudCallbacks {
    * le ofreceria "Continuar" una run que acaba de abandonar.
    */
   onQuitToMenu: () => void;
-  onToggleLanguage: () => void;
+  /** Devuelve la promesa del cambio para poder refrescar el texto que lo dispara. */
+  onToggleLanguage: () => void | Promise<void>;
   onContinueRun: () => void;
   // --- Pantalla de inicio ---
   onStartRun: () => void;
@@ -400,6 +401,21 @@ export class HUD {
   // Construccion del DOM
   // ==========================================================================
 
+  /**
+   * Resetea la clase BASE de un elemento CONSERVANDO sus clases de ESTADO.
+   *
+   * `build()` se vuelve a llamar en cada `i18n:changed` (cambio de idioma) y
+   * asigna `className = base` a cada capa, lo que borraba los modificadores
+   * (`is-open`, `is-carousel`, `is-visible`...) que la capa ya tenia puestos.
+   * El sintoma mas grave: con un panel abierto, el overlay perdia `is-open`,
+   * volvia a `display: none` con el panel adentro y el juego quedaba SIN UI.
+   */
+  private keepState(el: HTMLElement, base: string, states: readonly string[]): void {
+    const kept = states.filter((state) => el.classList.contains(state));
+    el.className = base;
+    if (kept.length > 0) el.classList.add(...kept);
+  }
+
   private build(): void {
     this.root.innerHTML = '';
 
@@ -470,14 +486,16 @@ export class HUD {
     rightGroup.style.display = 'flex';
     rightGroup.style.gap = 'var(--gap)';
 
+    // SIN caja y SIN etiqueta de texto: solo el icono del hongo + el numero.
+    // El icono dice que es (y es igual en los dos idiomas, asi que no hay nada
+    // que traducir); la losa del `.hud-block` sobraba y le robaba ancho a la
+    // barra superior, que en movil es la franja mas apretada.
     const moneyBlock = document.createElement('div');
-    moneyBlock.className = 'hud-block hud-money';
-    const moneyLabel = document.createElement('div');
-    moneyLabel.className = 'hud-label';
-    moneyLabel.textContent = t('hud.money');
-    // El icono va al lado del numero, no en la etiqueta: la etiqueta es texto
-    // traducible y el icono no. Juntos en una fila propia quedan centrados
-    // entre si sin depender de `line-height`.
+    moneyBlock.className = 'hud-money';
+    // El nombre accesible va en el bloque: al no haber etiqueta visible, un
+    // lector de pantalla solo oiria un numero suelto.
+    moneyBlock.setAttribute('role', 'img');
+    moneyBlock.setAttribute('aria-label', t('hud.money'));
     const moneyRow = document.createElement('div');
     moneyRow.className = 'hud-money-row';
     const moneyIcon = document.createElement('img');
@@ -491,16 +509,16 @@ export class HUD {
     moneyIcon.setAttribute('aria-hidden', 'true');
     this.elMoney.className = 'hud-value is-money';
     moneyRow.append(moneyIcon, this.elMoney);
-    moneyBlock.append(moneyLabel, moneyRow);
+    moneyBlock.append(moneyRow);
 
-    const langButton = document.createElement('button');
-    langButton.className = 'btn is-ghost is-small';
-    langButton.textContent = t('ui.language');
-    langButton.addEventListener('click', () => this.callbacks.onToggleLanguage());
+    // El boton de IDIOMA ya NO vive aca. Es un ajuste de sistema y estaba
+    // ocupando la franja mas apretada del HUD (movil). Ahora esta dentro del
+    // MENU INGAME, junto a la salida a la run, y en Ajustes desde el menu
+    // principal. En la barra quedan solo dinero y menu.
 
-    // Salida al MENU PRINCIPAL. Vive en la barra superior (junto a idioma) y no
-    // en la barra de acciones de abajo: alli compite con Jugar/Descartar, que
-    // son los botones de la partida. Es una accion de SISTEMA, no de juego.
+    // Salida al MENU PRINCIPAL. Vive en la barra superior y no en la barra de
+    // acciones de abajo: alli compite con Jugar/Descartar, que son los botones
+    // de la partida. Es una accion de SISTEMA, no de juego.
     // Pide confirmacion: abandonar la run es irreversible (el guardado se borra).
     const menuButton = document.createElement('button');
     menuButton.className = 'btn is-ghost is-small is-quit';
@@ -509,7 +527,7 @@ export class HUD {
     menuButton.title = t('menu.quitTitle');
     menuButton.addEventListener('click', () => this.confirmQuitToMenu());
 
-    rightGroup.append(moneyBlock, langButton, menuButton);
+    rightGroup.append(moneyBlock, menuButton);
     top.append(anteBlock, scoreBlock, rightGroup);
 
     // --- Jokers (izquierda) ---
@@ -523,7 +541,12 @@ export class HUD {
     bottom.append(this.elCounters, this.elActions);
 
     // --- Capas flotantes ---
-    this.elOverlay.className = 'overlay';
+    // OJO: `className = base` BORRA las clases de ESTADO que la capa lleva
+    // encima. El overlay es el caso grave: `build()` corre en cada
+    // `i18n:changed` (cambiar idioma) y, con un panel abierto, perdia `is-open`
+    // -> la capa volvia a `display:none` CON el panel adentro y el juego se
+    // quedaba sin UI (parecia congelado; no habia forma de salir).
+    this.keepState(this.elOverlay, 'overlay', ['is-open', 'is-closing', 'is-carousel', 'is-throw']);
     this.elTooltip.className = 'hud-tooltip';
     this.elPopups.className = 'hud-popups';
     this.elToasts.className = 'toast-stack';
@@ -548,14 +571,14 @@ export class HUD {
     // P0.3 (HUD movil) — Misiones: un chip plegable + un panel lateral. El chip
     // SI captura punteros (es el unico control de misiones en movil); el panel
     // se desliza desde la izquierda y tambien es interactivo cuando esta abierto.
-    this.elMissionsToggle.className = 'hud-missions-toggle';
+    this.keepState(this.elMissionsToggle, 'hud-missions-toggle', ['is-visible', 'is-open']);
     this.elMissionsToggle.dataset['act'] = 'missions-toggle';
     this.elMissionsToggle.addEventListener('click', () => {
       this.missionsOpen = !this.missionsOpen;
       this.syncMissions();
     });
 
-    this.elMissions.className = 'hud-missions-panel';
+    this.keepState(this.elMissions, 'hud-missions-panel', ['is-visible', 'is-open']);
     this.elMissions.dataset['act'] = 'missions';
 
     this.root.append(
@@ -1969,6 +1992,30 @@ export class HUD {
     body.className = 'panel-subtitle';
     body.textContent = t('menu.quitBody');
 
+    // IDIOMA: es un ajuste de SISTEMA y este es el unico "menu" que existe
+    // dentro de la partida (se abre desde el boton Menu de la barra superior).
+    // Va en su propia fila, ARRIBA de las acciones, para no competir con
+    // Cancelar / Salir, que son la decision de este panel.
+    const langRow = document.createElement('div');
+    langRow.className = 'panel-lang-row';
+    const lang = document.createElement('button');
+    lang.className = 'btn is-ghost is-small';
+    lang.dataset['act'] = 'lang';
+    lang.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
+    lang.addEventListener('click', () => {
+      // El panel no se reconstruye solo (el estado del motor no cambia y
+      // `renderOverlay` sale temprano), asi que el texto se refresca a mano
+      // cuando la promesa del cambio resuelve.
+      void Promise.resolve(this.callbacks.onToggleLanguage()).then(() => {
+        lang.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
+        title.textContent = t('menu.quitTitle');
+        body.textContent = t('menu.quitBody');
+        cancel.textContent = t('ui.cancel');
+        confirm.textContent = t('menu.quitConfirm');
+      });
+    });
+    langRow.appendChild(lang);
+
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
@@ -1988,7 +2035,7 @@ export class HUD {
     });
 
     actions.append(cancel, confirm);
-    panel.append(title, body, actions);
+    panel.append(title, body, langRow, actions);
     // Sin `carousel`: es un panel DOM normal y tiene que tapar la escena.
     this.openOverlay(panel);
   }
@@ -3533,17 +3580,15 @@ export class HUD {
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
-    const lang = document.createElement('button');
-    lang.className = 'btn is-ghost';
-    lang.textContent = t('ui.language');
-    lang.addEventListener('click', () => this.callbacks.onToggleLanguage());
-
+    // El idioma se saco de aca tambien: este panel es el resumen de la run, no
+    // un menu de sistema. Cambiar de idioma se hace en Ajustes (menu principal)
+    // o en el MENU INGAME.
     const restart = document.createElement('button');
     restart.className = 'btn is-play';
     restart.textContent = t('ui.newRun');
     restart.addEventListener('click', () => this.callbacks.onRestart());
 
-    actions.append(lang, restart);
+    actions.append(restart);
     panel.append(title, subtitle, grid, actions);
     this.openOverlay(panel);
   }
@@ -3671,6 +3716,20 @@ export class HUD {
       combos.className = 'tooltip-combos';
       combos.textContent = comboHint;
       this.elTooltip.appendChild(combos);
+    }
+
+    // En TACTIL el tooltip NO puede ir pegado al puntero: el dedo tapa
+    // exactamente lo que el jugador quiere leer (y con el long-press el dedo
+    // esta encima de la carta). Se ancla ARRIBA y centrado, en la franja libre
+    // entre la barra superior y la mano.
+    if (isCoarsePointer()) {
+      const width = this.elTooltip.offsetWidth;
+      this.elTooltip.style.left = `${Math.max(14, Math.round((window.innerWidth - width) / 2))}px`;
+      // Justo DEBAJO de la barra superior, que es donde empieza la franja
+      // libre: pegarlo al borde lo escondia detras del cromo.
+      this.elTooltip.style.top = 'calc(var(--hud-top-h, 66px) + 6px)';
+      this.elTooltip.classList.add('is-visible');
+      return;
     }
 
     // Se mantiene dentro de la pantalla: en landscape el margen es escaso.

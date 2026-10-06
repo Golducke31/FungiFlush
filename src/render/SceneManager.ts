@@ -246,6 +246,11 @@ export interface SceneCallbacks {
   onCardClick: (uid: string) => void;
   /** El puntero entro/salio de una carta (solo raton). */
   onHoverChange: (card: CardInstance | null) => void;
+  /**
+   * El dedo se mantuvo quieto sobre una carta. Es la via TACTIL del tooltip:
+   * el hover necesita `pointermove`, que no llega si el dedo no se mueve.
+   */
+  onLongPressChange?: (card: CardInstance) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
   onScorePopup?: (screenX: number, screenY: number, text: string, color: number) => void;
   /**
@@ -559,6 +564,7 @@ export class SceneManager {
 
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
+      onLongPress: (card) => this.handleLongPress(card),
       onClick: (card) => this.handleClick(card),
       onDragStart: (card) => this.handleDragStart(card),
       onDrag: (card, point, zone) => this.handleDrag(card, point, zone),
@@ -2893,6 +2899,14 @@ export class SceneManager {
     }
     if (card?.card) this.callbacks.onHoverChange(card.card);
     else this.callbacks.onHoverChange(null);
+  }
+
+  /**
+   * Long-press tactil. NO mueve la carta (el hover eleva; aca no hace falta) y
+   * no la selecciona: solo pide el tooltip. La UI decide DONDE ponerlo.
+   */
+  private handleLongPress(card: Card3D): void {
+    if (card.card) this.callbacks.onLongPressChange?.(card.card);
   }
 
   // -------------------------------------------------------------------------

@@ -142,7 +142,10 @@ export const CARD_HALO_WIDTH = CARD_WIDTH * 1.3 * HALO_SPREAD;
  * carta esta seleccionada, boca arriba y no se la esta arrastrando: es la
  * respuesta visual a "cuantas cartas llevo elegidas y en que orden".
  */
-const BADGE_SIZE = CARD_WIDTH * 0.32;
+// 0.32 -> 0.22: el badge del numero ocupaba un tercio del ancho de la carta y
+// se comia el carril derecho del NOMBRE (el dato #1 de la cara). Con 0.22 sigue
+// siendo legible (el digito se lee de un vistazo) y deja el nombre libre.
+const BADGE_SIZE = CARD_WIDTH * 0.22;
 const BADGE_GEO = new THREE.PlaneGeometry(BADGE_SIZE, BADGE_SIZE);
 const BADGE_TEXTURES = new Map<number, THREE.CanvasTexture>();
 
@@ -674,10 +677,13 @@ export class Card3D {
     const pulse = 0.5 + this.compatibleGlow * 0.45 + this.lift * 0.4;
     (this.haloMaterial.uniforms['uIntensity'] as { value: number }).value =
       this.kind === 'joker' ? base + pulse * 0.55 : 0;
-    // Borde verde: fuerte con la seleccion, tenue con el "compatible" (pista de
-    // combo, P1.2). El color del anillo es SELECT_COLOR desde el material.
+    // Borde verde: la seleccion se anuncia con el BORDE, no con un resplandor.
+    // Estaba en 0.9 y en quality `high` (bloom strength 0.9, 2 iteraciones) el
+    // anillo se derramaba sobre la ilustracion y competia con el nombre y las
+    // stats. 0.55 lo deja como un borde nitido; el "compatible" (pista de combo,
+    // P1.2) baja proporcionalmente para no ganarle a la seleccion.
     (this.haloMaterial.uniforms['uRingIntensity'] as { value: number }).value =
-      this.selectGlow * 0.9 + this.compatibleGlow * 0.3;
+      this.selectGlow * 0.55 + this.compatibleGlow * 0.22;
 
     // Badge del numero: solo con la carta elegida, boca arriba y quieta.
     this.badge.visible =

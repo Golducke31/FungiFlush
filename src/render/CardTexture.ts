@@ -27,6 +27,17 @@ const H = 744;
 const TAU = Math.PI * 2;
 
 /**
+ * Carril derecho que la cara COMPACTA le reserva al badge del numero de
+ * seleccion (esquina superior derecha, dibujado en 3D por `Card3D`).
+ *
+ * Sale de la geometria real: con `BADGE_SIZE = CARD_WIDTH * 0.22`, el badge
+ * empieza en x≈386 de la textura. El nombre tiene que terminar antes, asi que
+ * se descuentan ~140px del ancho util. Si cambia el tamano del badge, cambiar
+ * tambien esto.
+ */
+const NAME_BADGE_LANE = 140;
+
+/**
  * Tipografia de las cartas.
  *
  * DOS familias, con dos trabajos distintos:
@@ -775,12 +786,24 @@ export function createCardCanvas(
   // El nombre va en UNA sola linea y se achica solo si no entra. En DOS lineas
   // se comia la ilustracion: la carta es de 112px en pantalla y el nombre es
   // contexto, no el contenido.
-  const nameMaxW = W - pad * 2 - 24;
+  //
+  // En la cara COMPACTA, ademas:
+  //   - se le RESERVA el carril derecho, que es donde va el badge del numero
+  //     (antes iba centrado sobre el ancho entero y el badge lo tapaba);
+  //   - se alinea a la IZQUIERDA, para que el carril reservado sea siempre el
+  //     mismo y el nombre no se corra al seleccionar;
+  //   - usa la fuente de TEXTO (Fredoka SemiCondensed), no la de display: a
+  //     110px de carta, Gasoek One (trazo ancho) se volvia ilegible.
+  // La marca de habilidad va DELANTE del nombre (ver mas abajo): hay que
+  // descontarle su ancho al presupuesto del nombre.
+  const MARKER = '✦ ';
+  const nameMaxW = compact ? W - pad * 2 - NAME_BADGE_LANE : W - pad * 2 - 24;
   if (compact) {
-    let px = 68;
-    while (px > 30) {
-      ctx.font = `700 ${px}px ${CARD_DISPLAY_FONT}`;
-      if (ctx.measureText(spec.name).width <= nameMaxW) break;
+    let px = 62;
+    for (;;) {
+      ctx.font = `700 ${px}px ${CARD_TEXT_FONT}`;
+      const markW = spec.hasAbility ? ctx.measureText(MARKER).width : 0;
+      if (ctx.measureText(spec.name).width <= nameMaxW - markW || px <= 34) break;
       px -= 2;
     }
   } else {
@@ -790,7 +813,22 @@ export function createCardCanvas(
   const nameLines = wrapText(ctx, spec.name, nameMaxW, compact ? 1 : 2);
   const nameLineH = compact ? 78 : 36;
   const nameY = compact ? 48 : 56;
-  nameLines.forEach((line, i) => ctx.fillText(line, W / 2, nameY + i * nameLineH));
+  let nameX = compact ? pad : W / 2;
+  if (compact) {
+    ctx.textAlign = 'left';
+    if (spec.hasAbility) {
+      // Marca de HABILIDAD. Antes iba suelta en la esquina superior derecha,
+      // justo debajo del badge del numero: al seleccionar la carta quedaba
+      // tapada y a 46px de textura era casi invisible. Como prefijo del nombre
+      // se ve SIEMPRE y no compite con nada.
+      ctx.fillStyle = hexToCss(ABILITY_COLOR);
+      ctx.fillText('✦', nameX, nameY);
+      nameX += ctx.measureText(MARKER).width;
+      ctx.fillStyle = '#f2f6fb';
+    }
+  }
+  nameLines.forEach((line, i) => ctx.fillText(line, nameX, nameY + i * nameLineH));
+  if (compact) ctx.textAlign = 'center';
 
   // --- 5. Pie: chips de stats + descripcion ---
   //
@@ -923,20 +961,11 @@ export function createCardCanvas(
   ctx.fillRect(-13, -13, 26, 26);
   ctx.restore();
 
-  // --- 7b. Marca de HABILIDAD (solo cara compacta) ---
+  // --- 7b. Marca de HABILIDAD ---
   // En la cara completa la habilidad se anuncia con la etiqueta "✦ HABILIDAD"
-  // dentro del panel de texto. En la compacta no hay panel, asi que la marca va
-  // suelta: es la senal de que esa carta tiene reglas que conviene leer en el
-  // tooltip.
-  if (compact && spec.hasAbility) {
-    ctx.fillStyle = hexToCss(ABILITY_COLOR);
-    ctx.font = `700 46px ${CARD_TEXT_FONT}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('✦', W - 100, 46);
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'center';
-  }
+  // dentro del panel de texto. En la COMPACTA la marca va como prefijo del
+  // NOMBRE (ver el bloque del nombre): antes se dibujaba suelta aca arriba a la
+  // derecha, justo donde el badge del numero la tapaba al seleccionar la carta.
 
   // --- 8. Nivel (esquina superior izquierda) ---
   if ((spec.level ?? 1) > 1) {

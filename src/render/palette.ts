@@ -70,7 +70,11 @@ export const ABILITY_COLOR = 0xc4a8ff;
  * `overgrowth` (0x4fd18b): si compartieran tono, una carta de simbiosis
  * seleccionada no se distinguiria de una solo resaltada por elemento.
  */
-export const SELECT_COLOR = 0x5ef08a;
+// Un pelo mas oscuro que antes (0x5ef08a): ese verde tenia luminancia lineal
+// ~0,66, pegada al umbral de bloom (0,70), asi que en quality `high` el anillo
+// se convertia en un resplandor que lavaba la ilustracion. Sigue siendo un
+// verde vivo y sigue distinto del de simbiosis/crecimiento (0x4fd18b).
+export const SELECT_COLOR = 0x52e07f;
 
 /** 0xRRGGBB -> '#rrggbb' */
 export function hexToCss(hex: number): string {

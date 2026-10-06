@@ -511,6 +511,16 @@ body {
   color: var(--money);
 }
 
+/* --- Fungis: SOLO icono + numero, sin caja ---
+   Antes era un `.hud-block` (borde, fondo y padding) con la etiqueta "FUNGIS"
+   encima. El icono del hongo ya identifica la moneda y la palabra era
+   redundante; la losa ademas le robaba ancho a la barra superior, que en movil
+   es la franja mas apretada. Queda el icono pegado al numero, nada mas. */
+.hud-money {
+  display: flex;
+  align-items: center;
+}
+
 /* Icono de la moneda ("Fungis"): va pegado al numero, no en la etiqueta,
    porque la etiqueta es texto traducible y el icono no. */
 .hud-money-row {
@@ -948,7 +958,9 @@ body {
   display: none;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 6px 12px;
+  /* Minimo tactil: con `padding: 5px 10px` quedaba en 26px de alto. */
+  min-height: 32px;
   border-radius: 999px;
   border: 1px solid var(--frame-edge);
   background: linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 100%);
@@ -1372,9 +1384,20 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
+/* Deshabilitado: se lee "apagado" pero SIN desaparecer. Con `opacity .45` el
+   texto "Jugar Mano" dejaba de reconocerse y el jugador no entendia que el
+   boton existe y que le falta seleccionar cartas. Menos desaturacion y menos
+   brillo perdido; la sombra tambien se recorta (ver el label mas arriba). */
 .hud-actions .btn.is-play.is-art:disabled {
-  opacity: 0.45;
-  filter: saturate(0.55) brightness(0.85);
+  opacity: 0.78;
+  filter: saturate(0.8) brightness(0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(160, 255, 210, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+}
+
+.hud-actions .btn.is-play.is-art:disabled .btn-play-label {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
 }
 
 .hud-actions .btn.is-play.is-art:not(:disabled):active {
@@ -1747,6 +1770,17 @@ body {
 
 .panel.is-confirm .panel-actions {
   justify-content: center;
+}
+
+/* Fila de IDIOMA del MENU INGAME. Va separada de las acciones por una linea
+   para que no se lea como una tercera opcion de la decision (Cancelar /
+   Salir): es un ajuste de sistema, no una salida. */
+.panel-lang-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--frame-rim);
 }
 
 /* Aviso de CIEGO SUPERADO: el momento entre la ultima mano y el draft. */
@@ -3642,6 +3676,23 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Campo ANCHO: el que lleva un control segmentado de 4 opciones. En una sola
+   columna no entraba y la ultima opcion ("Alta") quedaba recortada. */
+.settings-field--wide {
+  grid-column: span 2;
+}
+
+/* Red de seguridad: si aun asi no entrara, los segmentos ENVUELVEN en vez de
+   cortarse (el contenedor tiene `overflow: hidden`). */
+.settings-segmented {
+  flex-wrap: wrap;
+}
+
+.settings-segment {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .settings-label {
   font-size: 13px;
   color: var(--text);
@@ -4579,11 +4630,34 @@ body {
 /* Pantallas muy bajas (celular en landscape con barra de navegacion): el menu
    se compacta pero sigue siendo tocable. Va al final para ganarles a las
    reglas generales de .btn.is-large. */
-@media (pointer: coarse) and (max-height: 430px) {
-  /* Landscape de celular: achicar los chips secundarios. */
+/* --------------------------------------------------------------------------
+   Piso tactil en CUALQUIER dispositivo tactil (celular Y tablet)
+
+   Los chips del menu y los sliders de Ajustes se ajustaban por ALTO de pantalla
+   (`max-height`), asi que en una TABLET con 820px de alto se quedaban en el
+   tamano del escritorio: chips de 24px y sliders de 16px. El criterio tiene que
+   ser el PUNTERO, no el alto.
+   -------------------------------------------------------------------------- */
+@media (pointer: coarse) {
   .menu-ghost {
-    padding: 0.3em 0.8em;
-    font-size: 9px;
+    min-height: 30px;
+  }
+
+  /* El slider nativo mide ~16px: el pulgar no se agarra con el dedo. Se agranda
+     el AREA (la pista sigue fina, se dibuja centrada). */
+  .settings-slider {
+    height: 30px;
+  }
+}
+
+@media (pointer: coarse) and (max-height: 430px) {
+  /* Landscape de celular: los chips secundarios se compactan, pero NO por debajo
+     del minimo tactil. Con `font-size: 9px` + `padding: 0.3em` quedaban en 17px
+     de alto: se ven, pero no se pueden tocar. */
+  .menu-ghost {
+    padding: 0.5em 0.85em;
+    font-size: 11px;
+    min-height: 30px;
   }
   .menu-version {
     display: none;
@@ -6705,6 +6779,36 @@ body {
     font-size: 12px;
   }
 
+  /* --- Tooltip TACTIL: se ancla ARRIBA, no bajo el dedo ---
+     Al no ir pegado al puntero tiene que ENTRAR en la franja libre entre la
+     barra superior y la mano (~164px a 412 de alto). Se ocultan las dos filas
+     que la cara de la carta YA comunica por color (taxonomia de elemento/
+     familia y rareza) y se aprieta el resto: el tooltip queda para lo que NO
+     se ve en la carta — nombre, descripcion, habilidad y numeros. */
+  .hud-tooltip .tooltip-taxonomy,
+  .hud-tooltip .tooltip-rarity {
+    display: none;
+  }
+
+  .hud-tooltip {
+    padding: 9px 11px;
+  }
+
+  .tooltip-name {
+    font-size: 16.5px;
+    margin-bottom: 2px;
+  }
+
+  .tooltip-desc {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+
+  .tooltip-ability-text {
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+
   #ui-root.is-panel-open > .hud-top,
   #ui-root.is-panel-open > .hud-jokers,
   #ui-root.is-panel-open > .hud-missions-panel,
@@ -7369,13 +7473,17 @@ body {
   }
 
   /* --- Ajustes: 8 campos + 2 deslizadores en una pantalla de 412px --- */
+  /* El grid se aprieta para PAGAR los minimos tactiles de abajo: con los
+     controles mas grandes (toggle 32, slider 30) el contenido crecia 25px a
+     844x390 y la ultima fila pedia scroll. Antes: los controles eran comodos
+     pero no tocables; ahora entran los dos. */
   .panel.is-settings .settings-grid {
-    gap: 6px;
+    gap: 4px;
     margin-bottom: 0;
   }
 
   .panel.is-settings .settings-field {
-    padding: 6px 10px;
+    padding: 4px 10px;
   }
 
   .panel.is-settings .settings-section {
@@ -7387,8 +7495,16 @@ body {
     font-size: 12px;
   }
 
+  /* Minimo tactil: 28px quedaba por debajo y el toggle es el control que mas se
+     toca de esta pantalla. */
   .panel.is-settings .settings-toggle {
-    min-height: 28px;
+    min-height: 30px;
+  }
+
+  /* El slider nativo mide ~16px de alto: el pulgar no se agarra con el dedo.
+     Se agranda el AREA (la pista sigue fina, se dibuja centrada). */
+  .panel.is-settings .settings-slider {
+    height: 30px;
   }
 
   /* --- Ciego superado: el desglose y el pie entran sin recortarse ---
@@ -7466,8 +7582,10 @@ body {
   }
 
   .deck-toolbar.is-floating .btn {
-    min-height: 28px;
-    padding: 4px 9px;
+    /* 28px quedaba por debajo del minimo tactil (son los filtros de la
+       Coleccion y los ordenes del Mazo: se tocan mucho). */
+    min-height: 32px;
+    padding: 5px 9px;
     font-size: 11px;
   }
 

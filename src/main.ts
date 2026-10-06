@@ -505,6 +505,30 @@ async function boot(): Promise<void> {
 
   let hud: HUD | null = null;
 
+  /**
+   * Muestra la etiqueta de una carta. La comparten las DOS vias:
+   *   - `onHoverChange`  -> raton (y tactil MIENTRAS el dedo se mueve).
+   *   - `onLongPressChange` -> mantener el dedo quieto, que es la unica via
+   *     tactil real: el hover necesita `pointermove` y no llega si no hay
+   *     movimiento.
+   * El texto es el mismo en las dos: si se separaran, la etiqueta de movil
+   * diria otra cosa que la de escritorio.
+   */
+  const showCardTooltip = (card: CardInstance): void => {
+    if (!hud) return;
+    const selection = engine.round?.selected ?? [];
+    let hint: string | undefined;
+    if (selection.length > 0) {
+      const round = engine.round;
+      const cards = round
+        ? round.hand.filter((c) => selection.includes(c.uid) || c.uid === card.uid)
+        : [];
+      const combos = detectCombos(cards);
+      if (combos.length > 0) hint = combos.map((c) => t(c.nameKey)).join(' · ');
+    }
+    hud.showTooltip(card, lastPointer.x, lastPointer.y, hint);
+  };
+
   const scene = new SceneManager({
     canvas,
     engine,
@@ -519,18 +543,9 @@ async function boot(): Promise<void> {
           hud.hideTooltip();
           return;
         }
-        const selection = engine.round?.selected ?? [];
-        let hint: string | undefined;
-        if (selection.length > 0) {
-          const round = engine.round;
-          const cards = round
-            ? round.hand.filter((c) => selection.includes(c.uid) || c.uid === card.uid)
-            : [];
-          const combos = detectCombos(cards);
-          if (combos.length > 0) hint = combos.map((c) => t(c.nameKey)).join(' · ');
-        }
-        hud.showTooltip(card, lastPointer.x, lastPointer.y, hint);
+        showCardTooltip(card);
       },
+      onLongPressChange: (card) => showCardTooltip(card),
       onScorePopup: (x, y, text, color) => hud?.popup(x, y, text, color),
       onScoreTick: (info) => hud?.scoreTick(info),
       // El monitor de frames bajo el nivel solo. El render no muestra avisos:
@@ -914,11 +929,10 @@ async function boot(): Promise<void> {
           hud?.toast(t('log.saveIncompatible'), 'warn');
         }
       },
-      onToggleLanguage: () => {
-        void toggleLanguage().then(() => {
+      onToggleLanguage: () =>
+        toggleLanguage().then(() => {
           document.documentElement.lang = currentLanguage();
-        });
-      },
+        }),
       // --- Pantalla de inicio ---
       onStartRun: () => {
         void runStore.clear();

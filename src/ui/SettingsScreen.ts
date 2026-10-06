@@ -16,9 +16,9 @@ export interface SettingsCallbacks {
   onClose: () => void;
 }
 
-function field(label: HTMLElement, control: HTMLElement): HTMLDivElement {
+function field(label: HTMLElement, control: HTMLElement, mod?: string): HTMLDivElement {
   const el = document.createElement('div');
-  el.className = 'settings-field';
+  el.className = `settings-field${mod ? ` ${mod}` : ''}`;
   el.append(label, control);
   return el;
 }
@@ -166,7 +166,11 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
     field(langLabel, langButton),
     field(reduceMotionLabel, checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
     field(autoSortLabel, checkbox(settings.autoSortHand, (v) => callbacks.onPatch({ autoSortHand: v }))),
-    field(qualityLabel, qualityControl),
+    // `settings-field--wide`: el control segmentado (Auto/Baja/Media/Alta) NO
+    // entra en UNA columna de la grilla y la 4a opcion quedaba RECORTADA por el
+    // `overflow:hidden` del propio control. Con dos columnas entra entero y la
+    // grilla sigue teniendo las mismas filas (2 + 1 completan la fila).
+    field(qualityLabel, qualityControl, 'settings-field--wide'),
     field(hapticsLabel, checkbox(settings.haptics, (v) => callbacks.onPatch({ haptics: v }))),
     notifySection,
     field(notifyDailyLabel, checkbox(settings.notifyDaily, (v) => callbacks.onPatch({ notifyDaily: v }))),

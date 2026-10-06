@@ -29,6 +29,15 @@ const CLICK_SLOP_PX = 6;
 const DRAG_START_PX = 10;
 /** Duracion maxima (ms) de un tap. */
 const CLICK_MAX_MS = 700;
+/**
+ * Cuanto hay que MANTENER el dedo quieto para que salga la etiqueta.
+ *
+ * En tactil el hover no existe (ver `handleDown`), asi que esta es la unica via
+ * para leer la habilidad de una carta. 380ms es lo bastante largo para no
+ * dispararse en un tap normal (<700ms pero con movimiento) y lo bastante corto
+ * para no sentirse lento.
+ */
+const LONG_PRESS_MS = 380;
 /** Altura del plano imaginario sobre el que se proyecta el dedo al arrastrar. */
 export const DRAG_PLANE_Y = 0.95;
 
@@ -38,6 +47,12 @@ const PLANE_HIT = new THREE.Vector3();
 export interface InteractionCallbacks {
   onHover: (card: Card3D | null) => void;
   onClick: (card: Card3D) => void;
+  /**
+   * El dedo se mantuvo quieto sobre una carta. Es la via TACTIL del tooltip:
+   * sin esto, en movil no habia forma de leer la habilidad (el hover necesita
+   * `pointermove`, que no ocurre si el dedo no se mueve).
+   */
+  onLongPress?: (card: Card3D) => void;
   onPointerMove?: (ndc: THREE.Vector2) => void;
   /** Empieza el arrastre (ya se superaron los 10 px). */
   onDragStart?: (card: Card3D) => void;
@@ -66,6 +81,11 @@ export class Interaction {
   private downTime = 0;
   private pointerInside = false;
   private lastHoverUid: string | null = null;
+
+  /** Timer del long-press pendiente, o null. */
+  private longPressTimer: number | null = null;
+  /** El long-press YA disparo: el `pointerup` no debe contar como click. */
+  private longPressFired = false;
 
   /** Carta bajo el puntero al bajar: el candidato a arrastre. */
   private candidate: Card3D | null = null;
@@ -102,6 +122,7 @@ export class Interaction {
   }
 
   dispose(): void {
+    this.cancelLongPress();
     this.element.removeEventListener('pointermove', this.handleMove);
     this.element.removeEventListener('pointerdown', this.handleDown);
     this.element.removeEventListener('pointerup', this.handleUp);
@@ -119,7 +140,12 @@ export class Interaction {
     if (this.candidate && !this.dragActive) {
       const dx = event.clientX - this.downX;
       const dy = event.clientY - this.downY;
-      if (Math.hypot(dx, dy) > DRAG_START_PX) {
+      const moved = Math.hypot(dx, dy);
+      // Un TEMBLOR del dedo no cancela el long-press: en tactil llegan
+      // `pointermove` aunque el jugador quiera quedarse quieto. Solo lo cancela
+      // un movimiento deliberado (> CLICK_SLOP_PX).
+      if (moved > CLICK_SLOP_PX) this.cancelLongPress();
+      if (moved > DRAG_START_PX) {
         this.dragActive = true;
         // Mientras se arrastra no hay hover: la carta ya esta "en la mano", y
         // un halo de hover encima solo confundiria.
@@ -150,12 +176,27 @@ export class Interaction {
     this.downTime = performance.now();
     this.pointerId = event.pointerId;
     this.dragActive = false;
+    this.longPressFired = false;
 
     // El candidato se elige al BAJAR: si el gesto termina en arrastre ya
     // sabemos que carta se mueve. Si termina en tap, este pick se descarta y
     // el `pick()` del pointerup manda.
     this.candidate = this.pick();
     if (!this.candidate) return;
+
+    // LONG-PRESS: la via TACTIL del tooltip. El hover se dispara desde
+    // `pointermove` (ver `emitHover`), asi que si el dedo no se mueve NUNCA
+    // llega: por eso "a veces no se mostraba la etiqueta". El timer cubre ese
+    // caso y convive con el hover (raton) sin reemplazarlo.
+    this.cancelLongPress();
+    const pressed = this.candidate;
+    this.longPressTimer = window.setTimeout(() => {
+      this.longPressTimer = null;
+      // Si mientras tanto empezo un arrastre (o cambio el candidato), no va.
+      if (this.dragActive || this.candidate !== pressed) return;
+      this.longPressFired = true;
+      this.callbacks.onLongPress?.(pressed);
+    }, LONG_PRESS_MS);
 
     // Captura del puntero: el arrastre sigue funcionando aunque el dedo se
     // salga del canvas. Se toma solo cuando hay una carta debajo, para no
@@ -169,6 +210,16 @@ export class Interaction {
 
   private readonly handleUp = (event: PointerEvent): void => {
     this.pointerInside = true;
+    this.cancelLongPress();
+
+    // Un long-press NO selecciona: el jugador mantuvo el dedo para LEER la
+    // etiqueta. Se oculta el tooltip y se corta el gesto aca.
+    if (this.longPressFired) {
+      this.longPressFired = false;
+      this.endDrag();
+      this.callbacks.onHover(null);
+      return;
+    }
 
     if (this.dragActive && this.candidate) {
       const card = this.candidate;
@@ -205,12 +256,16 @@ export class Interaction {
 
   private readonly handleCancel = (): void => {
     const card = this.dragActive ? this.candidate : null;
+    this.cancelLongPress();
+    this.longPressFired = false;
     this.endDrag();
     if (card) this.callbacks.onDragCancel?.(card);
   };
 
   private readonly handleLeave = (): void => {
     this.pointerInside = false;
+    this.cancelLongPress();
+    this.longPressFired = false;
     if (this.lastHoverUid !== null) {
       this.lastHoverUid = null;
       this.callbacks.onHover(null);
@@ -218,6 +273,18 @@ export class Interaction {
   };
 
   // -------------------------------------------------------------------------
+
+  /**
+   * Cancela el long-press pendiente. Se llama en TODOS los caminos que no sean
+   * "el dedo sigue quieto sobre la misma carta": soltar, moverse, cancelar el
+   * gesto, salir del canvas y `dispose`.
+   */
+  private cancelLongPress(): void {
+    if (this.longPressTimer !== null) {
+      window.clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+  }
 
   private endDrag(): void {
     if (this.pointerId !== null) {
