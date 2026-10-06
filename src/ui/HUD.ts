@@ -3796,33 +3796,16 @@ export class HUD {
     });
     this.elTicker.classList.toggle('is-final', isLast);
 
-    // Un paso que RESTA se grafica como daño (veneno) y no como ganancia: es la
-    // unica forma de que se vea que la mano esta perdiendo puntos, no sumando.
-    if (info.negative) this.effect(info.x, info.y, 'poison');
-    // Un bonus es un momento, no un numero: estalla.
-    if (info.isBonus) this.effect(info.x, info.y, 'burst');
+    // Un paso que RESTA se marca con el signo menos en el numero (el color ya
+    // es el del elemento): el jugador ve que la mano pierde puntos, no suma. El
+    // viejo sprite de "veneno" (pixel-art) lo reemplaza el burst de particulas
+    // del combo (F6). Un bonus ya se distingue por el popup dorado (is-bonus).
 
     if (this.tickerTimer !== null) window.clearTimeout(this.tickerTimer);
     this.tickerTimer = window.setTimeout(() => {
       this.elTicker.classList.remove('is-visible');
       this.tickerTimer = null;
     }, isLast ? 2600 : 1500);
-  }
-
-  /**
-   * Efecto con sprite en una posicion de pantalla. Se autodestruye al terminar
-   * la animacion: sin eso el DOM crece sin techo a lo largo de una partida.
-   *
-   * Los sprites vienen del Super Pixel Effects Gigapack y estan ADAPTADOS al
-   * estilo pintado del juego (upscale suave + halo). Ver public/fx/LICENSE.txt.
-   */
-  effect(x: number, y: number, kind: 'poison' | 'burst'): void {
-    const el = document.createElement('div');
-    el.className = `fx-sprite fx-${kind}`;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    this.elPopups.appendChild(el);
-    window.setTimeout(() => el.remove(), kind === 'poison' ? 1700 : 700);
   }
 
   /**

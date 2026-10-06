@@ -10,7 +10,7 @@
 > | **F3 · Combo** (`c`, pop, números) | ✅ **hecha** — ver §A.12 |
 > | F4 · Micelio | ✅ **hecha** — ver §A.13 |
 > | F5 · Cierre + bloom | ✅ **hecha** — ver §A.14 |
-> | F6 · Borrar los pixel-art | pendiente (bloqueada por F3-F5) |
+> | F6 · Borrar los pixel-art | ✅ **hecha** — ver §A.15 |
 > Fuente de las animaciones: `combo-esporas.html` (demo de 210 líneas).
 > Fuente del audio: los 4 archivos/carpetas que pasó Emanuel.
 > Cada bloque trae **alcance**, **archivos afectados** y **criterio de aceptación**.
@@ -445,6 +445,27 @@ desktop 6/6 · tablet 5/5 · probe-combo OK · probe-mycelium OK · probe-closur
 **Siguiente**: F6 — borrar los pixel-art (`public/fx/`, `.fx-sprite`/`.fx-burst`/`.fx-poison`,
 `HUD.effect()` y sus 2 llamadas) cuando el reemplazo esté verificado (decisión #5). Se deja la
 `LICENSE.txt` del pack hasta confirmar.
+
+### A.15 ✅ F6 implementada — borrado de los pixel-art
+
+**Hecho** (decisión #5: el reemplazo — el sistema de combo F2-F5 — ya está verificado):
+
+- Borrados `public/fx/fx_burst.webp` y `public/fx/fx_poison.webp` (del *Super Pixel Effects
+  Gigapack*).
+- Quitadas de `styles.css` las reglas `.fx-sprite` / `.fx-poison` / `.fx-burst` y los
+  `@keyframes fx-poison` / `fx-burst` (eran 24 y 9 frames recorridos con `steps()`).
+- Eliminado `HUD.effect(x, y, kind)` y sus 2 llamadas en `scoreTick` (la negativa → veneno y la
+  bonus → estallido). La negativa ya se lee por el signo `−` en el número; la bonus por el popup
+  dorado (`is-bonus`); y el burst de partículas del combo (F3/F5) cubre el estallido. NO se tocó el
+  resto del VFX (es 3D).
+- **`public/fx/LICENSE.txt` SE MANTIENE** (decisión #5): la atribución del pack. ⚠️ Ya no hay
+  assets del pack en el build; conviene revisar si la obligación de atribución aún aplica y, si no,
+  borrarla.
+
+**Verificación** (no rompe el flujo de puntaje): `grep -rn "fx_burst\|fx_poison\|fx-sprite" src/`
+vacío; typecheck; tests **332/332**; validate; closure OK (0 errores); smoke 0/0/0.
+
+**Estado del plan**: F1-F6 **COMPLETAS**.
 
 ### A.10 `prefers-reduced-motion`
 
