@@ -256,6 +256,12 @@ class BloomPass extends Pass {
     this.rtBlurB = new THREE.WebGLRenderTarget(1, 1, rtOptions);
   }
 
+  /** Fuerza del bloom en vivo (la usa el pulso de cierre del combo). */
+  setStrength(value: number): void {
+    const u = this.composite.uniforms.uStrength;
+    if (u) u.value = value;
+  }
+
   override setSize(width: number, height: number): void {
     const w = Math.max(1, Math.floor(width / 4));
     const h = Math.max(1, Math.floor(height / 4));
@@ -423,9 +429,12 @@ export class PostFx {
    */
   private readonly transitionPass: TransitionPass;
   private sceneCalls = 0;
+  /** Fuerza base del bloom: el pulso de cierre se suma encima de esta. */
+  private readonly baseBloomStrength: number;
 
   constructor(options: PostFxOptions) {
     const { renderer, width, height } = options;
+    this.baseBloomStrength = options.bloomStrength;
 
     // El render target propio es necesario para dos cosas: el tipo HalfFloat
     // (HDR, sin el cual el bloom recorta) y el MSAA del composer, que NO hereda
@@ -506,6 +515,14 @@ export class PostFx {
   /** Draw calls de la escena (sin los pases de pantalla completa). */
   get drawCalls(): number {
     return this.sceneCalls;
+  }
+
+  /**
+   * Pulso de bloom para el cierre del combo. `extra = 0` lo vuelve a la base;
+   * como el bloom puede estar desactivado (calidad baja), es un no-op ahi.
+   */
+  pulseBloom(extra: number): void {
+    this.bloomPass?.setStrength(this.baseBloomStrength + extra);
   }
 
   dispose(): void {

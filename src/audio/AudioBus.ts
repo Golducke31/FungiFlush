@@ -243,18 +243,39 @@ export class AudioBus {
   }
 
   /**
+   * Acorde sintetizado (cierre del combo). `notes` son semitonos sobre la nota
+   * base; suenan juntas. No necesita archivo: usa el mismo oscilador de reserva.
+   */
+  playChord(notes: number[], options: AudioPlayOptions = {}): void {
+    if (this.muted) return;
+    if (!this.ctx || !this.sfxGain) return;
+    const delay = options.delayMs ?? 0;
+    for (const semi of notes) {
+      this.synthFreq(SYNTH_BASE_HZ * Math.pow(2, semi / 12) * (options.rate ?? 1), {
+        ...options,
+        delayMs: delay,
+      });
+    }
+  }
+
+  /**
    * Beep de reserva. Mismo criterio que el prototipo de combo: triangular +
    * envolvente exponencial. El indice del id elige la nota de la pentatonica,
    * asi una secuencia de eventos sube de tono en vez de repetir el mismo pip.
    */
   private synth(id: string, options: AudioPlayOptions): void {
-    const ctx = this.ctx;
-    const sfx = this.sfxGain;
-    if (!ctx || !sfx) return;
-
     let hash = 0;
     for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
     const semi = PENTATONIC[hash % PENTATONIC.length] ?? 0;
+    const hz = SYNTH_BASE_HZ * Math.pow(2, semi / 12) * (options.rate ?? 1);
+    this.synthFreq(hz, options);
+  }
+
+  /** Un unico oscilador triangular con envolvente exponencial. */
+  private synthFreq(hz: number, options: AudioPlayOptions): void {
+    const ctx = this.ctx;
+    const sfx = this.sfxGain;
+    if (!ctx || !sfx) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -262,15 +283,15 @@ export class AudioBus {
     const volume = (options.volume ?? 0.22) * (this.isDucked ? 0.4 : 1);
 
     osc.type = 'triangle';
-    osc.frequency.value = SYNTH_BASE_HZ * Math.pow(2, semi / 12) * (options.rate ?? 1);
+    osc.frequency.value = hz;
     gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), at + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), at + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
 
     osc.connect(gain);
     gain.connect(sfx);
     osc.start(at);
-    osc.stop(at + 0.42);
+    osc.stop(at + 0.52);
   }
 
   /** Elige una variacion al azar sin repetir la ultima de la familia. */

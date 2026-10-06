@@ -8,8 +8,8 @@
 > | **F1 · Audio** | ✅ **hecha** — ver §B.8 |
 > | **F2 · Núcleo de FX** (`fxTween`, `sleep`, `hitStop`) | ✅ **hecha** — ver §A.11 |
 > | **F3 · Combo** (`c`, pop, números) | ✅ **hecha** — ver §A.12 |
-> | F4 · Micelio | pendiente |
-> | F5 · Cierre + bloom | pendiente |
+> | F4 · Micelio | ✅ **hecha** — ver §A.13 |
+> | F5 · Cierre + bloom | ✅ **hecha** — ver §A.14 |
 > | F6 · Borrar los pixel-art | pendiente (bloqueada por F3-F5) |
 > Fuente de las animaciones: `combo-esporas.html` (demo de 210 líneas).
 > Fuente del audio: los 4 archivos/carpetas que pasó Emanuel.
@@ -366,6 +366,85 @@ vale el total de la mano. `c = index / (total - 1)`, con guarda para `total === 
 mide: **escalas 1 → 1,083 → 1,167 → 1,25 → 1,333 → 1,417 → 1,5** (17 px → 26 px), los `+N` en
 ámbar `rgb(242,166,59)`, los `x1.25` en dorado `rgb(255,211,107)`, squash máximo **0,3** y
 **`sx/sy` de vuelta en 1** al terminar. 0 errores de consola.
+
+### A.13 ✅ F4 implementada — micelio
+
+**`src/render/Mycelium.ts`** (nuevo): **pool de 8 `TubeGeometry`** reutilizados (igual
+criterio que el pool de partículas), `MeshBasicMaterial` con `transparent` — no necesita luz,
+así que entra en cualquier tier de `Quality`.
+
+- **Forma**: `QuadraticBezierCurve3` entre la carta origen y la destino, con el punto de control
+  **colgado** debajo del punto medio (`sag = -0.55` en Y, `z +0.22` para que flote sobre la mesa).
+  `TubeGeometry(curve, 24, 0.035, 5, false)` → ~240 triángulos por raíz.
+- **Crecer**: la geometría es **indexada**, así que `setDrawRange(0, floor(total * p))` sobre el
+  `fxTween(260, …)` la va revelando de punta a punta sin regenerar buffers.
+- **Desvanecer**: `opacity = 1 - p` sobre un `fxTween(500, …)` y después libera el slot del pool.
+- **`fxTween`, no `setTimeout`**: por eso el crecimiento y el fade se **congelan con el hit-stop**,
+  en sintonía con F2.
+
+**`src/render/SceneManager.ts`** (`runScoreStep`): cada paso guarda `lastScoreOrigin` (la
+posición mundial de la carta que acaba de puntuar) y, si hay una anterior, pide
+`this.mycelium.grow(prev, this, color)` — la raíz une **las cartas JUGADAS en el orden real del
+cálculo**, que es la decisión #3. `this.mycelium = new Mycelium()` + `scene.add(group)` en el
+constructor y `this.mycelium.dispose()` en `dispose()`.
+
+**Verificación** — `tools/probe-mycelium.mjs` (nuevo, gate): fuerza 20 manos de 5 cartas y mide en
+vivo:
+
+| Qué | Resultado |
+|---|---|
+| Raíces pedidas vs vivas justo después | 8 (tope del pool = 8) |
+| Raíces vivas tras el sondeo | **0** (no puede quedar ninguna) |
+| Raíces simultáneas (máx) | 8 |
+| `drawRange` visto (% del recorrido) | 0 → 100 (la raíz crece de punta a punta) |
+| Geometrías GPU | **20 → 20** (no crece con las manos) |
+| Errores de consola | ninguno |
+
+El cap de 8 es deliberado (§Riesgos): si una mano larga pide más, la raíz se recorta antes que
+asignar geometría por frame. Repetir 20 manos no hace crecer `renderer.info`. **OK MICELIO.**
+
+**Siguiente**: F5 — cierre del combo (hit-stop 90 ms, explosión grande, total dorado, pulso de
+fondo usando `bgp` como intensidad del bloom, decisión #6).
+
+### A.14 ✅ F5 implementada — cierre del combo
+
+**Cierre** (`SceneManager.closeCombo`, disparado por el último paso animado de la mano):
+1. `hitStop(90)` (no-op con `reduceMotion`): congela TODO, incluido el estallido que sigue —
+   es lo que hace que el golpe se "sienta".
+2. **Estallido doble** en el centro de la fila de cartas jugadas: `burst(160, dorado)` +
+   `burst(80, ember 0xff5a3c)`. El dorado es el `×2` del juego; el ember cálido acompaña.
+3. **Pulso de fondo + bloom**: `bgPulse = 1`, que en el loop (`updateComboPulse`) decae con el
+   `dt` (así el hit-stop lo congela) y mezcla el color de fondo/niebla hacia un ember sutil
+   (`lerp` 0.3) y sube el bloom vía `PostFx.pulseBloom(t*0.5)`.
+4. **Acorde final**: `audio.playChord([0,4,7])` (Do-Mi-Sol) — `AudioBus` ganó `playChord` +
+   `synthFreq` reutilizable; sin archivo suena con los osciladores de reserva.
+
+**`PostFx`**: `BloomPass.setStrength(v)` + `PostFx.pulseBloom(extra)` (base + extra; no-op si el
+bloom está desactivado en calidad baja). Así el `bgp` de A.7 es, además, intensidad del bloom
+(decisión #6, misma fase).
+
+**HUD**: el total final del ticker pasa de cian (del demo) a **dorado** `#ffd36b` con glow dorado
+(`styles.css` `.score-ticker.is-final .score-ticker-total`) — respeta la decisión #1 (nada de
+teal/rojo en los números).
+
+**Verificación** — `tools/probe-closure.mjs` (nuevo, gate): juega una mano de 5 y mide en vivo:
+
+| Qué | Resultado |
+|---|---|
+| `bgPulse` máximo | 0,85 (cerca de 1; el sampleo lo pesca ya decaído) |
+| hit-stop máximo | 0,09 s |
+| Desvío de fondo máximo | 0,011 (> 0, el pulso ocurre) |
+| Partículas activas máximas | **482** (el estallido de cierre 160+80, muy por encima de un paso) |
+| Paso final marcado (HUD) | sí |
+| Fondo restaurado | sí (sin tinte permanente) |
+| Errores de consola | ninguno |
+
+**Gates (todos verdes, F5)**: typecheck · tests **332/332** · validate · smoke (0/0/0) ·
+desktop 6/6 · tablet 5/5 · probe-combo OK · probe-mycelium OK · probe-closure OK.
+
+**Siguiente**: F6 — borrar los pixel-art (`public/fx/`, `.fx-sprite`/`.fx-burst`/`.fx-poison`,
+`HUD.effect()` y sus 2 llamadas) cuando el reemplazo esté verificado (decisión #5). Se deja la
+`LICENSE.txt` del pack hasta confirmar.
 
 ### A.10 `prefers-reduced-motion`
 

@@ -1837,11 +1837,12 @@ body {
   }
 }
 
-/* El paso FINAL cierra la cuenta: se marca para que el numero quede. */
+/* El paso FINAL cierra la cuenta: el total se queda en dorado (el ×2 del juego),
+   no en el cian del demo. Es el numero que el jugador se lleva. */
 .score-ticker.is-final .score-ticker-total {
-  color: #ffffff;
+  color: #ffd36b;
   text-shadow:
-    0 0 28px rgba(95, 216, 232, 0.8),
+    0 0 30px rgba(255, 211, 107, 0.85),
     0 2px 10px rgba(0, 0, 0, 0.9);
 }
 

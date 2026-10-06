@@ -63,6 +63,7 @@ import { Water, hitHorizontalPlane } from './Water';
 import { Die3D, type DieImpulse } from './Die3D';
 import * as anim from './anim';
 import { ABILITY_COLOR, ELEMENT_COLOR, UI_COLORS } from './palette';
+import { audio } from '@audio/AudioBus';
 
 // --- Constantes de layout (unidades de mundo) ---
 //
@@ -396,6 +397,19 @@ export class SceneManager {
    * una a la siguiente. Se reinicia con la mano.
    */
   private lastScoreOrigin: THREE.Vector3 | null = null;
+
+  /**
+   * Pulso de cierre del combo (F5). `bgPulse` va de 1 (recien cerro) a 0 y
+   * mezcla el fondo/niebla hacia un tono ember y sube el bloom. Se decae con el
+   * `dt` del loop, asi que el hit-stop (dt=0) lo CONGELA junto con todo.
+   */
+  private bgPulse = 0;
+  private bgPulseActive = false;
+  /** Color de fondo base (no se toca; el pulso lo mezcla y lo restaura). */
+  private readonly baseBg = new THREE.Color();
+  /** Tinte calido al que tiende el fondo durante el pulso (ember, sutil). */
+  private readonly pulseColor = new THREE.Color(0x3a0d08);
+  private readonly bgTmp = new THREE.Color();
 
   /** Zonas de destino del arrastre, en orden de prioridad. */
   private readonly dropZones: DropZone[] = [];
@@ -857,6 +871,7 @@ export class SceneManager {
 
   private buildWorld(): void {
     this.scene.background = new THREE.Color(UI_COLORS.background);
+    this.baseBg.set(UI_COLORS.background);
     this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
 
     // --- Arena: losa runica + vegetacion ---
@@ -2582,6 +2597,9 @@ export class SceneManager {
       // Sin esto, el motor pasa a `reward` al instante y el panel de recompensa
       // (o la seleccion de ciego) aparece ENCIMA de la animacion del puntaje.
       this.scoreTl = anim.sequence({ onComplete: () => bus.emit('score:settled', {}) });
+      // Arranca la mano con el pulso de cierre limpio (por si una mano anterior
+      // quedo a medias por un game over).
+      this.bgPulse = 0;
     }
     this.scoreTl.call(
       () => this.runScoreStep(step, index),
@@ -2606,6 +2624,8 @@ export class SceneManager {
       // todos los `score:step` y `stepIndex` vale el total de la mano.
       const total = Math.max(1, this.stepIndex);
       const c = total > 1 ? Math.min(1, index / (total - 1)) : 0;
+      // Ultimo paso animado de la mano: es el que CIERRA el combo (F5).
+      const isLastStep = index === total - 1 || index === MAX_ANIMATED_STEPS - 1;
 
       this.particles.burst(origin.position, Math.round(14 + c * 40), {
         color,
@@ -2665,7 +2685,82 @@ export class SceneManager {
         y: screen.y,
         combo: c,
       });
+
+      // CIERRE del combo (F5): golpe de hit-stop, estallido grande y pulso de
+      // fondo/bloom. Solo en el ultimo paso animado, y solo una vez por mano.
+      if (isLastStep) this.closeCombo();
     }
+  }
+
+  /**
+   * Cierre del combo (F5). El ultimo paso animado de la mano dispara:
+   *   1. hit-stop de 90 ms (congela todo, incluso el estallido que sigue);
+   *   2. estallido grande en dorado + ember (dos bursts superpuestos);
+   *   3. pulso de fondo + bloom (decae en el loop via `updateComboPulse`);
+   *   4. acorde final sintetizado.
+   * El golpe + el estallido es lo que hace que el combo se SIENTA cerrado y no
+   * como un paso mas de la misma cuenta.
+   */
+  private closeCombo(): void {
+    const center = new THREE.Vector3();
+    if (this.scoringCards.length) {
+      const v = new THREE.Vector3();
+      let n = 0;
+      for (const card of this.scoringCards) {
+        card.group.getWorldPosition(v);
+        center.add(v);
+        n += 1;
+      }
+      if (n > 0) center.multiplyScalar(1 / n);
+    }
+
+    if (!this.reduceMotion) {
+      this.hitStop(90);
+      this.rig.addShake(0.12);
+    }
+
+    // Estallido doble: dorado (el ×2 del juego) + ember calido.
+    this.particles.burst(center, 160, {
+      color: UI_COLORS.xmult,
+      speed: 6,
+      size: 0.09,
+      life: 1.1,
+      upward: 2.4,
+    });
+    this.particles.burst(center, 80, {
+      color: 0xff5a3c,
+      speed: 4,
+      size: 0.07,
+      life: 0.9,
+      upward: 1.8,
+    });
+
+    // Pulso de fondo/bloom (se apaga solo en el loop).
+    this.bgPulse = this.reduceMotion ? 0 : 1;
+    // Acorde final: triada mayor suave (Do-Mi-Sol) en la pentatonica del juego.
+    audio.playChord([0, 4, 7], { volume: 0.16 });
+  }
+
+  /** Decae el pulso de cierre y mezcla/restaura el fondo y el bloom. */
+  private updateComboPulse(step: number): void {
+    if (this.bgPulse <= 0) {
+      if (this.bgPulseActive) {
+        (this.scene.background as THREE.Color | null)?.copy(this.baseBg);
+        const fog = this.scene.fog as (THREE.Fog | THREE.FogExp2) | null;
+        fog?.color.copy(this.baseBg);
+        this.postFx?.pulseBloom(0);
+        this.bgPulseActive = false;
+      }
+      return;
+    }
+    this.bgPulseActive = true;
+    this.bgPulse = Math.max(0, this.bgPulse - step * 3);
+    const t = this.bgPulse;
+    this.bgTmp.copy(this.baseBg).lerp(this.pulseColor, 0.3 * t);
+    (this.scene.background as THREE.Color | null)?.copy(this.bgTmp);
+    const fog = this.scene.fog as (THREE.Fog | THREE.FogExp2) | null;
+    fog?.color.copy(this.bgTmp);
+    this.postFx?.pulseBloom(t * 0.5);
   }
 
   private drawChain(fromId: string, toId: string, depth: number): void {
@@ -3173,6 +3268,7 @@ export class SceneManager {
       this.die3d?.update(step);
       this.water?.update(this.clock);
       this.rig.update(step, this.clock);
+      this.updateComboPulse(step);
 
       // Se renderiza SIEMPRE, tambien en el menu.
       //
