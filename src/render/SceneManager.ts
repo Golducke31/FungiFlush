@@ -43,6 +43,7 @@ import { CameraRig } from './CameraRig';
 import { DropZone, rectContains, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
+import { Mycelium } from './Mycelium';
 import { PostFx } from './PostFx';
 import { TRANSITION_SECONDS } from './Transition';
 import {
@@ -388,6 +389,14 @@ export class SceneManager {
   /** Cartas que estan en la zona de puntuacion (ya salieron de la mano). */
   private readonly scoringCards: Card3D[] = [];
 
+  /** Raices que unen las cartas jugadas durante el combo. Pool fijo. */
+  private readonly mycelium: Mycelium;
+  /**
+   * Posicion de la carta que origino el paso ANTERIOR, para trazar el micelio de
+   * una a la siguiente. Se reinicia con la mano.
+   */
+  private lastScoreOrigin: THREE.Vector3 | null = null;
+
   /** Zonas de destino del arrastre, en orden de prioridad. */
   private readonly dropZones: DropZone[] = [];
   /** Textura del dorso, compartida por las cartas, el mazo y el descarte. */
@@ -576,6 +585,9 @@ export class SceneManager {
       transient: maxParticles('transientSpores'),
       ambient: maxParticles('ambientSpores'),
     });
+
+    // Micelio del combo: pool fijo de raices, se crea una vez y se reutiliza.
+    this.mycelium = new Mycelium();
 
     this.interaction = new Interaction(options.canvas, {
       onHover: (card) => this.handleHover(card),
@@ -881,6 +893,9 @@ export class SceneManager {
 
     // --- Particulas ---
     this.scene.add(this.particles.group);
+
+    // --- Micelio del combo ---
+    this.scene.add(this.mycelium.group);
 
     // --- Dorso (una sola textura para todo el juego) ---
     // La comparten el mazo, el descarte y el dorso de cada carta: dibujarla una
@@ -1657,6 +1672,9 @@ export class SceneManager {
         // Primer carta de la mano: se reinicia la secuencia de puntuacion.
         if (index === 0) {
           this.stepIndex = 0;
+          // El micelio se encadena desde la primera carta de la mano: sin este
+          // reset la raiz arrancaria desde la mano ANTERIOR.
+          this.lastScoreOrigin = null;
           // Red de seguridad: si la timeline anterior se corto y quedaron cartas
           // en el centro, se las manda al descarte antes de la mano nueva.
           this.flyScoredToDiscard(0);
@@ -2599,6 +2617,15 @@ export class SceneManager {
 
       // Multiplicar golpea mas fuerte que sumar, y los dos escalan con el combo.
       this.rig.addShake(isMult ? 0.06 + c * 0.12 : 0.02 + c * 0.04);
+
+      // MICELIO: la raiz que une esta carta con la que puntuo antes, en el orden
+      // real del calculo. No se awaitea: crece (260 ms) y se desvanece (500 ms)
+      // mientras la secuencia sigue. Sin esto cada paso es una isla.
+      const previous = this.lastScoreOrigin;
+      this.lastScoreOrigin = origin.position.clone();
+      if (previous && previous.distanceTo(origin.position) > 0.35) {
+        void this.mycelium.grow(previous, origin.position, color);
+      }
 
       // POP de la carta que origina el paso: squash & stretch + destello en el
       // color del efecto. No se awaitea: es un adorno que corre en paralelo (los
@@ -3631,6 +3658,7 @@ export class SceneManager {
     this.postFx = null;
     this.backTexture = null;
     this.particles.dispose();
+    this.mycelium.dispose();
     for (const item of this.disposables) item.dispose();
     disposeSharedGeometry();
     this.renderer.dispose();
