@@ -130,7 +130,11 @@ async function longPress(card, holdMs = 600) {
       top: Math.round(r.top), bottom: Math.round(r.bottom),
       left: Math.round(r.left), right: Math.round(r.right),
       h: Math.round(r.height), w: Math.round(r.width),
+      // La marca ✦ de habilidad vive junto al nombre (ya no hay banda violeta
+      // aparte: el lila marca la descripcion misma).
       hasAbilityBlock: Boolean(el.querySelector('[data-act="tooltip-ability"]')),
+      hasTaxonomy: Boolean(el.querySelector('.tooltip-taxonomy')),
+      hasRarity: Boolean(el.querySelector('.tooltip-rarity')),
       text: el.textContent?.slice(0, 70) ?? '',
     };
   });

@@ -50,7 +50,8 @@ import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './C
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
-import { buildRewardPanel } from './RewardPanel';
+import { buildRewardCarouselFrame } from './RewardPanel';
+import { PackOpening, type PackCardView } from '@render/PackOpening';
 import {
   buildDeckBuilderPanel,
   type DeckBuilderState,
@@ -151,6 +152,14 @@ export interface HudCallbacks {
    * nuevo no la usa (si no, el anillo quedaria vivo detras de un panel DOM).
    */
   onPanelOpened?: (isCarousel: boolean) => void;
+  /**
+   * El draft de recompensa se dibuja sobre el CARRUSEL 3D: el marco DOM avisa
+   * aca que hay que montar el anillo con las ofertas, y con que entradas.
+   *
+   * `null` = desmontar (al cerrar el panel o al elegir). El HUD no conoce el
+   * render, asi que no puede llamar a `scene.setCarousel` el mismo: delega.
+   */
+  onRewardCarousel?: (info: { offerIds: string[]; onFocus: (index: number) => void } | null) => void;
   /**
    * El panel abierto TAPA la arena (true) o la deja a la vista (false).
    *
@@ -269,6 +278,8 @@ export class HUD {
   private elJokers = document.createElement('div');
   private elActions = document.createElement('div');
   private elOverlay = document.createElement('div');
+  /** Overlay de apertura de Sobres, vivo mientras el jugador lo tenga abierto. */
+  private packOpening: PackOpening | null = null;
   private elTooltip = document.createElement('div');
   private elPopups = document.createElement('div');
   private elToasts = document.createElement('div');
@@ -2272,6 +2283,8 @@ export class HUD {
         level: colony?.level ?? 1,
         spores: colony?.spores ?? 0,
         rewards: colony?.rewards ?? [],
+        dailyRemaining: colony?.dailyRemaining,
+        dailyCap: colony?.dailyCap,
       },
       { onClose: () => this.showProfile() },
     );
@@ -2543,6 +2556,50 @@ export class HUD {
   }
 
   /** Abre el panel de cosméticos (dorso de carta / tapete). */
+  /**
+   * Sobres: el overlay de apertura.
+   *
+   * NO pasa por `openOverlay` aunque comparta el contenedor: el sobre necesita
+   * un canvas WebGL propio a PANTALLA COMPLETA, y el `.overlay` tiene padding y
+   * `overflow-y:auto` (pensados para paneles con marco). Montarlo adentro
+   * dejaria el canvas con margenes y con el scroll del overlay encima.
+   *
+   * El controlador entrega las cartas YA sorteadas (`PackOpening.ts` no conoce
+   * la economia) y el HUD solo se ocupa del ciclo de vida: crear, montar,
+   * arrancar y destruir al cerrar.
+   */
+  showPackOpening(options: {
+    cards: PackCardView[];
+    onClose: () => void;
+    pendingLeft: () => number;
+  }): void {
+    this.closePackOpening();
+    const opening = new PackOpening({
+      cards: options.cards,
+      callbacks: {
+        onClose: () => {
+          this.closePackOpening();
+          options.onClose();
+        },
+        pendingLeft: options.pendingLeft,
+      },
+    });
+    this.packOpening = opening;
+    // Va al `#ui-root` (no al `.overlay`): asi el canvas ocupa TODO el viewport
+    // y el overlay de paneles queda libre para el siguiente panel.
+    this.root.appendChild(opening.element);
+    this.syncPanelOpen();
+    opening.start();
+  }
+
+  /** Cierra y destruye el overlay de sobres si esta abierto. */
+  closePackOpening(): void {
+    if (!this.packOpening) return;
+    this.packOpening.dispose();
+    this.packOpening = null;
+    this.syncPanelOpen();
+  }
+
   showCosmetics(returnTo?: () => void): void {
     // Igual que la ascension: el `openOverlay` limpia las referencias del panel,
     // asi que se toma el estado ANTES de abrirlo.
@@ -2654,29 +2711,42 @@ export class HUD {
   // Fase 2: recompensa, deckbuilding y coleccion
   // ==========================================================================
 
-  /** Draft de recompensa al ganar un blind. */
+  /**
+   * Draft de recompensa al ganar un blind.
+   *
+   * Se monta sobre el CARRUSEL 3D: el panel DOM es solo el marco (titulo arriba,
+   * accion abajo) y las 3 ofertas se dibujan como `Card3D` reales en el arco del
+   * canvas. El HUD no tiene acceso al render, asi que le pasa las ofertas por
+   * `onRewardCarousel` y recibe el foco por `onFocus`.
+   */
   showReward(): void {
-    this.showPanel(
-      buildRewardPanel(
-        {
-          offers: this.engine.rewardOffers(),
-          pick: this.engine.rewardPick,
-          allowSkip: this.engine.rewardAllowSkip,
-          taken: this.engine.rewardOffers().filter((o) => o.sold).length,
-          // La cara de la carta la compone el HUD: es quien tiene el motor y las
-          // imagenes decodificadas del render.
-          artFor: (offer) =>
-            offerFaceUrl(offer, this.engine, t, {
-              card: this.cardArt,
-              joker: this.jokerArt,
-            }),
-        },
-        {
-          onPick: (offerId) => this.callbacks.onPickReward(offerId),
-          onSkip: () => this.callbacks.onPickReward(null),
-        },
-      ),
+    const offers = this.engine.rewardOffers();
+    const frame = buildRewardCarouselFrame(
+      {
+        offers,
+        pick: this.engine.rewardPick,
+        allowSkip: this.engine.rewardAllowSkip,
+        taken: offers.filter((o) => o.sold).length,
+        // La cara de la carta la compone el HUD: es quien tiene el motor y las
+        // imagenes decodificadas del render.
+        artFor: (offer) =>
+          offerFaceUrl(offer, this.engine, t, {
+            card: this.cardArt,
+            joker: this.jokerArt,
+          }),
+      },
+      {
+        onPick: (offerId) => this.callbacks.onPickReward(offerId),
+        onSkip: () => this.callbacks.onPickReward(null),
+      },
     );
+    // `carousel: true` para que `onPanelOpened` NO apague la escena 3D: el
+    // anillo de recompensa es justamente lo que hay que ver.
+    this.showPanel(frame.panel, { carousel: true });
+    this.callbacks.onRewardCarousel?.({
+      offerIds: offers.map((o) => o.id),
+      onFocus: (index) => frame.setFocus(index),
+    });
   }
 
   /**
@@ -3345,55 +3415,6 @@ export class HUD {
     this.openOverlay(panel);
   }
 
-  /**
-   * P2.5 — Resumen numerico de lo que una oferta agrega al mazo.
-   *
-   * La tienda ya muestra el efecto en prosa; esto lo traduce a datos
-   * comparables (sustrato, esporas, si trae habilidad). Sin esto, elegir entre
-   * dos cartas obliga a leer las dos descripciones y recordarlas.
-   *
-   * Devuelve null para lo que no se puede resumir (dinero), y asi la tarjeta no
-   * muestra un bloque vacio.
-   */
-  private buildOfferImpact(offer: ShopOffer): HTMLElement | null {
-    const lines: string[] = [];
-
-    if (offer.kind === 'card') {
-      const def = this.engine.registry.tryGetCard(offer.refId);
-      if (!def) return null;
-      lines.push(t('shop.impactSubstrate', { value: def.baseSubstrate }));
-      lines.push(t('shop.impactSpores', { value: def.baseSpores }));
-      lines.push(
-        (def.effects?.length ?? 0) > 0 ? t('shop.impactAbility') : t('shop.impactNoAbility'),
-      );
-    } else if (offer.kind === 'joker' || offer.kind === 'mutation') {
-      lines.push(t('shop.impactJoker'));
-      // Se avisa solo si NO hay ranura libre: es la advertencia que hace falta
-      // en el momento de decidir, no un recordatorio permanente.
-      if (this.engine.run.jokers.length >= this.engine.run.jokerSlots) {
-        lines.push(t('shop.impactSlots'));
-      }
-    } else if (offer.kind === 'voucher') {
-      const def = this.engine.registry.tryGetVoucher(offer.refId);
-      lines.push(t('shop.impactVoucher'));
-      if (def && !def.repeatable && this.engine.run.vouchers.includes(offer.refId)) {
-        lines.push(t('shop.impactOwned'));
-      }
-    } else {
-      return null;
-    }
-
-    const wrap = document.createElement('ul');
-    wrap.className = 'offer-impact';
-    wrap.dataset['act'] = 'offer-impact';
-    for (const line of lines) {
-      const item = document.createElement('li');
-      item.textContent = line;
-      wrap.appendChild(item);
-    }
-    return wrap;
-  }
-
   private showShop(offers: ShopOffer[]): void {
     if (this.engine.run.status !== 'shop') return;
 
@@ -3498,6 +3519,14 @@ export class HUD {
   ): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'offer-grid';
+    // Una columna por oferta, para que la fila llene SIEMPRE el ancho del panel.
+    // No se capa en 4: la tarjeta manda el ALTO (la cara es vertical y el alto
+    // del cuerpo es el recurso escaso), asi que agregar columnas no la achica
+    // hasta que la columna baja del ancho de la propia cara (~120px). Con 5
+    // ofertas entran las 5 en la misma fila y todas se ven igual de grandes.
+    if (offers.length > 0) {
+      grid.style.setProperty('--offer-cols', String(Math.min(6, offers.length)));
+    }
 
     if (offers.length === 0) {
       const empty = document.createElement('p');
@@ -3546,31 +3575,17 @@ export class HUD {
         card.appendChild(spacer);
       }
 
-      const kind = document.createElement('div');
-      kind.className = 'offer-kind';
-      // La etiqueta se traduce: `CARD`/`JOKER`/`VOUCHER` en crudo es la clave
-      // del motor, no un texto para el jugador.
-      kind.textContent = offerLabel(offer.kind);
-
-      const name = document.createElement('div');
-      name.className = 'offer-name';
-      name.textContent = t(offer.nameKey);
-      name.style.color = hexToCss(
-        offer.kind === 'joker' || offer.kind === 'mutation'
-          ? RARITY_COLOR[rarityOfOffer(this.engine, offer)]
-          : ELEMENT_COLOR.neutral,
-      );
-
-      const desc = document.createElement('div');
-      desc.className = 'offer-desc';
-      desc.textContent = t(offer.descKey);
-
-      // P2.5 — "Que aporta": el plan pide que las mejoras de la tienda sean mas
-      // VISIBLES. `offer.descKey` describe el efecto en prosa, pero comparar dos
-      // ofertas obliga a leer y traducir mentalmente. Esta lista dice en
-      // numeros lo que la compra agrega al mazo, que es lo que se decide.
-      const impact = this.buildOfferImpact(offer);
-      if (impact) card.appendChild(impact);
+      // La cara de la carta es TODA la ficha: ya trae el nombre, la habilidad y
+      // los numeros impresos. Repetir eso al lado en un chip + parrafo + lista
+      // era informacion redundante que ademas robaba el alto escaso del
+      // landscape y dejaba la ilustracion chica. Aca solo van cara, precio y
+      // boton.
+      // El tipo y el nombre quedan para ACCESIBILIDAD (un lector de pantalla no
+      // ve la cara) y para que el smoke pueda verificar la traduccion.
+      const kindLabel = offerLabel(offer.kind);
+      card.dataset['kind'] = offer.kind;
+      card.dataset['kindLabel'] = kindLabel;
+      card.setAttribute('aria-label', `${kindLabel}: ${t(offer.nameKey)}`);
 
       const footer = document.createElement('div');
       footer.className = 'offer-footer';
@@ -3596,7 +3611,7 @@ export class HUD {
       buyButtons.push({ offer, button: buy, card, priceEl });
 
       footer.append(priceEl, buy);
-      card.append(kind, name, desc, footer);
+      card.append(footer);
 
       // Sello de vendida. Se agrega y se saca desde `shopRefresh`, porque una
       // oferta puede venderse con la tienda ya abierta.
@@ -3653,6 +3668,11 @@ export class HUD {
 
     const grid = document.createElement('div');
     grid.className = 'offer-grid is-sell';
+    // Mismo criterio que Comprar: una columna por Simbionte para que la fila
+    // llene el ancho del panel.
+    if (jokers.length > 0) {
+      grid.style.setProperty('--offer-cols', String(Math.min(6, jokers.length)));
+    }
 
     for (const joker of jokers) {
       const value = jokerSellValue(joker);
@@ -3693,18 +3713,11 @@ export class HUD {
         card.appendChild(spacer);
       }
 
-      const kind = document.createElement('div');
-      kind.className = 'offer-kind';
-      kind.textContent = t(`rarity.${rarity}`);
-
-      const name = document.createElement('div');
-      name.className = 'offer-name';
-      name.textContent = t(joker.def.nameKey);
-      name.style.color = hexToCss(RARITY_COLOR[rarity]);
-
-      const desc = document.createElement('div');
-      desc.className = 'offer-desc';
-      desc.textContent = t(joker.def.descKey);
+      // Igual que en Comprar: la cara del Simbionte ya trae nombre, habilidad y
+      // rareza, asi que la tarjeta se queda con cara, valor de venta y boton.
+      card.dataset['kind'] = 'joker';
+      card.dataset['kindLabel'] = t(`rarity.${rarity}`);
+      card.setAttribute('aria-label', `${t(`rarity.${rarity}`)}: ${t(joker.def.nameKey)}`);
 
       const footer = document.createElement('div');
       footer.className = 'offer-footer';
@@ -3748,7 +3761,7 @@ export class HUD {
       });
 
       footer.append(priceEl, sell);
-      card.append(kind, name, desc, footer);
+      card.append(footer);
       grid.appendChild(card);
     }
 
@@ -3911,6 +3924,11 @@ export class HUD {
 
     const desc = document.createElement('div');
     desc.className = 'tooltip-desc';
+    // La habilidad NO lleva banda aparte: el lila marca la DESCRIPCION misma,
+    // que es donde vive el efecto. Antes habia un cartel violeta redundante
+    // ("esta carta tiene un efecto...") que competia con la ✦ de la cara.
+    const hasAbility = (def.effects?.length ?? 0) > 0;
+    if (hasAbility) desc.classList.add('is-ability');
     desc.textContent = t(def.descKey);
 
     // Estadisticas en zona FIJA (siempre Sustrato a la izquierda, Esporas a la
@@ -3945,27 +3963,19 @@ export class HUD {
 
     stats.append(substrate, spores);
 
-    // HABILIDAD: la etiqueta va con FORMA (glifo ✦ + banda propia), no solo con
-    // color, para no depender del tono (accesibilidad). El mismo tratamiento que
-    // la cara de la carta y la mesa: una sola jerarquia en todo el juego.
-    const hasAbility = (def.effects?.length ?? 0) > 0;
-    let ability: HTMLElement | null = null;
+    // La ✦ de habilidad se conserva, pero como MARCADOR junto al nombre de la
+    // descripcion (no como una banda con su propia copia del texto). Una sola
+    // jerarquia: glifo ✦ + color lila, igual que la cara de la carta.
     if (hasAbility) {
-      ability = document.createElement('div');
-      ability.className = 'tooltip-ability';
-      ability.dataset['act'] = 'tooltip-ability';
-      const abilityTag = document.createElement('span');
-      abilityTag.className = 'tooltip-ability-tag';
-      abilityTag.textContent = `✦ ${t('guide.abilityTag')}`;
-      ability.appendChild(abilityTag);
-      const abilityBody = document.createElement('span');
-      abilityBody.className = 'tooltip-ability-text';
-      abilityBody.textContent = t('guide.abilityHint');
-      ability.appendChild(abilityBody);
+      const marker = document.createElement('span');
+      marker.className = 'tooltip-ability-marker';
+      marker.dataset['act'] = 'tooltip-ability';
+      marker.textContent = '✦';
+      marker.title = t('guide.abilityTag');
+      name.appendChild(marker);
     }
 
     this.elTooltip.append(name, taxonomy, rarity, desc, stats);
-    if (ability) this.elTooltip.appendChild(ability);
 
     if (card.statuses.length > 0) {
       const statuses = document.createElement('div');
@@ -4182,17 +4192,4 @@ function offerLabel(kind: ShopOffer['kind']): string {
   const key = `shop.kind.${kind}`;
   const label = t(key);
   return label === key ? kind.toUpperCase() : label;
-}
-
-/**
- * Rareza de una oferta (para colorear el nombre en la tienda).
- */
-function rarityOfOffer(engine: GameEngine, offer: ShopOffer): keyof typeof RARITY_COLOR {
-  const def = engine.registry.tryGetCard(offer.refId);
-  if (def) return def.rarity;
-  try {
-    return engine.registry.getJoker(offer.refId).rarity;
-  } catch {
-    return 'common';
-  }
 }

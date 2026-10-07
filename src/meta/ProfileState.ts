@@ -12,10 +12,12 @@
 
 import type { ColonyProgress } from './Colony';
 import { defaultColonyProgress } from './Colony';
+import type { PackInventory } from './Packs';
+import { defaultPackInventory } from './Packs';
 import type { LeaderboardSnapshot } from './Leaderboard';
 import { emptySnapshot } from './Leaderboard';
 
-export const PROFILE_SAVE_VERSION = 4;
+export const PROFILE_SAVE_VERSION = 5;
 
 export type Language = 'en' | 'es';
 
@@ -263,6 +265,15 @@ export interface ProfileSave {
   colony: ColonyProgress;
   /** Cuenta y sincronizacion (v4). Ver `AccountState`. */
   account: AccountState;
+  /**
+   * Sobres ganados al superar Ciegos (v5). Ver `src/meta/Packs.ts`.
+   *
+   * Es un contador, no una lista: el sobre se SORTEA al abrirlo, no al ganarlo,
+   * asi que guardar la semilla de cada sobre pendiente solo complicaria el save
+   * sin cambiar la experiencia. Aditivo: los perfiles v4 no lo tienen y la
+   * migracion arranca en cero (no se le inventan sobres por partidas viejas).
+   */
+  packs: PackInventory;
 }
 
 /** Tope de resultados de run sin subir que se conservan. */
@@ -353,5 +364,6 @@ export function defaultProfile(): ProfileSave {
       verifiedSpores: null,
       leaderboard: emptySnapshot(),
     },
+    packs: defaultPackInventory(),
   };
 }

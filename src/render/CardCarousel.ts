@@ -288,7 +288,19 @@ export class CardCarousel {
       const slot = this.slots[i];
       if (!slot) continue;
       const k2 = i - half;
-      const index = this.wrap(base + k2);
+      // Sin wrap, un slot cuyo `base + k2` cae fuera de la lista NO tiene
+      // entrada propia: `wrap()` lo clampearia al extremo y quedaria una copia
+      // de la primera/ultima carta, pero `angle` (que NO se clampea) la
+      // colocaria a 2+ pasos del arco. Eso dejaba cartas fantasma flotando a
+      // los costados (y por encima) en el draft de recompensa, que es el unico
+      // carrusel con `wrap:false`. La entrada repetida se OCULTA.
+      const rawIndex = base + k2;
+      if (!this.wrapping && (rawIndex < 0 || rawIndex > this.entries.length - 1)) {
+        slot.card.group.visible = false;
+        slot.entryIndex = -1;
+        continue;
+      }
+      const index = this.wrap(rawIndex);
       const angle = (k2 - frac) * step;
       const cos = Math.cos(angle);
 
@@ -396,6 +408,43 @@ export class CardCarousel {
     const slot = this.slots.find((s) => s.card.group.visible && s.entryIndex === this.focusedIndex);
     if (!slot) return null;
     return project(slot.card.worldPosition());
+  }
+
+  /**
+   * Cajas en pantalla de TODOS los slots visibles, para medir el ancho real del
+   * anillo/arco.
+   *
+   * Es lo unico que puede medir cuanto ancho ocupa el carrusel: vive en el
+   * canvas, asi que las sondas de layout (`probe-reward-shop-width.mjs`) no lo
+   * ven desde el DOM. `halfWidthPx` estima media anchura de la carta proyectando
+   * su borde derecho en el espacio de la carta (girado por `ry`, el angulo del
+   * arco); la proyeccion incluye el encogimiento por perspectiva.
+   */
+  screenBoxes(project: (v: THREE.Vector3) => { x: number; y: number }): {
+    count: number;
+    lo: number;
+    hi: number;
+  } {
+    let lo = Infinity;
+    let hi = -Infinity;
+    let count = 0;
+    for (const slot of this.slots) {
+      if (!slot.card.group.visible) continue;
+      const center = project(slot.card.worldPosition());
+      const edgeWorld = slot.card.worldPosition();
+      // Media anchura del plano (3.2 de mundo => 1.6) girada por el angulo.
+      const half = 1.6;
+      const ry = slot.card.home.ry ?? 0;
+      edgeWorld.x += Math.cos(ry) * half;
+      edgeWorld.z -= Math.sin(ry) * half;
+      const edge = project(edgeWorld);
+      const hw = Math.abs(edge.x - center.x);
+      lo = Math.min(lo, center.x - hw);
+      hi = Math.max(hi, center.x + hw);
+      count++;
+    }
+    if (count === 0) return { count: 0, lo: 0, hi: 0 };
+    return { count, lo, hi };
   }
 
   dispose(): void {

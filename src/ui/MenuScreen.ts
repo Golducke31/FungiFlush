@@ -112,29 +112,35 @@ export interface MenuState {
  * iconos de esquina, asi que necesitan su propio set.
  */
 const MENU_ICONS = {
-  // Perfil: una seta (identidad de la cuenta).
+  // Perfil: una seta (identidad de la cuenta). Trazo grueso del prototipo
+  // (`boton-hongo.html`), pensado para leerse sobre el gel claro.
   profile:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11c0-4 3.6-7 8-7s8 3 8 7z"/><path d="M9.5 11v6.2a2.5 2.5 0 0 0 5 0V11"/></svg>',
-  // Menu: hamburguesa (agrupa Ajustes / Coleccion / Desafios).
-  menu:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--gel-stroke, #06303c)" stroke-width="5" stroke-linejoin="round"><path d="M3 12.5a9 8.5 0 0 1 18 0z"/><path d="M9.5 12.5v5.5a2.5 2.5 0 0 0 5 0v-5.5z"/></g><path d="M9.5 12.5v5.5a2.5 2.5 0 0 0 5 0v-5.5z" fill="#d9fff8" stroke="#d9fff8" stroke-width="1.2" stroke-linejoin="round"/><path d="M3 12.5a9 8.5 0 0 1 18 0z" fill="#effffb" stroke="#effffb" stroke-width="1.2" stroke-linejoin="round"/><g fill="#3fe0d0"><circle cx="8" cy="9.4" r="1.5"/><circle cx="13.6" cy="7.4" r="1.8"/><circle cx="17.2" cy="10.6" r="1.2"/></g></svg>',
 } as const;
 
-/** Boton de icono de esquina (Perfil, Menu). */
-function iconButton(
-  glyph: string,
+/** Icono de la hamburguesa: las tres barras del prototipo (`boton-menu.html`). */
+const GEL_BARS_HTML =
+  '<span class="gel-bars" aria-hidden="true"><i class="gel-bar"></i><i class="gel-bar"></i><i class="gel-bar"></i></span>';
+
+/**
+ * Boton de icono "gel" de la esquina (Perfil, Menu).
+ *
+ * `act` es el ancla que leen las tools: NO cambiar sin actualizarlas.
+ */
+function gelIconButton(
   act: string,
   label: string,
   onClick: () => void,
-  extraClass = '',
+  opts: { alt?: boolean; profile?: boolean } = {},
 ): HTMLButtonElement {
   const el = document.createElement('button');
   el.type = 'button';
-  el.className = `menu-icon ${extraClass}`.trim();
+  el.className = `menu-gel menu-gel--icon${opts.alt ? ' is-alt' : ''}`;
+  if (opts.profile) el.classList.add('menu-gel--profile');
   el.dataset['act'] = act;
   el.setAttribute('aria-label', label);
   el.title = label;
-  el.innerHTML = glyph;
+  el.innerHTML = opts.profile ? MENU_ICONS.profile : GEL_BARS_HTML;
   el.addEventListener('click', onClick);
   return el;
 }
@@ -150,34 +156,88 @@ function dropItem(label: string, act: string, onClick: () => void): HTMLButtonEl
   return el;
 }
 
+// ---------------------------------------------------------------------------
+// Decoraciones del prototipo (setas, gotas, burbujas, espiral)
+// ---------------------------------------------------------------------------
+
+/** Setas del boton verde (Nueva partida). */
+function mushroomDecoHtml(): string {
+  return (
+    '<svg class="deco m1" aria-hidden="true" viewBox="0 0 64 64"><use href="#ff-seta"/></svg>' +
+    '<svg class="deco m2" aria-hidden="true" viewBox="0 0 64 64"><use href="#ff-seta"/></svg>' +
+    '<svg class="deco m3" aria-hidden="true" viewBox="0 0 64 64"><use href="#ff-seta"/></svg>'
+  );
+}
+
+/** Gota + espiral + burbujas del boton azul (Continuar). */
+function waterDecoHtml(): string {
+  return (
+    '<svg class="deco e1" aria-hidden="true" viewBox="0 0 48 48"><use href="#ff-espiral"/></svg>' +
+    '<svg class="deco g1" aria-hidden="true" viewBox="0 0 40 56"><use href="#ff-gota"/></svg>' +
+    '<svg class="deco b1" aria-hidden="true" viewBox="0 0 32 32"><use href="#ff-burbuja"/></svg>' +
+    '<svg class="deco b2" aria-hidden="true" viewBox="0 0 32 32"><use href="#ff-burbuja"/></svg>'
+  );
+}
+
 /**
- * Boton HEROE: la tipografia del juego como boton, sin caja.
+ * Boton HEROE de texto: la pastilla de gel del prototipo
+ * (`menu-botones-fungiflush`), sin caja alrededor.
  *
- * El logotipo (`menu-logo.png` / `menu-logo-continue.png`) ES el boton: la
- * imagen es la cara visible y el `aria-label` dice que hace. Se usan `<img>`
- * (y no `background`) porque los dos logos tienen proporciones distintas y asi
- * cada uno conserva la suya.
+ * `mod` da la variante (`new` = verde, `continue` = azul). El ancla `data-act`
+ * es la misma que antes (`new` / `continue`).
  */
-function heroButton(
-  mod: string,
-  src: string,
+function gelTextButton(
+  mod: 'new' | 'continue',
   label: string,
-  act: string,
   onClick: () => void,
 ): HTMLButtonElement {
   const el = document.createElement('button');
   el.type = 'button';
-  el.className = `menu-hero-cta menu-hero-cta--${mod}`;
-  el.dataset['act'] = act;
+  el.className = `menu-fb${mod === 'continue' ? ' is-alt' : ''}`;
+  el.dataset['act'] = mod;
   el.setAttribute('aria-label', label);
-  const img = document.createElement('img');
-  img.className = 'menu-hero-logo';
-  img.src = src;
-  img.alt = '';
-  img.draggable = false;
-  el.appendChild(img);
+  const span = document.createElement('span');
+  span.textContent = label;
+  el.appendChild(span);
   el.addEventListener('click', onClick);
   return el;
+}
+
+/**
+ * Sprite SVG de las decoraciones del prototipo.
+ *
+ * Va UNA sola vez por panel y las decoraciones lo referencian con `<use>`: los
+ * gradientes viven aqui, asi que dibujar los `<symbol>` a mano en cada boton
+ * repetiria los ids y romperia las referencias.
+ */
+function menuDecoDefs(): SVGSVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', '0');
+  svg.setAttribute('height', '0');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('style', 'position:absolute');
+  svg.innerHTML = `<defs>
+   <linearGradient id="ff-cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ffff0"/><stop offset="1" stop-color="#139fb6"/></linearGradient>
+   <linearGradient id="ff-agua" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfeaff"/><stop offset="1" stop-color="#1a74b8"/></linearGradient>
+   <symbol id="ff-seta" viewBox="0 0 64 64">
+    <path d="M26 34h12v21a6 6 0 0 1-12 0z" fill="#d9fff8" stroke="#06303c" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M3 37C3 18 16 5 32 5s29 13 29 32z" fill="url(#ff-cap)" stroke="#06303c" stroke-width="3" stroke-linejoin="round"/>
+    <g fill="#fff"><circle cx="19" cy="26" r="4.5"/><circle cx="35" cy="17" r="5.5"/><circle cx="48" cy="29" r="3.8"/><circle cx="30" cy="30" r="3"/><circle cx="43" cy="18" r="2.6"/></g>
+   </symbol>
+   <symbol id="ff-gota" viewBox="0 0 40 56">
+    <path d="M20 3S5 23 5 37a15 15 0 0 0 30 0C35 23 20 3 20 3z" fill="url(#ff-agua)" stroke="#04182b" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="14" cy="36" rx="3.2" ry="7" fill="#fff" opacity=".85" transform="rotate(12 14 36)"/>
+   </symbol>
+   <symbol id="ff-burbuja" viewBox="0 0 32 32">
+    <circle cx="16" cy="16" r="13" fill="rgba(160,225,255,.28)" stroke="#bff4ff" stroke-width="2.5"/><circle cx="11" cy="11" r="3.2" fill="#fff" opacity=".9"/>
+   </symbol>
+   <symbol id="ff-espiral" viewBox="0 0 48 48">
+    <path d="M33 33c-3 7-14 6-14-2 0-9 13-11 18-3 6 10-3 22-16 20C9 46 3 34 6 24" fill="none" stroke="#04182b" stroke-width="10" stroke-linecap="round"/>
+    <path d="M33 33c-3 7-14 6-14-2 0-9 13-11 18-3 6 10-3 22-16 20C9 46 3 34 6 24" fill="none" stroke="#7fd6ff" stroke-width="5" stroke-linecap="round"/>
+   </symbol>
+  </defs>`;
+  return svg;
 }
 
 /** Clave i18n del nombre de un nivel de ascension. A0 = base. */
@@ -225,27 +285,31 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
 
   // --- Capa de UI: layout anclado al VIEWPORT (ya no al arte) ---
   // La jerarquia responde una sola pregunta: "que deberia hacer ahora?".
-  //   1. heroe (Continuar / Nueva partida)  2. recomendacion  3. perfil  4. resto.
+  //   1. heroe (Nueva partida / Continuar)  2. perfil  3. resto.
   const layout = document.createElement('div');
   layout.className = 'menu-layout';
+
+  // Sprite de las decoraciones (setas / gotas / burbujas). Una sola copia.
+  panel.appendChild(menuDecoDefs());
 
   // ---- Fila superior: Perfil (izq) + menu hamburguesa (der) ----
   const top = document.createElement('div');
   top.className = 'menu-top';
 
-  const profileBtn = iconButton(
-    MENU_ICONS.profile,
-    'profile',
-    t('menu.profile'),
-    callbacks.onOpenProfile,
-    'menu-icon--profile',
-  );
-  // Nivel de la Colonia Fungi (meta-progresion futura): si todavia no existe
-  // (0), el icono se dibuja igual, sin insignia.
+  const profileBtn = gelIconButton('profile', t('menu.profile'), callbacks.onOpenProfile, {
+    profile: true,
+  });
+  // Nivel de la Colonia Fungi: si todavia no existe (0), el icono se dibuja
+  // igual, sin insignia.
   if ((state.colonyLevel ?? 0) > 0) {
     const badge = document.createElement('span');
     badge.className = 'menu-icon-badge';
-    badge.textContent = String(state.colonyLevel);
+    const prefix = document.createElement('span');
+    prefix.className = 'badge-prefix';
+    prefix.textContent = t('menu.levelShort');
+    const value = document.createElement('span');
+    value.textContent = String(state.colonyLevel);
+    badge.append(prefix, value);
     profileBtn.appendChild(badge);
   }
 
@@ -260,15 +324,14 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   drop.appendChild(dropItem(t('menu.collection'), 'collection', callbacks.onOpenCollection));
   drop.appendChild(dropItem(t('menu.challenges'), 'challenges', callbacks.onOpenChallenges));
 
-  const menuBtn = iconButton(
-    MENU_ICONS.menu,
+  const menuBtn = gelIconButton(
     'menu-toggle',
     t('menu.openMenu'),
     () => {
       const open = drop.classList.toggle('is-open');
       menuBtn.setAttribute('aria-expanded', String(open));
     },
-    'menu-icon--menu',
+    { alt: true },
   );
   menuBtn.setAttribute('aria-expanded', 'false');
   menuBtn.setAttribute('aria-haspopup', 'true');
@@ -277,51 +340,44 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   top.append(profileBtn, topRight);
   layout.appendChild(top);
 
-  // ---- Heroe: el logotipo-boton ----
-  // La recomendacion contextual se retiro de aca (competia con el logotipo y se
-  // superponia): el dato sigue en `HUD.setMenuMeta`, listo para reubicarlo.
+  // ---- Heroe: los dos botones de gel ----
   const hero = document.createElement('div');
   hero.className = 'menu-hero';
 
   const hasSave = state.continueLabel !== null;
   const hasArchetypes = (state.archetypes?.length ?? 0) > 0;
-  const ctaWrap = document.createElement('div');
-  ctaWrap.className = `menu-hero-cta-wrap${hasSave ? ' is-has-save' : ''}`;
-
-  // Halo que respira detras del logotipo: da profundidad al boton sin caja.
-  const glow = document.createElement('div');
-  glow.className = 'menu-hero-glow';
-  glow.setAttribute('aria-hidden', 'true');
-  ctaWrap.appendChild(glow);
 
   // "Nueva partida" abre el selector de ARQUETIPO (la forma de puntuar) en vez
   // de arrancar directo: el arquetipo es una decision de run, no un ajuste.
-  ctaWrap.appendChild(
-    heroButton(
-      'new',
-      'menu-logo.png',
-      t('menu.newRun'),
-      'new',
-      hasArchetypes ? callbacks.onOpenArchetypes : callbacks.onStartRun,
-    ),
-  );
+  const newBtn = gelTextButton('new', t('menu.newRun'), hasArchetypes ? callbacks.onOpenArchetypes : callbacks.onStartRun);
+  const newWrap = document.createElement('div');
+  newWrap.className = 'menu-cta-wrap';
+  newWrap.innerHTML = mushroomDecoHtml();
+  newWrap.appendChild(newBtn);
 
   // "Continuar" SOLO se ve si hay partida guardada, pero SIEMPRE vive en el DOM
-  // con `is-disabled`: el smoke lee esa clase para saber que no hay partida en
-  // curso (ver tools/smoke.mjs).
-  const continueBtn = heroButton(
-    'continue',
-    'menu-logo-continue.png',
-    t('menu.continue'),
-    'continue',
-    callbacks.onContinueRun,
-  );
+  // con `is-disabled` en el boton: el smoke lee esa clase para saber que no hay
+  // partida en curso (ver tools/smoke.mjs).
+  const continueBtn = gelTextButton('continue', t('menu.continue'), callbacks.onContinueRun);
+  const continueWrap = document.createElement('div');
+  continueWrap.className = 'menu-cta-wrap is-continue';
+  continueWrap.innerHTML = waterDecoHtml();
+  continueWrap.appendChild(continueBtn);
+  const ctaSub = document.createElement('p');
+  ctaSub.className = 'menu-cta-sub';
+  ctaSub.setAttribute('aria-live', 'polite');
+  continueWrap.appendChild(ctaSub);
+
   if (!hasSave) {
+    continueBtn.disabled = true;
     continueBtn.classList.add('is-disabled', 'is-hidden');
-    continueBtn.title = t('menu.noSave');
+    continueWrap.classList.add('is-off', 'is-hidden');
+    ctaSub.textContent = t('menu.noSave');
+  } else {
+    ctaSub.textContent = state.continueLabel ?? '';
   }
-  ctaWrap.appendChild(continueBtn);
-  hero.appendChild(ctaWrap);
+
+  hero.append(newWrap, continueWrap);
 
   const status = document.createElement('p');
   status.className = 'menu-hero-status';
@@ -383,6 +439,10 @@ export interface ColonyView {
   nextRewardNameKey: string | null;
   /** Esporas ganadas en la temporada en curso. */
   seasonSpores: number;
+  /** Esporas de Colonia que aun se pueden ganar hoy (tope duro diario). */
+  dailyRemaining: number;
+  /** Tope duro diario de Esporas de Colonia. */
+  dailyCap: number;
   rewards: ColonyRewardView[];
 }
 
@@ -651,7 +711,15 @@ export function buildProfilePanel(
  * jugador necesita saber "que gano si sigo jugando".
  */
 export function buildColonyRewardsPanel(
-  state: { level: number; spores: number; rewards: ColonyRewardView[] },
+  state: {
+    level: number;
+    spores: number;
+    rewards: ColonyRewardView[];
+    /** Esporas de Colonia que aun se pueden ganar hoy (tope duro). `undefined` = sin dato. */
+    dailyRemaining?: number;
+    /** Tope duro diario, para mostrar "X / 100". */
+    dailyCap?: number;
+  },
   callbacks: { onClose: () => void },
 ): HTMLElement {
   const panel = document.createElement('div');
@@ -675,6 +743,24 @@ export function buildColonyRewardsPanel(
   total.dataset['counter'] = 'colony-spores-total';
   total.textContent = t('colony.sporesTotal', { value: formatSpores(state.spores) });
   head.append(title, sub, total);
+
+  // Tope duro diario: cuanto queda HOY. Es la senal honesta de "segui manana".
+  if (typeof state.dailyRemaining === 'number' && typeof state.dailyCap === 'number') {
+    const daily = document.createElement('p');
+    daily.className = 'colony-rewards-daily';
+    daily.dataset['counter'] = 'colony-daily-remaining';
+    const used = Math.max(0, state.dailyCap - state.dailyRemaining);
+    daily.textContent =
+      state.dailyRemaining > 0
+        ? t('colony.dailyRemaining', {
+            value: formatSpores(state.dailyRemaining),
+            cap: formatSpores(state.dailyCap),
+            used: formatSpores(used),
+          })
+        : t('colony.dailyCapped', { cap: formatSpores(state.dailyCap) });
+    if (state.dailyRemaining <= 0) daily.classList.add('is-capped');
+    head.append(daily);
+  }
 
   const list = document.createElement('div');
   list.className = 'colony-rewards-list';

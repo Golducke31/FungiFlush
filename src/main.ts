@@ -41,10 +41,12 @@ import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
 import { HISTORY_CAP, type ColonyRunResult } from '@meta/ProfileState';
 import {
+  DAILY_HARD_CAP,
   applyBlindAward,
   bonusForMission,
   colonyLevelNameKey,
   computeBlindAward,
+  dailyRemaining,
   grantSpores,
   levelViews,
   nextLevelInfo,
@@ -92,7 +94,7 @@ import {
   resolveQuality,
 } from '@render/index';
 import type { QualityTier } from '@render/index';
-import { ELEMENT_COLOR } from '@render/palette';
+import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import { HUD } from '@ui/HUD';
 import { sortHand } from '@ui/handSort';
 import {
@@ -108,6 +110,15 @@ import {
   type DeckCarouselFrame,
 } from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
+import { cardDefFaceUrl } from '@ui/cardArt';
+import type { PackCardView } from '@render/PackOpening';
+import {
+  DEFAULT_CARDS_PER_PACK,
+  consumePack,
+  drawPack,
+  grantPack,
+  type PackRarity,
+} from '@meta/Packs';
 import type { BoardScreen } from '@ui/BoardScreen';
 import { attachAudioHooks, audio } from '@audio/AudioBus';
 import en from '@i18n/en.json';
@@ -415,10 +426,16 @@ async function boot(): Promise<void> {
 
     let levelAfter = 0;
     let newRewards: string[] = [];
+    let packTotal = 0;
     profileStore.patch((p) => {
       const result = applyBlindAward(p.colony, award, now);
       levelAfter = result.levelAfter;
       newRewards = result.newRewards;
+      // Superar un Ciego tambien da 1 Sobre. Se otorga SIEMPRE (no solo la
+      // primera vez del ciego): la Colonia tiene su propio anti-farm en las
+      // Esporas, pero los Sobres son el flujo constante de recompensa y cortarlo
+      // en repeticiones los volveria inalcanzables al farmear un ante comodo.
+      packTotal = grantPack(p.packs, 1);
     });
 
     runColony.spores += award.total;
@@ -431,13 +448,21 @@ async function boot(): Promise<void> {
         params: { level: levelAfter },
         kind: 'success',
       });
+    } else if (packTotal > 0) {
+      // Sin subida de nivel, el aviso es el sobre: asi el jugador se entera de
+      // que tiene algo para abrir sin tener que entrar a la Coleccion.
+      bus.emit('banner:show', {
+        key: 'banner.pack.earned',
+        params: { count: packTotal },
+        kind: 'success',
+      });
     }
   });
 
   // Una mision cumplida tambien alimenta a la colonia (bonificacion chica).
   bus.on('mission:completed', () => {
     const bonus = bonusForMission();
-    profileStore.patch((p) => grantSpores(p.colony, bonus.amount));
+    profileStore.patch((p) => grantSpores(p.colony, bonus.amount, Date.now()));
     runColony.spores += bonus.amount;
     runColony.bonuses.push(bonus);
     pushColonyResult();
@@ -806,6 +831,29 @@ async function boot(): Promise<void> {
   const DECK_CAROUSEL = { radius: 9, halfSpan: 5, wrap: true, lift: 1.9 };
 
   /**
+   * El draft de recompensa NO es un anillo: son 3 cartas en un ARCO abierto.
+   *
+   * `wrap:false` para que el indice se CLAMPEe a los extremos (es una eleccion
+   * de una sola vez, no una lista circular) y `arcStep` para separar las cartas
+   * sin cerrar el circulo.
+   *
+   * `radius:20` + `arcStep:0.55` es lo importante y NO es intuitivo: con un
+   * radio CHICO (9, como el mazo) el arco es tan curvado que las ofertas de los
+   * costados quedan muy por detras de la del frente y la perspectiva las encoge.
+   * Un radio GRANDE aplana el arco y deja las 3 cartas casi a la misma
+   * profundidad. Barrido medido con `tools/_tune-reward-arc.mjs` a 915x412,
+   * contando solo las 3 cartas REALES (el foco esta en la del medio):
+   *   r=16 step=.85 -> 89.2%   r=18 step=.85 -> 95.9% (19..896)
+   *   r=20 step=.55 -> 95.8% (21..897)   r=20 step=.65 -> 100.1% (3..919, se sale)
+   * r=20/step=.55 es el mejor que entra ENTERO con margen a los dos lados.
+   *
+   * `halfSpan:2` basta para 3 ofertas (5 slots): con 3 el pool construye 7 y
+   * los 4 de mas se apelotonan detras de los extremos sin aportar nada (y, sin
+   * el guard de `wrap:false` en CardCarousel, dejaban cartas fantasma al costado).
+   */
+  const REWARD_CAROUSEL = { radius: 20, halfSpan: 2, wrap: false, lift: 1.9, arcStep: 0.55 };
+
+  /**
    * Handler del gesto "tocar la carta centrada" en el carrusel activo.
    *
    * El render no conoce el panel que hay detras: solo avisa el indice tocado.
@@ -1147,43 +1195,7 @@ async function boot(): Promise<void> {
         // anillo quedaria vivo detras del panel nuevo (p. ej. el mazo DOM).
         if (!isCarousel) scene.setCarousel(null);
       },
-      onOpenCollection: () => {
-        // La Coleccion vive sobre el CARRUSEL 3D: el marco DOM solo manda los
-        // filtros y el detalle; el anillo esta en el canvas y recibe el input.
-        const all = buildCollection();
-        const toViews = (list: CollectionEntry[]): CarouselEntryView[] =>
-          list.map((e) => ({
-            uid: e.id,
-            discovered: e.seen,
-            ...(e.kind === 'joker' ? { jokerId: e.id } : { cardId: e.id }),
-          }));
-
-        // `frame` se referencia desde sus propios callbacks: se declara antes
-        // y se asigna despues (los callbacks corren mas tarde, no al construir).
-        let frame: CollectionCarouselFrame;
-        const focusHandler = (i: number): void => frame.setFocus(i);
-        frame = buildCollectionCarousel(all, {
-          onClose: () => {
-            carouselActivate = null;
-            scene.setCarousel(null);
-            hud?.closePanel();
-          },
-          onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
-          onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
-          onOpenPass: () => showPass(),
-          // Los Cosméticos viven dentro de la Coleccion: apagar el carrusel 3D
-          // antes de abrir su panel, o el anillo seguiria vivo por detras.
-          onOpenCosmetics: () => {
-            carouselActivate = null;
-            scene.setCarousel(null);
-            hud?.showCosmetics();
-          },
-        });
-        // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
-        carouselActivate = (index) => frame.setFocus(index);
-        hud?.showPanel(frame.panel, { carousel: true });
-        scene.setCarousel(toViews(all), focusHandler);
-      },
+      onOpenCollection: () => openCollection(),
       onOpenExpansions: () => hud?.toast(t('store.comingSoon'), 'info'),
       onOpenPass: () => showPass(),
       onOpenSettings: () => hud?.showSettings(profileStore.current.settings),
@@ -1258,6 +1270,44 @@ async function boot(): Promise<void> {
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
+      },
+      /**
+       * El draft de recompensa vive sobre el carrusel 3D. El HUD manda las
+       * ofertas y el handler de foco; aca se arma el anillo con un ARCO abierto
+       * (`arcStep` chico, `wrap:false`): son 3 cartas en fila, no un anillo, y
+       * el indice no debe dar la vuelta.
+       */
+      onRewardCarousel: (info) => {
+        carouselActivate = null;
+        if (!info) {
+          scene.setCarousel(null);
+          return;
+        }
+        const entries: CarouselEntryView[] = [];
+        for (const id of info.offerIds) {
+          const offer = engine.rewardOffers().find((o) => o.id === id);
+          if (!offer) continue;
+          entries.push({
+            uid: offer.id,
+            discovered: true,
+            ...(offer.kind === 'joker' ? { jokerId: offer.refId } : { cardId: offer.refId }),
+          });
+        }
+        scene.setCarousel(entries, info.onFocus, REWARD_CAROUSEL);
+        // El arco se ancla en la entrada ENFOCADA. Sin esto el foco cae en la
+        // oferta 0 y las tres cartas quedan desplazadas hacia un costado del
+        // canvas (medido: el arco se iba a x=380..894 en 915px, o sea
+        // descentrado y ocupando 56% del ancho). Parandolo en la oferta del
+        // MEDIO, el arco queda simetrico respecto del centro y las 3 se
+        // reparten el ancho.
+        const middle = Math.floor(entries.length / 2);
+        if (middle > 0) {
+          scene.focusCarousel(middle);
+          // El detalle DOM nace enfocado en la oferta 0 (el frame no sabe que
+          // el arco se ancla en el medio): se sincroniza o el pie diria una
+          // cosa y la carta centrada seria otra.
+          info.onFocus(middle);
+        }
       },
       onUseLoadedDie: () => {
         // Habilidad del Simbionte legendario: carga el dado. El motor sortea la
@@ -1388,6 +1438,127 @@ async function boot(): Promise<void> {
     hud?.showPanel(panel);
   };
 
+  /**
+   * Abre la Coleccion sobre el CARRUSEL 3D: el marco DOM solo manda los filtros
+   * y el detalle; el anillo esta en el canvas y recibe el input.
+   *
+   * Es una funcion con nombre (y no un callback anonimo) porque los Sobres
+   * necesitan reabrirla: cerrar el overlay de apertura devuelve al jugador a la
+   * Coleccion, que es de donde salio.
+   */
+  const openCollection = (): void => {
+    const all = buildCollection();
+    const toViews = (list: CollectionEntry[]): CarouselEntryView[] =>
+      list.map((e) => ({
+        uid: e.id,
+        discovered: e.seen,
+        ...(e.kind === 'joker' ? { jokerId: e.id } : { cardId: e.id }),
+      }));
+
+    // `frame` se referencia desde sus propios callbacks: se declara antes
+    // y se asigna despues (los callbacks corren mas tarde, no al construir).
+    let frame: CollectionCarouselFrame;
+    const focusHandler = (i: number): void => frame.setFocus(i);
+    frame = buildCollectionCarousel(all, {
+      onClose: () => {
+        carouselActivate = null;
+        scene.setCarousel(null);
+        hud?.closePanel();
+      },
+      onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
+      onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
+      onOpenPass: () => showPass(),
+      // Los Cosméticos viven dentro de la Coleccion: apagar el carrusel 3D
+      // antes de abrir su panel, o el anillo seguiria vivo por detras.
+      onOpenCosmetics: () => {
+        carouselActivate = null;
+        scene.setCarousel(null);
+        hud?.showCosmetics();
+      },
+      // Los Sobres tambien viven dentro de la Coleccion. Apagar el anillo por el
+      // mismo motivo: el overlay de apertura trae su propio canvas WebGL.
+      onOpenPacks: () => {
+        carouselActivate = null;
+        scene.setCarousel(null);
+        openPacks();
+      },
+      packsPending: profileStore.current.packs.pending,
+    });
+    // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
+    carouselActivate = (index) => frame.setFocus(index);
+    hud?.showPanel(frame.panel, { carousel: true });
+    scene.setCarousel(toViews(all), focusHandler);
+  };
+
+  /**
+   * Abre un Sobre. El sorteo vive en `Packs.ts` (puro, con `RNG`); aca solo se
+   * resuelve cada carta a su vista (nombre, rareza, cara con arte real) y se
+   * monta el overlay.
+   *
+   * El RNG se siembra con el reloj: un sobre NO necesita ser reproducible (a
+   * diferencia de una run), y sembrarlo con la semilla de la partida filtraria
+   * el estado del juego a la economia meta.
+   */
+  const openPacks = (): void => {
+    const inventory = profileStore.current.packs;
+    if (inventory.pending <= 0) {
+      hud?.toast(t('packs.none'), 'info');
+      return;
+    }
+    // El pool son las cartas BASE que el jugador PUEDE ver (el mismo `poolOf`
+    // que alimenta la Coleccion). No se sortean jokers: un sobre entrega
+    // especimenes, que es lo que se colecciona por cantidad.
+    const pool = (content.registry.poolOf('card') as CardDefinition[])
+      .map((def) => def.id)
+      .filter((id) => id.length > 0);
+    if (pool.length === 0) {
+      hud?.toast(t('packs.none'), 'info');
+      return;
+    }
+
+    const rng = new RNG((Date.now() ^ 0x5f3759df) >>> 0);
+    const drawn = drawPack(rng, pool, DEFAULT_CARDS_PER_PACK);
+
+    // La rareza del SOBRE (3 escalones, economia meta) se traduce a la rareza
+    // del CONTENIDO (5 escalones, catalogo) para el color y la etiqueta. Son
+    // dos vocabularios distintos a proposito: separarlos deja recalibrar la
+    // economia de sobres sin tocar las rarezas de las cartas.
+    const CONTENT_RARITY: Record<PackRarity, Rarity> = {
+      comun: 'common',
+      rara: 'rare',
+      epica: 'legendary',
+    };
+    const byId = new Map((content.registry.poolOf('card') as CardDefinition[]).map((d) => [d.id, d]));
+
+    const views: PackCardView[] = drawn.map((card) => {
+      const def = byId.get(card.cardId);
+      const contentRarity = CONTENT_RARITY[card.rarity];
+      return {
+        cardId: card.cardId,
+        rarity: card.rarity,
+        name: def ? t(def.nameKey) : card.cardId,
+        rarityLabel: t(`rarity.${contentRarity}`),
+        color: hexToCss(RARITY_COLOR[contentRarity] ?? ELEMENT_COLOR.neutral),
+        // Misma cara que la tienda y la coleccion: misma ilustracion real.
+        faceUrl: def ? cardDefFaceUrl(def, t, scene.cardArt(def)) : null,
+      };
+    });
+
+    // El sobre se consume ACA (no al cerrar): abrir el overlay ES usarlo. Si se
+    // consumiera al cerrar, cerrar con la X lo dejaria disponible y se podria
+    // abrir el mismo sobre infinitas veces.
+    profileStore.patch((p) => consumePack(p.packs));
+
+    hud?.showPackOpening({
+      cards: views,
+      pendingLeft: () => profileStore.current.packs.pending,
+      onClose: () => {
+        // Al cerrar se vuelve a la Coleccion: se abrieron sobres DESDE ahi.
+        openCollection();
+      },
+    });
+  };
+
   const achievementViews = () =>
     achievementDefs.map((def) => {
       const unlocked = profileStore.current.achievements.unlockedIds.includes(def.id);
@@ -1445,6 +1616,8 @@ async function boot(): Promise<void> {
         progress: next.progress,
         nextRewardNameKey: next.rewardNameKey,
         seasonSpores: colony.seasonSpores,
+        dailyRemaining: dailyRemaining(colony, Date.now()),
+        dailyCap: DAILY_HARD_CAP,
         rewards: levelViews(colony),
       },
       account: {
@@ -1932,6 +2105,10 @@ async function boot(): Promise<void> {
         unlocks,
         gate,
         collection: buildCollection,
+        // Sobres: el plan pide exponer una API invocable desde el menu, y ademas
+        // el smoke la necesita para abrir un sobre sin depender de la UI.
+        openPack: openPacks,
+        openCollection,
         // El duelo vive en una clausura de `boot()`. Se expone como funcion
         // porque la sesion se reemplaza en cada revancha, y el smoke test
         // necesita leer el estado real (sobre todo para comprobar que la mano

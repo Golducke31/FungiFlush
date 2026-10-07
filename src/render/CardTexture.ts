@@ -154,6 +154,7 @@ function wrapText(
     } else {
       if (current.length > 0) lines.push(current);
       current = word;
+      // `Infinity` = sin corte: se piden TODAS las lineas (lo usa el auditor).
       if (lines.length === maxLines) break;
     }
   }
@@ -172,6 +173,72 @@ function wrapText(
     }
   }
   return lines;
+}
+
+/**
+ * `wrapText` sin canvas (mide con un canvas OFFLINE). Para herramientas y tests.
+ *
+ * En el navegador usa un canvas real de 512px. En Node (el auditor de
+ * descripciones) no hay `document`, asi que se inyecta un medidor con la MISMA
+ * metrica que trae el proyecto: si no hay ninguno, se mide por ancho promedio de
+ * caracter, que es suficiente para CONTAR lineas (no para dibujar).
+ */
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Medidor inyectable (tests/Node). Recibe la fuente y el texto, devuelve px. */
+export type TextMeasurer = (font: string, text: string) => number;
+let injectedMeasurer: TextMeasurer | null = null;
+
+/** Inyecta un medidor de texto (solo herramientas/tests). */
+export function setTextMeasurer(fn: TextMeasurer | null): void {
+  injectedMeasurer = fn;
+}
+
+function makeMeasureCtx(fontPx: number): CanvasRenderingContext2D {
+  if (typeof document !== 'undefined') {
+    if (!measureCtx) {
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = 8;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No hay contexto 2D para medir texto.');
+      measureCtx = ctx;
+    }
+    measureCtx.font = `700 ${fontPx}px ${CARD_TEXT_FONT}`;
+    return measureCtx;
+  }
+  // Node: medidor sintetico con la misma interfaz (`measureText`).
+  const font = `700 ${fontPx}px ${CARD_TEXT_FONT}`;
+  return {
+    font,
+    measureText: (text: string) => ({
+      width: injectedMeasurer ? injectedMeasurer(font, text) : text.length * fontPx * 0.52,
+    }),
+  } as unknown as CanvasRenderingContext2D;
+}
+
+/**
+ * Envuelve `text` en lineas SIN limite de presupuesto. Devuelve el texto ya
+ * cortado: `audit-card-desc.ts` cuenta cuantas lineas pide cada carta y con eso
+ * se decide el presupuesto real, sin adivinar.
+ */
+export function wrapTextLines(
+  text: string,
+  opts: { fontPx: number; maxWidth: number; maxLines?: number },
+): string[] {
+  const ctx = makeMeasureCtx(opts.fontPx);
+  return wrapText(ctx, text, opts.maxWidth, opts.maxLines ?? Infinity);
+}
+
+/**
+ * Cuantas lineas de descripcion caben en la CARA segun tenga habilidad o no.
+ *
+ * Una carta CON habilidad gasta 38px del panel en la etiqueta "✦ HABILIDAD" y
+ * por eso lleva una linea menos. El numero sale de aca y lo consumen tanto el
+ * dibujo como el auditor: no pueden divergir.
+ */
+export function descLineBudget(hasAbility: boolean): number {
+  return hasAbility ? 3 : 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -916,7 +983,7 @@ export function createCardCanvas(
   let abilityBodyTop = descTop;
   let abilityBodyHeight = descHeight;
   if (hasAbility) {
-    const tagHeight = 34;
+    const tagHeight = 38;
     ctx.fillStyle = hexToRgba(abilityColor, 0.3);
     roundRect(ctx, pad, descTop, W - pad * 2, tagHeight, 12);
     ctx.fill();
@@ -926,8 +993,8 @@ export function createCardCanvas(
     ctx.textBaseline = 'middle';
     ctx.fillText('✦ HABILIDAD', W / 2, descTop + tagHeight / 2 + 1);
     ctx.textBaseline = 'top';
-    abilityBodyTop = descTop + tagHeight + 4;
-    abilityBodyHeight = descHeight - tagHeight - 4;
+    abilityBodyTop = descTop + tagHeight + 3;
+    abilityBodyHeight = descHeight - tagHeight - 3;
   }
 
   // `drawChip` deja `textAlign` en 'right' y NUNCA lo restaura. La descripcion
@@ -937,11 +1004,15 @@ export function createCardCanvas(
   // el "mal distribuida". Hay que reponer el centrado antes de dibujar.
   ctx.textAlign = 'center';
   ctx.fillStyle = hasAbility ? hexToCss(abilityColor) : 'rgba(233, 241, 249, 0.97)';
-  ctx.font = `700 25px ${CARD_TEXT_FONT}`;
-  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, hasAbility ? 2 : 3);
+  // Las cartas CON habilidad tienen menos alto util (la etiqueta ✦ se lleva
+  // 38px), por eso el presupuesto es menor — pero SIN habilidad tambien sube a
+  // 4: el texto largo entraba con "…" y el jugador no leia la regla.
+  const descFontPx = hasAbility ? 23 : 25;
+  const descLineHeight = hasAbility ? 29 : 32;
+  ctx.font = `700 ${descFontPx}px ${CARD_TEXT_FONT}`;
+  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, descLineBudget(hasAbility));
   // El bloque se centra VERTICALMENTE en el panel: una descripcion de una sola
   // linea queda al medio en vez de pegada al borde de arriba.
-  const descLineHeight = 32;
   const descBlockHeight = descLines.length * descLineHeight;
   const descFirstLineY =
     abilityBodyTop + abilityBodyHeight / 2 - descBlockHeight / 2 + descLineHeight / 2;

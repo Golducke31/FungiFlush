@@ -147,7 +147,7 @@ test('v3 -> v4: la Colonia arranca en cero y la cuenta en offline', () => {
   // Un perfil v3 es de alguien que jugo ANTES de que existieran las Esporas de
   // Colonia: no se le puede reconstruir hacia atras el historial de Ciegos.
   const migrated = migrateProfileSave({ version: 3, stats: { runs: 5, bestAnte: 4 } });
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, PROFILE_SAVE_VERSION);
   assert.equal(migrated.colony.lifetimeSpores, 0);
   assert.equal(migrated.colony.level, 1);
   assert.deepEqual(migrated.colony.firstClears, []);
@@ -181,8 +181,8 @@ test('v4: la Colonia sobrevive el merge y el nivel se DERIVA de las Esporas', ()
   });
   assert.equal(migrated.colony.lifetimeSpores, 1200);
   // El nivel NO se confia: un perfil editado a mano no puede mostrar un estado
-  // imposible. 1200 Esporas son nivel 6.
-  assert.equal(migrated.colony.level, 6);
+  // imposible. 1200 Esporas son nivel 8 (950..1250).
+  assert.equal(migrated.colony.level, 8);
   assert.deepEqual(migrated.colony.firstClears, ['1:0']);
   assert.deepEqual(migrated.colony.unlockedRewards, ['frame_common']);
   assert.equal(migrated.account.provider, 'google-play');
@@ -194,7 +194,7 @@ test('v4: la Colonia sobrevive el merge y el nivel se DERIVA de las Esporas', ()
 
 test('v1 -> v4 recorre la cadena entera sin perder nada', () => {
   const migrated = migrateProfileSave({ version: 1, stats: { runs: 2 } });
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, PROFILE_SAVE_VERSION);
   assert.equal(migrated.stats.runs, 2);
   assert.equal(migrated.seenTutorial, false);
   assert.equal(migrated.ui.missionsOpen, false);

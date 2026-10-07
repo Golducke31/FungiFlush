@@ -46,6 +46,12 @@ export interface ColonyProgress {
   dailyAwardedDate: string;
   /** Cuantos Ciegos se premiaron HOY (para el tope blando diario). */
   dailyAwardedCount: number;
+  /**
+   * Esporas de Colonia YA otorgadas hoy (tope DURO diario). Se resetea cuando
+   * cambia `dailyAwardedDate`. Independiente del tope blando de Ciegos: los
+   * bonos de mision/diaria tambien lo consumen.
+   */
+  dailySporesAwarded: number;
 }
 
 export function defaultColonyProgress(): ColonyProgress {
@@ -59,6 +65,7 @@ export function defaultColonyProgress(): ColonyProgress {
     firstClears: [],
     dailyAwardedDate: '',
     dailyAwardedCount: 0,
+    dailySporesAwarded: 0,
   };
 }
 
@@ -91,6 +98,15 @@ export const REPEAT_MULTIPLIER = 0.4;
 
 /** Ciegos premiados a valor completo por dia. Despues, `REPEAT_MULTIPLIER`. */
 export const DAILY_FULL_AWARDS = 5;
+
+/**
+ * TOPE DURO diario de Esporas de Colonia, en esporas.
+ *
+ * Es la defensa final contra el farmeo (de Ciegos o de misiones): mas alla de
+ * este numero, el dia ya no paga. Va aparte del tope BLANDO (`DAILY_FULL_AWARDS`,
+ * que solo baja el multiplicador) porque ese es gradual y este es un corte seco.
+ */
+export const DAILY_HARD_CAP = 100;
 
 /** Bonificaciones secundarias: chicas a proposito (el grueso es el Ciego). */
 export const BONUS_FIRST_HAND = 10;
@@ -187,24 +203,26 @@ export interface ColonyLevelDef {
 }
 
 /**
- * Escalera de niveles: arranca rapida y se estira. El primer ascenso NO puede
- * tardar horas (100 Esporas se juntan en el primer Ciego), y los ultimos
- * niveles son objetivos largos.
+ * Escalera de niveles: arranca rapida y se estira.
+ *
+ * Calibrada contra el TOPE DURO (`DAILY_HARD_CAP = 100`): con ~100 esporas al
+ * dia el primer ascenso cae en la primera sesion y los siguientes van a uno
+ * cada uno o dos dias. Los ultimos niveles son objetivos largos.
  *
  * Los nombres de nivel NO viven aca: son bandas (`colonyLevelNameKey`), asi que
  * agregar niveles mas alla del 10 no obliga a tocar i18n.
  */
 export const COLONY_LEVELS: readonly ColonyLevelDef[] = [
   { level: 1, spores: 0, rewardId: null, rewardNameKey: null },
-  { level: 2, spores: 100, rewardId: 'frame_common', rewardNameKey: 'colony.reward.frame_common' },
-  { level: 3, spores: 250, rewardId: 'pack_spores', rewardNameKey: 'colony.reward.pack_spores' },
-  { level: 4, spores: 450, rewardId: 'bg_new', rewardNameKey: 'colony.reward.bg_new' },
-  { level: 5, spores: 700, rewardId: 'title_mycelium', rewardNameKey: 'colony.reward.title_mycelium' },
-  { level: 6, spores: 1000, rewardId: 'victory_fx', rewardNameKey: 'colony.reward.victory_fx' },
-  { level: 7, spores: 1400, rewardId: 'pack_colony', rewardNameKey: 'colony.reward.pack_colony' },
-  { level: 8, spores: 1850, rewardId: 'avatar', rewardNameKey: 'colony.reward.avatar' },
-  { level: 9, spores: 2350, rewardId: 'frame_uncommon', rewardNameKey: 'colony.reward.frame_uncommon' },
-  { level: 10, spores: 3000, rewardId: 'title_established', rewardNameKey: 'colony.reward.title_established' },
+  { level: 2, spores: 50, rewardId: 'frame_common', rewardNameKey: 'colony.reward.frame_common' },
+  { level: 3, spores: 120, rewardId: 'pack_spores', rewardNameKey: 'colony.reward.pack_spores' },
+  { level: 4, spores: 220, rewardId: 'bg_new', rewardNameKey: 'colony.reward.bg_new' },
+  { level: 5, spores: 350, rewardId: 'title_mycelium', rewardNameKey: 'colony.reward.title_mycelium' },
+  { level: 6, spores: 500, rewardId: 'victory_fx', rewardNameKey: 'colony.reward.victory_fx' },
+  { level: 7, spores: 700, rewardId: 'pack_colony', rewardNameKey: 'colony.reward.pack_colony' },
+  { level: 8, spores: 950, rewardId: 'avatar', rewardNameKey: 'colony.reward.avatar' },
+  { level: 9, spores: 1250, rewardId: 'frame_uncommon', rewardNameKey: 'colony.reward.frame_uncommon' },
+  { level: 10, spores: 1600, rewardId: 'title_established', rewardNameKey: 'colony.reward.title_established' },
 ] as const;
 
 /** Ultimo nivel con recompensa escrita a mano. Mas alla, la escalera extrapola. */
@@ -324,16 +342,58 @@ export interface GrantResult {
   levelAfter: number;
   /** Ids de recompensa desbloqueados por esta subida. */
   newRewards: string[];
+  /** Esporas realmente acreditadas (puede ser menor que las pedidas por el cap). */
+  granted: number;
+  /** Esporas descartadas por el tope duro diario. */
+  capped: number;
+  /** El dia ya toco techo: no entro nada. */
+  dailyCapped: boolean;
+}
+
+/**
+ * Resetea los contadores diarios si cambio el dia local. Devuelve `true` si
+ * hubo reset. Se llama desde `grantSpores`, asi que cualquier via de premio
+ * (Ciego, mision, diaria) mantiene el contador al dia.
+ */
+export function refreshDailyWindow(progress: ColonyProgress, now: number): boolean {
+  const today = localDateKey(now);
+  if (progress.dailyAwardedDate === today) return false;
+  progress.dailyAwardedDate = today;
+  progress.dailyAwardedCount = 0;
+  progress.dailySporesAwarded = 0;
+  return true;
+}
+
+/** Esporas que aun caben hoy bajo el tope duro. */
+export function dailyRemaining(progress: ColonyProgress, now: number): number {
+  const today = localDateKey(now);
+  const used = progress.dailyAwardedDate === today ? progress.dailySporesAwarded : 0;
+  return Math.max(0, DAILY_HARD_CAP - used);
 }
 
 /**
  * Suma Esporas de Colonia y recalcula el nivel. MUTA `progress` (el llamador lo
  * envuelve en `profileStore.patch`). Devuelve que subio, para festejarlo.
+ *
+ * `now` es opcional para no romper llamadas viejas: sin fecha no hay ventana
+ * diaria (se acredita completo). Con fecha, el TOPE DURO diario recorta.
  */
-export function grantSpores(progress: ColonyProgress, amount: number): GrantResult {
+export function grantSpores(progress: ColonyProgress, amount: number, now?: number): GrantResult {
   const levelBefore = progress.level;
-  progress.lifetimeSpores = Math.max(0, progress.lifetimeSpores + Math.round(amount));
-  progress.seasonSpores = Math.max(0, progress.seasonSpores + Math.round(amount));
+  const requested = Math.max(0, Math.round(amount));
+
+  let granted = requested;
+  let capped = 0;
+  if (typeof now === 'number') {
+    refreshDailyWindow(progress, now);
+    const remaining = Math.max(0, DAILY_HARD_CAP - progress.dailySporesAwarded);
+    granted = Math.min(remaining, requested);
+    capped = requested - granted;
+    progress.dailySporesAwarded = Math.min(DAILY_HARD_CAP, progress.dailySporesAwarded + granted);
+  }
+
+  progress.lifetimeSpores = Math.max(0, progress.lifetimeSpores + granted);
+  progress.seasonSpores = Math.max(0, progress.seasonSpores + granted);
   const levelAfter = levelForSpores(progress.lifetimeSpores);
   const newRewards: string[] = [];
   if (levelAfter > levelBefore) {
@@ -348,10 +408,17 @@ export function grantSpores(progress: ColonyProgress, amount: number): GrantResu
   }
   // El nivel nunca baja, ni aunque un dato viejo llegara raro.
   progress.level = Math.max(progress.level, levelAfter);
-  return { levelBefore, levelAfter, newRewards };
+  return {
+    levelBefore,
+    levelAfter,
+    newRewards,
+    granted,
+    capped,
+    dailyCapped: capped > 0 && granted === 0,
+  };
 }
 
-/** Acredita un Ciego superado: Esporas + memoria de anti-farm + tope diario. */
+/** Acredita un Ciego superado: Esporas + memoria de anti-farm + topes diarios. */
 export function applyBlindAward(
   progress: ColonyProgress,
   award: ColonyAward,
@@ -360,13 +427,9 @@ export function applyBlindAward(
   if (award.firstClear && !progress.firstClears.includes(award.key)) {
     progress.firstClears.push(award.key);
   }
-  const today = localDateKey(now);
-  if (progress.dailyAwardedDate !== today) {
-    progress.dailyAwardedDate = today;
-    progress.dailyAwardedCount = 0;
-  }
+  refreshDailyWindow(progress, now);
   progress.dailyAwardedCount += 1;
-  return grantSpores(progress, award.total);
+  return grantSpores(progress, award.total, now);
 }
 
 /** Bonificaciones sueltas (mision, diaria, racha) sin tocar el anti-farm. */

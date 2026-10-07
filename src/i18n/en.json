@@ -749,6 +749,7 @@
     "profileSubtitle": "Your progress and collection",
     "colonySoon": "Coming soon",
     "openMenu": "Menu",
+    "levelShort": "Lv",
     "challenges": "Challenges",
     "challengesSubtitle": "Choose how you want to play",
     "modes": "Game modes",
@@ -832,6 +833,20 @@
     "score": "{score} / {target}",
     "total": "Run total score: {score}",
     "continue": "Continue"
+  },
+  "packs": {
+    "title": "Packs",
+    "subtitle": "Specimens waiting to be found",
+    "tapToOpen": "Tap the pack to open it",
+    "tapToReveal": "Tap each card to reveal it",
+    "open": "Open pack",
+    "another": "Another pack",
+    "revealAll": "Reveal all",
+    "none": "You have no packs to open. Clear a blind to earn one.",
+    "pending": "{n} unopened",
+    "resultEpic": "An epic came out!",
+    "resultRare": "{n} rares came out",
+    "resultDone": "Pack opened"
   },
   "die": {
     "title": "Spore die",
@@ -1027,6 +1042,9 @@
     },
     "colony": {
       "levelUp": "Your Colony reached level {level}!"
+    },
+    "pack": {
+      "earned": "You earned a Pack! ({count} unopened)"
     }
   },
   "unlockRule": {
@@ -1258,7 +1276,6 @@
     "breakdownMult": "Multiplier",
     "breakdownTotal": "Total",
     "abilityTag": "ABILITY",
-    "abilityHint": "This card has an effect that triggers on its own. The violet border and the ✦ mark it.",
     "abilityActivated": "{name} activated",
     "substrateBonus": "Substrate bonus",
     "firstBlindTitle": "Your first Blind",
@@ -1473,6 +1490,8 @@
     "noNext": "You unlocked every level reward",
     "rewards": "Rewards",
     "rewardsSubtitle": "Your colony grows every time you clear a Blind.",
+    "dailyRemaining": "Today: {value} of {cap} Colony Spores left ({used} earned)",
+    "dailyCapped": "Daily cap reached ({cap}). Come back tomorrow.",
     "rewardCost": "Reached at {value} Colony Spores",
     "ranking": "Ranking",
     "rank": {

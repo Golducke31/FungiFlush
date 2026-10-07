@@ -48,6 +48,10 @@ export interface CollectionCallbacks {
   onOpenPass?: () => void;
   /** Opcional: los Cosméticos viven dentro de la Coleccion. */
   onOpenCosmetics?: () => void;
+  /** Opcional: los Sobres viven dentro de la Coleccion. */
+  onOpenPacks?: () => void;
+  /** Sobres sin abrir, para el contador del boton. */
+  packsPending?: number;
 }
 
 type Filter = 'all' | 'cards' | 'jokers' | 'locked' | 'unlocked';
@@ -63,6 +67,33 @@ function lockLabel(entry: CollectionEntry): string {
   return t('collection.locked', {
     pack: entry.packTitleKey ? t(entry.packTitleKey) : entry.id,
   });
+}
+
+/**
+ * Boton de Sobres, con el contador de pendientes.
+ *
+ * Vive en las DOS versiones del panel (carrusel y grilla) para que el acceso
+ * sea identico: la Coleccion es la pantalla de contenido y los Sobres son
+ * contenido. El contador va en una pildora aparte (`.pack-count`) para que el
+ * numero se lea sin depender del texto.
+ */
+function buildPacksButton(
+  onOpen: () => void,
+  pending: number,
+): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'btn is-ghost is-packs';
+  button.dataset['act'] = 'sobres';
+  button.textContent = t('packs.title');
+  if (pending > 0) {
+    button.classList.add('has-pending');
+    const count = document.createElement('span');
+    count.className = 'pack-count';
+    count.textContent = String(pending);
+    button.appendChild(count);
+  }
+  button.addEventListener('click', onOpen);
+  return button;
 }
 
 /** Marco DOM de la coleccion cuando el protagonista es el carrusel 3D. */
@@ -90,6 +121,8 @@ export function buildCollectionCarousel(
     onOpenStore?: () => void;
     onOpenPass?: () => void;
     onOpenCosmetics?: () => void;
+    onOpenPacks?: () => void;
+    packsPending?: number;
   },
 ): CollectionCarouselFrame {
   const panel = document.createElement('div');
@@ -179,6 +212,11 @@ export function buildCollectionCarousel(
     toolbar.appendChild(button);
   }
 
+  // Sobres primero: es contenido propio del jugador, no una superficie de
+  // venta. El contador de pendientes es lo que invita a entrar.
+  if (callbacks.onOpenPacks) {
+    actions.appendChild(buildPacksButton(callbacks.onOpenPacks, callbacks.packsPending ?? 0));
+  }
   if (callbacks.onOpenStore) {
     const store = document.createElement('button');
     store.className = 'btn is-ghost';
@@ -343,6 +381,9 @@ export function buildCollectionPanel(
 
   // La tienda de expansiones y el pase viven aca: son contenido, y esta es la
   // pantalla de contenido. Asi ya no ocupan lugar en el menu principal.
+  if (callbacks.onOpenPacks) {
+    actions.appendChild(buildPacksButton(callbacks.onOpenPacks, callbacks.packsPending ?? 0));
+  }
   if (callbacks.onOpenStore) {
     const store = document.createElement('button');
     store.className = 'btn is-ghost';

@@ -749,6 +749,7 @@
     "profileSubtitle": "Tu progreso y tu colección",
     "colonySoon": "Próximamente",
     "openMenu": "Menú",
+    "levelShort": "Nv",
     "challenges": "Desafíos",
     "challengesSubtitle": "Elegí cómo querés jugar",
     "modes": "Modos de juego",
@@ -832,6 +833,20 @@
     "score": "{score} / {target}",
     "total": "Score total de la run: {score}",
     "continue": "Continuar"
+  },
+  "packs": {
+    "title": "Sobres",
+    "subtitle": "Especímenes por descubrir",
+    "tapToOpen": "Tocá el sobre para abrirlo",
+    "tapToReveal": "Tocá cada carta para revelarla",
+    "open": "Abrir sobre",
+    "another": "Otro sobre",
+    "revealAll": "Revelar todas",
+    "none": "No tenés sobres para abrir. Superá un ciego y te ganás uno.",
+    "pending": "{n} sin abrir",
+    "resultEpic": "¡Salió una épica!",
+    "resultRare": "Salieron {n} raras",
+    "resultDone": "Sobre abierto"
   },
   "die": {
     "title": "Dado de esporas",
@@ -1027,6 +1042,9 @@
     },
     "colony": {
       "levelUp": "¡Tu Colonia subió al nivel {level}!"
+    },
+    "pack": {
+      "earned": "¡Ganaste un Sobre! ({count} sin abrir)"
     }
   },
   "unlockRule": {
@@ -1258,7 +1276,6 @@
     "breakdownMult": "Multiplicador",
     "breakdownTotal": "Total",
     "abilityTag": "HABILIDAD",
-    "abilityHint": "Esta carta tiene un efecto que se dispara sola. El borde lila y el ✦ la marcan.",
     "abilityActivated": "{name} activado",
     "substrateBonus": "Bonificación de Sustrato",
     "firstBlindTitle": "Tu primer Ciego",
@@ -1473,6 +1490,8 @@
     "noNext": "Ya desbloqueaste todas las recompensas por nivel",
     "rewards": "Recompensas",
     "rewardsSubtitle": "Tu colonia crece cada vez que superás un Ciego.",
+    "dailyRemaining": "Hoy: {value} de {cap} Esporas restantes ({used} ganadas)",
+    "dailyCapped": "Tope diario alcanzado ({cap}). Volvé mañana.",
     "rewardCost": "Se alcanza con {value} Esporas de Colonia",
     "ranking": "Ranking",
     "rank": {

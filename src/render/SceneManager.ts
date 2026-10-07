@@ -1345,6 +1345,35 @@ export class SceneManager {
     this.carouselDrag = null;
   }
 
+  /**
+   * Caja en PANTALLA (px del canvas) que ocupan las cartas VISIBLES del
+   * carrusel. Es la unica forma de medir cuanto ancho usa de verdad el anillo:
+   * vive en el canvas, asi que `getBoundingClientRect` de la UI no lo ve.
+   *
+   * Lo usan las sondas de layout (`tools/probe-reward-shop-width.mjs`) para
+   * comprobar que el draft de recompensa no desperdicia el ancho landscape.
+   * Devuelve `null` si no hay carrusel activo.
+   */
+  carouselScreenBox(): { count: number; span: number; lo: number; hi: number; vw: number } | null {
+    if (!this.carouselActive || !this.carousel) return null;
+    const canvas = this.renderer.domElement;
+    const w = canvas.clientWidth || 1;
+    const h = canvas.clientHeight || 1;
+    const project = (v: THREE.Vector3): { x: number; y: number } => {
+      const p = v.clone().project(this.rig.camera);
+      return { x: (p.x * 0.5 + 0.5) * w, y: (-p.y * 0.5 + 0.5) * h };
+    };
+    const box = this.carousel.screenBoxes(project);
+    if (box.count === 0) return null;
+    return {
+      count: box.count,
+      span: +(box.hi - box.lo).toFixed(1),
+      lo: +box.lo.toFixed(1),
+      hi: +box.hi.toFixed(1),
+      vw: w,
+    };
+  }
+
   // ==========================================================================
   // Agua reactiva (F2)
   // ==========================================================================

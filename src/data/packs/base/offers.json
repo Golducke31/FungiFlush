@@ -37,12 +37,16 @@
         ]
       },
       {
-        "chance": 0.55,
         "count": 1,
         "options": [
           {
-            "weight": 1,
+            "weight": 55,
             "kind": "voucher"
+          },
+          {
+            "weight": 45,
+            "kind": "card",
+            "excludeTag": "evolved"
           }
         ]
       }
@@ -99,12 +103,16 @@
         ]
       },
       {
-        "chance": 0.55,
         "count": 1,
         "options": [
           {
-            "weight": 1,
+            "weight": 55,
             "kind": "voucher"
+          },
+          {
+            "weight": 45,
+            "kind": "card",
+            "excludeTag": "evolved"
           }
         ]
       }

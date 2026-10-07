@@ -15,11 +15,13 @@ import {
   BONUS_FIRST_HAND,
   COLONY_LAST_DEFINED_LEVEL,
   DAILY_FULL_AWARDS,
+  DAILY_HARD_CAP,
   REPEAT_MULTIPLIER,
   applyBlindAward,
   blindBaseSpores,
   colonyLevelNameKey,
   computeBlindAward,
+  dailyRemaining,
   defaultColonyProgress,
   grantSpores,
   levelForSpores,
@@ -48,21 +50,21 @@ test('la escalera de niveles es monotona y creciente', () => {
     previous = value;
   }
   assert.equal(levelThreshold(1), 0);
-  assert.equal(levelThreshold(2), 100);
-  assert.equal(levelThreshold(5), 700);
-  assert.equal(levelThreshold(10), 3000);
+  assert.equal(levelThreshold(2), 50);
+  assert.equal(levelThreshold(5), 350);
+  assert.equal(levelThreshold(10), 1600);
 });
 
 test('levelForSpores corta en el umbral exacto', () => {
   assert.equal(levelForSpores(0), 1);
-  assert.equal(levelForSpores(99), 1);
-  assert.equal(levelForSpores(100), 2);
-  assert.equal(levelForSpores(249), 2);
-  assert.equal(levelForSpores(250), 3);
-  assert.equal(levelForSpores(700), 5);
-  assert.equal(levelForSpores(3000), 10);
-  assert.equal(levelForSpores(3449), 10);
-  assert.equal(levelForSpores(3450), 11);
+  assert.equal(levelForSpores(49), 1);
+  assert.equal(levelForSpores(50), 2);
+  assert.equal(levelForSpores(119), 2);
+  assert.equal(levelForSpores(120), 3);
+  assert.equal(levelForSpores(350), 5);
+  assert.equal(levelForSpores(1600), 10);
+  assert.equal(levelForSpores(levelThreshold(11) - 1), 10);
+  assert.equal(levelForSpores(levelThreshold(11)), 11);
 });
 
 test('el nombre del nivel va por bandas, no uno por nivel', () => {
@@ -153,24 +155,29 @@ test('applyBlindAward acumula Esporas, memoria de anti-farm y tope diario', () =
   assert.deepEqual(progress.firstClears, ['2:1']);
   assert.equal(progress.dailyAwardedDate, localDateKey(NOON));
   assert.equal(progress.dailyAwardedCount, 1);
+  assert.equal(progress.dailySporesAwarded, 75);
   assert.equal(result.levelBefore, 1);
-  assert.equal(result.levelAfter, 1);
+  // 75 Esporas ya alcanzan el umbral 50 del nivel 2.
+  assert.equal(result.levelAfter, 2);
 });
 
 test('grantSpores sube de nivel y desbloquea las recompensas saltadas', () => {
   const progress = defaultColonyProgress();
   const result = grantSpores(progress, 1200);
   assert.equal(result.levelBefore, 1);
-  assert.equal(result.levelAfter, 6);
-  assert.equal(progress.level, 6);
-  // Niveles 2..6: cinco recompensas (el 1 no otorga nada).
-  assert.equal(result.newRewards.length, 5);
+  // 1200 cae dentro del tramo del nivel 8 (950..1250), no llega al 9 (1250).
+  assert.equal(result.levelAfter, 8);
+  assert.equal(progress.level, 8);
+  // Niveles 2..8: siete recompensas (el 1 no otorga nada).
+  assert.equal(result.newRewards.length, 7);
   assert.deepEqual(result.newRewards, [
     'frame_common',
     'pack_spores',
     'bg_new',
     'title_mycelium',
     'victory_fx',
+    'pack_colony',
+    'avatar',
   ]);
   // Idempotente: volver a otorgar no duplica.
   const again = grantSpores(progress, 0);
@@ -191,24 +198,61 @@ test('el nivel nunca baja', () => {
 
 test('nextLevelInfo describe el tramo actual para la barra', () => {
   const progress = defaultColonyProgress();
-  progress.lifetimeSpores = 1175;
+  progress.lifetimeSpores = 575;
   progress.level = levelForSpores(progress.lifetimeSpores);
   const info = nextLevelInfo(progress);
   assert.equal(info.level, 6);
-  assert.equal(info.current, 1000);
-  assert.equal(info.next, 1400);
-  assert.equal(info.remaining, 225);
-  assert.ok(Math.abs(info.progress - 175 / 400) < 1e-9);
+  assert.equal(info.current, 500);
+  assert.equal(info.next, 700);
+  assert.equal(info.remaining, 125);
+  assert.ok(Math.abs(info.progress - 75 / 200) < 1e-9);
   assert.equal(info.rewardId, 'pack_colony');
 });
 
 test('la escalera definida a mano tiene la forma esperada', () => {
   assert.equal(COLONY_LAST_DEFINED_LEVEL, 10);
   const progress = defaultColonyProgress();
-  progress.lifetimeSpores = 3000;
+  progress.lifetimeSpores = 1600;
   progress.level = levelForSpores(progress.lifetimeSpores);
   const info = nextLevelInfo(progress);
   assert.equal(info.level, 10);
   // El nivel 10 es el techo de la escalera ESCRITA a mano: el 11 ya extrapola.
-  assert.equal(info.next, 3450);
+  assert.equal(info.next, levelThreshold(11));
+  assert.ok(info.next > info.current);
+});
+
+test('el tope DURO diario recorta las Esporas acreditadas', () => {
+  const progress = defaultColonyProgress();
+  const first = grantSpores(progress, 70, NOON);
+  assert.equal(first.granted, 70);
+  assert.equal(first.capped, 0);
+  assert.equal(progress.lifetimeSpores, 70);
+  assert.equal(progress.level, 2);
+  assert.equal(dailyRemaining(progress, NOON), DAILY_HARD_CAP - 70);
+
+  // Lo que sobra del dia se recorta: 70 + 90 pedidas -> solo entran 30.
+  const second = grantSpores(progress, 90, NOON);
+  assert.equal(second.granted, 30);
+  assert.equal(second.capped, 60);
+  assert.equal(progress.lifetimeSpores, DAILY_HARD_CAP);
+  assert.equal(dailyRemaining(progress, NOON), 0);
+
+  // El dia ya toco techo: nada entra.
+  const third = grantSpores(progress, 50, NOON);
+  assert.equal(third.granted, 0);
+  assert.equal(third.dailyCapped, true);
+  assert.equal(progress.lifetimeSpores, DAILY_HARD_CAP);
+
+  // Al dia siguiente la ventana se reabre completa.
+  const tomorrow = NOON + 24 * 60 * 60 * 1000;
+  const next = grantSpores(progress, 40, tomorrow);
+  assert.equal(next.granted, 40);
+  assert.equal(progress.lifetimeSpores, DAILY_HARD_CAP + 40);
+});
+
+test('sin fecha no hay ventana diaria: grantSpores acredita completo', () => {
+  const progress = defaultColonyProgress();
+  const result = grantSpores(progress, DAILY_HARD_CAP * 3);
+  assert.equal(result.granted, DAILY_HARD_CAP * 3);
+  assert.equal(result.capped, 0);
 });

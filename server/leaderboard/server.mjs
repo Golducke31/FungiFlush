@@ -124,7 +124,7 @@ function playerOf(id) {
 }
 
 /** Nivel derivado de las Esporas. Espejo de `levelForSpores`. */
-const LEVEL_THRESHOLDS = [0, 100, 250, 450, 700, 1000, 1400, 1850, 2350, 3000];
+const LEVEL_THRESHOLDS = [0, 50, 120, 220, 350, 500, 700, 950, 1250, 1600];
 function levelForSpores(spores) {
   let level = 1;
   for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {

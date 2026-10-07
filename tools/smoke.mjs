@@ -1351,8 +1351,10 @@ const voucherShop = await (async () => {
     return {
       total: cards.length,
       vouchers: cards.filter((c) => c.classList.contains('is-voucher')).length,
-      // Tiene que decir "Mejora", NO la clave cruda "VOUCHER".
-      labels: cards.map((c) => c.querySelector('.offer-kind')?.textContent ?? null),
+      // La tarjeta ya no lleva chip visible (la cara trae todo), asi que la
+      // etiqueta traducida se lee del `data-kind-label` que deja el HUD. Tiene
+      // que decir "Mejora", NO la clave cruda "VOUCHER".
+      labels: cards.map((c) => c.dataset.kindLabel ?? null),
       // Cada voucher tiene cara compuesta (no un hueco).
       withArt: cards.filter((c) => c.querySelector('img.offer-art')?.src?.startsWith('data:')).length,
       prices: cards.map((c) => ({

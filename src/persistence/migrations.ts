@@ -14,6 +14,7 @@
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
 import { levelForSpores } from '../meta/Colony';
+import { defaultPackInventory } from '../meta/Packs';
 import { emptySnapshot } from '../meta/Leaderboard';
 import { PROFILE_SAVE_VERSION, defaultProfile, type ProfileSave } from '../meta/ProfileState';
 
@@ -32,6 +33,7 @@ export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   1: migrateProfileV1toV2,
   2: migrateProfileV2toV3,
   3: migrateProfileV3toV4,
+  4: migrateProfileV4toV5,
 };
 
 export function migrateChain(
@@ -156,6 +158,7 @@ export function migrateProfileV3toV4(input: UnknownRecord): UnknownRecord {
       firstClears: [],
       dailyAwardedDate: '',
       dailyAwardedCount: 0,
+      dailySporesAwarded: 0,
     },
     account: {
       provider: 'none',
@@ -166,6 +169,33 @@ export function migrateProfileV3toV4(input: UnknownRecord): UnknownRecord {
       pendingResults: [],
       verifiedSpores: null,
       leaderboard: { season: null, lifetime: null, fetchedAt: null },
+    },
+  };
+}
+
+/**
+ * Perfil: v4 -> v5
+ *
+ * v5 agrega los sobres (`packs`): cuantos tiene pendientes y cuantos abrio de
+ * por vida.
+ *
+ * Default a proposito: arranca en cero con `defaultPackInventory()`. Un perfil
+ * v4 es de alguien que jugo ANTES de que existieran los sobres; los Ciegos que
+ * supero no se pueden reconstruir hacia atras, asi que empieza a ganar sobres
+ * desde ahora. Regalarle sobres por partidas viejas seria inventar progreso que
+ * nadie gano (y la economia meta lo notaria). Es defensivo ante un perfil al
+ * que le falte el campo: cae al default en vez de romper el guardado.
+ */
+export function migrateProfileV4toV5(input: UnknownRecord): UnknownRecord {
+  const initial = defaultPackInventory();
+  const raw = input['packs'];
+  const packData = typeof raw === 'object' && raw !== null ? (raw as UnknownRecord) : {};
+  return {
+    ...input,
+    version: 5,
+    packs: {
+      pending: numberOr(packData['pending'], initial.pending),
+      opened: numberOr(packData['opened'], initial.opened),
     },
   };
 }
@@ -270,6 +300,22 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   if (!Array.isArray(colony.firstClears)) colony.firstClears = [];
   if (!Array.isArray(colony.unlockedRewards)) colony.unlockedRewards = [];
 
+  // Sobres (v5): OBJETO anidado ADITIVO. Un perfil v4 no lo tiene y cae al
+  // default (cero sobres). Si llegara con la forma equivocada (numero suelto,
+  // edicion a mano), el spread sobre el default lo descarta. `pending` y
+  // `opened` son contadores: se fuerzan a enteros >= 0 para que un valor
+  // negativo o fractional de un perfil editado no deje la UI en un estado
+  // imposible ("-3 sobres por abrir").
+  const packsRaw = migrated['packs'];
+  const packs = {
+    ...fallback.packs,
+    ...((typeof packsRaw === 'object' && packsRaw !== null ? packsRaw : {}) as object),
+  };
+  packs.pending = Math.max(0, Math.floor(packs.pending));
+  packs.opened = Math.max(0, Math.floor(packs.opened));
+  if (!Number.isFinite(packs.pending)) packs.pending = 0;
+  if (!Number.isFinite(packs.opened)) packs.opened = 0;
+
   // Cuenta (v4): OBJETO anidado ADITIVO.
   const accountRaw = migrated['account'];
   const account = {
@@ -311,6 +357,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     },
     colony,
     account,
+    packs,
   };
 }
 

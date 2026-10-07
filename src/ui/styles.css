@@ -304,7 +304,8 @@ body {
 #ui-root > .hud-top,
 #ui-root > .hud-jokers,
 #ui-root > .hud-bottom,
-#ui-root > .overlay {
+#ui-root > .overlay,
+#ui-root > .pack-overlay {
   pointer-events: auto;
 }
 
@@ -1660,32 +1661,24 @@ body {
 }
 
 /* --- HABILIDAD en el tooltip ---
-   Misma jerarquia que la cara de carta y la mesa: banda con forma (glifo ✦),
-   color propio (lila) y borde. Nunca color solo. */
-.tooltip-ability {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 10px;
+   El lila marca la DESCRIPCION de la carta con efecto (donde vive la habilidad)
+   y la ✦ junto al nombre. Antes habia una banda violeta aparte que repetia lo
+   mismo que la ✦ de la cara de la carta: se elimino. El color NUNCA va solo:
+   siempre lo acompaña el glifo ✦. */
+.tooltip-desc.is-ability {
   padding: 7px 10px;
   border-radius: 9px;
   background: rgba(196, 168, 255, 0.12);
   border: 1px solid rgba(196, 168, 255, 0.42);
-}
-
-.tooltip-ability-tag {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #c4a8ff;
-}
-
-.tooltip-ability-text {
-  font-size: 11.5px;
-  line-height: 1.4;
   color: #d8ccf5;
+}
+
+.tooltip-ability-marker {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  color: #c4a8ff;
+  vertical-align: middle;
 }
 
 .tooltip-combos {
@@ -3372,7 +3365,7 @@ body {
   }
 }
 
-/* --- Capa 2: halo del heroe (ilumina el logotipo-boton) --- */
+/* --- Capa 2: halo del heroe (ilumina los botones de gel) --- */
 .menu-hero-glow {
   position: absolute;
   inset: -22% -10%;
@@ -3429,54 +3422,412 @@ body {
   display: flex;
 }
 
-.menu-icon {
+/* ==========================================================================
+   BOTONES "GEL" / "FB" — los botones de hongo del menu principal.
+   --------------------------------------------------------------------------
+   Estilo de la familia Fungus: pastilla de gel con puntos de brillo, contorno
+   oscuro ancho y halo cian. TODO escala desde el `font-size` del elemento (em),
+   asi que un solo valor los agranda o achica. Por FUERA son transparentes:
+   viven sobre el bosque real, no sobre una caja. Tres variantes:
+     - `.menu-fb`          → boton grande de texto (Nueva partida)
+     - `.menu-fb.is-alt`   → variante azul (Continuar)
+     - `.menu-gel`         → boton de icono cuadrado (Perfil y hamburguesa)
+   ========================================================================== */
+
+.menu-gel {
+  --gel-ink: #04202b;
+  --gel-edge: #0d6a80;
+  --gel-mint: #c6fff4;
+  --gel-teal: #4fe6d6;
+  --gel-deep: #139fb6;
+  --gel-glow: 63, 224, 208;
+  --gel-stroke: #06303c;
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid rgba(95, 216, 232, 0.24);
-  border-radius: 12px;
-  background: rgba(6, 12, 18, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: #cfe6f2;
+  border: 0.12em solid var(--gel-edge);
+  border-radius: 999px;
+  color: #effffb;
   cursor: pointer;
+  /* La tipografia del juego como boton. El prototipo usaba "Bagel Fat One"
+     (una webfont de Google): aca se usa la display propia del juego, que ya
+     esta subseteada y no cuesta una descarga extra por boton. */
+  font: 400 1em var(--font-display);
+  background:
+    radial-gradient(circle at 12% 40%, rgba(255, 255, 255, 0.85) 0 0.1em, transparent 0.12em),
+    radial-gradient(circle at 80% 28%, rgba(255, 255, 255, 0.85) 0 0.11em, transparent 0.13em),
+    radial-gradient(circle at 70% 78%, rgba(255, 255, 255, 0.75) 0 0.08em, transparent 0.1em),
+    linear-gradient(180deg, var(--gel-mint) 0%, var(--gel-teal) 42%, var(--gel-deep) 100%);
+  box-shadow:
+    0 0 0 0.1em var(--gel-ink),
+    0 0.16em 0 0.1em var(--gel-ink),
+    0 0.3em 0.9em 0.1em rgba(0, 0, 0, 0.45),
+    0 0 1.1em rgba(var(--gel-glow), 0.55),
+    inset 0 -0.28em 0.4em rgba(5, 60, 80, 0.5),
+    inset 0 0.12em 0.2em rgba(255, 255, 255, 0.45);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    transform 0.12s,
+    box-shadow 0.12s,
+    filter 0.2s;
   -webkit-tap-highlight-color: transparent;
+  animation: gel-latido 3.6s ease-in-out infinite;
 }
-.menu-icon:hover,
-.menu-icon:focus-visible {
+.menu-gel::before {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 7%;
+  height: 34%;
+  border-radius: 999px;
+  pointer-events: none;
+  background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+}
+.menu-gel:hover,
+.menu-gel:focus-visible {
   outline: none;
-  background: rgba(95, 216, 232, 0.16);
-  border-color: rgba(95, 216, 232, 0.6);
-  color: #fff;
+  filter: brightness(1.1) saturate(1.1);
+  animation: gel-gelatina 0.7s;
 }
-.menu-icon svg {
-  display: block;
-  width: 24px;
-  height: 24px;
+.menu-gel:active {
+  animation: none;
+  transform: translateY(0.14em) scale(1.03, 0.94);
+  box-shadow:
+    0 0 0 0.1em var(--gel-ink),
+    0 0.03em 0 0.1em var(--gel-ink),
+    0 0.1em 0.5em 0.1em rgba(0, 0, 0, 0.45),
+    0 0 1.5em rgba(var(--gel-glow), 0.85),
+    inset 0 -0.2em 0.4em rgba(5, 60, 80, 0.5),
+    inset 0 0.12em 0.2em rgba(255, 255, 255, 0.45);
+}
+.menu-gel:focus-visible {
+  outline: 0.1em solid #fff;
+  outline-offset: 0.2em;
 }
 
-/* Insignia del nivel de Colonia (meta-progresion futura). */
+/* Variante AZUL (las letras "FLUSH" del logotipo): agua, gotas y burbujas. */
+.menu-gel.is-alt {
+  --gel-ink: #04182b;
+  --gel-edge: #0b4f86;
+  --gel-mint: #d4f2ff;
+  --gel-teal: #5cc8f0;
+  --gel-deep: #1a74b8;
+  --gel-glow: 90, 190, 255;
+  --gel-stroke: #0a3560;
+}
+
+@keyframes gel-latido {
+  50% {
+    filter: brightness(1.1);
+  }
+}
+@keyframes gel-gelatina {
+  25% {
+    transform: scale(1.07, 0.93);
+  }
+  50% {
+    transform: scale(0.95, 1.06);
+  }
+  75% {
+    transform: scale(1.02, 0.98);
+  }
+}
+
+/* Boton de ICONO cuadrado (Perfil / hamburguesa). */
+.menu-gel--icon {
+  width: 2.7em;
+  height: 2.7em;
+  padding: 0;
+  border-radius: 0.82em;
+  display: grid;
+  place-items: center;
+  font-size: clamp(18px, 3.2vw, 28px);
+  animation: none;
+}
+.menu-gel--icon svg {
+  position: relative;
+  width: 1.55em;
+  height: 1.55em;
+  overflow: visible;
+  filter: drop-shadow(0 0.06em 0 rgba(4, 32, 43, 0.6));
+}
+.menu-gel--icon:hover svg,
+.menu-gel--icon:focus-visible svg {
+  animation: gel-meneo 0.6s;
+}
+@keyframes gel-meneo {
+  25% {
+    rotate: -9deg;
+  }
+  60% {
+    rotate: 7deg;
+  }
+}
+
+/* Barras de la hamburguesa (dentro de `.menu-gel--icon`). */
+.menu-gel .gel-bars {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  width: 1.25em;
+}
+.menu-gel .gel-bar {
+  display: block;
+  height: 0.17em;
+  border-radius: 0.1em;
+  background: #effffb;
+  box-shadow:
+    0 0 0 0.07em var(--gel-stroke),
+    0 0.07em 0 0.07em var(--gel-ink);
+  transition:
+    transform 0.25s,
+    opacity 0.2s;
+}
+.menu-gel[aria-expanded='true'] .gel-bar:nth-child(1) {
+  transform: translateY(0.37em) rotate(45deg);
+}
+.menu-gel[aria-expanded='true'] .gel-bar:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.menu-gel[aria-expanded='true'] .gel-bar:nth-child(3) {
+  transform: translateY(-0.37em) rotate(-45deg);
+}
+
+/* --- Boton de TEXTO grande (Nueva partida / Continuar) --- */
+.menu-fb {
+  --gel-ink: #04202b;
+  --gel-edge: #0d6a80;
+  --gel-mint: #c6fff4;
+  --gel-teal: #4fe6d6;
+  --gel-deep: #139fb6;
+  --gel-glow: 63, 224, 208;
+  --gel-stroke: #06303c;
+  position: relative;
+  font: 400 1em var(--font-display);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0.42em 1.5em 0.46em;
+  border: 0.12em solid var(--gel-edge);
+  border-radius: 999px;
+  color: #effffb;
+  background:
+    radial-gradient(circle at 7% 42%, rgba(255, 255, 255, 0.88) 0 0.13em, transparent 0.15em),
+    radial-gradient(circle at 15% 72%, rgba(255, 255, 255, 0.8) 0 0.09em, transparent 0.11em),
+    radial-gradient(circle at 26% 30%, rgba(255, 255, 255, 0.85) 0 0.1em, transparent 0.12em),
+    radial-gradient(circle at 74% 70%, rgba(255, 255, 255, 0.85) 0 0.11em, transparent 0.13em),
+    radial-gradient(circle at 85% 32%, rgba(255, 255, 255, 0.88) 0 0.12em, transparent 0.14em),
+    radial-gradient(circle at 93% 64%, rgba(255, 255, 255, 0.8) 0 0.08em, transparent 0.1em),
+    linear-gradient(180deg, var(--gel-mint) 0%, var(--gel-teal) 42%, var(--gel-deep) 100%);
+  box-shadow:
+    0 0 0 0.1em var(--gel-ink),
+    0 0.16em 0 0.1em var(--gel-ink),
+    0 0.3em 0.9em 0.1em rgba(0, 0, 0, 0.45),
+    0 0 1.2em rgba(var(--gel-glow), 0.55),
+    inset 0 -0.28em 0.4em rgba(5, 60, 80, 0.5),
+    inset 0 0.12em 0.2em rgba(255, 255, 255, 0.45);
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s,
+    filter 0.25s;
+  -webkit-tap-highlight-color: transparent;
+}
+.menu-fb::before {
+  content: '';
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: 7%;
+  height: 34%;
+  border-radius: 999px;
+  pointer-events: none;
+  background: linear-gradient(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0));
+}
+.menu-fb > span {
+  position: relative;
+  display: block;
+  -webkit-text-stroke: 0.13em var(--gel-stroke);
+  paint-order: stroke fill;
+  text-shadow: 0 0.06em 0 var(--gel-ink);
+}
+.menu-fb.is-alt {
+  --gel-ink: #04182b;
+  --gel-edge: #0b4f86;
+  --gel-mint: #d4f2ff;
+  --gel-teal: #5cc8f0;
+  --gel-deep: #1a74b8;
+  --gel-glow: 90, 190, 255;
+  --gel-stroke: #0a3560;
+}
+.menu-fb:hover:not(:disabled),
+.menu-fb:focus-visible:not(:disabled) {
+  outline: none;
+  filter: brightness(1.08) saturate(1.1);
+  animation: gel-gelatina 0.7s;
+}
+.menu-fb:active:not(:disabled) {
+  animation: none;
+  transform: translateY(0.14em) scale(1.02, 0.95);
+  box-shadow:
+    0 0 0 0.1em var(--gel-ink),
+    0 0.03em 0 0.1em var(--gel-ink),
+    0 0.1em 0.5em 0.1em rgba(0, 0, 0, 0.45),
+    0 0 1.6em rgba(var(--gel-glow), 0.8),
+    inset 0 -0.2em 0.4em rgba(5, 60, 80, 0.5),
+    inset 0 0.12em 0.2em rgba(255, 255, 255, 0.45);
+}
+.menu-fb:disabled {
+  --gel-glow: 60, 85, 95;
+  filter: grayscale(0.8) brightness(0.62);
+  cursor: not-allowed;
+}
+
+/* Caja que envuelve un boton de texto + sus esporas decorativas. Todo su
+   tamano sale de `font-size`, igual que en el prototipo.
+   La caja se ata a `vh` ADEMAS de a `vw`: en landscape el alto es el recurso
+   escaso y los dos botones tienen que caber bajo el titulo del arte. */
+.menu-cta-wrap {
+  position: relative;
+  font-size: min(clamp(22px, 4vw, 38px), 7.4vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: menu-cta-flota 4.5s ease-in-out infinite;
+}
+.menu-cta-wrap.is-continue {
+  font-size: min(clamp(18px, 3.2vw, 30px), 6vh);
+  animation-delay: -2s;
+}
+/* Sin partida guardada: apagado, sin brillo ni particulas. */
+.menu-cta-wrap.is-off {
+  animation: none;
+}
+.menu-cta-wrap.is-off .menu-fb {
+  animation: none;
+}
+
+.menu-cta-wrap .deco {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  filter: drop-shadow(0 0 0.35em rgba(var(--gel-glow), 0.75));
+  animation: menu-deco-brilla 3.2s ease-in-out infinite;
+}
+.menu-cta-wrap .deco svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.menu-cta-wrap .m1 {
+  width: 1em;
+  height: 1em;
+  left: 6%;
+  top: -0.62em;
+  rotate: -14deg;
+}
+.menu-cta-wrap .m2 {
+  width: 1.25em;
+  height: 1.25em;
+  right: 7%;
+  top: -0.8em;
+  rotate: 11deg;
+  animation-delay: -1s;
+}
+.menu-cta-wrap .m3 {
+  width: 0.62em;
+  height: 0.62em;
+  left: 34%;
+  top: -0.36em;
+  rotate: 6deg;
+  animation-delay: -2s;
+}
+.menu-cta-wrap .e1 {
+  width: 0.95em;
+  height: 0.95em;
+  left: -0.5em;
+  top: 0.05em;
+  rotate: -8deg;
+}
+.menu-cta-wrap .g1 {
+  width: 0.5em;
+  height: 0.7em;
+  right: 12%;
+  top: -0.55em;
+  rotate: 10deg;
+  animation-delay: -1.4s;
+}
+.menu-cta-wrap .b1 {
+  width: 0.34em;
+  height: 0.34em;
+  left: 26%;
+  top: -0.34em;
+  animation-delay: -0.6s;
+}
+.menu-cta-wrap .b2 {
+  width: 0.3em;
+  height: 0.3em;
+  right: -0.3em;
+  top: 0.25em;
+  animation-delay: -2.2s;
+}
+@keyframes menu-cta-flota {
+  50% {
+    transform: translateY(-0.14em);
+  }
+}
+@keyframes menu-deco-brilla {
+  50% {
+    filter: drop-shadow(0 0 0.6em rgba(var(--gel-glow), 1)) brightness(1.18);
+  }
+}
+
+/* Subtexto bajo "Continuar" (que partida se va a retomar). */
+.menu-cta-sub {
+  margin: 0.8em 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.42em;
+  letter-spacing: 0.03em;
+  color: #c6f3ea;
+  text-shadow:
+    0 0.1em 0.4em #021419,
+    0 0 0.1em #021419;
+  min-height: 1.3em;
+  text-align: center;
+  /* La caja que lo contiene la dimensiona el boton: el subtexto puede ser mas
+     ancho (trae la semilla) y NO debe empujar el layout, solo salirse. */
+  align-self: center;
+  max-width: 92vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Insignia del nivel de Colonia (meta-progresion). Se lee como NIVEL, no como
+   alerta: pildora con prefijo "Nv" en tono ambar-neutro, nunca el verde de
+   `--accent` (que se leia como "notificacion sin leer"). */
 .menu-icon-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 18px;
+  top: -7px;
+  right: -9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 6px;
   border-radius: 9px;
-  background: var(--accent, #4fd18b);
-  color: #04140c;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
+  background: linear-gradient(180deg, #3c4a55, #222c34);
+  border: 1px solid rgba(240, 196, 105, 0.55);
+  color: #f0c469;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.menu-icon-badge .badge-prefix {
+  font-size: 0.82em;
+  opacity: 0.75;
 }
 
 /* --- Desplegable del menu (Ajustes / Coleccion / Desafios) --- */
@@ -3522,7 +3873,16 @@ body {
   color: #fff;
 }
 
-/* --- Heroe: recomendacion + logotipo-boton --- */
+/* --- Heroe: los dos botones de gel ---
+   OJO: el titulo "FUNGI FLUSH" NO es DOM, vive en `public/menu-bg.jpg`. El
+   `.menu-art` replica `cover` con media queries: en 915x412 (ratio 2.22 > 1.79)
+   el arte mide 915 x 510.7 y se centra a `top: -49.3px`. Medido sobre el JPG,
+   la palabra "FLUSH" (la mas baja) termina en el 47.7% del alto del arte, que
+   en pantalla cae en ~194px con un halo suave hasta ~200px.
+   Centrar los botones a secas los ponia encima de las letras (y=132, justo en
+   medio del titulo). De ahi `justify-content: flex-end` + un `padding-top` que
+   reserva el hueco del titulo: el contenido se empuja por DEBAJO, nunca por
+   encima. El 52% deja ~20px de aire sobre el halo del titulo. */
 .menu-hero {
   position: relative;
   flex: 1 1 auto;
@@ -3530,110 +3890,39 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* El boton va ABAJO: el "FUNGI FLUSH" del fondo es el logo (arriba) y el
-     boton no debe tocar sus letras. */
   justify-content: flex-end;
-  gap: 4px;
-  padding-bottom: 0;
+  gap: 0.7em;
+  padding-top: 52vh;
+  padding-bottom: 1vh;
 }
 
-/* Foco: un velo radial suave que separa el logotipo-boton del fondo, sin
-   dibujar una caja. */
+/* Foco: un velo radial suave que separa los botones del fondo, sin dibujar una
+   caja. El bosque es tan cian y tan tupido como el gel y sin esto se pierden. */
 .menu-hero::before {
   content: '';
   position: absolute;
-  inset: auto 0 0 0;
-  height: 52%;
+  inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 62% 92% at 50% 76%,
-    rgba(2, 5, 9, 0.7),
-    rgba(2, 5, 9, 0.32) 48%,
+    ellipse 60% 70% at 50% 55%,
+    rgba(2, 5, 9, 0.66),
+    rgba(2, 5, 9, 0.3) 48%,
     transparent 80%
   );
 }
-
-.menu-hero-cta-wrap {
+.menu-hero > * {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  /* Atado a vw Y vh: en landscape movil el alto es el recurso escaso.
-     Acotado para caer DEBAJO del "FUNGI FLUSH" del fondo, sin tocarlo. */
-  width: min(48vw, calc(30vh * 1.83), 560px);
+  z-index: 1;
 }
 
-/* Placa de apoyo: el bosque es tan cian y tan tupido como las letras de hongos
-   y sin una base el boton se pierde. Es un halo difuso (borde desenfocado),
-   no una caja dura: no hay marco ni esquina recta visible. */
-.menu-hero-cta-wrap::before {
-  content: '';
-  position: absolute;
-  inset: -14% -11%;
-  border-radius: 30px;
-  pointer-events: none;
-  background: rgba(2, 6, 10, 0.86);
-  filter: blur(9px);
-}
-
-.menu-hero-cta {
-  position: relative;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    transform var(--dur-fast) var(--ease-out),
-    filter var(--dur-fast) var(--ease-out);
-  -webkit-tap-highlight-color: transparent;
-}
-.menu-hero-cta:hover,
-.menu-hero-cta:focus-visible {
-  outline: none;
-  transform: translateY(-2px) scale(1.02);
-  filter: brightness(1.18) drop-shadow(0 0 22px rgba(95, 216, 232, 0.7));
-}
-.menu-hero-cta:active {
-  transform: translateY(0) scale(0.99);
-}
-.menu-hero-cta.is-hidden {
+.menu-cta-wrap.is-hidden {
   display: none;
 }
-.menu-hero-cta.is-disabled {
-  pointer-events: none;
-}
 
-.menu-hero-logo {
-  display: block;
-  width: 100%;
-  height: auto;
-  /* Mas presencia: se sube brillo y saturacion (el bosque es cian y se comia
-     las letras), un contorno oscuro que las despega y un doble halo cian. */
-  filter:
-    brightness(1.38)
-    saturate(1.45)
-    contrast(1.12)
-    drop-shadow(0 0 5px rgba(205, 255, 255, 0.6))
-    drop-shadow(0 0 18px rgba(95, 216, 232, 0.8))
-    drop-shadow(0 0 50px rgba(70, 180, 220, 0.55));
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-/* Con partida guardada, "Continuar" manda y "Nueva partida" pasa a secundario. */
-.menu-hero-cta-wrap.is-has-save .menu-hero-cta--new {
-  width: 58%;
-  opacity: 0.9;
-}
-
+/* El subtexto del prototipo ya se muestra bajo "Continuar": la linea de estado
+   repetida sobra y le come alto al heroe en landscape. */
 .menu-hero-status {
-  margin: 0;
-  font-size: clamp(10px, 1vw, 13px);
-  color: rgba(207, 230, 242, 0.72);
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  display: none;
 }
 
 .menu-version {
@@ -3781,12 +4070,17 @@ body {
    Regla de oro: lo que solo aplica al movil va DENTRO de un bloque
    (pointer: coarse), nunca en la base (la base tambien afecta al escritorio). */
 @media (pointer: coarse) {
-  .menu-icon {
-    width: 48px;
-    height: 48px;
+  /* Los botones de gel escalan con su `font-size` (em): se suben un poco en
+     tactil para que el dedo tenga donde caer, pero SIEMPRE topados por `vh`
+     para no pisar el titulo del arte en landscape. */
+  .menu-gel--icon {
+    font-size: min(clamp(20px, 3.6vw, 30px), 6.4vh);
   }
-  .menu-hero-cta-wrap {
-    width: min(64vw, calc(38vh * 1.83));
+  .menu-cta-wrap {
+    font-size: min(clamp(24px, 4.4vw, 42px), 7.6vh);
+  }
+  .menu-cta-wrap.is-continue {
+    font-size: min(clamp(19px, 3.4vw, 32px), 6.2vh);
   }
 }
 
@@ -3794,11 +4088,18 @@ body {
   .menu-layout {
     gap: 4px;
   }
+  /* El titulo del arte termina al ~48% del alto: el heroe reserva el 52% y los
+     botones se apilan en el resto, sin pisar las letras. */
   .menu-hero {
-    gap: 3px;
+    gap: 0.55em;
+    padding-top: 52vh;
+    padding-bottom: 1.5vh;
   }
-  .menu-hero-cta-wrap {
-    width: min(62vw, calc(36vh * 1.83));
+  .menu-cta-wrap {
+    font-size: min(clamp(22px, 4.4vw, 38px), 7.4vh);
+  }
+  .menu-cta-wrap.is-continue {
+    font-size: min(clamp(18px, 3.6vw, 30px), 5.9vh);
   }
   .menu-drop-item {
     font-size: 13px;
@@ -3807,16 +4108,14 @@ body {
 }
 
 @media (pointer: coarse) and (min-height: 600px) {
-  .menu-icon {
-    width: 56px;
-    height: 56px;
+  .menu-gel--icon {
+    font-size: min(clamp(24px, 3.2vw, 34px), 6.4vh);
   }
-  .menu-icon svg {
-    width: 28px;
-    height: 28px;
+  .menu-cta-wrap {
+    font-size: min(clamp(28px, 4.4vw, 46px), 7.6vh);
   }
-  .menu-hero-cta-wrap {
-    width: min(44vw, calc(30vh * 1.83));
+  .menu-cta-wrap.is-continue {
+    font-size: min(clamp(22px, 3.6vw, 34px), 6.2vh);
   }
 }
 
@@ -4865,16 +5164,8 @@ body {
   }
   /* P2.5 — A 390px de alto (landscape de celular) la tienda tiene que caber
      ENTERA: si el boton de compra queda debajo del pliegue, no se puede
-     comprar. La miniatura se achica al minimo y la lista de "que aporta" se
-     recorta a lo esencial. */
-  .offer-art {
-    height: 64px;
-  }
-  .offer-impact li {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+     comprar. El alto de la cara ya lo gobierna `.panel.is-shop .offer-art`
+     (`flex: 1 1 auto`), que es MAS especifico: aca no se toca. */
   .panel.is-shop .panel-title {
     font-size: 17px;
     margin-bottom: 4px;
@@ -5517,6 +5808,22 @@ body {
   margin-top: 2px;
   font-size: 11px;
   color: var(--frame-dim);
+}
+
+/* Descripcion de la oferta enfocada en el draft de recompensa (carrusel).
+   La cara 3D ya trae nombre y numeros, pero NO la descripcion larga de la
+   habilidad: sin esto, la ultima pantalla de deckbuilding del juego pedia
+   elegir a ciegas entre tres cartas que solo se diferenciaban por el dibujo. */
+.reward-carousel-desc {
+  margin-top: 4px;
+  max-width: min(560px, 68vw);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #c3d3e0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Substrato / Esporas del detalle del mazo (carrusel).
@@ -6999,20 +7306,17 @@ body {
   }
 
   .tooltip-rarity,
-  .tooltip-ability-tag,
   .tooltip-stat-label {
     font-size: 12px;
   }
 
   /* --- Tooltip TACTIL: se ancla ARRIBA, no bajo el dedo ---
      Al no ir pegado al puntero tiene que ENTRAR en la franja libre entre la
-     barra superior y la mano (~164px a 412 de alto). Se ocultan las dos filas
-     que la cara de la carta YA comunica por color (taxonomia de elemento/
-     familia y rareza) y se aprieta el resto: el tooltip queda para lo que NO
-     se ve en la carta — nombre, descripcion, habilidad y numeros. */
-  .hud-tooltip .tooltip-taxonomy,
-  .hud-tooltip .tooltip-rarity {
-    display: none;
+     barra superior y la mano (~164px a 412 de alto). Elemento y Familia
+     VUELVEN a mostrarse (son lo que mas se compara al mirar dos cartas); se
+     aprieta el resto para que entre. */
+  .tooltip-taxonomy {
+    margin-bottom: 5px;
   }
 
   .hud-tooltip {
@@ -7027,11 +7331,6 @@ body {
   .tooltip-desc {
     font-size: 12.5px;
     line-height: 1.35;
-  }
-
-  .tooltip-ability-text {
-    font-size: 11.5px;
-    line-height: 1.3;
   }
 
   #ui-root.is-panel-open > .hud-top,
@@ -7551,6 +7850,7 @@ body {
   .panel > .reward-grid,
   .panel > .settings-grid,
   .panel > .shop-body,
+  .panel > .offer-grid,
   .panel > .deck-grid,
   .panel > .collection-grid,
   .panel > .achievement-grid,
@@ -7653,38 +7953,114 @@ body {
     font-size: 11.5px;
   }
 
-  /* --- Tienda: ofertas completas con su boton de compra --- */
+  /* --- Tienda: ofertas completas con su boton de compra ---
+     OJO: hay UN solo bloque `.panel.is-shop .offer-grid` a proposito. Tenerlo
+     duplicado hacia que la regla de altura de mas abajo compitiera (misma
+     especificidad, gana la ultima) y el arreglo parecia "no aplicarse". */
+
+  /* El body de la tienda pasa a ser una COLUMNA flex. Motivo medido: con
+     `display:block` el `.offer-grid` no puede resolver `height:100%` contra un
+     padre cuyo alto viene de `flex: 1 1 auto` (el navegador lo trata como
+     indefinido para porcentajes) -> el grid media 218px dentro de un cuerpo de
+     190px y el boton de compra quedaba recortado por `overflow-y:auto`.
+     Como flex item, el grid SÍ recibe el alto del cuerpo. */
+  .panel.is-shop .shop-body {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* El grid LLENA el `.shop-body`. `height:100%` en la TARJETA no sirve: la
+     fila del grid mide `auto`, asi que su alto lo dicta el contenido de la
+     tarjeta. La fila tiene que medir el alto del cuerpo, y eso se pide aca. */
   .panel.is-shop .offer-grid {
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 8px;
     margin-bottom: 0;
+    grid-auto-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  /* La pestaña "Vender" tambien es hija del body: que llene igual. */
+  .panel.is-shop .sell-tab {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* --- La tarjeta de la tienda es la CARA + precio + boton ------------------
+     La cara ya trae nombre, habilidad y numeros impresos. El chip de tipo, el
+     parrafo de descripcion y la lista "Que aporta" repetian esa misma
+     informacion al lado, robaban el alto escaso del landscape y dejaban la
+     ilustracion chica. Ahora la tarjeta es la ilustracion GRANDE con el precio
+     y el boton debajo: nada que leer dos veces.
+     Columnas: el HUD fija `--offer-cols` (una por oferta, hasta 4) para que las
+     tarjetas llenen SIEMPRE el ancho del panel. Con `auto-fit` la tienda de 3
+     ofertas dejaba una columna vacia al costado. */
+  .panel.is-shop .offer-grid {
+    grid-template-columns: repeat(var(--offer-cols, 4), minmax(0, 1fr));
+    /* Piso de alto por fila: si alguna vez hay mas ofertas que columnas (o mas
+       de 6), la fila extra NO se comprime hasta dejar la carta ilegible; el
+       cuerpo scrollea. Con una sola fila el `1fr` la estira al alto del cuerpo. */
+    grid-auto-rows: minmax(150px, 1fr);
+  }
+
+  /* Sin caja: la tarjeta de la tienda es LA CARTA, no un recuadro que la
+     contiene. El borde y el fondo del `.offer` base dibujaban un marco que
+     competia con el marco que la propia carta ya trae pintado, y el padding
+     se comia el ancho que necesita la ilustracion. Se anulan el fondo, el
+     borde, la sombra y el padding; queda la cara, el precio y el boton. */
+  .panel.is-shop .offer,
+  .panel.is-shop .offer:hover:not(.is-sold),
+  .panel.is-shop .offer.is-voucher,
+  .panel.is-shop .offer.is-voucher:hover:not(.is-sold) {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    padding: 0;
   }
 
   .panel.is-shop .offer {
-    padding: 7px;
-    gap: 3px;
-  }
-
-  .panel.is-shop .offer-art {
-    height: min(10vh, 44px);
-    margin-bottom: 0;
-  }
-
-  .panel.is-shop .offer-name {
-    font-size: 13px;
-  }
-
-  .panel.is-shop .offer-desc {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 0;
     overflow: hidden;
-    font-size: 10px;
-    line-height: 1.25;
   }
 
-  .panel.is-shop .offer-impact li {
-    font-size: 9.5px;
-    line-height: 1.25;
+  /* La cara ABSORBE todo el alto que sobra (`flex: 1 1 auto`), asi que la
+     ilustracion crece hasta llenar la tarjeta y no queda hueco muerto. `contain`
+     garantiza que se vea ENTERA: nunca recorta ni deforma. */
+  .panel.is-shop .offer-art {
+    width: 100%;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    object-fit: contain;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.34);
+    border-radius: 8px;
+    display: block;
+  }
+
+  /* El pie (precio + boton) es fijo: no cede alto, siempre visible.
+     Va CENTRADO y no con `space-between`: la cara es vertical y queda centrada
+     dentro de la columna con barras a los costados, asi que pegar el precio al
+     borde izquierdo y el boton al derecho los dejaba flotando FUERA de la
+     carta, desalineados con lo unico que el jugador esta mirando. Agrupados al
+     medio, el precio y el boton se leen como parte de la carta. */
+  .panel.is-shop .offer-footer {
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* El tachado del precio con descuento se alinea junto al precio, no contra
+     el borde: `margin-right: auto` lo empujaba lejos al centrar el grupo. */
+  .panel.is-shop .offer-price-was {
+    margin-right: 0;
   }
 
   .panel.is-shop .offer-price {
@@ -8159,6 +8535,14 @@ body {
   font-size: 12.5px;
   color: #f0c469;
 }
+.colony-rewards-daily {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(207, 230, 242, 0.72);
+}
+.colony-rewards-daily.is-capped {
+  color: #e8a15c;
+}
 .colony-rewards-list {
   display: flex;
   flex-direction: column;
@@ -8567,5 +8951,203 @@ body {
   }
   .profile-card-name {
     font-size: 11px;
+  }
+}
+
+/* ==========================================================================
+   Sobres: overlay de apertura 3D
+   ==========================================================================
+   El sobre se abre en su PROPIO canvas WebGL (`PackOpening.ts`), a pantalla
+   completa. Por eso el overlay no lleva `backdrop-filter` ni blur: el canvas ya
+   pinta el fondo (ocre oscuro, el mismo `#17110d` del prototipo) y un blur
+   encima solo costaria GPU por frame.
+   ========================================================================== */
+
+.pack-overlay {
+  position: fixed;
+  inset: 0;
+  /* POR ENCIMA de `--z-overlay`: el sobre se abre DESDE la Coleccion, que ya es
+     un overlay a pantalla completa. Con el mismo nivel, el orden del DOM decide
+     y el panel de la Coleccion (con sus botones `.menu-fb`) le ganaba el click:
+     `elementFromPoint` sobre "Abrir sobre" devolvia el boton del menu.
+     Se queda por debajo del toast (90) para que un aviso siga siendo visible. */
+  z-index: var(--z-banner);
+  background: #17110d;
+  overflow: hidden;
+  /* El overlay atrapa el gesto: los toques son para el sobre, no para la pagina. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pack-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Informacion de estado: arriba y centrada, como el prototipo. Nunca captura el
+   puntero, porque debajo esta el sobre (que se toca para abrirlo). */
+.pack-info {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(10px + var(--safe-t)) calc(16px + var(--safe-r)) 0 calc(16px + var(--safe-l));
+  min-height: 30px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: #e9dcc0;
+  pointer-events: none;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+}
+
+.pack-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px calc(16px + var(--safe-r)) calc(14px + var(--safe-b)) calc(16px + var(--safe-l));
+  flex-wrap: wrap;
+}
+
+/* El destello blanco del impacto. Empieza apagado y solo anima cuando se le
+   pone `.is-go` (que `PackOpening` reinicia en cada apertura). */
+.pack-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff3d6;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pack-flash.is-go {
+  animation: pack-flash 0.35s ease-out;
+}
+
+@keyframes pack-flash {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Movimiento reducido: el destello se acorta (no se anula: el estado final
+   siempre se alcanza). El resto del timing lo escala `anim.d()`. */
+@media (prefers-reduced-motion: reduce) {
+  .pack-flash.is-go {
+    animation-duration: 0.001ms;
+  }
+}
+
+/* Pantallas bajas (landscape de celular): la barra se aprieta y el texto del
+   estado pierde tamano para no comerse el canvas. */
+@media (pointer: coarse) and (max-height: 430px) {
+  .pack-info {
+    font-size: 15px;
+    min-height: 24px;
+  }
+  .pack-bar {
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: calc(8px + var(--safe-b));
+  }
+  .pack-bar .btn {
+    padding: 8px 14px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+}
+
+/* Contador de Sobres sin abrir dentro del boton de la Coleccion.
+   `margin-left: auto` no sirve (el boton no es flex): la pildora se separa con
+   margen y el propio boton la centra junto al texto. */
+.btn.is-packs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn.is-packs.has-pending {
+  border-color: var(--frame-moss);
+  color: #e2fbf4;
+}
+
+.pack-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--money);
+  color: #1b1410;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Tienda: recortar CROMO para agrandar la CARTA
+   --------------------------------------------------------------------------
+   Lo que el jugador lee vive DENTRO de la cara de la carta, y la cara escala
+   con el ALTO del cuerpo (el ancho lo sobra: la cara es vertical y queda
+   centrada con barras a los costados). El panel ya esta topado por el viewport
+   (`max-height: 100%`), asi que recortar cabecera y pestañas NO encoge el
+   panel: el alto liberado se lo queda el cuerpo, y cada pixel se convierte en
+   texto mas grande. Va al final del archivo para ganarle a los bloques
+   anteriores con la misma especificidad. */
+@media (pointer: coarse) and (max-height: 560px) {
+  .panel.is-shop {
+    /* Menos marco: el overlay ya aporta 16px de aire. */
+    padding: 8px 12px;
+    position: relative;
+  }
+
+  /* El subtitulo ("Pungi: 200 · Simbiontes 0/5") es un dato de ESTADO, no un
+     parrafo: sale del flujo y se apoya arriba a la derecha, al lado del titulo.
+     En el flujo costaba una linea entera mas su margen (~22px) que ahora son
+     carta. */
+  .panel.is-shop .panel-subtitle {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    margin: 0;
+    font-size: 10.5px;
+    pointer-events: none;
+  }
+
+  .panel.is-shop .panel-title {
+    font-size: 16px;
+    margin: 0 0 6px;
+    /* Deja lugar al subtitulo absoluto: sin esto un titulo largo lo pisa. */
+    padding-right: 40%;
+  }
+
+  /* Pestañas mas bajas: siguen siendo tactiles (31px de alto) pero dejan de
+     costar 51px entre el alto y el margen. */
+  .panel.is-shop .shop-tabs {
+    margin-bottom: 8px;
+  }
+
+  .panel.is-shop .shop-tab {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+
+  /* El pie tambien cede un poco: el boton sigue por encima del minimo tactil
+     (28px) y esos 4px van a la cara. */
+  .panel.is-shop .btn {
+    min-height: 28px;
+    padding: 4px 9px;
   }
 }

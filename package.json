@@ -13,6 +13,7 @@
     "test": "node --import tsx --test --test-force-exit \"tests/*.test.ts\"",
     "packs": "node tools/genPackIndex.mjs",
     "validate": "tsx tools/validate-content.ts",
+    "audit:desc": "tsx tools/audit-card-desc.ts",
     "sim": "tsx tools/simulate.ts",
     "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
     "sim:board": "tsx tools/boardSim.ts",
