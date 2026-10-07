@@ -60,6 +60,9 @@ export const HALO_FRAG = /* glsl */ `
   uniform vec2  uInnerRing;
   uniform float uFalloff;
   uniform float uRingFalloff;
+  // --- Putrefaccion (P2.6) ---
+  uniform float uRot;
+  uniform vec3  uRotColor;
   varying vec2  vUv;
 
   vec3 hsv2rgb(vec3 c) {
@@ -93,14 +96,25 @@ export const HALO_FRAG = /* glsl */ `
     float aRing = ring * uRingIntensity;
     float aFoil = halo * uFoilAmount;
 
-    vec3 color = uColor * aHalo + uRingColor * aRing;
+    // --- Putrefaccion (P2.6): aura que supura ---
+    // Una banda que BAJA por la carta (1.0 - fract(...) la empuja del borde
+    // superior al inferior) y que se apoya en el halo que ya existe: adentro de
+    // la carta vale ~0.1 y afuera decae, asi que no hace falta geometria ni
+    // mascara nueva. Con uRot = 0 (el caso normal) el termino es exactamente 0 y
+    // no cuesta nada.
+    // OJO: nada de comillas invertidas en los comentarios GLSL — esto vive
+    // dentro de un template literal de TS y una sola cierra el shader entero.
+    float rotBand = smoothstep(0.34, 0.0, abs(vUv.y - (1.0 - fract(uTime * 0.22))));
+    float aRot = uRot * halo * (0.3 + 0.7 * rotBand);
+
+    vec3 color = uColor * aHalo + uRingColor * aRing + uRotColor * aRot;
     if (uFoilAmount > 0.001) {
       // El tono recorre el espectro segun la posicion y el tiempo.
       float hue = fract(vUv.x * 0.6 + vUv.y * 0.35 + uTime * 0.12);
       color += hsv2rgb(vec3(hue, 0.75, 1.0)) * aFoil;
     }
 
-    float a = clamp(aHalo + aRing + aFoil, 0.0, 1.0);
+    float a = clamp(aHalo + aRing + aFoil + aRot, 0.0, 1.0);
     // Se normaliza por la suma para conservar el color cuando hay dos terminos
     // activos a la vez (una legendaria seleccionada, por ejemplo).
     vec3 mixed = a > 0.001 ? color / a : color;
@@ -145,6 +159,11 @@ export function createHaloMaterial(options: {
       // banda ancha hacia que los anillos de dos cartas vecinas se solaparan en
       // un reventon. Mas fino se lee como "borde" y no como mancha.
       uRingFalloff: { value: 9.5 },
+      // Putrefaccion (P2.6): en 0 no se ve NADA (el shader multiplica por uRot).
+      // Lo alimenta el SceneManager cada frame, solo para las cartas de la mano
+      // con el estado activo.
+      uRot: { value: 0 },
+      uRotColor: { value: new THREE.Color(0x9fb43a) },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,

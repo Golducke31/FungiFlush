@@ -279,9 +279,8 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
     máscara, así que el color lo fija el CSS en cada contexto.
   - ⚠️ `src-tauri/` **no se compila en los gates** (no hay Rust ni CLI de Tauri en el
     entorno): el puente de Play Games está escrito pero **sin compilar**.
-- **Ranking global + Play Games nativo (2026-10-06)** — cambios GLOBALES
-  (`docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md`):
-  - **Panel de Perfil**: pasa a **cinco accesos** en una sola fila
+  - **Ranking global + Play Games nativo (2026-10-06)** — cambios GLOBALES
+    (`docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md`):  - **Panel de Perfil**: pasa a **cinco accesos** en una sola fila
     (Recompensas · Ranking · Cosméticos · Logros · Historial). En escritorio la rejilla
     sigue siendo `auto-fit`, así que los cinco pueden caer en dos filas: verificar el
     ancho del panel a 1440×810.
@@ -294,6 +293,21 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
   - **Toolchain en la máquina**: se instalaron Rust (`~/.cargo`) y MinGW-w64
     (`~/.workbuddy-ai/binaries/mingw/mingw64`) para poder compilar el contenedor.
     La CLI de Tauri quedó como devDependency (`@tauri-apps/cli`).
+- **Estados de carta + combos visuales (2026-10-06)** — cambios GLOBALES (cierran los pendientes
+  P2.3 y P2.6 de `docs/PLAN_HUD_MOVIL_HORIZONTAL.md`):
+  - **Chips de estado** (`CardTexture.ts`): rediseño del canvas ⇒ **afecta las caras de
+    escritorio**. Verificar una captura de `desk-playing` (los 4 estados se distinguen por forma:
+    punteado / dentado / tachado / chevron, no solo por color).
+  - **Aura de putrefacción** (`uRot` en el shader del halo): 3D, se ve igual en escritorio. Con
+    `reduceMotion` se apaga.
+  - **Capa extra de combo** (`comboFlourish`): 3D, se ve igual en escritorio. La celebración BASE
+    **no cambió** (sigue en todas las manos). Dorado = elemento, ámbar = familia, verde =
+    diversidad.
+  - **Nada de esto es CSS**: no hay impacto de layout en ninguna plataforma.
+  - Gates nuevos: `tools/probe-boss-target.mjs` (ciego del jefe con objetivo alterado),
+    `tools/probe-card-states.mjs` (estados), `tools/probe-combo-axes.mjs` (ejes de combo).
+    `audit-mobile-buttons.mjs` acepta `FF_HEIGHT` para correr a 360px, donde el panel del jefe sí
+    desborda (a 412 entra).
 
 ---
 

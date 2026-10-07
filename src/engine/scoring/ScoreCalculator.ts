@@ -81,11 +81,17 @@ export class ScoreCalculator {
     for (const combo of combos) {
       res.combos.push(combo);
       const sourceId = `combo:${combo.id}`;
+      const firstStep = res.steps.length;
       if (combo.flatSubstrate !== 0) {
         res.addSubstrate(combo.flatSubstrate, sourceId, combo.nameKey, 0);
       }
       if (combo.sporeMultiplier !== 1) {
         res.multiplySpores(combo.sporeMultiplier, sourceId, combo.nameKey, 0);
+      }
+      // Las cartas del combo viajan con el PRIMER paso del combo: si aporta
+      // plano Y multiplicador, el resaltado no puede dispararse dos veces.
+      if (res.steps.length > firstStep) {
+        res.steps[firstStep]!.comboCardUids = combo.cardUids;
       }
     }
 

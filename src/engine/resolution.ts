@@ -12,7 +12,7 @@
 
 import { MAX_TRIGGERS_PER_RESOLUTION } from './constants';
 import type { ComboResult } from './scoring/combos';
-import type { CardInstance, ScoreStep } from './types';
+import type { CardInstance, ScoreStep, StatusEvent } from './types';
 
 export interface ResolutionInit {
   scoredCards?: CardInstance[];
@@ -75,7 +75,14 @@ export class ResolutionContext {
   drawRequests = 0;
   readonly destroyed: CardInstance[] = [];
   readonly createdIds: string[] = [];
-  readonly statusRequests: Array<{ uid: string; status: string; value: number; turns: number }> = [];
+  /**
+   * Estados de carta aplicados / cosechados en esta resolucion (P2.6).
+   *
+   * Antes esto se llamaba `statusRequests` y NADIE lo leia: era dato muerto. Ahora
+   * GameEngine lo emite como `status:applied` / `status:consumed` para que el
+   * render anime el momento en vez de solo repintar el chip.
+   */
+  readonly statusEvents: StatusEvent[] = [];
   /**
    * Mejoras pedidas por efectos (LEVEL_UP_CARD).
    *

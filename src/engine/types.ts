@@ -48,6 +48,29 @@ export interface StatusInstance {
   turnsLeft: number;
 }
 
+/**
+ * Un cambio de estado observado durante una resolucion (P2.6).
+ *
+ * Existe porque los estados se mutaban EN SILENCIO: el render no tenia forma de
+ * saber que una carta se estaba pudriendo hasta volver a dibujar su cara. Con
+ * esto, el render puede animar el momento (aplicar / cosechar / expirar) en vez
+ * de solo mostrar un chip estatico.
+ */
+export interface StatusEvent {
+  kind: 'applied' | 'consumed' | 'expired';
+  /** Carta afectada. */
+  uid: string;
+  status: StatusType;
+  /** `applied`: cuanto se sumo. `consumed`: cuantas pilas se cosecharon. `expired`: 0. */
+  value: number;
+  /** Solo en `applied`: cuantas manos dura. */
+  turns?: number;
+  /** Solo en `consumed`: a que recurso se convirtio. */
+  gainKind?: 'substrate' | 'spores';
+  /** Quien lo provoco (uid del efecto). Vacio en `expired`. */
+  sourceId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Eventos de disparo (el "Trigger Engine")
 // ---------------------------------------------------------------------------
@@ -379,6 +402,14 @@ export interface ScoreStep {
   depth: number;
   /** uid de la carta objetivo, si aplica. Sirve al render para trazar la flecha A->B. */
   targetUid?: string;
+  /**
+   * Solo en los pasos de COMBO: las cartas que lo formaron (P2.3).
+   *
+   * `ComboResult.cardUids` se calculaba con esta misma intencion y nadie lo
+   * consumia. El render las resalta y las une con micelio, que es lo que dice
+   * CUALES cartas armaron el combo sin necesidad de un rotulo nuevo.
+   */
+  comboCardUids?: string[];
 }
 
 export interface ScoreBreakdown {

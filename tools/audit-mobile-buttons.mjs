@@ -42,10 +42,20 @@ if (!exe) { console.error('No hay Chromium.'); process.exit(1); }
 const shotsDir = join(ROOT, 'tools', 'shots');
 if (!existsSync(shotsDir)) mkdirSync(shotsDir, { recursive: true });
 
-const VIEWPORT =
+const BASE_VIEWPORT =
   process.env.FF_VIEWPORT === 'tablet' ? { width: 1180, height: 820 }
   : process.env.FF_VIEWPORT === 'smoke' ? { width: 844, height: 390 }
   : { width: 915, height: 412 };
+
+/**
+ * `FF_HEIGHT` BAJA el alto del viewport. Hace falta porque hay paneles cuyo
+ * contenido mide mas que el viewport de referencia: el ciego del JEFE con el
+ * objetivo alterado por un interludio mide ~366px, asi que a 412 entra y a 360
+ * (un celular real en landscape con la barra del navegador) NO. Un gate que solo
+ * corre a 412 no puede ver ese bug.
+ */
+const FORCED_HEIGHT = Number(process.env.FF_HEIGHT ?? 0);
+const VIEWPORT = FORCED_HEIGHT > 0 ? { ...BASE_VIEWPORT, height: FORCED_HEIGHT } : BASE_VIEWPORT;
 
 /**
  * Piso tactil. Por debajo se marca CHICO.
@@ -347,6 +357,45 @@ const bossInfo = await page.evaluate(() => {
 });
 console.log('  [jefe]', JSON.stringify(bossInfo));
 await visit('blind-select-JEFE', 'blind-boss');
+
+// *** EL JEFE CON EL OBJETIVO ALTERADO POR UN INTERLUDIO ***
+//
+// Es el caso que rompia: el jefe ya carga el bloque EFECTO y encima aparece la
+// banda del aviso de interludio, asi que el contenido se pasa del alto
+// disponible y el PIE (los botones) quedaba recortado por el `overflow: hidden`
+// del panel. El aviso SOLO existe si `targetMultiplier !== 1`, y por eso el jefe
+// "normal" de arriba no lo cubria: se monta a mano, igual que el jefe.
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  ff.engine.run.interludeModifiers = { targetMultiplier: 1.15 };
+  ff.engine.run.blindIndex = 2;
+  ff.hud.showBlindSelect();
+});
+await waitPanel('.panel.is-blind-select', 8000);
+await page.waitForTimeout(600);
+const bossMod = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-blind-select');
+  return {
+    modified: panel?.classList.contains('is-target-modified') ?? null,
+    notice: Boolean(panel?.querySelector('.blind-help.is-interlude')),
+    bodyScroll: (() => {
+      const b = panel?.querySelector('.blind-body');
+      return b ? Math.round(b.scrollHeight - b.clientHeight) : null;
+    })(),
+    panelH: panel ? Math.round(panel.getBoundingClientRect().height) : null,
+    vh: window.innerHeight,
+  };
+});
+console.log('  [jefe+objetivo]', JSON.stringify(bossMod));
+await visit('blind-select-JEFE-mod', 'blind-boss-mod');
+
+// Se devuelve el objetivo a la normalidad: el resto de la auditoria tiene que
+// correr con el mismo estado que antes de este caso.
+await page.evaluate(() => {
+  window.__fungiflush.engine.run.interludeModifiers = { targetMultiplier: 1 };
+  window.__fungiflush.hud.showBlindSelect();
+});
+await page.waitForTimeout(400);
 
 // Detalle de la run (desde el panel de ciego)
 if (await has('.panel.is-blind-select [data-act="blind-details"]')) {

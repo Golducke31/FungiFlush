@@ -3033,6 +3033,20 @@ export class HUD {
     subtitle.className = 'panel-subtitle';
     subtitle.textContent = `${t('hud.ante')} ${run.ante} · ${t('blindCard.progress', { current: blindPos, total: blindCount })} · ${t('hud.money')} ${formatNumber(run.money)}`;
 
+    // CUERPO flexible del panel (modelo P8): todo lo que NO es cabecera ni pie.
+    //
+    // Antes estos bloques colgaban DIRECTO del panel y ninguno podia encoger
+    // (`min-height: auto`): cuando aparecia un bloque extra —el aviso de
+    // interludio— la columna desbordaba y el `overflow: hidden` que P8 le pone al
+    // panel recortaba el FINAL, o sea el PIE con el boton "Luchar". En el jefe se
+    // veia primero porque ya carga el bloque `.blind-effect`.
+    //
+    // Con el cuerpo flexible, lo que sobra scrollea adentro y el pie
+    // (`flex: 0 0 auto`) nunca se pierde. Ver `styles.css`, lista de cuerpos de P8.
+    const body = document.createElement('div');
+    body.className = 'blind-body';
+    body.dataset['act'] = 'blind-body';
+
     // P2.3 — Aviso de que el objetivo esta alterado por un interludio. Sin
     // esto, un jugador que acepto "+15% de objetivo" veria un numero distinto
     // al del contenido y no sabria por que. Se mantiene porque NO es duplicado:
@@ -3040,6 +3054,10 @@ export class HUD {
     const interludeMul = run.interludeModifiers?.targetMultiplier ?? 1;
     let interludeNotice: HTMLElement | null = null;
     if (Math.abs(interludeMul - 1) > 0.001) {
+      // Clase en el PANEL (no solo el aviso): es el gancho que usa el CSS para
+      // apretar este caso en pantallas bajas. Se prefiere una clase explicita a
+      // `:has()` porque el WebView de Android puede ser viejo.
+      panel.classList.add('is-target-modified');
       interludeNotice = document.createElement('p');
       interludeNotice.className = 'blind-help is-interlude';
       interludeNotice.dataset['act'] = 'blind-interlude-notice';
@@ -3255,9 +3273,10 @@ export class HUD {
 
     actions.append(deck, details, menu);
 
-    panel.append(title, subtitle, route, focus);
-    if (interludeNotice) panel.appendChild(interludeNotice);
-    panel.append(help, actions);
+    body.append(route, focus);
+    if (interludeNotice) body.appendChild(interludeNotice);
+    body.append(help);
+    panel.append(title, subtitle, body, actions);
     this.openOverlay(panel);
 
     // La tarjeta entra sola (ya no hay cascada de 3).

@@ -146,7 +146,25 @@ const HANDLERS: HandlerMap = {
     } else {
       target.statuses.push({ type: a.status, value: a.value, turnsLeft: turns });
     }
-    env.res.statusRequests.push({ uid: target.uid, status: a.status, value: a.value, turns });
+    // El EVENTO no se registra en dryRun: `preview()` corre la resolucion entera
+    // para calcular el score, y el render no puede animar algo que no paso.
+    //
+    // OJO (bug latente, NO tocado aca): la MUTACION de arriba tampoco respeta
+    // `dryRun`, a diferencia de CONSUME_STATUS. Como `preview()` corre en cada
+    // cambio de seleccion, un efecto APPLY_STATUS deja el estado en la carta de
+    // verdad con solo seleccionarla. Blindar el evento es lo correcto para las
+    // animaciones; arreglar la mutacion cambia el score previsualizado y merece
+    // su propia tanda con tests.
+    if (!env.res.dryRun) {
+      env.res.statusEvents.push({
+        kind: 'applied',
+        uid: target.uid,
+        status: a.status,
+        value: a.value,
+        turns,
+        sourceId: env.source.uid,
+      });
+    }
   },
 
   /**
@@ -177,6 +195,14 @@ const HANDLERS: HandlerMap = {
     }
 
     if (!env.res.dryRun) {
+      env.res.statusEvents.push({
+        kind: 'consumed',
+        uid: target.uid,
+        status: a.status,
+        value: stacks,
+        gainKind: a.gain === 'substrate' ? 'substrate' : 'spores',
+        sourceId: env.source.uid,
+      });
       const left = existing.value - stacks;
       if (left <= 0) target.statuses = target.statuses.filter((s) => s !== existing);
       else existing.value = left;

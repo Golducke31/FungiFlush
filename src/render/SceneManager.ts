@@ -24,6 +24,7 @@ import {
   type JokerInstance,
   type Rarity,
   type ScoreStep,
+  type StatusType,
 } from '@engine/index';
 
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor, type ArtKey } from './ArtAssets';
@@ -62,7 +63,7 @@ import { CardCarousel, type CarouselEntryView } from './CardCarousel';
 import { Water, hitHorizontalPlane } from './Water';
 import { Die3D, type DieImpulse } from './Die3D';
 import * as anim from './anim';
-import { ABILITY_COLOR, ELEMENT_COLOR, UI_COLORS } from './palette';
+import { ABILITY_COLOR, ELEMENT_COLOR, STATUS_COLOR, UI_COLORS } from './palette';
 import { audio } from '@audio/AudioBus';
 
 // --- Constantes de layout (unidades de mundo) ---
@@ -428,6 +429,14 @@ export class SceneManager {
 
   /** Indice de paso dentro de la mano actual (se reinicia en cada jugada). */
   private stepIndex = 0;
+  /**
+   * El combo MAS ALTO de la mano en curso (P2.3), o `null` si no hubo ninguno.
+   *
+   * La celebracion BASE (`closeCombo`) corre en TODAS las manos y eso no cambia:
+   * este flag solo decide si encima va la CAPA EXTRA. Se reinicia con la primer
+   * carta de cada mano.
+   */
+  private handCombo: { axis: 'element' | 'family' | 'diversity'; tier: number } | null = null;
   /**
    * Separacion temporal entre pasos de score.
    *
@@ -1687,6 +1696,9 @@ export class SceneManager {
         // Primer carta de la mano: se reinicia la secuencia de puntuacion.
         if (index === 0) {
           this.stepIndex = 0;
+          // El combo se detecta por mano: sin este reset la capa extra de una
+          // mano con Floracion se seguiria aplicando en las siguientes.
+          this.handCombo = null;
           // El micelio se encadena desde la primera carta de la mano: sin este
           // reset la raiz arrancaria desde la mano ANTERIOR.
           this.lastScoreOrigin = null;
@@ -1761,7 +1773,119 @@ export class SceneManager {
       }),
 
       bus.on('i18n:changed', () => this.rebuildTextures()),
+
+      // --- Estados de carta (P2.6) ---
+      //
+      // Los estados se aplicaban EN SILENCIO: el render solo se enteraba al
+      // volver a dibujar la cara de la carta. Ahora el MOMENTO se anima.
+      bus.on('status:applied', ({ uid, status, value }) => {
+        const target = this.handCards.get(uid);
+        if (!target) return;
+        this.queueFx(0, () => this.playStatusApplied(target, status, value));
+      }),
+
+      bus.on('status:consumed', ({ uid, status, stacks, gainKind }) => {
+        const target = this.handCards.get(uid);
+        if (!target) return;
+        this.queueFx(0, () => this.playStatusConsumed(target, status, stacks, gainKind));
+      }),
+
+      bus.on('status:expired', ({ uid, status }) => {
+        const target = this.handCards.get(uid);
+        if (!target) return;
+        this.queueFx(0, () => this.playStatusExpired(target, status));
+      }),
     );
+  }
+
+  /**
+   * Se APLICO un estado: latido en su color + un estallido corto.
+   *
+   * Si es putrefaccion, ademas queda el aura ambiental supurando (la sostiene
+   * `updateStatusAmbient`), que es lo que hace que una carta podrida se siga
+   * leyendo como podrida y no como "destello y a otra cosa".
+   */
+  private playStatusApplied(card3d: Card3D, status: StatusType, value: number): void {
+    const color = STATUS_COLOR[status];
+    void card3d.flashStatus(color, Math.min(1, 0.6 + value * 0.15));
+    this.particles.burst(card3d.worldPosition(), status === 'decay' ? 22 : 14, {
+      color,
+      speed: 2.4,
+      spread: 0.5,
+      size: 0.075,
+      life: 0.7,
+    });
+    this.rig.addShake(status === 'decay' ? 0.06 : 0.03);
+  }
+
+  /**
+   * Se COSECHO un estado (CONSUME_STATUS): estallido + hit-stop corto.
+   *
+   * El color es el del RECURSO que se cobro (ambar = Sustrato, verde = Esporas),
+   * no el del estado: lo que importa en ese momento es lo que ganaste.
+   */
+  private playStatusConsumed(
+    card3d: Card3D,
+    status: StatusType,
+    stacks: number,
+    gainKind: 'substrate' | 'spores',
+  ): void {
+    const color = gainKind === 'spores' ? UI_COLORS.spores : UI_COLORS.substrate;
+    void card3d.flashStatus(color, 1);
+    const origin = card3d.worldPosition();
+    this.particles.burst(origin, 30 + stacks * 8, {
+      color,
+      speed: 5,
+      spread: 0.6,
+      size: 0.1,
+      life: 0.9,
+    });
+    // Un resto en el color del ESTADO: recuerda de donde salio el recurso.
+    this.particles.burst(origin, 8, {
+      color: STATUS_COLOR[status],
+      speed: 1.8,
+      spread: 0.5,
+      size: 0.06,
+      life: 0.5,
+    });
+    // 70ms: se siente el "cobro" sin cortar el ritmo de la mano.
+    this.hitStop(70);
+    this.rig.addShake(0.12);
+  }
+
+  /** Un estado se agoto por turnos: ultimo parpadeo suave y el aura se apaga. */
+  private playStatusExpired(card3d: Card3D, status: StatusType): void {
+    void card3d.flashStatus(STATUS_COLOR[status], 0.35);
+    card3d.setRot(0);
+  }
+
+  /**
+   * Putrefaccion AMBIENTAL (P2.6): mientras una carta de la mano tenga `decay`,
+   * su aura supura.
+   *
+   * Se recalcula desde `card.statuses` en cada frame en vez de llevar estado
+   * propio, asi se apaga SOLA cuando el estado se va (por cosecha o por
+   * expiracion) sin necesidad de avisos ni de limpieza.
+   *
+   * COSTO: unas pocas escrituras de uniform por carta de la mano (<=8). Nada de
+   * geometria, particulas ni texturas nuevas: es lo que hace viable el
+   * "ambiental continuo" en un celular. Con `reduceMotion` se apaga entero y
+   * queda solo el latido del evento.
+   */
+  private updateStatusAmbient(): void {
+    for (const [uid, card3d] of this.handCards) {
+      const decay = this.reduceMotion ? undefined : card3d.card?.statuses.find((s) => s.type === 'decay');
+      if (!decay) {
+        card3d.setRot(0);
+        continue;
+      }
+      // Mas pilas = mas fuerte, y un latido lento para que se lea vivo. La fase
+      // depende del uid para que dos cartas podridas no respiren al unisono.
+      const base = Math.min(1, 0.34 + decay.value * 0.16);
+      const phase = (uid.charCodeAt(0) + uid.length) * 0.7;
+      const breath = 0.5 + 0.5 * Math.sin(this.clock * 1.6 + phase);
+      card3d.setRot(base * (0.74 + 0.26 * breath), STATUS_COLOR.decay);
+    }
   }
 
   /**
@@ -2662,6 +2786,18 @@ export class SceneManager {
       // color de la carta, asi que va con un VFX propio y no con un tinte.
       this.flashAbility(step.sourceId);
 
+      // --- P2.3: el combo se RECONOCE ---
+      // Se guarda el mas alto de la mano (por si hubo elemento Y familia) y se
+      // resaltan las cartas que lo formaron. `closeCombo` sigue corriendo en
+      // todas las manos: esto es una capa ENCIMA, no un reemplazo.
+      const combo = this.comboOf(step.sourceId);
+      if (combo && (!this.handCombo || combo.tier > this.handCombo.tier)) {
+        this.handCombo = combo;
+      }
+      if (step.comboCardUids && step.comboCardUids.length > 1) {
+        this.highlightComboCards(step.comboCardUids, color);
+      }
+
       const sign = step.value >= 0 ? '+' : '';
       const text =
         step.action === 'MULTIPLY_SPORES' ? `x${step.value}` : `${sign}${Math.round(step.value)}`;
@@ -2688,8 +2824,101 @@ export class SceneManager {
 
       // CIERRE del combo (F5): golpe de hit-stop, estallido grande y pulso de
       // fondo/bloom. Solo en el ultimo paso animado, y solo una vez por mano.
-      if (isLastStep) this.closeCombo();
+      // SIGUE corriendo en TODAS las manos (con o sin combo): es la celebracion
+      // base y no se le quita nada.
+      if (isLastStep) {
+        this.closeCombo();
+        // Capa EXTRA: solo si la mano formo al menos un combo.
+        if (this.handCombo) this.comboFlourish(this.handCombo.axis, this.handCombo.tier);
+      }
     }
+  }
+
+  /**
+   * Clasifica un paso de combo: que EJE fue y cuantas cartas lo formaron.
+   *
+   * El `sourceId` es `combo:<eje>:...` y el ULTIMO tramo es el tier (2..5), que
+   * es lo que permite escalar la intensidad: un x1.25 se nota y un x3 se siente
+   * enorme.
+   */
+  private comboOf(sourceId: string): { axis: 'element' | 'family' | 'diversity'; tier: number } | null {
+    const parts = sourceId.split(':');
+    if (parts[0] !== 'combo') return null;
+    const axis = parts[1];
+    if (axis !== 'element' && axis !== 'family' && axis !== 'diversity') return null;
+    const tier = Number.parseInt(parts[parts.length - 1] ?? '', 10);
+    return { axis, tier: Number.isFinite(tier) ? Math.max(2, Math.min(5, tier)) : 2 };
+  }
+
+  /**
+   * Resalta las cartas que FORMARON el combo y las une con micelio (P2.3).
+   *
+   * Es lo que reemplaza al rotulo que se descarto: en vez de decir "Floracion
+   * x3" con texto, el jugador VE cuales cartas lo armaron. El micelio de la
+   * secuencia une el orden de puntuacion; este une las cartas del combo entre
+   * si, que es otra informacion.
+   */
+  private highlightComboCards(uids: readonly string[], color: number): void {
+    const points: THREE.Vector3[] = [];
+    for (const uid of uids) {
+      const card = this.handCards.get(uid) ?? this.scoringCards.find((x) => x.uid === uid);
+      if (!card) continue;
+      points.push(card.group.getWorldPosition(new THREE.Vector3()));
+      void card.pop(color);
+    }
+    for (let i = 1; i < points.length; i++) {
+      void this.mycelium.grow(points[i - 1]!, points[i]!, color);
+    }
+  }
+
+  /** Centro de las cartas puntuadas (para los estallidos de cierre). */
+  private scoringCenter(): THREE.Vector3 {
+    const center = new THREE.Vector3();
+    if (this.scoringCards.length === 0) return center;
+    const v = new THREE.Vector3();
+    for (const card of this.scoringCards) {
+      card.group.getWorldPosition(v);
+      center.add(v);
+    }
+    return center.multiplyScalar(1 / this.scoringCards.length);
+  }
+
+  /**
+   * CAPA EXTRA de combo (P2.3). Se suma a la celebracion BASE de `closeCombo`,
+   * que sigue corriendo en todas las manos.
+   *
+   * El COLOR dice el eje y la INTENSIDAD dice el tier:
+   *   elemento (x Esporas)  -> DORADO, porque multiplicar es dorado en el juego;
+   *   familia  (+ Sustrato) -> AMBAR, porque sumar sustrato es ambar;
+   *   diversidad            -> VERDE, porque son esporas.
+   * Asi un combo de familia nunca se confunde con uno de elemento aunque los dos
+   * disparen el mismo estallido base.
+   */
+  private comboFlourish(axis: 'element' | 'family' | 'diversity', tier: number): void {
+    const color =
+      axis === 'element' ? UI_COLORS.xmult : axis === 'family' ? UI_COLORS.substrate : UI_COLORS.spores;
+    // 2 cartas -> 0, 5 cartas -> 1. Es lo que hace que un combo chico se note y
+    // uno grande se SIENTA grande, sin recurrir a texto.
+    const weight = Math.max(0, Math.min(1, (tier - 2) / 3));
+    const center = this.scoringCenter();
+
+    this.particles.burst(center, Math.round(60 + weight * 120), {
+      color,
+      speed: 4.5 + weight * 3.5,
+      size: 0.08 + weight * 0.04,
+      life: 1 + weight * 0.4,
+      upward: 2.2 + weight * 1.2,
+    });
+
+    if (!this.reduceMotion) {
+      // Un poco mas de hit-stop y de shake que el cierre base: es exactamente
+      // ese exceso lo que se lee como "esta mano armo algo".
+      this.hitStop(50 + Math.round(weight * 70));
+      this.rig.addShake(0.06 + weight * 0.1);
+    }
+
+    // El pulso de fondo se refuerza (decae solo en el loop).
+    this.bgPulse = Math.max(this.bgPulse, this.reduceMotion ? 0 : 1);
   }
 
   /**
@@ -2702,17 +2931,7 @@ export class SceneManager {
    * como un paso mas de la misma cuenta.
    */
   private closeCombo(): void {
-    const center = new THREE.Vector3();
-    if (this.scoringCards.length) {
-      const v = new THREE.Vector3();
-      let n = 0;
-      for (const card of this.scoringCards) {
-        card.group.getWorldPosition(v);
-        center.add(v);
-        n += 1;
-      }
-      if (n > 0) center.multiplyScalar(1 / n);
-    }
+    const center = this.scoringCenter();
 
     if (!this.reduceMotion) {
       this.hitStop(90);
@@ -3250,6 +3469,9 @@ export class SceneManager {
         for (const card3d of this.handCards.values()) card3d.update(step, this.clock);
         for (const card3d of this.jokerCards.values()) card3d.update(step, this.clock);
         for (const card3d of this.scoringCards) card3d.update(step, this.clock);
+        // Putrefaccion ambiental (P2.6): despues de `update()` para que el aura
+        // del frame sea la del estado actual de la carta.
+        this.updateStatusAmbient();
         if (this.mode === 'menu') this.updateMenuDecor(step);
       }
 

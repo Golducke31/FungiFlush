@@ -639,6 +639,46 @@ export class Card3D {
   }
 
   /**
+   * Putrefaccion AMBIENTAL (P2.6): 0..1. Lo escribe el SceneManager una vez por
+   * frame para las cartas de la mano con el estado activo.
+   *
+   * Es independiente de `uIntensity`: el halo de las cartas de la mano esta
+   * apagado a proposito (la señal de seleccion es el borde verde), pero el aura
+   * de putrefaccion SI tiene que verse, asi que el shader la multiplica por la
+   * mascara geometrica y no por la intensidad del halo.
+   */
+  setRot(amount: number, color?: number): void {
+    const uniforms = this.haloMaterial.uniforms;
+    const rot = uniforms['uRot'] as { value: number } | undefined;
+    if (rot) rot.value = Math.max(0, Math.min(1, amount));
+    const rotColor = uniforms['uRotColor'] as { value: THREE.Color } | undefined;
+    if (rotColor && color !== undefined) rotColor.value.setHex(color);
+  }
+
+  /**
+   * Latido de ESTADO (P2.6): un destello corto en el color del estado, con la
+   * forma "sube rapido, baja lento" (se lee como latido, no como parpadeo).
+   *
+   * Escribe `emissive`, igual que `pop()` y `setFlash()`, pero no se pisan en la
+   * practica: los estados se aplican al RESOLVER la mano y el pop de puntuacion
+   * viene despues. Restaura SIEMPRE, incluso si el tween se rechaza.
+   */
+  flashStatus(color: number, strength = 1): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const restore = (): void => {
+      this.faceMaterial.emissive.setHex(0xffffff);
+      this.faceMaterial.emissiveIntensity = 0.32;
+    };
+    this.faceMaterial.emissive.setHex(color);
+    return anim
+      .fxTween(520, (p) => {
+        const k = p < 0.22 ? p / 0.22 : 1 - (p - 0.22) / 0.78;
+        this.faceMaterial.emissiveIntensity = 0.32 + Math.max(0, k) * 1.5 * strength;
+      })
+      .then(restore, restore);
+  }
+
+  /**
    * POP de puntuacion: squash & stretch + un destello del borde en el COLOR del
    * efecto. Es el "golpe" por carta del combo.
    *

@@ -22,6 +22,7 @@ import type {
   ScoreBreakdown,
   ScoreStep,
   ShopOffer,
+  StatusType,
   TriggerEvent,
 } from './types';
 import type { InterludeChoice, InterludeDefinition } from './interlude/interlude';
@@ -109,6 +110,31 @@ export interface GameEventMap {
   'card:held': { card: CardInstance };
   'card:destroyed': { card: CardInstance };
   'card:created': { card: CardInstance };
+
+  // --- Estados de carta (P2.6) ---
+  //
+  // Los estados se mutaban EN SILENCIO: el render solo podia repintar el chip
+  // cuando volvia a dibujar la cara. Estos tres los emite GameEngine (no las
+  // acciones, que no tienen el bus observable) al cerrar la resolucion, para que
+  // el render pueda animar el MOMENTO: aplicarse, cosecharse o expirar.
+  /** Se aplico un estado a una carta. */
+  'status:applied': {
+    uid: string;
+    status: StatusType;
+    value: number;
+    turns: number;
+    sourceId: string;
+  };
+  /** Se cosecho un estado (CONSUME_STATUS): se convirtio en Sustrato o Esporas. */
+  'status:consumed': {
+    uid: string;
+    status: StatusType;
+    stacks: number;
+    gainKind: 'substrate' | 'spores';
+    sourceId: string;
+  };
+  /** Un estado se agoto por turnos y salio de la carta. */
+  'status:expired': { uid: string; status: StatusType };
 
   // --- Puntuacion ---
   'score:step': { step: ScoreStep };

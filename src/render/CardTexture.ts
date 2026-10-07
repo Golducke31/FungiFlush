@@ -992,17 +992,66 @@ export function createCardCanvas(
     const color = STATUS_COLOR[status];
     const x = pad + i * 62;
     const y = statusTop;
+    const w = 54;
+    const h = 30;
+
     ctx.fillStyle = hexToRgba(color, 0.22);
-    roundRect(ctx, x, y, 54, 30, 8);
+    roundRect(ctx, x, y, w, h, 8);
     ctx.fill();
+
+    // La diferencia entre estados NO puede depender solo del COLOR (daltonismo,
+    // y a 6px de alto en pantalla el tono no se distingue). Cada estado lleva una
+    // FORMA propia, y esa forma dice que hace el estado:
+    //   dormant     -> borde PUNTEADO ("esta dormida")
+    //   decay       -> borde inferior DENTADO ("supura")
+    //   spore_lock  -> barra que TACHA el glifo ("anula")
+    //   overgrowth  -> chevron ASCENDENTE ("crece")
     ctx.strokeStyle = hexToRgba(color, 0.85);
     ctx.lineWidth = 2;
-    roundRect(ctx, x, y, 54, 30, 8);
-    ctx.stroke();
+    if (status === 'dormant') {
+      ctx.setLineDash([4, 3]);
+      roundRect(ctx, x, y, w, h, 8);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      roundRect(ctx, x, y, w, h, 8);
+      ctx.stroke();
+    }
+
+    if (status === 'decay') {
+      ctx.beginPath();
+      const teeth = 6;
+      for (let t = 0; t <= teeth; t++) {
+        const tx = x + (w / teeth) * t;
+        const ty = y + h + (t % 2 === 0 ? 0 : 4);
+        if (t === 0) ctx.moveTo(tx, ty);
+        else ctx.lineTo(tx, ty);
+      }
+      ctx.strokeStyle = hexToRgba(color, 0.95);
+      ctx.stroke();
+    }
+
     ctx.fillStyle = hexToCss(color);
     ctx.font = `700 15px ${CARD_TEXT_FONT}`;
     ctx.textBaseline = 'middle';
     ctx.fillText(status.slice(0, 4).toUpperCase(), x + 27, y + 16);
+
+    if (status === 'spore_lock') {
+      ctx.strokeStyle = hexToCss(color);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, y + h - 8);
+      ctx.lineTo(x + w - 8, y + 8);
+      ctx.stroke();
+    } else if (status === 'overgrowth') {
+      ctx.strokeStyle = hexToCss(color);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x + w - 18, y + 11);
+      ctx.lineTo(x + w - 12, y + 5);
+      ctx.lineTo(x + w - 6, y + 11);
+      ctx.stroke();
+    }
     ctx.textBaseline = 'top';
   });
 

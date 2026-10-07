@@ -6890,6 +6890,34 @@ body {
     font-size: 20px;
   }
 
+  /* --- Jefe + objetivo modificado por un interludio ---
+     Es la pantalla mas ALTA del juego: el jefe ya carga el bloque EFECTO y
+     encima aparece la banda del aviso de interludio. El cuerpo flexible
+     (`.blind-body`) ya garantiza que el PIE no se pierda —lo que sobra scrollea
+     adentro—, pero el objetivo es que entre SIN scroll: se aprieta lo que sobra.
+     La clase la pone el HUD, no `:has()`: el WebView de Android puede ser viejo. */
+  @media (pointer: coarse) and (max-height: 560px) {
+    .panel.is-blind-select.is-target-modified .blind-effect {
+      padding: 5px 9px;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .panel.is-blind-select.is-target-modified .blind-focus .blind-card {
+      padding: 8px 10px;
+      gap: 4px;
+    }
+
+    .panel.is-blind-select.is-target-modified .blind-help {
+      padding: 3px 8px;
+      margin-bottom: 6px;
+    }
+
+    .panel.is-blind-select.is-target-modified .blind-stat {
+      padding: 4px 4px;
+    }
+  }
+
   /* --- Subpantalla abierta: se apaga el cromo de la partida --- */
   /* Con un panel abierto (mazo, coleccion, tienda, ciego...) el HUD de partida
      NO debe dibujarse encima: en celular el bloque de score tapaba el titulo
@@ -7530,6 +7558,7 @@ body {
   .panel > .cosmetics-grid,
   .panel > .daily-ladder,
   .panel > .blind-grid,
+  .panel > .blind-body,
   .panel > .board-grid,
   .panel > .profile-body,
   .panel > .challenges-body,

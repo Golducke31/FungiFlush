@@ -71,6 +71,7 @@ import type {
   RunSnapshot,
   ScoreBreakdown,
   ShopOffer,
+  StatusType,
   VoucherDefinition,
   VoucherRunModifiers,
 } from './types';
@@ -558,6 +559,32 @@ export class GameEngine {
     scored.forEach((card, index) => bus.emit('card:played', { card, index }));
     for (const step of res.steps) bus.emit('score:step', { step });
     held.forEach((card) => bus.emit('card:held', { card }));
+
+    // --- Estados de carta (P2.6) ---
+    //
+    // El render solo sabia de un estado cuando volvia a dibujar la cara de la
+    // carta: no habia forma de animar el MOMENTO. Estos eventos se emiten DESPUES
+    // de los pasos de score para que la animacion del estado se sienta como
+    // consecuencia de la jugada, no como algo que pasa por detras.
+    for (const event of res.statusEvents) {
+      if (event.kind === 'applied') {
+        bus.emit('status:applied', {
+          uid: event.uid,
+          status: event.status,
+          value: event.value,
+          turns: event.turns ?? 1,
+          sourceId: event.sourceId,
+        });
+      } else if (event.kind === 'consumed') {
+        bus.emit('status:consumed', {
+          uid: event.uid,
+          status: event.status,
+          stacks: event.value,
+          gainKind: event.gainKind ?? 'substrate',
+          sourceId: event.sourceId,
+        });
+      }
+    }
 
     this.applyDeltas(res);
 
@@ -1641,9 +1668,18 @@ export class GameEngine {
   private decayStatuses(): void {
     for (const card of this.run.deck.allCards) {
       if (card.statuses.length === 0) continue;
+      // Se recolectan los que se agotan para poder AVISAR (P2.6): el render anima
+      // la salida del estado en vez de descubrirla en el proximo repintado.
+      // `turnsLeft: -1` es permanente: baja a -2, -3... y nunca llega a 0.
+      const expired: StatusType[] = [];
       card.statuses = card.statuses
-        .map((s) => ({ ...s, turnsLeft: s.turnsLeft - 1 }))
+        .map((s) => {
+          const turnsLeft = s.turnsLeft - 1;
+          if (turnsLeft === 0) expired.push(s.type);
+          return { ...s, turnsLeft };
+        })
         .filter((s) => s.turnsLeft !== 0);
+      for (const status of expired) bus.emit('status:expired', { uid: card.uid, status });
     }
   }
 

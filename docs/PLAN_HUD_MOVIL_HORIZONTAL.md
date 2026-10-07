@@ -252,8 +252,32 @@ Si se prefiere conservar `Menú` visible, dejar **solo** `Menú` e incluir `Idio
   - Nota: falta animación de celebración cuando una misión se completa.
 - **P2.5** Vibración sutil al tocar acción importante (si el dispositivo la soporta).
   - Nota: `navigator.vibrate` API. Solo en dispositivos que la soporten.
-- **P2.6** Diferenciar visual estados: Estéril / Pudriéndose / Latente.
+- **P2.3** Feedback de combo (cuando se forma Floración/Colonia). ✅ **HECHO** (2026-10-06)
+  - Nota: `detectCombos` ya existe. Falta: feedback visual (flash, popup) cuando se forma un combo.
+  - **Implementado**: la celebración BASE (`closeCombo`) **se mantiene en todas las manos** —
+    decisión explícita del usuario, no se gateó. Encima corre `comboFlourish(eje, tier)`, una
+    CAPA EXTRA que solo aparece si hubo combo: el **color** dice el eje (dorado = elemento/×,
+    ámbar = familia/+, verde = diversidad) y la **intensidad** escala con el tier (2→5).
+    Además se consumen los `cardUids` del combo (que se calculaban y se tiraban) para pulsar esas
+    cartas y unirlas con micelio: eso es lo que dice CUÁLES armaron el combo sin un rótulo nuevo.
+  - **Verificación**: `tools/probe-combo-axes.mjs` (espía `particles.burst` y `comboFlourish`).
+    Cubre las 3 manos: sin combo (celebra, sin capa extra), Floración (dorado, tier 5, golpea más)
+    y Colonia (ámbar, distinto a simple vista). 0 fallos a 915×412 y 844×390.
+- **P2.6** Diferenciar visual estados: Estéril / Pudriéndose / Latente. ✅ **HECHO** (2026-10-06)
   - Nota: los estados de carta ya existen en el motor. Falta representación visual en el render.
+  - **Implementado**: (a) el chip de estado en `CardTexture` se rediseñó para que la diferencia
+    **no dependa del color**: `dormant` borde punteado, `decay` borde inferior dentado,
+    `spore_lock` barra que tacha el glifo, `overgrowth` chevron ascendente. (b) El motor emite
+    `status:applied` / `status:consumed` / `status:expired` (antes `statusRequests` era dato
+    muerto). (c) El render los anima: latido + partículas al aplicarse, estallido + hit-stop al
+    cosecharse, y **aura ambiental continua** mientras la carta está podrida (`uRot` en el shader
+    del halo: una banda que baja por la carta, alimentada una vez por frame y solo para la mano).
+    Con `reduceMotion` el ambiental se apaga y queda el latido del evento.
+  - **Bug latente detectado (NO corregido)**: `APPLY_STATUS` muta sin respetar `dryRun`, a
+    diferencia de `CONSUME_STATUS`. Como `preview()` corre la resolución entera en cada cambio de
+    selección, una carta con ese efecto deja el estado puesto con solo seleccionarla. Se blindó el
+    EVENTO (no se emite en dryRun) para que no anime fantasmas; corregir la mutación cambia el
+    score previsualizado y merece su propia tanda con tests.
 
 ---
 
