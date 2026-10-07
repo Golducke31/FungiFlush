@@ -159,7 +159,7 @@ const profile = await page.evaluate(() => {
     level: text('.panel.is-profile .profile-colony-level'),
     next: text('.panel.is-profile .profile-colony-next'),
     fill: document.querySelector('.panel.is-profile .profile-colony-fill')?.style.width ?? null,
-    cards: ['colony-rewards', 'cosmetics', 'achievements', 'history'].map(card),
+    cards: ['colony-rewards', 'leaderboard', 'cosmetics', 'achievements', 'history'].map(card),
     accountBtn: card('account-unlink') ?? card('account-link'),
     sync: text('.panel.is-profile .profile-account-sync'),
     icon: Boolean(document.querySelector('.panel.is-profile .colony-icon')),
@@ -203,6 +203,37 @@ check(rewards.unlocked === 6, 'marca los 6 niveles alcanzados', String(rewards.u
 check(rewards.rawKeys === 0, 'ninguna clave i18n sin resolver');
 check(rewards.closeInside, 'el boton Cerrar entra en la ventana');
 await page.screenshot({ path: join(shotsDir, 'colony-rewards.png') });
+
+// --- 2b. Ranking (V1.3) ---
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  ff.hud.showProfile();
+});
+await page.waitForSelector('.panel.is-profile', { timeout: 8000 });
+await wait(300);
+await click('.panel.is-profile [data-act="leaderboard"]');
+await page.waitForSelector('.panel.is-leaderboard', { timeout: 8000 });
+await wait(400);
+const leaderboard = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-leaderboard');
+  const close = panel?.querySelector('[data-act="leaderboard-close"]');
+  const r = close?.getBoundingClientRect();
+  return {
+    present: Boolean(panel),
+    tabs: [...(panel?.querySelectorAll('.leaderboard-tab') ?? [])].map((b) => b.textContent),
+    milestones: panel?.querySelectorAll('.leaderboard-milestone').length ?? 0,
+    rawKeys: /t\(['"]/.test(panel?.textContent ?? '') ? 1 : 0,
+    closeInside: r ? r.bottom <= window.innerHeight + 1 : false,
+  };
+});
+console.log('--- RANKING ---');
+console.log(JSON.stringify(leaderboard, null, 2));
+check(leaderboard.present, 'el panel de Ranking abre desde el Perfil');
+check(leaderboard.tabs.length === 2, 'tiene los dos tableros (temporada / historica)', leaderboard.tabs.join(' · '));
+check(leaderboard.milestones === 3, 'lista los 3 hitos personales', String(leaderboard.milestones));
+check(leaderboard.rawKeys === 0, 'ninguna clave i18n sin resolver');
+check(leaderboard.closeInside, 'el boton Cerrar del ranking entra en la ventana');
+await page.screenshot({ path: join(shotsDir, 'colony-ranking.png') });
 
 // --- 3. Resultados ---
 await page.evaluate(() => {

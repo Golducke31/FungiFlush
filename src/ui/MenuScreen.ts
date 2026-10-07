@@ -347,6 +347,8 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
 export interface ProfilePanelCallbacks {
   /** Escalera de niveles de la Colonia (Recompensas). */
   onOpenColonyRewards: () => void;
+  /** Ranking global de Esporas de Colonia (temporada + historica). */
+  onOpenLeaderboard: () => void;
   /** Cosmeticos (Personalizar): dorso de carta y tapete. */
   onOpenCosmetics: () => void;
   onOpenAchievements: () => void;
@@ -415,6 +417,8 @@ export interface ProfilePanelState {
   /** Colonia resuelta (nivel, Esporas, barra, proximo desbloqueo). */
   colony?: ColonyView | null;
   account?: AccountView | null;
+  /** Detalle de la tarjeta de Ranking ("12 / 340", o vacio). */
+  leaderboardDetail?: string;
   bestAnte?: number;
   wins?: number;
   streak?: number;
@@ -573,6 +577,7 @@ export function buildProfilePanel(
       'colony-rewards',
       callbacks.onOpenColonyRewards,
     ),
+    card(t('colony.ranking'), state.leaderboardDetail ?? '', 'leaderboard', callbacks.onOpenLeaderboard),
     card(t('menu.cosmetics'), '', 'cosmetics', callbacks.onOpenCosmetics),
     card(
       t('menu.achievements'),
@@ -714,6 +719,250 @@ export function buildColonyRewardsPanel(
   footer.appendChild(close);
 
   shell.append(head, list, footer);
+  panel.appendChild(shell);
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Panel de Ranking global (V1.3)
+// ---------------------------------------------------------------------------
+
+export interface LeaderboardRowView {
+  playerId: string;
+  displayName: string;
+  spores: number;
+  level: number;
+  isSelf: boolean;
+}
+
+export interface LeaderboardScopeView {
+  rows: LeaderboardRowView[];
+  selfRank: number | null;
+  total: number;
+  /** Ya formateado ("12 / 340"). */
+  rankLabel: string;
+  /** 0-100. */
+  percentile: number;
+  /** Clave i18n del premio que le toca por posicion, o null sin tablero. */
+  tierNameKey: string | null;
+}
+
+export interface LeaderboardMilestoneView {
+  nameKey: string;
+  met: boolean;
+  progress: number;
+  current: number;
+  target: number;
+}
+
+export interface LeaderboardPanelState {
+  /** Hay servidor de ranking configurado. */
+  enabled: boolean;
+  /** Por que esta apagado (para explicarlo), o null. */
+  disabledReason: string | null;
+  syncState: 'offline' | 'pending' | 'synced' | 'conflict';
+  season: LeaderboardScopeView | null;
+  lifetime: LeaderboardScopeView | null;
+  milestones: LeaderboardMilestoneView[];
+  /** Esporas de Colonia locales (el libro del jugador). */
+  localSpores: number;
+  /** Esporas VALIDADAS por el servidor, o null si nunca sincronizo. */
+  verifiedSpores: number | null;
+}
+
+export interface LeaderboardPanelCallbacks {
+  onRefresh: () => void;
+  onClose: () => void;
+}
+
+/**
+ * Panel de RANKING: posicion propia, tablero y hitos personales.
+ *
+ * Dos tableros con pestanas, porque responden preguntas distintas:
+ * "como voy esta temporada" (competitivo, y donde un jugador nuevo tiene
+ * chance) y "cuanto he acumulado" (prestigio, donde nadie pierde su lugar).
+ *
+ * Los HITOS van SIEMPRE, incluso sin servidor: el plan es explicito en que la
+ * mayoria de los jugadores nunca va a entrar al top 1%, y tiene que poder sentir
+ * que su colonia avanza igual.
+ */
+export function buildLeaderboardPanel(
+  state: LeaderboardPanelState,
+  callbacks: LeaderboardPanelCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-leaderboard';
+
+  const shell = document.createElement('div');
+  shell.className = 'leaderboard-shell';
+
+  // --- Cabecera ---
+  const head = document.createElement('div');
+  head.className = 'leaderboard-head';
+  const title = document.createElement('h2');
+  title.className = 'leaderboard-title';
+  const titleText = document.createElement('span');
+  titleText.textContent = t('colony.ranking');
+  title.append(colonyIconEl('is-title'), titleText);
+  const sub = document.createElement('p');
+  sub.className = 'leaderboard-subtitle';
+  sub.textContent = state.enabled
+    ? t('colony.rank.subtitle')
+    : (state.disabledReason ?? t('colony.rank.offline'));
+  head.append(title, sub);
+
+  const numbers = document.createElement('div');
+  numbers.className = 'leaderboard-numbers';
+  const localValue = document.createElement('span');
+  localValue.className = 'leaderboard-number';
+  localValue.dataset['counter'] = 'leaderboard-local';
+  localValue.textContent = t('colony.rank.local', { value: formatSpores(state.localSpores) });
+  numbers.appendChild(localValue);
+  if (state.verifiedSpores !== null) {
+    const verified = document.createElement('span');
+    verified.className = 'leaderboard-number is-verified';
+    verified.dataset['counter'] = 'leaderboard-verified';
+    verified.textContent = t('colony.rank.verified', { value: formatSpores(state.verifiedSpores) });
+    numbers.appendChild(verified);
+  }
+  const sync = document.createElement('span');
+  sync.className = 'leaderboard-sync';
+  sync.textContent = t(`colony.account.sync.${state.syncState}`);
+  numbers.appendChild(sync);
+  head.appendChild(numbers);
+
+  // --- Cuerpo ---
+  const body = document.createElement('div');
+  body.className = 'leaderboard-body';
+
+  const tabs = document.createElement('div');
+  tabs.className = 'leaderboard-tabs';
+  const boardWrap = document.createElement('div');
+  boardWrap.className = 'leaderboard-board';
+
+  const scopeButtons = new Map<string, HTMLButtonElement>();
+  let scope: 'season' | 'lifetime' = 'season';
+
+  const renderBoard = (): void => {
+    const view = scope === 'season' ? state.season : state.lifetime;
+    for (const [key, button] of scopeButtons) {
+      button.classList.toggle('is-active', key === scope);
+      button.setAttribute('aria-pressed', String(key === scope));
+    }
+    boardWrap.innerHTML = '';
+
+    if (!state.enabled || !view || view.rows.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'leaderboard-empty';
+      empty.textContent = state.enabled ? t('colony.rank.empty') : t('colony.rank.offline');
+      boardWrap.appendChild(empty);
+      return;
+    }
+
+    // Posicion propia: es lo primero que mira el jugador.
+    const self = document.createElement('div');
+    self.className = 'leaderboard-self';
+    self.dataset['act'] = 'leaderboard-self';
+    const selfRank = document.createElement('span');
+    selfRank.className = 'leaderboard-self-rank';
+    selfRank.textContent = view.rankLabel;
+    const selfBody = document.createElement('span');
+    selfBody.className = 'leaderboard-self-body';
+    const selfTop = document.createElement('span');
+    selfTop.className = 'leaderboard-self-top';
+    selfTop.textContent =
+      view.selfRank === null
+        ? t('colony.rank.unranked')
+        : t('colony.rank.percentile', { value: view.percentile });
+    const selfTier = document.createElement('span');
+    selfTier.className = 'leaderboard-self-tier';
+    selfTier.textContent = view.tierNameKey ? t(view.tierNameKey) : '';
+    selfBody.append(selfTop, selfTier);
+    self.append(selfRank, selfBody);
+    boardWrap.appendChild(self);
+
+    const list = document.createElement('div');
+    list.className = 'leaderboard-list';
+    view.rows.forEach((row, index) => {
+      const el = document.createElement('div');
+      el.className = `leaderboard-row${row.isSelf ? ' is-self' : ''}`;
+      el.dataset['rank'] = String(index + 1);
+      const rank = document.createElement('span');
+      rank.className = 'leaderboard-row-rank';
+      rank.textContent = `#${index + 1}`;
+      const name = document.createElement('span');
+      name.className = 'leaderboard-row-name';
+      name.textContent = row.displayName;
+      const level = document.createElement('span');
+      level.className = 'leaderboard-row-level';
+      level.textContent = t('colony.levelLabel', { level: row.level });
+      const spores = document.createElement('span');
+      spores.className = 'leaderboard-row-spores';
+      spores.textContent = formatSpores(row.spores);
+      el.append(rank, name, level, spores);
+      list.appendChild(el);
+    });
+    boardWrap.appendChild(list);
+  };
+
+  for (const key of ['season', 'lifetime'] as const) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'leaderboard-tab';
+    button.dataset['act'] = `leaderboard-scope-${key}`;
+    button.textContent = t(`colony.rank.${key}`);
+    button.addEventListener('click', () => {
+      scope = key;
+      renderBoard();
+    });
+    scopeButtons.set(key, button);
+    tabs.appendChild(button);
+  }
+
+  // --- Hitos personales ---
+  const milestones = document.createElement('div');
+  milestones.className = 'leaderboard-milestones';
+  for (const milestone of state.milestones) {
+    const row = document.createElement('div');
+    row.className = `leaderboard-milestone${milestone.met ? ' is-met' : ''}`;
+    const name = document.createElement('span');
+    name.className = 'leaderboard-milestone-name';
+    name.textContent = t(milestone.nameKey);
+    const track = document.createElement('span');
+    track.className = 'leaderboard-milestone-track';
+    const fill = document.createElement('span');
+    fill.className = 'leaderboard-milestone-fill';
+    fill.style.width = `${Math.round(milestone.progress * 100)}%`;
+    track.appendChild(fill);
+    const value = document.createElement('span');
+    value.className = 'leaderboard-milestone-value';
+    value.textContent = `${formatSpores(milestone.current)} / ${formatSpores(milestone.target)}`;
+    row.append(name, track, value);
+    milestones.appendChild(row);
+  }
+
+  body.append(tabs, boardWrap, milestones);
+
+  // --- Pie ---
+  const footer = document.createElement('div');
+  footer.className = 'leaderboard-footer';
+  const refresh = document.createElement('button');
+  refresh.type = 'button';
+  refresh.className = 'leaderboard-refresh';
+  refresh.dataset['act'] = 'leaderboard-refresh';
+  refresh.textContent = t('colony.rank.refresh');
+  refresh.disabled = !state.enabled;
+  refresh.addEventListener('click', callbacks.onRefresh);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'leaderboard-close';
+  close.dataset['act'] = 'leaderboard-close';
+  close.textContent = t('ui.close');
+  close.addEventListener('click', callbacks.onClose);
+  footer.append(refresh, close);
+
+  renderBoard();
+  shell.append(head, body, footer);
   panel.appendChild(shell);
   return panel;
 }

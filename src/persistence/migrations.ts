@@ -14,6 +14,7 @@
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
 import { levelForSpores } from '../meta/Colony';
+import { emptySnapshot } from '../meta/Leaderboard';
 import { PROFILE_SAVE_VERSION, defaultProfile, type ProfileSave } from '../meta/ProfileState';
 
 export type UnknownRecord = Record<string, unknown>;
@@ -163,6 +164,8 @@ export function migrateProfileV3toV4(input: UnknownRecord): UnknownRecord {
       syncState: 'offline',
       lastSyncAt: null,
       pendingResults: [],
+      verifiedSpores: null,
+      leaderboard: { season: null, lifetime: null, fetchedAt: null },
     },
   };
 }
@@ -274,6 +277,15 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     ...((typeof accountRaw === 'object' && accountRaw !== null ? accountRaw : {}) as object),
   };
   if (!Array.isArray(account.pendingResults)) account.pendingResults = [];
+  // Ranking (V1.3): el tablero cacheado es un objeto ANIDADO. Si llegara con la
+  // forma equivocada (edicion a mano, formato futuro), se cae al snapshot vacio
+  // en vez de romper el panel al leer `entries`.
+  const lbRaw = (account as UnknownRecord)['leaderboard'];
+  account.leaderboard =
+    typeof lbRaw === 'object' && lbRaw !== null
+      ? { ...emptySnapshot(), ...(lbRaw as object) }
+      : emptySnapshot();
+  if (typeof account.verifiedSpores !== 'number') account.verifiedSpores = null;
 
   return {
     version: CURRENT_PROFILE_VERSION,

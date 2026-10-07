@@ -22,6 +22,12 @@ tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Puente a Google Play Games (JNI). SOLO Android: en escritorio el modulo
+# `play_games.rs` usa su implementacion de reemplazo y estas crates ni se bajan.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1"
+
 [profile.release]
 # El ejecutable final pesa menos y arranca mas rapido.
 codegen-units = 1

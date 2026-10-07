@@ -12,6 +12,8 @@
 
 import type { ColonyProgress } from './Colony';
 import { defaultColonyProgress } from './Colony';
+import type { LeaderboardSnapshot } from './Leaderboard';
+import { emptySnapshot } from './Leaderboard';
 
 export const PROFILE_SAVE_VERSION = 4;
 
@@ -144,6 +146,14 @@ export interface AccountState {
   lastSyncAt: string | null;
   /** Resultados de run pendientes de subir. Capeado por `PENDING_RESULTS_CAP`. */
   pendingResults: ColonyRunResult[];
+  /**
+   * Esporas de Colonia VALIDADAS por el servidor (V1.3), o `null` si nunca se
+   * sincronizo. Es el numero con el que se calcula la posicion en el ranking:
+   * puede diferir del local si el anti-trampa recorto alguna run.
+   */
+  verifiedSpores: number | null;
+  /** Ultimo tablero conocido, cacheado para poder dibujar el panel sin red. */
+  leaderboard: LeaderboardSnapshot;
 }
 
 export interface ProfileSave {
@@ -340,6 +350,8 @@ export function defaultProfile(): ProfileSave {
       syncState: 'offline',
       lastSyncAt: null,
       pendingResults: [],
+      verifiedSpores: null,
+      leaderboard: emptySnapshot(),
     },
   };
 }

@@ -1474,6 +1474,29 @@
     "rewards": "Recompensas",
     "rewardsSubtitle": "Tu colonia crece cada vez que superás un Ciego.",
     "rewardCost": "Se alcanza con {value} Esporas de Colonia",
+    "ranking": "Ranking",
+    "rank": {
+      "subtitle": "Esporas de Colonia validadas por el servidor.",
+      "season": "Temporada",
+      "lifetime": "Histórica",
+      "local": "Tu colonia: {value}",
+      "verified": "Verificado: {value}",
+      "percentile": "Mejor que el {value}% de los jugadores",
+      "unranked": "Todavía sin posición — jugá una partida",
+      "empty": "Todavía no hay jugadores en este tablero",
+      "offline": "El ranking no está disponible sin conexión",
+      "refresh": "Actualizar",
+      "top1": "Top 1% — Título legendario y marco exclusivo",
+      "top5": "Top 5% — Efecto de victoria",
+      "top10": "Top 10% — Insignia de temporada",
+      "top25": "Top 25% — Cosmético común",
+      "participation": "Participación — Recompensa básica"
+    },
+    "milestone": {
+      "spores1000": "Alcanzá 1.000 Esporas de Colonia",
+      "blinds10": "Superá 10 Ciegos",
+      "level10": "Llevá tu Colonia al nivel 10"
+    },
     "band": {
       "dormant": "Espora Dormida",
       "sprout": "Brote Micelial",

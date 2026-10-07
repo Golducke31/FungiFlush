@@ -1474,6 +1474,29 @@
     "rewards": "Rewards",
     "rewardsSubtitle": "Your colony grows every time you clear a Blind.",
     "rewardCost": "Reached at {value} Colony Spores",
+    "ranking": "Ranking",
+    "rank": {
+      "subtitle": "Colony Spores validated by the server.",
+      "season": "Season",
+      "lifetime": "All-time",
+      "local": "Your colony: {value}",
+      "verified": "Verified: {value}",
+      "percentile": "Better than {value}% of players",
+      "unranked": "No rank yet — play a run",
+      "empty": "No players on this board yet",
+      "offline": "The ranking is not available offline",
+      "refresh": "Refresh",
+      "top1": "Top 1% — Legendary title and exclusive frame",
+      "top5": "Top 5% — Victory effect",
+      "top10": "Top 10% — Season badge",
+      "top25": "Top 25% — Common cosmetic",
+      "participation": "Participation — Basic reward"
+    },
+    "milestone": {
+      "spores1000": "Reach 1,000 Colony Spores",
+      "blinds10": "Clear 10 Blinds",
+      "level10": "Grow your Colony to level 10"
+    },
     "band": {
       "dormant": "Dormant Spore",
       "sprout": "Mycelial Sprout",

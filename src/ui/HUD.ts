@@ -37,12 +37,14 @@ import {
   buildAscensionPanel,
   buildChallengesPanel,
   buildColonyRewardsPanel,
+  buildLeaderboardPanel,
   buildMenuPanel,
   buildProfilePanel,
   colonyIconEl,
   type AccountView,
   type ColonyResultView,
   type ColonyView,
+  type LeaderboardPanelState,
 } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
@@ -179,6 +181,8 @@ export interface HudCallbacks {
   // --- Colonia Fungi (meta-progresion) ---
   /** Escalera de niveles de la Colonia (Recompensas). */
   onOpenColonyRewards: () => void;
+  /** Ranking global: pide refrescar los tableros al servidor. */
+  onRefreshLeaderboard: () => void;
   /** Vincular el progreso a Google Play Games. */
   onLinkAccount: () => void;
   /** Desvincular la cuenta (el progreso local se conserva). */
@@ -385,6 +389,8 @@ export class HUD {
    * ya esta completo (el panel se dibuja DESPUES de los listeners de `main.ts`).
    */
   private colonyResult: ColonyResultView = { spores: 0, bonuses: [] };
+  /** Ranking (V1.3): lo redacta el controlador (perfil + cache + hitos). */
+  private leaderboardState: LeaderboardPanelState | null = null;
   /** Logros ya redactados por el controlador, para abrirlos desde el Perfil. */
   private achievementsState: AchievementView[] = [];
   /** Ascension (R1): se la empuja el controlador desde el perfil. */
@@ -2199,6 +2205,7 @@ export class HUD {
         colonyLevel: meta.colonyLevel,
         colony: meta.colony,
         account: meta.account,
+        leaderboardDetail: this.leaderboardState?.season?.rankLabel ?? '',
         bestAnte: meta.bestAnte,
         wins: meta.wins,
         streak: meta.streak,
@@ -2206,6 +2213,7 @@ export class HUD {
       },
       {
         onOpenColonyRewards: () => this.showColonyRewards(),
+        onOpenLeaderboard: () => this.showLeaderboard(),
         onOpenCosmetics: () => this.showCosmetics(() => this.showProfile()),
         onOpenAchievements: () => this.showAchievements(this.achievementsState, () => this.showProfile()),
         onOpenHistory: () => this.showHistory(() => this.showProfile()),
@@ -2214,6 +2222,30 @@ export class HUD {
         onClose: () => this.showMenu(),
       },
     );
+    this.openOverlay(panel);
+  }
+
+  /** El controlador empuja el ranking ya redactado (el HUD no conoce el perfil). */
+  setLeaderboardState(state: LeaderboardPanelState | null): void {
+    this.leaderboardState = state;
+  }
+
+  /** Ranking global de Esporas de Colonia (V1.3). */
+  showLeaderboard(): void {
+    const state: LeaderboardPanelState = this.leaderboardState ?? {
+      enabled: false,
+      disabledReason: null,
+      syncState: 'offline',
+      season: null,
+      lifetime: null,
+      milestones: [],
+      localSpores: 0,
+      verifiedSpores: null,
+    };
+    const panel = buildLeaderboardPanel(state, {
+      onRefresh: () => this.callbacks.onRefreshLeaderboard(),
+      onClose: () => this.showProfile(),
+    });
     this.openOverlay(panel);
   }
 

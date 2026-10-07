@@ -22,7 +22,8 @@ import { PENDING_RESULTS_CAP, type AccountState, type ColonyRunResult, type Prof
 export interface AccountIdentity {
   id: string;
   displayName: string;
-  provider: 'google-play';
+  /** Proveedor que emitio la identidad. `local` = cuenta propia, sin Google. */
+  provider: 'google-play' | 'local';
 }
 
 /**
@@ -75,8 +76,7 @@ export function createGooglePlayProvider(): AccountProvider {
 
   return {
     id: 'google-play',
-    async isAvailable(): Promise<boolean> {
-      if (!isTauriRuntime()) return false;
+    async isAvailable(): Promise<boolean> {      if (!isTauriRuntime()) return false;
       try {
         return (await invokeNative<boolean>(PLAY_GAMES_COMMANDS.available)) === true;
       } catch {

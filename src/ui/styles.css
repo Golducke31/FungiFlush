@@ -7549,7 +7549,8 @@ body {
   .panel > .ascension-shell,
   .panel > .history-shell,
   .panel > .cosmetics-shell,
-  .panel > .colony-rewards-shell {
+  .panel > .colony-rewards-shell,
+  .panel > .leaderboard-shell {
     flex: 1 1 auto;
     min-height: 0;
   }
@@ -8276,5 +8277,266 @@ body {
 @media (pointer: coarse) and (max-height: 560px) {
   .profile-stats {
     display: none;
+  }
+}
+
+/* ==========================================================================
+   RANKING GLOBAL (V1.3)
+   --------------------------------------------------------------------------
+   Dos tableros (temporada / historica) y los hitos personales. El tablero usa
+   el ambar de recompensa, no el cian de interfaz: es el mismo recurso que la
+   Colonia, y el jugador no tiene que reaprender el color.
+   ========================================================================== */
+.panel.is-leaderboard {
+  display: flex;
+  flex-direction: column;
+}
+.leaderboard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.leaderboard-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.leaderboard-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--text);
+}
+.leaderboard-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(207, 230, 242, 0.66);
+}
+.leaderboard-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 4px;
+}
+.leaderboard-number {
+  font-size: 12px;
+  color: var(--text);
+}
+.leaderboard-number.is-verified {
+  color: #f0c469;
+}
+.leaderboard-sync {
+  font-size: 11px;
+  color: rgba(207, 230, 242, 0.5);
+}
+
+.leaderboard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.leaderboard-tabs {
+  display: flex;
+  gap: 6px;
+}
+.leaderboard-tab {
+  flex: 1 1 0;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(95, 216, 232, 0.2);
+  border-radius: 999px;
+  background: rgba(6, 12, 18, 0.45);
+  color: rgba(207, 230, 242, 0.75);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.leaderboard-tab.is-active {
+  border-color: rgba(240, 196, 105, 0.6);
+  background: rgba(240, 196, 105, 0.12);
+  color: #ffd36b;
+}
+.leaderboard-board {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.leaderboard-empty {
+  margin: 0;
+  padding: 14px 4px;
+  font-size: 12.5px;
+  color: rgba(207, 230, 242, 0.6);
+}
+.leaderboard-self {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 13px;
+  border: 1px solid rgba(240, 196, 105, 0.42);
+  border-radius: 12px;
+  background: rgba(240, 196, 105, 0.08);
+}
+.leaderboard-self-rank {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: #ffd36b;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.leaderboard-self-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.leaderboard-self-top {
+  font-size: 12px;
+  color: var(--text);
+}
+.leaderboard-self-tier {
+  font-size: 11px;
+  color: rgba(240, 196, 105, 0.9);
+}
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(6, 12, 18, 0.4);
+  font-size: 12px;
+}
+.leaderboard-row.is-self {
+  background: rgba(240, 196, 105, 0.12);
+}
+.leaderboard-row-rank {
+  flex: 0 0 auto;
+  min-width: 32px;
+  color: rgba(207, 230, 242, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.leaderboard-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.leaderboard-row-level {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: rgba(207, 230, 242, 0.55);
+}
+.leaderboard-row-spores {
+  flex: 0 0 auto;
+  color: #f0c469;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-milestones {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(95, 216, 232, 0.14);
+}
+.leaderboard-milestone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: rgba(207, 230, 242, 0.72);
+}
+.leaderboard-milestone.is-met {
+  color: #f0c469;
+}
+.leaderboard-milestone-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaderboard-milestone-track {
+  flex: 0 0 84px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.leaderboard-milestone-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f0c469, #ffd36b);
+}
+.leaderboard-milestone-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: rgba(207, 230, 242, 0.6);
+}
+.leaderboard-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.leaderboard-refresh,
+.leaderboard-close {
+  min-height: 34px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.leaderboard-refresh {
+  border: 1px solid rgba(240, 196, 105, 0.5);
+  background: rgba(240, 196, 105, 0.12);
+  color: #ffd36b;
+}
+.leaderboard-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.leaderboard-close {
+  border: 1px solid rgba(95, 216, 232, 0.35);
+  background: rgba(95, 216, 232, 0.1);
+  color: var(--text);
+}
+
+@media (pointer: coarse) {
+  .leaderboard-title {
+    font-size: 17px;
+  }
+  .leaderboard-milestone-track {
+    flex-basis: 64px;
+  }
+  /* El quinto acceso (Ranking) tiene que entrar en la MISMA fila: una segunda
+     fila empuja la cuenta fuera del area visible del cuerpo. */
+  .profile-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .profile-card-name {
+    font-size: 11px;
   }
 }

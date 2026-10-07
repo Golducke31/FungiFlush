@@ -18,7 +18,10 @@ audio-source/
 
 # Tauri / Rust
 src-tauri/target/
-src-tauri/gen/
+# El proyecto Android (`tauri android init`) SI se versiona: ahi vive el puente
+# de Google Play Games (Kotlin) y la config de la app. Lo generado de verdad
+# (builds, .gradle, local.properties) lo ignoran los .gitignore anidados.
+src-tauri/gen/schemas/
 
 # --- Android / Google Play: NUNCA al repo ---
 # Una keystore filtrada permite publicar actualizaciones en nombre del

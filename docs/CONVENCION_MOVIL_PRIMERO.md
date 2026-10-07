@@ -279,6 +279,21 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
     máscara, así que el color lo fija el CSS en cada contexto.
   - ⚠️ `src-tauri/` **no se compila en los gates** (no hay Rust ni CLI de Tauri en el
     entorno): el puente de Play Games está escrito pero **sin compilar**.
+- **Ranking global + Play Games nativo (2026-10-06)** — cambios GLOBALES
+  (`docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md`):
+  - **Panel de Perfil**: pasa a **cinco accesos** en una sola fila
+    (Recompensas · Ranking · Cosméticos · Logros · Historial). En escritorio la rejilla
+    sigue siendo `auto-fit`, así que los cinco pueden caer en dos filas: verificar el
+    ancho del panel a 1440×810.
+  - **Pantalla nueva**: panel de **Ranking** (`.panel.is-leaderboard`) con dos tableros
+    y hitos personales. No la cubre ningún gate visual de escritorio.
+  - **Proyecto Android versionado**: `src-tauri/gen/android` **ya no está ignorado**
+    (sólo `src-tauri/gen/schemas/`). Ahí viven el puente Kotlin de Play Games y la
+    config de la app; los `.gitignore` anidados siguen ignorando builds, `.gradle`,
+    `local.properties` y keystores.
+  - **Toolchain en la máquina**: se instalaron Rust (`~/.cargo`) y MinGW-w64
+    (`~/.workbuddy-ai/binaries/mingw/mingw64`) para poder compilar el contenedor.
+    La CLI de Tauri quedó como devDependency (`@tauri-apps/cli`).
 
 ---
 

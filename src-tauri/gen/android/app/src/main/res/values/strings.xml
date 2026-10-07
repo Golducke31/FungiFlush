@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">"FungiFlush"</string>
+    <string name="main_activity_title">"FungiFlush"</string>
+    <!-- APP_ID de Play Games Services (Play Console > Play Games Services >
+         Configuracion). NO es el applicationId ni el versionCode: es un ID
+         numerico propio del proyecto de Play Games.
+         PENDIENTE: reemplazar "0" por el valor real. Mientras quede el
+         placeholder, `google_play_sign_in` devuelve un error y la UI muestra
+         "no disponible"; el juego funciona igual (offline-first). -->
+    <string name="game_services_project_id" translatable="false">0</string>
+</resources>

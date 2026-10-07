@@ -51,6 +51,15 @@ import {
   type ColonyBonus,
 } from '@meta/Colony';
 import { createGooglePlayProvider, linkAccount, makeRunResult, queueRunResult, unlinkAccount } from '@meta/Account';
+import type { AccountIdentity } from '@meta/Account';
+import { formatRank, milestoneViews, percentileOf, rankTierFor, type LeaderboardBoard } from '@meta/Leaderboard';
+import { flushPendingResults, refreshBoards } from '@meta/LeaderboardSync';
+import {
+  createLeaderboardClient,
+  createOfflineTransport,
+  leaderboardEndpointFromEnv,
+} from './net/LeaderboardClient';
+import type { LeaderboardPanelState, LeaderboardScopeView } from '@ui/MenuScreen';
 import { ARCHETYPES, biasFor, starterFor } from '@meta/Archetypes';
 import { notifier } from '@notify/notify';
 import {
@@ -500,6 +509,9 @@ async function boot(): Promise<void> {
     });
     // El desglose de la run ya esta cerrado: el panel de resultados lo lee.
     pushColonyResult();
+    // Ranking (V1.3): subir el resultado y refrescar los tableros. Es
+    // best-effort y no bloquea el panel: sin cuenta o sin servidor no hace nada.
+    if (leaderboardTransport.enabled && accountIdentity()) void syncLeaderboard();
     if (seasonDef) {
       const total =
         profileStore.current.entitlements.passes.find((x) => x.seasonId === seasonDef.id)?.xp ?? 0;
@@ -1240,6 +1252,7 @@ async function boot(): Promise<void> {
       onOpenHistory: () => hud?.showHistory(),
       // --- Colonia Fungi (meta-progresion) ---
       onOpenColonyRewards: () => hud?.showColonyRewards(),
+      onRefreshLeaderboard: () => void syncLeaderboard(),
       onLinkAccount: () => void onLinkAccount(),
       onUnlinkAccount: () => onUnlinkAccount(),
       // --- Fase 2 ---
@@ -1416,6 +1429,7 @@ async function boot(): Promise<void> {
           ? { key: 'menu.recommend.continue', params: { ante: savedRun.ante } }
           : { key: 'menu.recommend.beatBest', params: { ante: p.stats.bestAnte } };
     hud?.setAchievementsState(views);
+    hud?.setLeaderboardState(buildLeaderboardView());
     // Colonia Fungi: la meta-progresion REAL (Esporas de Colonia + nivel).
     const colony = p.colony;
     const next = nextLevelInfo(colony);
@@ -1478,6 +1492,88 @@ async function boot(): Promise<void> {
     profileStore.patch((p) => unlinkAccount(p));
     syncMenuMeta();
     hud?.showProfile();
+  };
+
+  // --- Ranking global (V1.3) ---
+  //
+  // El servicio se configura por build (`VITE_LEADERBOARD_URL`). SIN variable el
+  // transporte queda APAGADO y el panel muestra su estado offline: el juego se
+  // puede jugar entero sin servidor, y la cuenta sigue siendo opcional.
+  const leaderboardEndpoint = leaderboardEndpointFromEnv();
+  const leaderboardTransport = leaderboardEndpoint
+    ? createLeaderboardClient({ endpoint: leaderboardEndpoint, seasonId: seasonDef?.id ?? '' })
+    : createOfflineTransport('El ranking todavía no está disponible en este build');
+
+  /** Identidad para hablar con el servicio, o null si no hay cuenta vinculada. */
+  const accountIdentity = (): AccountIdentity | null => {
+    const account = profileStore.current.account;
+    if (account.provider === 'none' || !account.accountId) return null;
+    return {
+      id: account.accountId,
+      displayName: account.displayName ?? account.accountId,
+      provider: account.provider === 'local' ? 'local' : 'google-play',
+    };
+  };
+
+  /** Traduce el tablero cacheado a la vista que dibuja el panel. */
+  const scopeView = (board: LeaderboardBoard | null): LeaderboardScopeView | null => {
+    if (!board) return null;
+    const self = profileStore.current.account.accountId;
+    const rank = board.selfRank;
+    return {
+      rows: board.entries.map((entry) => ({
+        playerId: entry.playerId,
+        displayName: entry.displayName,
+        spores: entry.spores,
+        level: entry.level,
+        isSelf: self !== null && entry.playerId === self,
+      })),
+      selfRank: rank,
+      total: board.total,
+      rankLabel: formatRank(rank, board.total),
+      percentile: rank === null ? 100 : percentileOf(rank, board.total),
+      tierNameKey: rank === null ? null : rankTierFor(rank, board.total).nameKey,
+    };
+  };
+
+  const buildLeaderboardView = (): LeaderboardPanelState => {
+    const p = profileStore.current;
+    return {
+      enabled: leaderboardTransport.enabled,
+      disabledReason: leaderboardTransport.disabledReason,
+      syncState: p.account.syncState,
+      season: scopeView(p.account.leaderboard.season),
+      lifetime: scopeView(p.account.leaderboard.lifetime),
+      milestones: milestoneViews(p).map((m) => ({
+        nameKey: m.nameKey,
+        met: m.met,
+        progress: m.progress,
+        current: m.current,
+        target: m.target,
+      })),
+      localSpores: p.colony.lifetimeSpores,
+      verifiedSpores: p.account.verifiedSpores,
+    };
+  };
+
+  /**
+   * Sube lo pendiente y refresca los tableros.
+   *
+   * NO acredita Esporas locales: eso ya paso al superar cada Ciego. Volver a
+   * acreditarlas aca duplicaria la recompensa en cada reintento (ver
+   * `LeaderboardSync.ts`). Si el servidor rechaza un resultado, el perfil queda
+   * en conflicto y se muestra.
+   */
+  const syncLeaderboard = async (): Promise<void> => {
+    const identity = accountIdentity();
+    const now = Date.now();
+    const flush = await flushPendingResults(profileStore.current, leaderboardTransport, identity, now);
+    if (flush.hadWork && !flush.error) {
+      await refreshBoards(profileStore.current, leaderboardTransport, identity?.id ?? null, now);
+    }
+    await profileStore.saveNow();
+    hud?.setLeaderboardState(buildLeaderboardView());
+    syncMenuMeta();
   };
 
   // El sondeo es barato y no bloquea el arranque: si el contenedor no trae el
