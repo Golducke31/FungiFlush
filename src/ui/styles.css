@@ -1334,75 +1334,197 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Boton JUGAR MANO con arte propio (SOLO texto localizado, transparente)
+   Boton JUGAR MANO — gel verde con abanico de cartas
    --------------------------------------------------------------------------
-   Sin marco y SIN fondo: el texto (arte del usuario) es el unico contenido,
-   sobre el tablero. Cuando hay cartas elegidas se "arma" (clase is-armed) y
-   hace un zoom para ganar jerarquia como accion primaria. Cambiar de idioma
-   no obliga a re-exportar nada (el texto es su propia imagen). El prefijo
-   `.hud-actions` gana en especificidad a `.hud-actions .btn.is-play`. */
-.hud-actions .btn.is-play.is-art {
+   Reemplaza al boton "solo texto" (`.is-art`, un PNG por idioma). El gel no
+   depende de un asset por idioma (el texto es texto, se traduce solo), escala
+   con el `font-size` del propio boton y trae sus estados (jugando, apagado)
+   sin exportar una imagen por cada uno.
+
+   TODA la metrica esta en `em`: el tamano se controla con el `font-size`, que
+   es lo unico que cambia entre escritorio y movil. */
+.hud-actions .btn.is-play.is-jm {
+  --jm1: #a6ffc6;
+  --jm2: #38dc92;
+  --jm3: #0f7d5a;
+  --jm-glow: 70, 235, 150;
+  --jm-ink: #04241c;
   position: relative;
-  overflow: visible;
   isolation: isolate;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  /* En escritorio el boton conserva el verde del .btn.is-play (el escritorio
-     esta CONGELADO). El look transparente + zoom vive en el media query movil. */
-  padding: 0 18px;
-  height: 56px;
-  min-height: 56px;
-  /* Transicion suave para el zoom al armar la jugada (movil). */
-  transition: transform var(--dur-fast, 0.18s) var(--ease-back, ease-out);
+  gap: 0.5em;
+  font-size: 25px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #05261c;
+  min-height: 52px;
+  padding: 0.42em 1.25em 0.46em 0.8em;
+  border: 0;
+  border-radius: 0.95em;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.22) 0.08em, transparent 0.1em) 0 0 / 0.4em 0.4em,
+    linear-gradient(180deg, var(--jm1) 0%, var(--jm2) 46%, var(--jm3) 100%);
+  box-shadow:
+    0 0 0 0.09em var(--jm-ink),
+    0 0.15em 0 0.09em var(--jm-ink),
+    0 0.4em 0.9em 0.1em rgba(0, 0, 0, 0.5),
+    0 0 1.3em rgba(var(--jm-glow), 0.6),
+    inset 0 0.1em 0 rgba(255, 255, 255, 0.6),
+    inset 0 -0.3em 0.5em rgba(0, 70, 45, 0.5);
+  transition: transform 0.12s var(--ease-back, ease-out), box-shadow 0.12s, filter 0.2s;
+  animation: jm-latido 2.6s ease-in-out infinite;
 }
 
-.hud-actions .btn.is-play.is-art .btn-play-label {
-  position: relative;
-  z-index: 1;
-  height: 78%;
-  width: auto;
-  max-width: 100%;
-  object-fit: contain;
+/* Gloss superior. */
+.hud-actions .btn.is-play.is-jm::before {
+  content: '';
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 6%;
+  height: 36%;
+  border-radius: 0.8em;
   pointer-events: none;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.75));
+  background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
 }
 
-.hud-actions .btn.is-play.is-art .btn-play-count {
+/* Barrido de brillo. */
+.hud-actions .btn.is-play.is-jm .jm-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hud-actions .btn.is-play.is-jm .jm-shine::before {
+  content: '';
+  position: absolute;
+  top: -25%;
+  bottom: -25%;
+  width: 28%;
+  left: -40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-18deg);
+  animation: jm-barrido 3.8s ease-in-out infinite;
+}
+
+.hud-actions .btn.is-play.is-jm .jm-fan {
+  position: relative;
+  width: 1.35em;
+  height: 1.35em;
+  flex: none;
+  filter: drop-shadow(0 0.05em 0 rgba(255, 255, 255, 0.35));
+}
+
+.hud-actions .btn.is-play.is-jm .jm-label {
+  position: relative;
+  white-space: nowrap;
+  text-shadow: 0 0.05em 0 rgba(255, 255, 255, 0.45);
+}
+
+/* Ficha con las cartas elegidas. Va FUERA del boton (arriba a la derecha), por
+   eso no lleva `overflow:hidden` el boton. */
+.hud-actions .btn.is-play.is-jm .btn-play-count {
   position: absolute;
   z-index: 2;
-  top: -6px;
-  right: -6px;
-  min-width: 24px;
-  padding: 1px 8px;
+  top: -0.6em;
+  right: -0.5em;
+  min-width: 1.55em;
+  height: 1.55em;
+  padding: 0 0.2em;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
   border-radius: 999px;
-  background: rgba(94, 240, 138, 0.95);
-  color: #06170f;
-  font-size: 14px;
+  font-size: 0.7em;
   font-weight: 800;
-  line-height: 1.4;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-}
-
-/* Deshabilitado: se lee "apagado" pero SIN desaparecer. Con `opacity .45` el
-   texto "Jugar Mano" dejaba de reconocerse y el jugador no entendia que el
-   boton existe y que le falta seleccionar cartas. Menos desaturacion y menos
-   brillo perdido; la sombra tambien se recorta (ver el label mas arriba). */
-.hud-actions .btn.is-play.is-art:disabled {
-  opacity: 0.78;
-  filter: saturate(0.8) brightness(0.92);
+  line-height: 1;
+  color: #05261c;
+  background: #7bf0a4;
   box-shadow:
-    inset 0 1px 0 rgba(160, 255, 210, 0.2),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+    0 0 0 0.12em var(--jm-ink),
+    0 0 0 0.2em rgba(255, 255, 255, 0.7),
+    0 0.15em 0.5em rgba(0, 0, 0, 0.45);
 }
 
-.hud-actions .btn.is-play.is-art:disabled .btn-play-label {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+.hud-actions .btn.is-play.is-jm:not(:disabled):hover {
+  transform: translateY(-0.06em);
+  filter: brightness(1.1) saturate(1.1);
+  animation: none;
 }
 
-.hud-actions .btn.is-play.is-art:not(:disabled):active {
-  transform: scale(1.02);
+.hud-actions .btn.is-play.is-jm:not(:disabled):active {
+  transform: translateY(0.14em) scale(1.02, 0.95);
+}
+
+/* Apagado: se lee "sin jugada posible" pero SIGUE reconociendose (no se
+   desvanece). Mismo criterio que el boton anterior.
+
+   OJO con la especificidad: la regla movil `.hud-actions .btn.is-play:disabled`
+   empata en peso (0,4,0) con el `background` de `.is-jm` y GANA por venir mas
+   abajo en el archivo — apagaba el gel y le metia `opacity:.5`. Por eso aca se
+   re-declaran `background`, `border`, `box-shadow` y `opacity` con el peso de
+   `.is-jm:disabled` (0,5,0), que si gana. */
+.hud-actions .btn.is-play.is-jm:disabled {
+  --jm-glow: 0, 0, 0;
+  opacity: 1;
+  border: 0;
+  color: #d6f2e8;
+  cursor: not-allowed;
+  animation: none;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.1) 0.08em, transparent 0.1em) 0 0 / 0.4em 0.4em,
+    linear-gradient(180deg, #4a7d6e 0%, #2a5648 46%, #183b30 100%);
+  box-shadow:
+    0 0 0 0.09em var(--jm-ink),
+    0 0.15em 0 0.09em var(--jm-ink),
+    0 0.3em 0.7em rgba(0, 0, 0, 0.4),
+    inset 0 0.08em 0 rgba(255, 255, 255, 0.14),
+    inset 0 -0.25em 0.4em rgba(0, 0, 0, 0.35);
+}
+.hud-actions .btn.is-play.is-jm:disabled::before,
+.hud-actions .btn.is-play.is-jm:disabled .jm-shine {
+  display: none;
+}
+.hud-actions .btn.is-play.is-jm:disabled .jm-label {
+  text-shadow: none;
+}
+.hud-actions .btn.is-play.is-jm:disabled .jm-fan {
+  filter: none;
+  opacity: 0.7;
+}
+
+/* "Jugando": la mano se esta resolviendo. El parpadeo del texto es el aviso de
+   que la jugada entro; el boton ademas queda deshabilitado desde el HUD. */
+.hud-actions .btn.is-play.is-jm.jugando {
+  animation: none;
+  filter: brightness(1.15);
+}
+.hud-actions .btn.is-play.is-jm.jugando .jm-label {
+  animation: jm-parpadea 0.5s steps(2) infinite;
+}
+
+@keyframes jm-latido {
+  50% {
+    filter: brightness(1.12) saturate(1.1);
+  }
+}
+@keyframes jm-barrido {
+  0%,
+  55% {
+    left: -40%;
+  }
+  100% {
+    left: 135%;
+  }
+}
+@keyframes jm-parpadea {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 /* Simbionte legendario del dado: una losa propia, en el violeta del cristal,
@@ -4082,6 +4204,16 @@ body {
   .menu-cta-wrap.is-continue {
     font-size: min(clamp(19px, 3.4vw, 32px), 6.2vh);
   }
+  /* Con las DOS llamadas visibles (`is-both`) el heroe se aprieta: dos botones
+     apilados mas el subtitulo empujan todo hacia arriba y la fila de arriba es
+     el titulo "FUNGI FLUSH" horneado en el arte. Sin guardado se conserva el
+     tamano grande de siempre. */
+  .menu-hero.is-both .menu-cta-wrap {
+    font-size: min(clamp(21px, 4vw, 36px), 6.9vh);
+  }
+  .menu-hero.is-both .menu-cta-wrap.is-continue {
+    font-size: min(clamp(17px, 3.2vw, 28px), 5.6vh);
+  }
 }
 
 @media (pointer: coarse) and (max-height: 430px) {
@@ -4101,6 +4233,22 @@ body {
   .menu-cta-wrap.is-continue {
     font-size: min(clamp(18px, 3.6vw, 30px), 5.9vh);
   }
+  /* Dos CTAs en un landscape bajo: ademas de achicar, se recorta la reserva
+     del titulo (50vh en vez de 52vh) y la separacion, para ganar aire. */
+  .menu-hero.is-both {
+    gap: 0.45em;
+    padding-top: 50vh;
+    padding-bottom: 1vh;
+  }
+  .menu-hero.is-both .menu-cta-wrap {
+    font-size: min(clamp(19px, 4vw, 33px), 6.6vh);
+  }
+  .menu-hero.is-both .menu-cta-wrap.is-continue {
+    font-size: min(clamp(15px, 3.2vw, 26px), 5.2vh);
+  }
+  .menu-hero.is-both .menu-cta-sub {
+    margin-top: 0.45em;
+  }
   .menu-drop-item {
     font-size: 13px;
     padding: 0.5em 0.8em;
@@ -4116,6 +4264,13 @@ body {
   }
   .menu-cta-wrap.is-continue {
     font-size: min(clamp(22px, 3.6vw, 34px), 6.2vh);
+  }
+  /* Tablet (tactil y alta): tambien aprieta con dos CTAs, aunque sobra alto. */
+  .menu-hero.is-both .menu-cta-wrap {
+    font-size: min(clamp(24px, 4vw, 40px), 6.9vh);
+  }
+  .menu-hero.is-both .menu-cta-wrap.is-continue {
+    font-size: min(clamp(19px, 3.4vw, 30px), 5.6vh);
   }
 }
 
@@ -4242,73 +4397,8 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Recompensa (draft), constructor de mazo y coleccion
+   Constructor de mazo y coleccion
    -------------------------------------------------------------------------- */
-
-.reward-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.reward-card {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.025);
-  transition: border-color 0.15s, transform 0.12s;
-}
-
-.reward-card:hover:not(.is-sold) {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-}
-
-.reward-card.is-sold {
-  opacity: 0.4;
-}
-
-/* Ventana de arte: la cara real de la carta. Se recorta con proporcion fija
-   (2:3, la de la ilustracion) para que todas las tarjetas del draft midan
-   igual aunque falte el arte en alguna. */
-.reward-art {
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  border-radius: 9px;
-  overflow: hidden;
-  background: var(--frame-deep-lo);
-  box-shadow: inset 0 0 0 1px var(--frame-edge), inset 0 -8px 20px rgba(0, 0, 0, 0.4);
-}
-
-.reward-art-img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-}
-
-.reward-element {
-  width: 26px;
-  height: 4px;
-  border-radius: 99px;
-  opacity: 0.85;
-}
-
-.reward-name {
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.reward-desc {
-  font-size: 12px;
-  color: #b6c6d6;
-  line-height: 1.4;
-  flex: 1;
-}
 
 /* El grid scrollea por dentro: con 40+ cartas el panel no puede crecer sin
    techo o se come los botones de abajo. */
@@ -4538,6 +4628,34 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--frame-moss, #2eb2a4);
+}
+
+/* Copias poseidas de una carta: pildora "xN".
+   Existe para NO repetir la misma carta tantas veces como copias haya: una
+   carta, una celda, un badge. Va `flex: 0 0 auto` para no ensanchar la celda
+   (el `.collection-name` de al lado es el que absorbe el ancho). */
+.collection-count {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: #06170f;
+  background: rgba(94, 240, 138, 0.95);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Misma pildora, pero en el detalle del carrusel (fuera de una celda flex). */
+.carousel-detail-copies {
+  margin-top: 0.25em;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--frame-moss, #2eb2a4);
+}
+
+.carousel-detail-copies.is-hidden {
+  display: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -4833,14 +4951,13 @@ body {
    asi una pantalla nueva hereda el material por agregar su clase a una lista, y
    no hay forma de que una quede en el vidrio oscuro viejo sin que nadie lo note.
 
-   Las clases de abajo son las de tienda (`.offer`), recompensa (`.reward-card`),
-   mazo (`.deck-card`), coleccion (`.collection-card`) y ajustes
-   (`.settings-field`). Cada una conserva su layout; aca solo se pisa el
-   material.
+   Las clases de abajo son las de tienda (`.offer`), mazo (`.deck-card`),
+   coleccion (`.collection-card`) y ajustes (`.settings-field`). Cada una
+   conserva su layout; aca solo se pisa el material. La recompensa ya no tiene
+   material propio: usa `.offer` como la tienda.
    ========================================================================== */
 
 .offer,
-.reward-card,
 .deck-card,
 .collection-card,
 .blind-card,
@@ -4862,8 +4979,7 @@ body {
     0 3px 10px rgba(0, 0, 0, 0.4);
 }
 
-.offer:hover:not(.is-sold),
-.reward-card:hover:not(.is-sold) {
+.offer:hover:not(.is-sold) {
   border-color: rgba(46, 178, 164, 0.62);
   box-shadow:
     inset 0 1px 0 var(--frame-rim),
@@ -6888,37 +7004,29 @@ body {
     border-color: var(--border);
   }
 
-  /* --- Boton JUGAR MANO en movil: transparente, grande y con zoom al armar ---
-     Sin fondo verde: el texto (arte del usuario) flota sobre el tablero. Al
-     elegir cartas se "arma" (is-armed) y hace un zoom de jerarquia. El boton se
-     deja mas angosto que el ancho total (max-width) para que el zoom 1.16 no
-     recorte contra los bordes del viewport. */
+  /* --- Boton JUGAR MANO en movil: el gel, a lo ancho, con zoom al armar ---
+     El ancho se acota (78vw) para que el zoom 1.16 no recorte contra los
+     bordes del viewport. `justify-content: center` centra el contenido, porque
+     el boton es mas ancho que su contenido (icono + texto). */
   .hud-actions {
     flex: 1 1 auto;
     justify-content: center;
   }
 
-  .hud-actions .btn.is-play.is-art {
-    background: none;
-    border: none;
-    box-shadow: none;
-    /* Ancho acotado: deja margen a los costados para el zoom. `flex: 0 1 auto`
-       evita que el `flex: 1 1 auto` de .is-play lo estire a todo el ancho. */
+  .hud-actions .btn.is-play.is-jm {
     flex: 0 1 auto;
     width: min(78vw, 460px);
     height: 66px;
     min-height: 66px;
-    padding: 0 12px;
-  }
-
-  .hud-actions .btn.is-play.is-art .btn-play-label {
-    height: 90%;
+    font-size: 26px;
+    justify-content: center;
+    padding: 0 1em;
   }
 
   /* Zoom de jerarquia al armar la jugada (hay cartas seleccionadas). El
      transform no mueve el layout: la fila no se reacomoda. 1.16 sobre
-     max(78vw,460px) queda dentro del viewport en landscape movil. */
-  .hud-actions .btn.is-play.is-art.is-armed {
+     min(78vw,460px) queda dentro del viewport en landscape movil. */
+  .hud-actions .btn.is-play.is-jm.is-armed {
     transform: scale(1.16);
   }
 
@@ -7847,7 +7955,6 @@ body {
      scrollea por dentro si el contenido no entra. `overscroll-behavior:
      contain` evita que el gesto se propague a la pagina (que ya no scrollea,
      pero el rebote del sistema igual se notaria). */
-  .panel > .reward-grid,
   .panel > .settings-grid,
   .panel > .shop-body,
   .panel > .offer-grid,
@@ -7901,55 +8008,54 @@ body {
    tienda quedaban bajo el corte. Aca se achica lo secundario (arte, padding,
    texto) para que las tres caras y las tres ofertas entren enteras.
 
-   La CARA de la carta ya trae impresos el nombre, el elemento y la familia: en
-   la recompensa no se repiten debajo (era el mismo dato dos veces). Si en el
-   futuro se quiere el detalle, va a un boton "Ver detalles", no a la tarjeta.
+   La recompensa usa el MISMO grid que la tienda (`.offer`): antes tenia su
+   propio `.reward-grid` con caras de ancho fijo, lo que obligaba a mantener dos
+   layouts para la misma decision ("elegir 1 entre N").
+
+   La CARA de la carta ya trae impresos el nombre, el elemento y la familia: no
+   se repiten debajo (era el mismo dato dos veces). Si en el futuro se quiere el
+   detalle, va a un boton "Ver detalles", no a la tarjeta.
    -------------------------------------------------------------------------- */
 
 @media (pointer: coarse) and (max-height: 560px) {
-  /* --- Recompensa: tres caras 2:3 en fila, con su boton --- */
-  .panel.is-reward .reward-grid {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 12px;
+  /* --- Recompensa: el grid de ofertas de la tienda, con boton en vez de precio ---
+     Se repite el bloque de `.panel.is-shop .offer-grid` (mas abajo) porque la
+     recompensa NO tiene `.shop-body`: su `.offer-grid` es hijo directo del panel
+     y hereda la zona flexible de `.panel > .offer-grid`. */
+  .panel.is-reward .offer-grid {
+    grid-template-columns: repeat(var(--offer-cols, 3), minmax(0, 1fr));
+    grid-auto-rows: minmax(120px, 1fr);
+    gap: 8px;
+    margin-bottom: 0;
   }
 
-  /* Ancho FIJO y chico: en landscape el alto es el recurso escaso, asi que la
-     cara se achica hasta entrar. Sin un ancho fijo la descripcion (una linea
-     larga) estira la tarjeta y vuelve a desbordar. */
-  .panel.is-reward .reward-card {
-    flex: 0 0 auto;
-    /* El ancho sigue al ALTO del viewport: en landscape el alto es el recurso
-       escaso. Asi la cara entra tanto a 412px como a 390px (el smoke). */
-    width: clamp(96px, 27vh, 118px);
+  .panel.is-reward .offer {
     padding: 6px;
     gap: 4px;
+    min-height: 0;
   }
 
-  .panel.is-reward .reward-art {
+  /* La cara absorbe el alto disponible y se achica sola: en landscape el alto
+     es el recurso escaso. `object-fit: contain` evita recortar la ilustracion. */
+  .panel.is-reward .offer-art {
     width: 100%;
     height: auto;
-    aspect-ratio: 2 / 3;
+    flex: 1 1 auto;
+    min-height: 0;
+    object-fit: contain;
+    margin: 0;
   }
 
-  .panel.is-reward .reward-element,
-  .panel.is-reward .reward-name {
-    display: none;
+  .panel.is-reward .offer-footer {
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 8px;
   }
 
-  .panel.is-reward .reward-desc {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    font-size: 10px;
-    line-height: 1.2;
-  }
-
-  .panel.is-reward .reward-card .btn {
+  /* Piso tactil: 30px > los 26px que audita `audit-mobile-buttons.mjs`. */
+  .panel.is-reward .offer .btn {
     min-height: 30px;
-    padding: 4px 8px;
+    padding: 4px 10px;
     font-size: 11.5px;
   }
 

@@ -347,6 +347,13 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   const hasSave = state.continueLabel !== null;
   const hasArchetypes = (state.archetypes?.length ?? 0) > 0;
 
+  // Con las DOS llamadas a la accion visibles el heroe tiene que apretarse: dos
+  // botones de gel apilados mas el subtitulo empujan el contenido hacia arriba y
+  // la fila de arriba (el titulo "FUNGI FLUSH" horneado en el arte) queda tapada.
+  // La clase `is-both` habilita los tamanos reducidos del CSS SOLO en ese caso:
+  // sin guardado se conserva el tamano grande de siempre.
+  if (hasSave) hero.classList.add('is-both');
+
   // "Nueva partida" abre el selector de ARQUETIPO (la forma de puntuar) en vez
   // de arrancar directo: el arquetipo es una decision de run, no un ajuste.
   const newBtn = gelTextButton('new', t('menu.newRun'), hasArchetypes ? callbacks.onOpenArchetypes : callbacks.onStartRun);

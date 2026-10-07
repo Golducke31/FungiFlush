@@ -205,6 +205,18 @@
     "overgrowth": "Overgrown"
   },
   "effect": {
+    "latent": "Latency",
+    "chain": "Mycelial chain",
+    "herald": "Herald",
+    "crossbreed": "Cross symbiosis",
+    "hybrid": "Hybrid",
+    "slumber": "Slumber",
+    "awakening": "Awakening",
+    "deepNet": "Deep mycelium",
+    "symbiont": "Symbiont",
+    "conduit": "Conduit",
+    "parasitic": "Parasitism",
+    "carrion": "Carrion",
     "poisonBurst": "Poison burst",
     "poisonAura": "Poison aura",
     "echo": "Echo",
@@ -350,6 +362,54 @@
     }
   },
   "card": {
+    "deep_latent_sporocarp": {
+      "name": "Latent Sporocarp",
+      "desc": "Covers itself in Overgrowth on play; bursts it on scoring and cashes it as Spores."
+    },
+    "deep_chain_rhizomorph": {
+      "name": "Chained Rhizomorph",
+      "desc": "If it is the last card of the hand, it retriggers its own effect."
+    },
+    "deep_herald_cap": {
+      "name": "Herald Cap",
+      "desc": "If it is the first play of the blind: x1.4 Spores."
+    },
+    "deep_cross_mycorrhiza": {
+      "name": "Cross Mycorrhiza",
+      "desc": "With a Crystal card in hand: +3 Spores."
+    },
+    "deep_hybrid_lattice": {
+      "name": "Hybrid Lattice",
+      "desc": "With Spore and Decay in hand: x1.5 Substrate."
+    },
+    "deep_slumber_amanita": {
+      "name": "Slumber Amanita",
+      "desc": "Puts a card in hand to sleep and gains +5 Spores."
+    },
+    "deep_awakening_bracket": {
+      "name": "Awakening Bracket",
+      "desc": "With 5 or more cards scored: x1.7 Spores."
+    },
+    "deep_network_core": {
+      "name": "Network Core",
+      "desc": "With 3 mycelium cards from 2 different families: +18 Substrate."
+    },
+    "deep_symbiont_veil": {
+      "name": "Symbiont Veil",
+      "desc": "With 2 or more Simbionts on the table: +2 Spores."
+    },
+    "deep_spore_conduit": {
+      "name": "Spore Conduit",
+      "desc": "Each mycelium played: +1 Spore."
+    },
+    "deep_parasite_lash": {
+      "name": "Parasite Lash",
+      "desc": "With 2 or more parasites scored: x1.3 Spores."
+    },
+    "deep_carrion_lattice": {
+      "name": "Carrion Lattice",
+      "desc": "Rots a card in hand; when scoring with Decay: +12 Substrate."
+    },
     "spore_puffball": {
       "name": "Puffball",
       "desc": "A dry sac of spores. Pops when disturbed."
@@ -612,6 +672,26 @@
     }
   },
   "joker": {
+    "joker_deep_root_network": {
+      "name": "Root Network",
+      "desc": "With 3 mycelium cards from 2 different families: x1.5 Spores."
+    },
+    "joker_cross_symbiosis": {
+      "name": "Cross Symbiosis",
+      "desc": "With Spore and Crystal in hand: +5 Spores."
+    },
+    "joker_latent_pulse": {
+      "name": "Latent Pulse",
+      "desc": "With 5 or more cards scored: +4 Spores."
+    },
+    "joker_first_herald": {
+      "name": "First Herald",
+      "desc": "On the first play of the blind: +12 Substrate."
+    },
+    "joker_mycelial_conduit": {
+      "name": "Mycelial Conduit",
+      "desc": "With 3 or more Simbionts: x1.25 Spores."
+    },
     "joker_spore_printer": {
       "name": "Spore Printer",
       "desc": "End of every hand: +2 Spores."
@@ -802,6 +882,7 @@
     "jokers": "Simbionts",
     "all": "All",
     "unlocked": "Unlocked",
+    "copies": "{count} copies",
     "unlockSource": {
       "daily": "Daily streak",
       "achievement": "Achievement",
@@ -842,11 +923,16 @@
     "open": "Open pack",
     "another": "Another pack",
     "revealAll": "Reveal all",
-    "none": "You have no packs to open. Clear a blind to earn one.",
+    "none": "You have no packs to open. Defeat a Boss to earn one.",
     "pending": "{n} unopened",
     "resultEpic": "An epic came out!",
     "resultRare": "{n} rares came out",
-    "resultDone": "Pack opened"
+    "resultDone": "Pack opened",
+    "expansion": {
+      "title": "Expansion pack",
+      "none": "You have no expansion packs. Defeat a Boss to earn one.",
+      "pending": "{n} expansion"
+    }
   },
   "die": {
     "title": "Spore die",
@@ -897,6 +983,10 @@
   "pack": {
     "base": {
       "title": "Base game"
+    },
+    "deep_mycelium": {
+      "title": "Deep Mycelium",
+      "desc": "Expansion: 12 specimens and 5 simbionts that reward play order, mixing elements and Overgrowth."
     }
   },
   "reward": {
@@ -1044,7 +1134,8 @@
       "levelUp": "Your Colony reached level {level}!"
     },
     "pack": {
-      "earned": "You earned a Pack! ({count} unopened)"
+      "earned": "You earned a Pack! ({count} unopened)",
+      "expansion": "You earned an Expansion Pack! ({count} unopened)"
     }
   },
   "unlockRule": {
@@ -1227,6 +1318,7 @@
     "equipped": "Equipped",
     "none": "You don't have cosmetics of this type yet.",
     "cardback.default": "Classic",
+    "cardback.mycelial": "Deep Mycelium",
     "felt.default": "Runic slab"
   },
   "history": {

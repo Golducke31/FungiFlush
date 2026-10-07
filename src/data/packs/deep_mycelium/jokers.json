@@ -1,0 +1,102 @@
+[
+  {
+    "id": "joker_deep_root_network",
+    "nameKey": "joker.joker_deep_root_network.name",
+    "descKey": "joker.joker_deep_root_network.desc",
+    "rarity": "rare",
+    "cost": 7,
+    "sellValue": 4,
+    "art": { "hue": 216, "hue2": 160, "pattern": "fibrous", "silhouette": "cluster", "glow": 0.82 },
+    "effects": [
+      {
+        "id": "deep_root_network_resonate",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          { "type": "scored_element_families_gte", "element": "mycelium", "count": 3, "families": 2 }
+        ],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.5 }],
+        "labelKey": "effect.deepNet"
+      }
+    ]
+  },
+  {
+    "id": "joker_cross_symbiosis",
+    "nameKey": "joker.joker_cross_symbiosis.name",
+    "descKey": "joker.joker_cross_symbiosis.desc",
+    "rarity": "uncommon",
+    "cost": 6,
+    "sellValue": 3,
+    "art": { "hue": 192, "hue2": 280, "pattern": "fibrous", "silhouette": "truffle", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "cross_symbiosis_bridge",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          {
+            "type": "all",
+            "conds": [
+              { "type": "element_in_hand", "value": "spore" },
+              { "type": "element_in_hand", "value": "crystal" }
+            ]
+          }
+        ],
+        "actions": [{ "type": "ADD_SPORES", "value": 5 }],
+        "labelKey": "effect.crossbreed"
+      }
+    ]
+  },
+  {
+    "id": "joker_latent_pulse",
+    "nameKey": "joker.joker_latent_pulse.name",
+    "descKey": "joker.joker_latent_pulse.desc",
+    "rarity": "uncommon",
+    "cost": 6,
+    "sellValue": 3,
+    "art": { "hue": 206, "hue2": 174, "pattern": "radial", "silhouette": "cap", "glow": 0.64 },
+    "effects": [
+      {
+        "id": "latent_pulse_surge",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 5 }],
+        "actions": [{ "type": "ADD_SPORES", "value": 4 }],
+        "labelKey": "effect.latent"
+      }
+    ]
+  },
+  {
+    "id": "joker_first_herald",
+    "nameKey": "joker.joker_first_herald.name",
+    "descKey": "joker.joker_first_herald.desc",
+    "rarity": "common",
+    "cost": 5,
+    "sellValue": 3,
+    "art": { "hue": 198, "hue2": 250, "pattern": "rings", "silhouette": "cap", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "first_herald_opener",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "is_first_play_of_round" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 12 }],
+        "labelKey": "effect.herald"
+      }
+    ]
+  },
+  {
+    "id": "joker_mycelial_conduit",
+    "nameKey": "joker.joker_mycelial_conduit.name",
+    "descKey": "joker.joker_mycelial_conduit.desc",
+    "rarity": "common",
+    "cost": 5,
+    "sellValue": 3,
+    "art": { "hue": 172, "hue2": 214, "pattern": "fibrous", "silhouette": "mold", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "mycelial_conduit_field",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "jokers_gte", "value": 3 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.25 }],
+        "labelKey": "effect.conduit"
+      }
+    ]
+  }
+]

@@ -6,7 +6,13 @@
  * exit 1. Para verificar sigue estando `shot-mobile.mjs` + `smoke.mjs`.
  *
  *   node tools/shot-menu-buttons.mjs
+ *   FF_VIEWPORT=smoke node tools/shot-menu-buttons.mjs   # 844x390
+ *   FF_HEIGHT=360 node tools/shot-menu-buttons.mjs       # caso mas bajo
  *   FF_URL=... node tools/shot-menu-buttons.mjs
+ *
+ * `FF_VIEWPORT`/`FF_HEIGHT` existen para revisar la HOLGURA sobre el titulo en
+ * mas de un tamano: el logo "FUNGI FLUSH" vive horneado en el JPG, asi que la
+ * unica forma de saber si un boton lo pisa es medir en pantalla.
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -16,6 +22,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const URL_TO_TEST = process.env.FF_URL ?? 'http://127.0.0.1:1420/?daily=0';
 const OUT = join(ROOT, 'tools', 'shots');
 mkdirSync(OUT, { recursive: true });
+
+/** Viewports con nombre (mismos que `audit-mobile-buttons.mjs`). */
+const VIEWPORTS = {
+  ref: { width: 915, height: 412 },
+  smoke: { width: 844, height: 390 },
+};
+const vpName = process.env.FF_VIEWPORT ?? 'ref';
+const baseVp = VIEWPORTS[vpName] ?? VIEWPORTS.ref;
+const forcedHeight = Number(process.env.FF_HEIGHT);
+const viewport = forcedHeight > 0 ? { width: baseVp.width, height: forcedHeight } : baseVp;
+/** Sufijo para no pisar los shots del viewport de referencia. */
+const SUFFIX =
+  vpName === 'ref' && !(forcedHeight > 0) ? '' : `-${vpName}${forcedHeight > 0 ? `-h${forcedHeight}` : ''}`;
 
 const PW_CANDIDATES = [
   'C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/playwright-core/index.js',
@@ -47,7 +66,7 @@ const browser = await chromium.launch({
 });
 
 const ctx = await browser.newContext({
-  viewport: { width: 915, height: 412 },
+  viewport,
   hasTouch: true,
   isMobile: true,
   deviceScaleFactor: 2,
@@ -56,7 +75,7 @@ const page = await ctx.newPage();
 
 const report = {};
 async function snap(name) {
-  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  await page.screenshot({ path: join(OUT, `${name}${SUFFIX}.png`) });
   const state = await page.evaluate(() => {
     const q = (s) => document.querySelector(s);
     const cont = q('.panel.is-menu [data-act="continue"]');
@@ -178,7 +197,7 @@ await snap('menu-btns-save');
 // --- 3. Desplegable abierto (mismo motivo: el boton late, no esta "stable") ---
 await mouseClick('.panel.is-menu [data-act="menu-toggle"]');
 await wait(500);
-await page.screenshot({ path: join(OUT, 'menu-btns-drop.png') });
+await page.screenshot({ path: join(OUT, `menu-btns-drop${SUFFIX}.png`) });
 const drop = await page.evaluate(() => {
   const items = [...document.querySelectorAll('.menu-drop.is-open .menu-drop-item')];
   return { open: Boolean(document.querySelector('.menu-drop.is-open')), items: items.map((i) => i.dataset['act']) };
@@ -187,4 +206,4 @@ console.log('\n[menu-btns-drop]', JSON.stringify(drop));
 report['menu-btns-drop'] = drop;
 
 await browser.close();
-console.log('\nShots: tools/shots/menu-btns-*.png');
+console.log(`\nShots: tools/shots/menu-btns-*${SUFFIX}.png`);

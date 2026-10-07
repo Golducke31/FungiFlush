@@ -1,0 +1,298 @@
+[
+  {
+    "id": "deep_latent_sporocarp",
+    "nameKey": "card.deep_latent_sporocarp.name",
+    "descKey": "card.deep_latent_sporocarp.desc",
+    "element": "mycelium",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 212, "hue2": 168, "pattern": "blotch", "silhouette": "cap", "glow": 0.62 },
+    "effects": [
+      {
+        "id": "latent_sporocarp_grow",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "APPLY_STATUS", "status": "overgrowth", "value": 3, "turns": -1 }],
+        "labelKey": "effect.latent"
+      },
+      {
+        "id": "latent_sporocarp_burst",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "has_status", "status": "overgrowth" }],
+        "actions": [{ "type": "CONSUME_STATUS", "status": "overgrowth", "gain": "spores", "value": 2, "full": true }],
+        "labelKey": "effect.sporeBloom"
+      }
+    ]
+  },
+  {
+    "id": "deep_chain_rhizomorph",
+    "nameKey": "card.deep_chain_rhizomorph.name",
+    "descKey": "card.deep_chain_rhizomorph.desc",
+    "element": "mycelium",
+    "family": "polyporaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 226, "hue2": 176, "pattern": "fibrous", "silhouette": "bracket", "glow": 0.58 },
+    "effects": [
+      {
+        "id": "chain_rhizomorph_anchor",
+        "trigger": "ON_PLAY",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 5 }],
+        "labelKey": "effect.thread"
+      },
+      {
+        "id": "chain_rhizomorph_echo",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "is_last_card_of_hand" }],
+        "actions": [{ "type": "RETRIGGER", "value": 1 }],
+        "labelKey": "effect.chain"
+      }
+    ]
+  },
+  {
+    "id": "deep_herald_cap",
+    "nameKey": "card.deep_herald_cap.name",
+    "descKey": "card.deep_herald_cap.desc",
+    "element": "symbiosis",
+    "family": "tricholomataceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 2,
+    "baseSpores": 3,
+    "cost": 5,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 196, "hue2": 268, "pattern": "rings", "silhouette": "cap", "glow": 0.7 },
+    "effects": [
+      {
+        "id": "herald_cap_opener",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "is_first_play_of_round" }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.4 }],
+        "labelKey": "effect.herald"
+      }
+    ]
+  },
+  {
+    "id": "deep_cross_mycorrhiza",
+    "nameKey": "card.deep_cross_mycorrhiza.name",
+    "descKey": "card.deep_cross_mycorrhiza.desc",
+    "element": "symbiosis",
+    "family": "boletaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["expansion", "deep", "bridge"],
+    "art": { "hue": 188, "hue2": 246, "pattern": "fibrous", "silhouette": "truffle", "glow": 0.55 },
+    "effects": [
+      {
+        "id": "cross_mycorrhiza_bind",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "element_in_hand", "value": "crystal" }],
+        "actions": [{ "type": "ADD_SPORES", "value": 3 }],
+        "labelKey": "effect.crossbreed"
+      }
+    ]
+  },
+  {
+    "id": "deep_hybrid_lattice",
+    "nameKey": "card.deep_hybrid_lattice.name",
+    "descKey": "card.deep_hybrid_lattice.desc",
+    "element": "symbiosis",
+    "family": "clavariaceae",
+    "rarity": "rare",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 6,
+    "tags": ["expansion", "deep", "rare"],
+    "art": { "hue": 204, "hue2": 300, "pattern": "crystal", "silhouette": "coral", "glow": 0.86 },
+    "effects": [
+      {
+        "id": "hybrid_lattice_weave",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          {
+            "type": "all",
+            "conds": [
+              { "type": "element_in_hand", "value": "spore" },
+              { "type": "element_in_hand", "value": "decay" }
+            ]
+          }
+        ],
+        "actions": [{ "type": "MULTIPLY_SUBSTRATE", "value": 1.5 }],
+        "labelKey": "effect.hybrid"
+      }
+    ]
+  },
+  {
+    "id": "deep_slumber_amanita",
+    "nameKey": "card.deep_slumber_amanita.name",
+    "descKey": "card.deep_slumber_amanita.desc",
+    "element": "mycelium",
+    "family": "amanitaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 1,
+    "cost": 4,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 232, "hue2": 190, "pattern": "rings", "silhouette": "cap", "glow": 0.5 },
+    "effects": [
+      {
+        "id": "slumber_amanita_lull",
+        "trigger": "ON_PLAY",
+        "target": "random_hand",
+        "actions": [
+          { "type": "APPLY_STATUS", "status": "dormant", "value": 1, "turns": 1 },
+          { "type": "ADD_SPORES", "value": 5 }
+        ],
+        "labelKey": "effect.slumber"
+      }
+    ]
+  },
+  {
+    "id": "deep_awakening_bracket",
+    "nameKey": "card.deep_awakening_bracket.name",
+    "descKey": "card.deep_awakening_bracket.desc",
+    "element": "crystal",
+    "family": "polyporaceae",
+    "rarity": "rare",
+    "baseSubstrate": 2,
+    "baseSpores": 4,
+    "cost": 6,
+    "tags": ["expansion", "deep", "rare"],
+    "art": { "hue": 178, "hue2": 214, "pattern": "crystal", "silhouette": "bracket", "glow": 0.9 },
+    "effects": [
+      {
+        "id": "awakening_bracket_flare",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_count_gte", "value": 5 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.7 }],
+        "labelKey": "effect.awakening"
+      }
+    ]
+  },
+  {
+    "id": "deep_network_core",
+    "nameKey": "card.deep_network_core.name",
+    "descKey": "card.deep_network_core.desc",
+    "element": "mycelium",
+    "family": "tricholomataceae",
+    "rarity": "rare",
+    "baseSubstrate": 6,
+    "baseSpores": 1,
+    "cost": 6,
+    "tags": ["expansion", "deep", "rare"],
+    "art": { "hue": 218, "hue2": 158, "pattern": "fibrous", "silhouette": "cluster", "glow": 0.8 },
+    "effects": [
+      {
+        "id": "network_core_resonate",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [
+          { "type": "scored_element_families_gte", "element": "mycelium", "count": 3, "families": 2 }
+        ],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 18 }],
+        "labelKey": "effect.deepNet"
+      }
+    ]
+  },
+  {
+    "id": "deep_symbiont_veil",
+    "nameKey": "card.deep_symbiont_veil.name",
+    "descKey": "card.deep_symbiont_veil.desc",
+    "element": "symbiosis",
+    "family": "amanitaceae",
+    "rarity": "common",
+    "baseSubstrate": 3,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 200, "hue2": 284, "pattern": "radial", "silhouette": "mold", "glow": 0.6 },
+    "effects": [
+      {
+        "id": "symbiont_veil_swarm",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "jokers_gte", "value": 2 }],
+        "actions": [{ "type": "ADD_SPORES", "value": 2 }],
+        "labelKey": "effect.symbiont"
+      }
+    ]
+  },
+  {
+    "id": "deep_spore_conduit",
+    "nameKey": "card.deep_spore_conduit.name",
+    "descKey": "card.deep_spore_conduit.desc",
+    "element": "neutral",
+    "family": "agaricaceae",
+    "rarity": "uncommon",
+    "baseSubstrate": 4,
+    "baseSpores": 2,
+    "cost": 4,
+    "tags": ["expansion", "deep", "bridge"],
+    "art": { "hue": 168, "hue2": 226, "pattern": "fibrous", "silhouette": "mold", "glow": 0.52 },
+    "effects": [
+      {
+        "id": "spore_conduit_channel",
+        "trigger": "ON_CARD_PLAYED",
+        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "actions": [{ "type": "ADD_SPORES", "value": 1 }],
+        "labelKey": "effect.conduit"
+      }
+    ]
+  },
+  {
+    "id": "deep_parasite_lash",
+    "nameKey": "card.deep_parasite_lash.name",
+    "descKey": "card.deep_parasite_lash.desc",
+    "element": "parasite",
+    "family": "psilocybaceae",
+    "rarity": "common",
+    "baseSubstrate": 2,
+    "baseSpores": 3,
+    "cost": 4,
+    "tags": ["expansion", "deep"],
+    "art": { "hue": 286, "hue2": 196, "pattern": "blotch", "silhouette": "cluster", "glow": 0.66 },
+    "effects": [
+      {
+        "id": "parasite_lash_drain",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "scored_element_count_gte", "element": "parasite", "value": 2 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.3 }],
+        "labelKey": "effect.parasitic"
+      }
+    ]
+  },
+  {
+    "id": "deep_carrion_lattice",
+    "nameKey": "card.deep_carrion_lattice.name",
+    "descKey": "card.deep_carrion_lattice.desc",
+    "element": "parasite",
+    "family": "agaricaceae",
+    "rarity": "rare",
+    "baseSubstrate": 5,
+    "baseSpores": 1,
+    "cost": 5,
+    "tags": ["expansion", "deep", "rare"],
+    "art": { "hue": 274, "hue2": 22, "pattern": "blotch", "silhouette": "mold", "glow": 0.72 },
+    "effects": [
+      {
+        "id": "carrion_lattice_infect",
+        "trigger": "ON_PLAY",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": -1 }],
+        "labelKey": "effect.compost"
+      },
+      {
+        "id": "carrion_lattice_reap",
+        "trigger": "ON_HAND_SCORED",
+        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": 12 }],
+        "labelKey": "effect.carrion"
+      }
+    ]
+  }
+]

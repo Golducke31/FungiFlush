@@ -50,7 +50,7 @@ import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './C
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
-import { buildRewardCarouselFrame } from './RewardPanel';
+import { buildRewardPanel } from './RewardPanel';
 import { PackOpening, type PackCardView } from '@render/PackOpening';
 import {
   buildDeckBuilderPanel,
@@ -152,14 +152,6 @@ export interface HudCallbacks {
    * nuevo no la usa (si no, el anillo quedaria vivo detras de un panel DOM).
    */
   onPanelOpened?: (isCarousel: boolean) => void;
-  /**
-   * El draft de recompensa se dibuja sobre el CARRUSEL 3D: el marco DOM avisa
-   * aca que hay que montar el anillo con las ofertas, y con que entradas.
-   *
-   * `null` = desmontar (al cerrar el panel o al elegir). El HUD no conoce el
-   * render, asi que no puede llamar a `scene.setCarousel` el mismo: delega.
-   */
-  onRewardCarousel?: (info: { offerIds: string[]; onFocus: (index: number) => void } | null) => void;
   /**
    * El panel abierto TAPA la arena (true) o la deja a la vista (false).
    *
@@ -378,6 +370,11 @@ export class HUD {
   private lastStatus: string | null = null;
   /** Info del guardado disponible, para ofrecer "Continuar" al arrancar. */
   private continueLabel: string | null = null;
+  /**
+   * Proveedor del estado de "Continuar" (ver `bindContinueProvider`). Manda
+   * sobre `continueLabel`: si esta puesto, el menu lo consulta al construirse.
+   */
+  private continueProvider: (() => string | null) | null = null;
   /**
    * Estado meta del menu (progreso + recomendacion + Colonia). Lo empuja el
    * controlador antes de `showMenu`, igual que ascension/cosmeticos: el HUD no
@@ -664,6 +661,7 @@ export class HUD {
     this.elMissions.dataset['act'] = 'missions';
 
     this.root.append(
+      this.playIconDefs(),
       top,
       this.elJokers,
       this.elMissionsToggle,
@@ -679,6 +677,32 @@ export class HUD {
       this.elTooltip,
       this.elOverlay,
     );
+  }
+
+  /**
+   * Sprite del icono del boton "Jugar mano" (abanico de cartas).
+   *
+   * Se registra UNA vez por `build()` en un `<svg>` oculto y el boton lo
+   * referencia con `<use href="#hud-fan">`: asi el boton puede reconstruirse en
+   * cada render sin duplicar el markup del icono. El id va prefijado `hud-` para
+   * no chocar con el sprite del menu (`#ff-*`), que vive en otro subarbol.
+   */
+  private playIconDefs(): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '0');
+    svg.setAttribute('height', '0');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.style.position = 'absolute';
+    svg.innerHTML =
+      '<defs><symbol id="hud-fan" viewBox="0 0 24 24">' +
+      '<g fill="#e9fff4" stroke="#05261c" stroke-width="1.7" stroke-linejoin="round">' +
+      '<rect x="4.5" y="4.5" width="9" height="14" rx="2" transform="rotate(-17 9 18)"/>' +
+      '<rect x="10.5" y="4.5" width="9" height="14" rx="2" transform="rotate(17 15 18)"/>' +
+      '<rect x="7.5" y="3.2" width="9" height="15" rx="2"/>' +
+      '</g>' +
+      '<circle cx="12" cy="10.6" r="2.3" fill="#38dc92" stroke="#05261c" stroke-width="1.2"/>' +
+      '</symbol></defs>';
+    return svg;
   }
 
   // ==========================================================================
@@ -726,6 +750,8 @@ export class HUD {
         // cambiado ya, pero la animacion todavia se esta viendo.
         this.scoreSettling = true;
         this.scoreSettleDeadline = performance.now() + 15000;
+        // El boton de mano pasa a "jugando" (parpadea y no acepta otra jugada).
+        this.syncPlayPlaying();
       }),
 
       // El RENDER avisa cuando la secuencia termino. Recien ahi puede aparecer
@@ -737,6 +763,8 @@ export class HUD {
         // mataba el aviso nunca llegaba y el HUD quedaba sin mostrar paneles.
         this.scoreSettling = false;
         this.clearPanelTimer();
+        // La secuencia termino: el boton vuelve a su estado normal.
+        this.syncPlayPlaying();
         if (!this.panelPending) return;
         window.setTimeout(() => {
           if (!this.panelPending) return;
@@ -1478,17 +1506,17 @@ export class HUD {
     // seleccion, "arma" la jugada con un zoom (clase is-armed).
 
     const play = document.createElement('button');
-    play.className = 'btn is-play is-art';
+    play.className = 'btn is-play is-jm';
     play.dataset['act'] = 'play';
-    // Arte del boton: solo el TEXTO localizado, sin marco ni fondo. El color
-    // verde del .btn.is-play se anula en el CSS de .is-art: el boton es
-    // transparente y el texto (arte del usuario) es el unico contenido.
+    // Boton de gel verde con el abanico de cartas y el texto. El icono sale del
+    // sprite `#hud-fan` (ver `playIconDefs`), asi que el markup se reconstruye
+    // en cada render sin repetir el SVG.
     if (selected > 0) play.classList.add('is-armed');
-    const playLabel = document.createElement('img');
-    playLabel.className = 'btn-play-label';
-    playLabel.src = new URL(`art/ui_play_text_${currentLanguage()}.webp`, document.baseURI).href;
-    playLabel.alt = t('action.play');
-    play.append(playLabel);
+    play.innerHTML =
+      '<span class="jm-shine" aria-hidden="true"></span>' +
+      '<svg class="jm-fan" viewBox="0 0 24 24" aria-hidden="true"><use href="#hud-fan"/></svg>' +
+      `<span class="jm-label">${t('action.play')}</span>`;
+    play.setAttribute('aria-label', t('action.play'));
     // Cuantas cartas estan elegidas: va como ficha, no dentro del texto.
     if (selected > 0) {
       const count = document.createElement('span');
@@ -1497,7 +1525,15 @@ export class HUD {
       play.appendChild(count);
     }
     play.disabled = selected === 0 || round.handsLeft <= 0;
-    play.addEventListener('click', () => this.callbacks.onPlay());
+    play.addEventListener('click', () => {
+      // Chorro de esporas: feedback inmediato de que la jugada entro. Es
+      // decorativo y respeta `reduce-motion`.
+      this.playBurst(play);
+      this.callbacks.onPlay();
+    });
+    // Si la secuencia de puntaje sigue viva (el motor ya cambio de estado pero
+    // la animacion no), el boton nace en modo "jugando".
+    if (this.scoreSettling) play.classList.add('jugando');
 
     // Simbionte legendario `joker_loaded_die`: habilidad ACTIVA. El boton solo
     // existe si el jugador tiene el Simbionte en la mesa; mientras la carga no
@@ -1521,6 +1557,65 @@ export class HUD {
     }
 
     this.elActions.append(play);
+  }
+
+  /**
+   * Alterna el estado "jugando" del boton de mano.
+   *
+   * `renderActions` reconstruye la barra y sale temprano si el estado no es
+   * `playing`, asi que NO se puede confiar en que corra durante el puntaje: la
+   * ventana real de la animacion es `score:step` -> `score:settled`. Por eso el
+   * estado se sincroniza desde esos dos eventos sobre el boton VIVO.
+   */
+  private syncPlayPlaying(): void {
+    const btn = this.elActions.querySelector<HTMLButtonElement>('.btn.is-play');
+    if (!btn) return;
+    btn.classList.toggle('jugando', this.scoreSettling);
+    // Se RECALCULA el disabled (no se hace OR con el valor actual): si no, una
+    // vez apagado por la animacion quedaria apagado para siempre hasta que
+    // `renderActions` reconstruya la barra.
+    const round = this.engine.round;
+    const selected = round?.selected.length ?? 0;
+    btn.disabled = this.scoreSettling || selected === 0 || (round?.handsLeft ?? 0) <= 0;
+  }
+
+  /**
+   * Chorro de esporas al jugar la mano.
+   *
+   * Es DOM puro (Web Animations API) a proposito: el HUD no puede importar el
+   * render, y esto es feedback de UI, no un efecto de la mesa. Se guarda con
+   * `:root.reduce-motion` para no animar a quien pidio quietud.
+   */
+  private playBurst(anchor: HTMLElement): void {
+    if (document.documentElement.classList.contains('reduce-motion')) return;
+    if (typeof anchor.animate !== 'function') return;
+    const rect = anchor.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const palette = ['#a6ffc6', '#38dc92', '#d8fff0', '#c8ff7a', '#7ffff0'];
+    for (let i = 0; i < 24; i++) {
+      const dot = document.createElement('i');
+      const size = 5 + Math.random() * 10;
+      const x0 = rect.left + Math.random() * rect.width;
+      const y0 = rect.top + rect.height * 0.3;
+      const color = palette[i % palette.length];
+      dot.style.cssText =
+        `position:fixed;left:${x0 - size / 2}px;top:${y0 - size / 2}px;` +
+        `width:${size}px;height:${size}px;border-radius:50%;pointer-events:none;z-index:9;` +
+        `background:radial-gradient(circle at 35% 35%,#fff 0 12%,${color} 40%,transparent 70%)`;
+      document.body.appendChild(dot);
+      const dx = (Math.random() - 0.5) * rect.width * 0.9;
+      const dy = -(rect.height * (1.2 + Math.random() * 2.6));
+      const anim = dot.animate(
+        [
+          { transform: 'translate(0,0) scale(.5)', opacity: 1 },
+          { transform: `translate(${dx}px,${dy}px) scale(1.2)`, opacity: 0 },
+        ],
+        { duration: 700 + Math.random() * 700, easing: 'cubic-bezier(.15,.7,.3,1)' },
+      );
+      anim.onfinish = () => dot.remove();
+      // Si el navegador cancela la animacion, el nodo igual se limpia.
+      anim.oncancel = () => dot.remove();
+    }
   }
 
   // ==========================================================================
@@ -2056,6 +2151,25 @@ export class HUD {
   }
 
   /**
+   * Proveedor del estado de "Continuar" (espejo de `bindCollectionProvider`).
+   *
+   * POR QUE EXISTE: `setContinueAvailable` empuja un valor y solo sirve si
+   * alguien lo llama en el momento justo. El menu, en cambio, se construye cada
+   * vez que se entra al estado `menu` (boot, salir de la run, cerrar un panel),
+   * y en TODOS esos casos tiene que mostrar el estado REAL del guardado. Con un
+   * proveedor, el HUD pregunta al construirse y no depende del orden de las
+   * llamadas.
+   */
+  bindContinueProvider(fn: () => string | null): void {
+    this.continueProvider = fn;
+  }
+
+  /** Estado de "Continuar" a usar: el proveedor manda sobre el valor cacheado. */
+  private currentContinueLabel(): string | null {
+    return this.continueProvider ? this.continueProvider() : this.continueLabel;
+  }
+
+  /**
    * Salida al MENU PRINCIPAL desde la partida, con un panel de confirmacion.
    *
    * Se usa un panel y no el "dos toques" del boton de vender joker: abandonar la
@@ -2156,7 +2270,7 @@ export class HUD {
     const panel = buildMenuPanel(
       {
         version: this.appInfo.version,
-        continueLabel: this.continueLabel,
+        continueLabel: this.currentContinueLabel(),
         // El duelo solo se ofrece si el contenido trae datos de tablero: un
         // boton que abre un panel vacio es peor que no tener el boton.
         showBoard: this.boardAvailable,
@@ -2714,39 +2828,33 @@ export class HUD {
   /**
    * Draft de recompensa al ganar un blind.
    *
-   * Se monta sobre el CARRUSEL 3D: el panel DOM es solo el marco (titulo arriba,
-   * accion abajo) y las 3 ofertas se dibujan como `Card3D` reales en el arco del
-   * canvas. El HUD no tiene acceso al render, asi que le pasa las ofertas por
-   * `onRewardCarousel` y recibe el foco por `onFocus`.
+   * Usa el MISMO lenguaje visual que el Mercado del Micelio (grid `.offer`): la
+   * cara de la carta es la ficha y el pie trae el boton "Elegir". Antes esto era
+   * un carrusel 3D propio, lo que obligaba a aprender dos lenguajes para la
+   * misma decision ("elegir 1 entre N"). El HUD compone la cara porque es quien
+   * tiene el motor y las imagenes decodificadas del render.
    */
   showReward(): void {
     const offers = this.engine.rewardOffers();
-    const frame = buildRewardCarouselFrame(
+    const panel = buildRewardPanel(
       {
         offers,
         pick: this.engine.rewardPick,
         allowSkip: this.engine.rewardAllowSkip,
         taken: offers.filter((o) => o.sold).length,
-        // La cara de la carta la compone el HUD: es quien tiene el motor y las
-        // imagenes decodificadas del render.
         artFor: (offer) =>
           offerFaceUrl(offer, this.engine, t, {
             card: this.cardArt,
             joker: this.jokerArt,
           }),
+        labelFor: (kind) => offerLabel(kind),
       },
       {
         onPick: (offerId) => this.callbacks.onPickReward(offerId),
         onSkip: () => this.callbacks.onPickReward(null),
       },
     );
-    // `carousel: true` para que `onPanelOpened` NO apague la escena 3D: el
-    // anillo de recompensa es justamente lo que hay que ver.
-    this.showPanel(frame.panel, { carousel: true });
-    this.callbacks.onRewardCarousel?.({
-      offerIds: offers.map((o) => o.id),
-      onFocus: (index) => frame.setFocus(index),
-    });
+    this.showPanel(panel);
   }
 
   /**

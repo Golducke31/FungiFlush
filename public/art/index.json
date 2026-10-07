@@ -60,6 +60,18 @@
     "art_card_own_decay_compost_heap.webp",
     "art_card_own_decay_inkcap.webp",
     "art_card_own_decay_rotwood.webp",
+    "art_card_own_deep_awakening_bracket.webp",
+    "art_card_own_deep_carrion_lattice.webp",
+    "art_card_own_deep_chain_rhizomorph.webp",
+    "art_card_own_deep_cross_mycorrhiza.webp",
+    "art_card_own_deep_herald_cap.webp",
+    "art_card_own_deep_hybrid_lattice.webp",
+    "art_card_own_deep_latent_sporocarp.webp",
+    "art_card_own_deep_network_core.webp",
+    "art_card_own_deep_parasite_lash.webp",
+    "art_card_own_deep_slumber_amanita.webp",
+    "art_card_own_deep_spore_conduit.webp",
+    "art_card_own_deep_symbiont_veil.webp",
     "art_card_own_ergot_rye.webp",
     "art_card_own_ghost_fungus.webp",
     "art_card_own_mycelium_truffle.webp",
@@ -97,6 +109,7 @@
     "art_card_symbiosis_rare.webp",
     "art_card_symbiosis_uncommon.webp",
     "art_cardback.webp",
+    "art_cardback_mycelial.webp",
     "art_crystal.webp",
     "art_decay.webp",
     "art_legendary.webp",
@@ -106,6 +119,9 @@
     "art_poison.webp",
     "art_spore.webp",
     "art_symbiosis.webp",
-    "art_table.webp"
+    "art_table.webp",
+    "ui_play_frame.webp",
+    "ui_play_text_en.webp",
+    "ui_play_text_es.webp"
   ]
 }

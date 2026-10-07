@@ -114,9 +114,15 @@ import { cardDefFaceUrl } from '@ui/cardArt';
 import type { PackCardView } from '@render/PackOpening';
 import {
   DEFAULT_CARDS_PER_PACK,
+  EXPANSION_PACK_ID,
+  consumeExpansionPack,
   consumePack,
   drawPack,
+  grantExpansionPack,
   grantPack,
+  rollPackDrop,
+  rollPackKind,
+  type PackDropKind,
   type PackRarity,
 } from '@meta/Packs';
 import type { BoardScreen } from '@ui/BoardScreen';
@@ -334,6 +340,20 @@ async function boot(): Promise<void> {
   // entera produce UNA escritura, no doscientas. El menu no se guarda nunca.
   let savedRun: RunSaveData | null = null;
 
+  /**
+   * Texto del chip "Continuar" para un guardado dado (`null` = no hay run).
+   *
+   * Es la UNICA traduccion de "hay guardado" a "texto del chip": antes el
+   * string se armaba inline en el boot, y cualquier otro punto del ciclo de vida
+   * que quisiera refrescar el chip tenia que repetir la formula (o quedarse
+   * desactualizado, que es lo que pasaba).
+   */
+  const continueLabelFor = (save: RunSaveData | null): string | null =>
+    save ? `${t('hud.ante')} ${save.ante} · ${t('ui.seed')} ${save.seed}` : null;
+
+  /** Empuja al HUD el estado de "Continuar" derivado de `savedRun`. */
+  const syncContinueState = (): void => hud?.setContinueAvailable(continueLabelFor(savedRun));
+
   bus.on('state:changed', ({ run }) => {
     if (run.status === 'menu') {
       runStore.cancelAutosave();
@@ -424,6 +444,25 @@ async function boot(): Promise<void> {
       now,
     });
 
+    // Los Sobres ya NO caen en cualquier ciego: solo los suelta un JEFE, y no
+    // siempre. `round:win` se emite ANTES de que `leaveShop` avance el
+    // `blindIndex`, asi que en este instante `round.blind` es el ciego recien
+    // vencido. `tier === 'boss'` es la etiqueta de contenido; `effects.length`
+    // es el respaldo para contenido viejo que no declara `tier`.
+    const blind = round.blind;
+    const isBoss = blind?.tier === 'boss' || (blind?.effects?.length ?? 0) > 0;
+    // RNG sembrado con el reloj: un drop NO necesita ser reproducible (a
+    // diferencia de la run) y sembrarlo con la semilla de la partida filtraria
+    // el estado del juego a la economia meta. Mismo criterio que `openPacks`.
+    const dropRng = new RNG((Date.now() ^ 0x5f3759df) >>> 0);
+
+    // El sorteo se resuelve ANTES del patch (que es sincrono): asi el resultado
+    // y el tipo de sobre quedan fijos y el `patch` solo los aplica.
+    const dropRoll = isBoss
+      ? rollPackDrop(dropRng, profileStore.current.packs.bossMisses)
+      : null;
+    const dropKind: PackDropKind = dropRoll?.drop ? rollPackKind(dropRng) : 'base';
+
     let levelAfter = 0;
     let newRewards: string[] = [];
     let packTotal = 0;
@@ -431,11 +470,15 @@ async function boot(): Promise<void> {
       const result = applyBlindAward(p.colony, award, now);
       levelAfter = result.levelAfter;
       newRewards = result.newRewards;
-      // Superar un Ciego tambien da 1 Sobre. Se otorga SIEMPRE (no solo la
-      // primera vez del ciego): la Colonia tiene su propio anti-farm en las
-      // Esporas, pero los Sobres son el flujo constante de recompensa y cortarlo
-      // en repeticiones los volveria inalcanzables al farmear un ante comodo.
-      packTotal = grantPack(p.packs, 1);
+      if (!dropRoll) return;
+      // Pity: si ya fallo `PACK_PITY_AFTER` Jefes seguidos, este lo entrega si o
+      // si y el contador vuelve a cero.
+      p.packs.bossMisses = dropRoll.misses;
+      if (!dropRoll.drop) return;
+      packTotal =
+        dropKind === 'expansion'
+          ? grantExpansionPack(p.packs, 1)
+          : grantPack(p.packs, 1);
     });
 
     runColony.spores += award.total;
@@ -452,7 +495,7 @@ async function boot(): Promise<void> {
       // Sin subida de nivel, el aviso es el sobre: asi el jugador se entera de
       // que tiene algo para abrir sin tener que entrar a la Coleccion.
       bus.emit('banner:show', {
-        key: 'banner.pack.earned',
+        key: dropKind === 'expansion' ? 'banner.pack.expansion' : 'banner.pack.earned',
         params: { count: packTotal },
         kind: 'success',
       });
@@ -608,6 +651,10 @@ async function boot(): Promise<void> {
         kind: 'card',
         state: stateOf(card.id),
         seen: seen.has(card.id),
+        // Cuantas copias se obtuvieron de sobres: la Coleccion muestra "xN" en
+        // vez de repetir la carta. Los jokers no llevan contador (los sobres
+        // nunca dan jokers).
+        count: profile.collection.ownedCounts[card.id] ?? 0,
         ...(profile.collection.unlockSource[card.id]
           ? { unlockSource: profile.collection.unlockSource[card.id] }
           : {}),
@@ -829,29 +876,6 @@ async function boot(): Promise<void> {
 
   /** El mazo usa el mismo anillo que la coleccion. */
   const DECK_CAROUSEL = { radius: 9, halfSpan: 5, wrap: true, lift: 1.9 };
-
-  /**
-   * El draft de recompensa NO es un anillo: son 3 cartas en un ARCO abierto.
-   *
-   * `wrap:false` para que el indice se CLAMPEe a los extremos (es una eleccion
-   * de una sola vez, no una lista circular) y `arcStep` para separar las cartas
-   * sin cerrar el circulo.
-   *
-   * `radius:20` + `arcStep:0.55` es lo importante y NO es intuitivo: con un
-   * radio CHICO (9, como el mazo) el arco es tan curvado que las ofertas de los
-   * costados quedan muy por detras de la del frente y la perspectiva las encoge.
-   * Un radio GRANDE aplana el arco y deja las 3 cartas casi a la misma
-   * profundidad. Barrido medido con `tools/_tune-reward-arc.mjs` a 915x412,
-   * contando solo las 3 cartas REALES (el foco esta en la del medio):
-   *   r=16 step=.85 -> 89.2%   r=18 step=.85 -> 95.9% (19..896)
-   *   r=20 step=.55 -> 95.8% (21..897)   r=20 step=.65 -> 100.1% (3..919, se sale)
-   * r=20/step=.55 es el mejor que entra ENTERO con margen a los dos lados.
-   *
-   * `halfSpan:2` basta para 3 ofertas (5 slots): con 3 el pool construye 7 y
-   * los 4 de mas se apelotonan detras de los extremos sin aportar nada (y, sin
-   * el guard de `wrap:false` en CardCarousel, dejaban cartas fantasma al costado).
-   */
-  const REWARD_CAROUSEL = { radius: 20, halfSpan: 2, wrap: false, lift: 1.9, arcStep: 0.55 };
 
   /**
    * Handler del gesto "tocar la carta centrada" en el carrusel activo.
@@ -1105,7 +1129,7 @@ async function boot(): Promise<void> {
       },
       onRestart: () => {
         savedRun = null;
-        hud?.setContinueAvailable(null);
+        syncContinueState();
         void runStore.clear();
         engine.startRun();
         scene.setMode('run');
@@ -1119,11 +1143,20 @@ async function boot(): Promise<void> {
        *      abandonar.
        *   2. `savedRun` se limpia para que el chip no reaparezca en memoria.
        *   3. La escena vuelve a modo menu (decorado + sin arena de juego).
+       *
+       * El `clear()` es ASINCRONO: el chip se apaga ya (punto 2), pero recien
+       * cuando el borrado termina se vuelve a leer el disco. Leerlo antes
+       * resucitaria el guardado viejo y el chip reapareceria solo.
        */
       onQuitToMenu: () => {
         savedRun = null;
-        hud?.setContinueAvailable(null);
-        void runStore.clear();
+        syncContinueState();
+        void runStore.clear().then(() => {
+          void runStore.load().then((restored) => {
+            savedRun = restored;
+            syncContinueState();
+          });
+        });
         // El estado meta se empuja ANTES de `enterMenu`: el panel del menu se
         // construye en ese cambio de estado y no se vuelve a dibujar.
         syncMenuMeta();
@@ -1134,7 +1167,7 @@ async function boot(): Promise<void> {
         if (!savedRun) return;
         if (engine.restore(savedRun)) {
           savedRun = null;
-          hud?.setContinueAvailable(null);
+          syncContinueState();
           scene.setMode('run');
         } else {
           hud?.toast(t('log.saveIncompatible'), 'warn');
@@ -1271,44 +1304,6 @@ async function boot(): Promise<void> {
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
       },
-      /**
-       * El draft de recompensa vive sobre el carrusel 3D. El HUD manda las
-       * ofertas y el handler de foco; aca se arma el anillo con un ARCO abierto
-       * (`arcStep` chico, `wrap:false`): son 3 cartas en fila, no un anillo, y
-       * el indice no debe dar la vuelta.
-       */
-      onRewardCarousel: (info) => {
-        carouselActivate = null;
-        if (!info) {
-          scene.setCarousel(null);
-          return;
-        }
-        const entries: CarouselEntryView[] = [];
-        for (const id of info.offerIds) {
-          const offer = engine.rewardOffers().find((o) => o.id === id);
-          if (!offer) continue;
-          entries.push({
-            uid: offer.id,
-            discovered: true,
-            ...(offer.kind === 'joker' ? { jokerId: offer.refId } : { cardId: offer.refId }),
-          });
-        }
-        scene.setCarousel(entries, info.onFocus, REWARD_CAROUSEL);
-        // El arco se ancla en la entrada ENFOCADA. Sin esto el foco cae en la
-        // oferta 0 y las tres cartas quedan desplazadas hacia un costado del
-        // canvas (medido: el arco se iba a x=380..894 en 915px, o sea
-        // descentrado y ocupando 56% del ancho). Parandolo en la oferta del
-        // MEDIO, el arco queda simetrico respecto del centro y las 3 se
-        // reparten el ancho.
-        const middle = Math.floor(entries.length / 2);
-        if (middle > 0) {
-          scene.focusCarousel(middle);
-          // El detalle DOM nace enfocado en la oferta 0 (el frame no sabe que
-          // el arco se ancla en el medio): se sincroniza o el pie diria una
-          // cosa y la carta centrada seria otra.
-          info.onFocus(middle);
-        }
-      },
       onUseLoadedDie: () => {
         // Habilidad del Simbionte legendario: carga el dado. El motor sortea la
         // cara (RNG sembrado) y aca el cubo la anima hasta apoyarse; recien
@@ -1335,6 +1330,11 @@ async function boot(): Promise<void> {
   hud.setUiState(profileStore.current.ui);
 
   hud.bindCollectionProvider(buildCollection);
+  // El chip "Continuar" se re-deriva al CONSTRUIR el menu (no se cachea): asi
+  // cualquier via que lleve al menu — boot, salir de la run, cerrar un panel —
+  // lo dibuja con el estado REAL de `savedRun`, sin depender del orden en que
+  // se llamaron `setContinueAvailable` y `enterMenu`.
+  hud.bindContinueProvider(() => continueLabelFor(savedRun));
 
   // --- Fase 3: auto-orden de la mano ---
   // Si el ajuste `autoSortHand` esta activo (por defecto SI), la mano se ordena
@@ -1495,24 +1495,36 @@ async function boot(): Promise<void> {
    * resuelve cada carta a su vista (nombre, rareza, cara con arte real) y se
    * monta el overlay.
    *
+   * `kind` distingue el sobre BASE del de EXPANSION: el de expansion solo saca
+   * cartas del pack `EXPANSION_PACK_ID`, asi que su pool se filtra por origen.
+   *
    * El RNG se siembra con el reloj: un sobre NO necesita ser reproducible (a
    * diferencia de una run), y sembrarlo con la semilla de la partida filtraria
    * el estado del juego a la economia meta.
    */
-  const openPacks = (): void => {
+  const openPacks = (kind: PackDropKind = 'base'): void => {
     const inventory = profileStore.current.packs;
-    if (inventory.pending <= 0) {
-      hud?.toast(t('packs.none'), 'info');
+    const pending = kind === 'expansion' ? inventory.expansionPending : inventory.pending;
+    const emptyKey = kind === 'expansion' ? 'packs.expansion.none' : 'packs.none';
+    if (pending <= 0) {
+      hud?.toast(t(emptyKey), 'info');
       return;
     }
-    // El pool son las cartas BASE que el jugador PUEDE ver (el mismo `poolOf`
-    // que alimenta la Coleccion). No se sortean jokers: un sobre entrega
+
+    // El pool son las cartas que el jugador PUEDE ver (el mismo `poolOf` que
+    // alimenta la Coleccion). No se sortean jokers: un sobre entrega
     // especimenes, que es lo que se colecciona por cantidad.
-    const pool = (content.registry.poolOf('card') as CardDefinition[])
+    const allCards = content.registry.poolOf('card') as CardDefinition[];
+    const pool = allCards
+      .filter((def) =>
+        kind === 'expansion' ? content.registry.packOf(def.id) === EXPANSION_PACK_ID : true,
+      )
       .map((def) => def.id)
       .filter((id) => id.length > 0);
     if (pool.length === 0) {
-      hud?.toast(t('packs.none'), 'info');
+      // Pack de expansion sin contenido cargado (o pool vacio): se avisa en vez
+      // de abrir un sobre que no puede entregar nada.
+      hud?.toast(t(emptyKey), 'info');
       return;
     }
 
@@ -1528,7 +1540,7 @@ async function boot(): Promise<void> {
       rara: 'rare',
       epica: 'legendary',
     };
-    const byId = new Map((content.registry.poolOf('card') as CardDefinition[]).map((d) => [d.id, d]));
+    const byId = new Map(allCards.map((d) => [d.id, d]));
 
     const views: PackCardView[] = drawn.map((card) => {
       const def = byId.get(card.cardId);
@@ -1547,11 +1559,25 @@ async function boot(): Promise<void> {
     // El sobre se consume ACA (no al cerrar): abrir el overlay ES usarlo. Si se
     // consumiera al cerrar, cerrar con la X lo dejaria disponible y se podria
     // abrir el mismo sobre infinitas veces.
-    profileStore.patch((p) => consumePack(p.packs));
+    //
+    // Ademas se anota CUANTAS copias de cada carta se obtuvieron: es lo que
+    // alimenta el badge "xN" de la Coleccion. Solo cuenta cartas (los sobres
+    // nunca dan jokers).
+    profileStore.patch((p) => {
+      if (kind === 'expansion') consumeExpansionPack(p.packs);
+      else consumePack(p.packs);
+      for (const card of drawn) {
+        if (!card.cardId) continue;
+        p.collection.ownedCounts[card.cardId] = (p.collection.ownedCounts[card.cardId] ?? 0) + 1;
+      }
+    });
 
     hud?.showPackOpening({
       cards: views,
-      pendingLeft: () => profileStore.current.packs.pending,
+      pendingLeft: () =>
+        kind === 'expansion'
+          ? profileStore.current.packs.expansionPending
+          : profileStore.current.packs.pending,
       onClose: () => {
         // Al cerrar se vuelve a la Coleccion: se abrieron sobres DESDE ahi.
         openCollection();
@@ -2050,9 +2076,7 @@ async function boot(): Promise<void> {
   // boton "Continuar" dependen de que exista (o no) una partida guardada, y el
   // panel se construye UNA sola vez al entrar al estado `menu`.
   savedRun = await runStore.load();
-  if (savedRun) {
-    hud.setContinueAvailable(`${t('hud.ante')} ${savedRun.ante} · ${t('ui.seed')} ${savedRun.seed}`);
-  }
+  syncContinueState();
   // Antes de dibujar el menu: el icono de Perfil lee este estado.
   syncAscension();
   // Cosméticos (R4b): aplica el dorso/tapete guardado y alimenta el panel.

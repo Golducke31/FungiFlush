@@ -34,6 +34,7 @@ export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   2: migrateProfileV2toV3,
   3: migrateProfileV3toV4,
   4: migrateProfileV4toV5,
+  5: migrateProfileV5toV6,
 };
 
 export function migrateChain(
@@ -201,6 +202,50 @@ export function migrateProfileV4toV5(input: UnknownRecord): UnknownRecord {
 }
 
 /**
+ * Perfil: v5 -> v6
+ *
+ * v6 agrega dos cosas que van juntas porque nacieron del mismo rediseno:
+ *
+ *   - `packs.bossMisses` / `packs.expansionPending` / `packs.expansionOpened`:
+ *     los sobres dejan de caer en CADA ciego y pasan a caer solo al vencer a un
+ *     Jefe, con pity (`rollPackDrop`), y aparece un segundo tipo de sobre (el de
+ *     expansion).
+ *   - `collection.ownedCounts`: cuantas copias de cada carta se obtuvieron de
+ *     sobres, para que la Coleccion muestre "xN" en vez de repetir la carta.
+ *
+ * Defaults a proposito: todo en cero / objeto vacio. Un perfil v5 es de alguien
+ * que jugo antes de este cambio; no se le puede reconstruir hacia atras cuantas
+ * copias saco de cada sobre, asi que empieza a contar desde ahora.
+ */
+export function migrateProfileV5toV6(input: UnknownRecord): UnknownRecord {
+  const initial = defaultPackInventory();
+  const rawPacks = input['packs'];
+  const packData = typeof rawPacks === 'object' && rawPacks !== null ? (rawPacks as UnknownRecord) : {};
+  const rawCollection = input['collection'];
+  const collectionData =
+    typeof rawCollection === 'object' && rawCollection !== null ? (rawCollection as UnknownRecord) : {};
+  return {
+    ...input,
+    version: 6,
+    packs: {
+      ...packData,
+      pending: numberOr(packData['pending'], initial.pending),
+      opened: numberOr(packData['opened'], initial.opened),
+      expansionPending: numberOr(packData['expansionPending'], initial.expansionPending),
+      expansionOpened: numberOr(packData['expansionOpened'], initial.expansionOpened),
+      bossMisses: numberOr(packData['bossMisses'], initial.bossMisses),
+    },
+    collection: {
+      ...collectionData,
+      ownedCounts:
+        typeof collectionData['ownedCounts'] === 'object' && collectionData['ownedCounts'] !== null
+          ? collectionData['ownedCounts']
+          : {},
+    },
+  };
+}
+
+/**
  * Migra un guardado de run. Devuelve null si es ilegible o de una version
  * futura (en ese caso la capa superior lo pone en cuarentena).
  */
@@ -238,12 +283,43 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // sigue siendo valido, y uno corrupto en una seccion no tumba al resto.
   const settings = { ...fallback.settings, ...((migrated['settings'] as object) ?? {}) };
   const entitlements = { ...fallback.entitlements, ...((migrated['entitlements'] as object) ?? {}) };
+  // Los packs INCLUIDOS en la app se garantizan SIEMPRE. Un perfil viejo trae
+  // `owned: ['pack.base']` y el merge hace ganar al perfil, asi que sin esto una
+  // actualizacion que agrega contenido incluido dejaria sus cartas bloqueadas
+  // (la Coleccion las mostraria como "superficie de venta" de algo que ya se
+  // pago). Se UNEN, no se reemplazan: los entitlements comprados se conservan.
+  const ownedEntitlements = Array.isArray(entitlements.owned) ? [...entitlements.owned] : [];
+  for (const id of fallback.entitlements.owned) {
+    if (!ownedEntitlements.includes(id)) ownedEntitlements.push(id);
+  }
+  entitlements.owned = ownedEntitlements;
   // `pendingUnlocks` (R2) entra por aca y NO necesita linea propia porque el
   // spread ya cubre cualquier campo nuevo de `collection`. Se deja el spread a
   // proposito: enumerar los campos a mano es exactamente la trampa que este
   // archivo documenta (un campo nuevo se descarta en silencio).
   const collection = { ...fallback.collection, ...((migrated['collection'] as object) ?? {}) };
+  // v6: `ownedCounts` es un mapa id -> cantidad. Se descartan las entradas
+  // basura (no numericas, negativas o cero) para que el badge de la Coleccion no
+  // muestre "x-3" ni "xNaN" con un perfil editado a mano.
+  const ownedRaw = (collection as UnknownRecord)['ownedCounts'];
+  const ownedCounts: Record<string, number> = {};
+  if (typeof ownedRaw === 'object' && ownedRaw !== null) {
+    for (const [id, value] of Object.entries(ownedRaw as UnknownRecord)) {
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        ownedCounts[id] = Math.floor(value);
+      }
+    }
+  }
+  collection.ownedCounts = ownedCounts;
   const cosmetics = { ...fallback.cosmetics, ...((migrated['cosmetics'] as object) ?? {}) };
+  // Mismo criterio que los entitlements: los cosmeticos INCLUIDOS (dorso
+  // clasico + el de la expansion) se garantizan. Un perfil viejo trae
+  // `owned: ['default']` y el dorso nuevo no apareceria nunca en el panel.
+  const ownedCosmetics = Array.isArray(cosmetics.owned) ? [...cosmetics.owned] : [];
+  for (const id of fallback.cosmetics.owned) {
+    if (!ownedCosmetics.includes(id)) ownedCosmetics.push(id);
+  }
+  cosmetics.owned = ownedCosmetics;
   const stats = { ...fallback.stats, ...((migrated['stats'] as object) ?? {}) };
   const board = { ...fallback.board, ...((migrated['board'] as object) ?? {}) };
   // Retencion (P0): campos ADITIVOS. El merge sobre el default alcanza y sobra,
@@ -315,6 +391,13 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   packs.opened = Math.max(0, Math.floor(packs.opened));
   if (!Number.isFinite(packs.pending)) packs.pending = 0;
   if (!Number.isFinite(packs.opened)) packs.opened = 0;
+  // v6: segundo tipo de sobre (expansion) + contador del pity de Jefes.
+  packs.expansionPending = Math.max(0, Math.floor(packs.expansionPending));
+  packs.expansionOpened = Math.max(0, Math.floor(packs.expansionOpened));
+  packs.bossMisses = Math.max(0, Math.floor(packs.bossMisses));
+  if (!Number.isFinite(packs.expansionPending)) packs.expansionPending = 0;
+  if (!Number.isFinite(packs.expansionOpened)) packs.expansionOpened = 0;
+  if (!Number.isFinite(packs.bossMisses)) packs.bossMisses = 0;
 
   // Cuenta (v4): OBJETO anidado ADITIVO.
   const accountRaw = migrated['account'];

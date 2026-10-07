@@ -405,7 +405,11 @@ test('el jugador que arranca se sortea desde la semilla', () => {
 test('board.json del pack base cubre todas las cartas y tiene 8 flechas', () => {
   const registry = buildRegistry();
   const defs = registry.boardDefs();
-  const cardIds = new Set(registry.poolOf('card').map((c) => c.id));
+  // Solo el pack base tiene board.json; las cartas de expansion usan el
+  // tablero "vacío" por defecto y no necesitan flechas.
+  const cardIds = new Set(
+    registry.poolOf('card').filter((c) => registry.packOf(c.id) === 'base').map((c) => c.id),
+  );
 
   assert.ok(defs.length > 0, 'el pack base deberia declarar datos de tablero');
   assert.equal(defs.length, cardIds.size, 'todas las cartas del base juegan en el tablero');

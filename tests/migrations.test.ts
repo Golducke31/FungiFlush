@@ -210,6 +210,46 @@ test('basura en colony/account no rompe el arranque', () => {
   assert.deepEqual(migrated.account.pendingResults, []);
 });
 
+test('v5 -> v6: sobres de Jefe y copias de la Coleccion arrancan en cero', () => {
+  const migrated = migrateProfileSave({
+    version: 5,
+    packs: { pending: 2, opened: 5 },
+    collection: { seenCardIds: ['spore_puffball'] },
+  });
+  assert.equal(migrated.version, PROFILE_SAVE_VERSION);
+  // Los contadores viejos sobreviven.
+  assert.equal(migrated.packs.pending, 2);
+  assert.equal(migrated.packs.opened, 5);
+  // Los nuevos caen a cero / objeto vacio: no se puede reconstruir hacia atras.
+  assert.equal(migrated.packs.expansionPending, 0);
+  assert.equal(migrated.packs.expansionOpened, 0);
+  assert.equal(migrated.packs.bossMisses, 0);
+  assert.deepEqual(migrated.collection.ownedCounts, {});
+  // Lo que ya conocia el perfil se preserva.
+  assert.deepEqual(migrated.collection.seenCardIds, ['spore_puffball']);
+});
+
+test('v6: un ownedCounts con basura se limpia (no numericos, negativos, cero)', () => {
+  const migrated = migrateProfileSave({
+    version: 6,
+    collection: {
+      ownedCounts: { a: 3, b: -2, c: 0, d: 'x', e: 2.7, f: Number.NaN },
+    },
+  });
+  assert.deepEqual(migrated.collection.ownedCounts, { a: 3, e: 2 });
+});
+
+test('v6: un packs con contadores basura se fuerza a enteros >= 0', () => {
+  const migrated = migrateProfileSave({
+    version: 6,
+    packs: { pending: -3, opened: 'x', expansionPending: 1.9, bossMisses: -1 },
+  });
+  assert.equal(migrated.packs.pending, 0);
+  assert.equal(migrated.packs.opened, 0);
+  assert.equal(migrated.packs.expansionPending, 1);
+  assert.equal(migrated.packs.bossMisses, 0);
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);

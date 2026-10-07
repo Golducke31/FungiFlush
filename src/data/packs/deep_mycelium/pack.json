@@ -1,0 +1,14 @@
+{
+  "id": "deep_mycelium",
+  "version": 1,
+  "kind": "expansion",
+  "priority": 10,
+  "titleKey": "pack.deep_mycelium.title",
+  "descKey": "pack.deep_mycelium.desc",
+  "requires": { "appMin": "1.0.0", "packs": ["base"] },
+  "gating": { "entitlement": "pack.deep_mycelium", "lockedVisibility": "visible" },
+  "contents": {
+    "cards": ["cards/01_deep.json"],
+    "jokers": ["jokers.json"]
+  }
+}

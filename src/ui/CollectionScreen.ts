@@ -38,6 +38,14 @@ export interface CollectionEntry {
   unlockSource?: string;
   /** El jugador ya la vio en una partida. */
   seen: boolean;
+  /**
+   * Cuantas copias de esta carta posee el jugador (solo CARTAS; los jokers no
+   * llevan contador porque los sobres nunca los entregan).
+   *
+   * Es lo que permite mostrar "xN" en vez de repetir la misma carta tantas
+   * veces como copias haya. `0`/`undefined` = no mostrar badge.
+   */
+  count?: number;
 }
 
 export interface CollectionCallbacks {
@@ -67,6 +75,25 @@ function lockLabel(entry: CollectionEntry): string {
   return t('collection.locked', {
     pack: entry.packTitleKey ? t(entry.packTitleKey) : entry.id,
   });
+}
+
+/**
+ * Pildora "xN" con las copias poseidas de una carta.
+ *
+ * Devuelve `null` cuando no corresponde mostrarla (joker, cero copias, carta no
+ * descubierta o bloqueada): asi el llamador no tiene que repetir la condicion.
+ */
+function countBadge(entry: CollectionEntry): HTMLElement | null {
+  const count = entry.count ?? 0;
+  if (entry.kind !== 'card' || count <= 0) return null;
+  if (entry.state === 'locked') return null;
+  if (!entry.seen && entry.state !== 'unlocked') return null;
+  const badge = document.createElement('span');
+  badge.className = 'collection-count';
+  badge.textContent = `x${count}`;
+  badge.title = t('collection.copies', { count });
+  badge.setAttribute('aria-label', t('collection.copies', { count }));
+  return badge;
 }
 
 /**
@@ -145,7 +172,9 @@ export function buildCollectionCarousel(
   detailName.className = 'carousel-detail-name';
   const detailMeta = document.createElement('div');
   detailMeta.className = 'carousel-detail-meta';
-  detail.append(detailName, detailMeta);
+  const detailCopies = document.createElement('div');
+  detailCopies.className = 'carousel-detail-copies';
+  detail.append(detailName, detailMeta, detailCopies);
 
   const actions = document.createElement('div');
   actions.className = 'panel-actions is-floating';
@@ -172,6 +201,7 @@ export function buildCollectionCarousel(
     if (!entry) {
       detailName.textContent = '';
       detailMeta.textContent = '';
+      detailCopies.textContent = '';
       return;
     }
     detailName.textContent = entry.seen ? t(entry.nameKey) : t('collection.unknown');
@@ -186,6 +216,11 @@ export function buildCollectionCarousel(
           ? `${t('collection.unlocked')} · ${t(`collection.unlockSource.${entry.unlockSource}`)}`
           : '';
     detailMeta.textContent = state ? `${kind} · ${state}` : kind;
+    // Copias poseidas: el detalle del carrusel las muestra como el badge "xN".
+    const copies = countBadge(entry);
+    detailCopies.textContent = copies ? (copies.textContent ?? '') : '';
+    detailCopies.title = copies ? (copies.title ?? '') : '';
+    detailCopies.classList.toggle('is-hidden', copies === null);
   };
 
   const filters: Array<[Filter, string]> = [
@@ -330,6 +365,10 @@ export function buildCollectionPanel(
           : hexToCss(RARITY_COLOR[entry.rarity] ?? ELEMENT_COLOR.neutral);
 
       cell.append(swatch, name);
+
+      // Copias poseidas: una carta, un badge "xN" (no N celdas repetidas).
+      const copies = countBadge(entry);
+      if (copies) cell.appendChild(copies);
 
       if (locked) {
         const badge = document.createElement('span');

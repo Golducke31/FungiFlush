@@ -17,7 +17,7 @@ import { defaultPackInventory } from './Packs';
 import type { LeaderboardSnapshot } from './Leaderboard';
 import { emptySnapshot } from './Leaderboard';
 
-export const PROFILE_SAVE_VERSION = 5;
+export const PROFILE_SAVE_VERSION = 6;
 
 export type Language = 'en' | 'es';
 
@@ -187,6 +187,17 @@ export interface ProfileSave {
      * desbloqueo se escribe en `unlockedCardIds`.
      */
     pendingUnlocks: Record<string, string>;
+    /**
+     * Cuantas copias de cada carta tiene el jugador, id -> cantidad (v6).
+     *
+     * Lo alimenta la apertura de Sobres: un sobre NO mete cartas al mazo, pero
+     * si suma especimenes. La Coleccion lo usa para mostrar el badge "xN" en vez
+     * de repetir la misma carta tantas veces como copias haya.
+     *
+     * Solo cuenta CARTAS (los sobres nunca dan jokers) y solo copias obtenidas
+     * de sobres; el mazo inicial de una run no infla este contador.
+     */
+    ownedCounts: Record<string, number>;
   };
   /** Recompensa diaria y racha. Ver `DailyState`. */
   daily: DailyState;
@@ -329,9 +340,10 @@ export function defaultProfile(): ProfileSave {
       notifyAchievements: true,
       autoSortHand: true,
     },
-    // Comprar la app otorga el pack base. Nunca se pone detras de otro pago.
+    // Comprar la app otorga el pack base y la expansion incluida. Nunca se pone
+    // detras de otro pago.
     entitlements: {
-      owned: ['pack.base'],
+      owned: ['pack.base', 'pack.deep_mycelium'],
       passes: [],
       offlineGraceMs: DEFAULT_OFFLINE_GRACE_MS,
     },
@@ -341,10 +353,11 @@ export function defaultProfile(): ProfileSave {
       unlockedJokerIds: [],
       unlockSource: {},
       pendingUnlocks: {},
+      ownedCounts: {},
     },
     daily: { lastClaimDate: null, lastClaimTs: 0, streak: 0, bestStreak: 0, history: [] },
     achievements: { unlockedIds: [], progress: {} },
-    cosmetics: { equippedCardBack: 'default', equippedFelt: 'default', owned: ['default'] },
+    cosmetics: { equippedCardBack: 'default', equippedFelt: 'default', owned: ['default', 'mycelial'] },
     starterOverrides: [],
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },

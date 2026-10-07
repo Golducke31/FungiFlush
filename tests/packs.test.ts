@@ -13,13 +13,19 @@ import { test } from 'node:test';
 
 import { RNG } from '../src/engine/rng.ts';
 import {
+  BOSS_PACK_DROP_CHANCE,
   DEFAULT_CARDS_PER_PACK,
+  PACK_PITY_AFTER,
   PACK_RARITY_ORDER,
   PACK_RARITY_WEIGHTS,
+  consumeExpansionPack,
   consumePack,
   defaultPackInventory,
   drawPack,
+  grantExpansionPack,
   grantPack,
+  rollPackDrop,
+  rollPackKind,
 } from '../src/meta/Packs.ts';
 
 const POOL = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
@@ -124,4 +130,88 @@ test('consumePack descuenta y cuenta los abiertos; sin pendientes falla', () => 
 
   assert.equal(consumePack(inv), false);
   assert.equal(inv.opened, 2);
+});
+
+// ---------------------------------------------------------------------------
+// Drop de Jefes (rollPackDrop) — los sobres ya no caen en cualquier ciego
+// ---------------------------------------------------------------------------
+
+test('rollPackDrop es determinista con la misma semilla', () => {
+  const a = rollPackDrop(new RNG(99), 0);
+  const b = rollPackDrop(new RNG(99), 0);
+  assert.deepEqual(a, b);
+});
+
+test('rollPackDrop: con chance 0 nunca cae y acumula fallos', () => {
+  const rng = new RNG(1);
+  let misses = 0;
+  for (let i = 0; i < 5; i++) {
+    const roll = rollPackDrop(rng, misses, 0, 99);
+    assert.equal(roll.drop, false);
+    misses = roll.misses;
+  }
+  assert.equal(misses, 5);
+});
+
+test('rollPackDrop: con chance 1 siempre cae y resetea el contador', () => {
+  const rng = new RNG(1);
+  const roll = rollPackDrop(rng, 3, 1, 99);
+  assert.equal(roll.drop, true);
+  assert.equal(roll.misses, 0);
+});
+
+test('rollPackDrop: el pity garantiza el sobre tras PACK_PITY_AFTER fallos', () => {
+  const rng = new RNG(7);
+  // Con chance 0 solo el pity puede entregarlo.
+  assert.equal(rollPackDrop(rng, 0, 0, PACK_PITY_AFTER).drop, false);
+  assert.equal(rollPackDrop(rng, 1, 0, PACK_PITY_AFTER).drop, false);
+  const pity = rollPackDrop(rng, PACK_PITY_AFTER, 0, PACK_PITY_AFTER);
+  assert.equal(pity.drop, true);
+  // Al caer, el contador vuelve a cero.
+  assert.equal(pity.misses, 0);
+});
+
+test('rollPackDrop: un contador basura se trata como cero', () => {
+  const roll = rollPackDrop(new RNG(3), -4, 1, PACK_PITY_AFTER);
+  assert.equal(roll.drop, true);
+  assert.equal(roll.misses, 0);
+});
+
+test('BOSS_PACK_DROP_CHANCE y el pity tienen los valores calibrados', () => {
+  assert.equal(BOSS_PACK_DROP_CHANCE, 0.5);
+  assert.equal(PACK_PITY_AFTER, 2);
+});
+
+test('rollPackKind: con expansionShare 1 es expansion; con 0 es base', () => {
+  assert.equal(rollPackKind(new RNG(5), 1), 'expansion');
+  assert.equal(rollPackKind(new RNG(5), 0), 'base');
+});
+
+// ---------------------------------------------------------------------------
+// Sobre de expansion: inventario propio
+// ---------------------------------------------------------------------------
+
+test('el inventario arranca con los dos tipos de sobre y el pity en cero', () => {
+  assert.deepEqual(defaultPackInventory(), {
+    pending: 0,
+    opened: 0,
+    expansionPending: 0,
+    expansionOpened: 0,
+    bossMisses: 0,
+  });
+});
+
+test('grant/consume del sobre de expansion es independiente del base', () => {
+  const inv = defaultPackInventory();
+  grantExpansionPack(inv, 2);
+  assert.equal(inv.expansionPending, 2);
+  // No toca el contador base.
+  assert.equal(inv.pending, 0);
+  assert.equal(consumeExpansionPack(inv), true);
+  assert.equal(inv.expansionPending, 1);
+  assert.equal(inv.expansionOpened, 1);
+  assert.equal(consumeExpansionPack(inv), true);
+  assert.equal(consumeExpansionPack(inv), false);
+  assert.equal(inv.expansionOpened, 2);
+  assert.equal(inv.opened, 0);
 });
