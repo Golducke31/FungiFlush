@@ -28,6 +28,14 @@
  */
 
 import { t } from '@i18n/index';
+import {
+  DECK_MAX,
+  DECK_MIN,
+  MAX_COPIES_PER_CARD,
+  addCopy,
+  removeCopy,
+  validateDeck,
+} from '@meta/DeckPresets';
 
 export interface MenuCallbacks {
   onStartRun: () => void;
@@ -1462,6 +1470,19 @@ export interface ArchetypePanelCallbacks {
   /** El jugador confirmo un arquetipo y quiere arrancar la run. */
   onStart: (archetypeId: string) => void;
   onClose: () => void;
+  /**
+   * Opcional: abrir el constructor de mazo propio. Si se omite, el boton no se
+   * dibuja (asi el panel sigue funcionando en contextos sin decks — tests que
+   * solo miran los 4 arquetipos).
+   */
+  onOpenDeckBuilder?: () => void;
+  /**
+   * Opcional: cuantas cartas tiene el mazo propio guardado, para el chip del
+   * boton. `0` = todavia no armo nada (el boton lo invita a armarlo).
+   */
+  deckSize?: number;
+  /** Opcional: `true` si el modo esta bloqueado por progreso. */
+  deckLocked?: boolean;
 }
 
 /**
@@ -1617,7 +1638,39 @@ export function buildArchetypePanel(
   startBtn.textContent = t('menu.newRun');
   startBtn.addEventListener('click', () => callbacks.onStart(selected));
 
-  footer.append(back, startBtn);
+  footer.append(back);
+
+  // Entrada al modo "Deck propio". Va en el pie, junto a Cerrar/Empezar, y no
+  // como una tarjeta mas de la lista: las tarjetas eligen una opcion de un set
+  // fijo y esta abre una PANTALLA distinta.
+  if (callbacks.onOpenDeckBuilder) {
+    const locked = callbacks.deckLocked === true;
+    const deckBtn = document.createElement('button');
+    deckBtn.type = 'button';
+    deckBtn.className = `btn is-ghost deck-open${locked ? ' is-locked' : ''}`;
+    deckBtn.dataset['act'] = 'deck-open';
+    deckBtn.textContent = t('customDeck.open');
+    if (locked) {
+      // Bloqueado por progreso: se muestra el candado en vez del tamano, y el
+      // click no navega (el controlador avisa como desbloquearlo).
+      const lock = document.createElement('span');
+      lock.className = 'deck-open-lock';
+      lock.textContent = t('customDeck.locked');
+      deckBtn.appendChild(lock);
+    } else if ((callbacks.deckSize ?? 0) > 0) {
+      const chip = document.createElement('span');
+      chip.className = 'deck-open-count';
+      chip.textContent = String(callbacks.deckSize);
+      deckBtn.appendChild(chip);
+    }
+    deckBtn.addEventListener('click', () => {
+      if (locked) return;
+      callbacks.onOpenDeckBuilder?.();
+    });
+    footer.append(deckBtn);
+  }
+
+  footer.append(startBtn);
 
   shell.append(head, list, footer);
   panel.appendChild(shell);
@@ -1633,5 +1686,270 @@ export function buildArchetypePanel(
     startBtn.textContent = t('archetype.startWith', { name: t(nameKeyOf(selected)) });
   };
   paintSelection();
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Constructor de mazo propio ("Deck propio")
+// ---------------------------------------------------------------------------
+
+/** Una carta que el jugador PUEDE poner en un mazo custom. */
+export interface DeckCatalogCard {
+  id: string;
+  nameKey: string;
+  element: string;
+  /** Color HEX (css) de la rareza, para el acento del nombre. */
+  rarityColor: string;
+  /** Cara real (misma que tienda/coleccion). `null` si no hay arte cargado. */
+  faceUrl: string | null;
+}
+
+export interface CustomDeckCallbacks {
+  /**
+   * El jugador confirmo el mazo. `entries` ya viene validado: la UI no llama a
+   * esto si `validateDeck` falla (el boton esta deshabilitado).
+   */
+  onStart: (entries: Array<{ cardId: string; copies: number }>) => void;
+  onClose: () => void;
+  /**
+   * El mazo cambio: el controlador lo persiste en el perfil. Se llama en cada
+   * toque (sumar/quitar) para que no haya un "guardar" que el jugador olvide.
+   */
+  onChange?: (entries: Array<{ cardId: string; copies: number }>) => void;
+}
+
+/**
+ * Constructor de mazo propio.
+ *
+ * POR QUE UN PANEL PROPIO Y NO UNA PESTANA MAS EN EL DE ARQUETIPOS
+ * ----------------------------------------------------------------
+ * El panel de arquetipos elige UNA opcion de una lista corta y fija. Armar un
+ * mazo es otra tarea: recorrer un catalogo largo, sumar copias carta por carta y
+ * ver el tamano en vivo. Como "una tarjeta mas" obligaria a scrollear el
+ * catalogo dentro de la lista de arquetipos.
+ *
+ * Se ABRE DESDE el panel de arquetipos con `data-act="deck-open"`: asi el
+ * jugador sigue teniendo un solo lugar donde se elige "con que arranco".
+ *
+ * El `data-act="archetypes-start"` del boton de arranque se REUTILIZA a
+ * proposito: las tools (`probe-*`, `audit-mobile-buttons`) ya lo buscan, y no
+ * hay razon para que un mazo custom tenga un flujo de "empezar" distinto.
+ *
+ * La validacion vive en `DeckPresets.validateDeck` (pura). Este archivo solo
+ * PINTA el resultado; no decide que es legal. Si el mazo no pasa, el boton de
+ * arranque se deshabilita y el aviso dice exactamente que falta.
+ */
+export function buildCustomDeckPanel(
+  catalog: DeckCatalogCard[],
+  initial: Array<{ cardId: string; copies: number }>,
+  callbacks: CustomDeckCallbacks,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-deck-builder';
+
+  const shell = document.createElement('div');
+  shell.className = 'deck-shell';
+
+  const head = document.createElement('div');
+  head.className = 'archetypes-head';
+  const title = document.createElement('h2');
+  title.className = 'archetypes-title';
+  title.textContent = t('customDeck.title');
+  const sub = document.createElement('p');
+  sub.className = 'archetypes-subtitle';
+  sub.textContent = t('customDeck.subtitle');
+  head.append(title, sub);
+
+  // Barra de tamano + aviso de validacion. Es lo que el jugador mira mientras
+  // arma: si no ve "20/40" en vivo, va a tocar "Empezar" y no va a entender por
+  // que no arranca.
+  const meter = document.createElement('div');
+  meter.className = 'deck-meter';
+  const meterBar = document.createElement('span');
+  meterBar.className = 'deck-meter-bar';
+  const meterFill = document.createElement('span');
+  meterFill.className = 'deck-meter-fill';
+  meterBar.appendChild(meterFill);
+  const meterText = document.createElement('span');
+  meterText.className = 'deck-meter-text';
+  meter.append(meterBar, meterText);
+
+  const notice = document.createElement('p');
+  notice.className = 'deck-notice';
+
+  const grid = document.createElement('div');
+  grid.className = 'deck-grid';
+
+  const footer = document.createElement('div');
+  footer.className = 'archetypes-footer';
+
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'archetypes-close';
+  back.dataset['act'] = 'deck-close';
+  back.textContent = t('ui.close');
+  back.addEventListener('click', callbacks.onClose);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'btn is-ghost';
+  clearBtn.dataset['act'] = 'deck-clear';
+  clearBtn.textContent = t('customDeck.clear');
+
+  const startBtn = document.createElement('button');
+  startBtn.type = 'button';
+  startBtn.className = 'btn is-play archetypes-start';
+  startBtn.dataset['act'] = 'archetypes-start';
+
+  footer.append(back, clearBtn, startBtn);
+
+  // Estado VIVO del mazo. Se muta por `addCopy`/`removeCopy` (puras) para no
+  // duplicar la regla del tope aca.
+  let entries = initial.map((e) => ({ ...e }));
+
+  const copiesOf = (cardId: string): number =>
+    entries.find((e) => e.cardId === cardId)?.copies ?? 0;
+
+  const sizeOf = (): number => entries.reduce((sum, e) => sum + e.copies, 0);
+
+  // El catalogo es el universo conocido Y poseido (el controlador ya filtro por
+  // ambas cosas), asi que ambas listas de ids son la misma.
+  const catalogIds = catalog.map((c) => c.id);
+
+  /**
+   * Reacciona a cada cambio: repinta contadores, barra, aviso y boton. Se llama
+   * despues de CUALQUIER mutacion para que no haya dos fuentes de verdad.
+   */
+  const refresh = (): void => {
+    const size = sizeOf();
+    // El aviso se calcula con la MISMA funcion pura que usa el controlador al
+    // arrancar: si aca dijera "listo" y alla fallara, el jugador no entenderia.
+    const validation = validateDeck(entries, catalogIds, catalogIds);
+    const inRange = size >= DECK_MIN && size <= DECK_MAX;
+
+    meterText.textContent = t('customDeck.size', { size, min: DECK_MIN, max: DECK_MAX });
+    const pct = Math.max(0, Math.min(1, size / DECK_MAX));
+    meterFill.style.width = `${Math.round(pct * 100)}%`;
+    meter.classList.toggle('is-under', size < DECK_MIN);
+    meter.classList.toggle('is-over', size > DECK_MAX);
+    meter.classList.toggle('is-ok', inRange);
+
+    // El aviso explica el PRIMER problema; el boton de arranque solo se habilita
+    // con el mazo legal. El texto del boton lleva el tamano, asi el numero que
+    // el jugador mira y el estado del boton son el mismo dato.
+    if (!inRange) {
+      notice.textContent =
+        size < DECK_MIN
+          ? t('customDeck.needMore', { count: DECK_MIN - size })
+          : t('customDeck.needLess', { count: size - DECK_MAX });
+      notice.className = 'deck-notice is-warn';
+    } else if (validation.errors.some((e) => e.code === 'too_many_copies')) {
+      notice.textContent = t('customDeck.tooManyCopies', { max: MAX_COPIES_PER_CARD });
+      notice.className = 'deck-notice is-warn';
+    } else {
+      notice.textContent = t('customDeck.ready');
+      notice.className = 'deck-notice is-ok';
+    }
+
+    startBtn.disabled = !validation.ok;
+    startBtn.textContent = t('customDeck.start', { size });
+
+    for (const cell of grid.querySelectorAll<HTMLElement>('.deck-card')) {
+      const cardId = cell.dataset['cardId'] ?? '';
+      const count = copiesOf(cardId);
+      const badge = cell.querySelector<HTMLElement>('.deck-card-count');
+      if (badge) {
+        badge.textContent = count > 0 ? `x${count}` : '';
+        badge.classList.toggle('is-zero', count === 0);
+      }
+      cell.classList.toggle('is-picked', count > 0);
+      cell.classList.toggle('is-max', count >= MAX_COPIES_PER_CARD);
+      const minus = cell.querySelector<HTMLButtonElement>('[data-step="-"]');
+      if (minus) minus.disabled = count === 0;
+      const plus = cell.querySelector<HTMLButtonElement>('[data-step="+"]');
+      if (plus) plus.disabled = count >= MAX_COPIES_PER_CARD || sizeOf() >= DECK_MAX;
+    }
+
+    callbacks.onChange?.(entries.map((e) => ({ ...e })));
+  };
+
+  for (const card of catalog) {
+    const cell = document.createElement('div');
+    cell.className = 'deck-card';
+    cell.dataset['cardId'] = card.id;
+
+    const art = document.createElement('div');
+    art.className = 'deck-card-art';
+    if (card.faceUrl) {
+      const img = document.createElement('img');
+      img.src = card.faceUrl;
+      img.alt = '';
+      img.draggable = false;
+      art.appendChild(img);
+    } else {
+      art.classList.add('is-empty');
+    }
+
+    const badge = document.createElement('span');
+    badge.className = 'deck-card-count';
+
+    // Dos botones (+/-) en vez de tocar la carta para sumar y un segundo gesto
+    // para restar: en movil landscape el toque accidental es comun, y "tocar
+    // para sumar" no tiene forma obvia de restar.
+    const controls = document.createElement('div');
+    controls.className = 'deck-card-controls';
+    const minus = document.createElement('button');
+    minus.type = 'button';
+    minus.className = 'deck-step';
+    minus.dataset['step'] = '-';
+    minus.dataset['act'] = 'deck-minus';
+    minus.dataset['cardId'] = card.id;
+    minus.textContent = '\u2212';
+    minus.setAttribute('aria-label', t('customDeck.removeOne', { name: t(card.nameKey) }));
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'deck-step';
+    plus.dataset['step'] = '+';
+    plus.dataset['act'] = 'deck-plus';
+    plus.dataset['cardId'] = card.id;
+    plus.textContent = '+';
+    plus.setAttribute('aria-label', t('customDeck.addOne', { name: t(card.nameKey) }));
+    controls.append(minus, plus);
+
+    minus.addEventListener('click', (event) => {
+      event.stopPropagation();
+      entries = removeCopy(entries, card.id);
+      refresh();
+    });
+    plus.addEventListener('click', (event) => {
+      event.stopPropagation();
+      entries = addCopy(entries, card.id);
+      refresh();
+    });
+
+    const name = document.createElement('span');
+    name.className = 'deck-card-name';
+    name.textContent = t(card.nameKey);
+    name.style.color = card.rarityColor;
+
+    cell.append(art, badge, controls, name);
+    grid.appendChild(cell);
+  }
+
+  clearBtn.addEventListener('click', () => {
+    entries = [];
+    refresh();
+  });
+
+  startBtn.addEventListener('click', () => {
+    // Doble red de seguridad: el boton ya esta deshabilitado, pero el perfil es
+    // la fuente de verdad y un estado imposible no debe poder arrancar una run.
+    if (!validateDeck(entries, catalogIds, catalogIds).ok) return;
+    callbacks.onStart(entries.map((e) => ({ ...e })));
+  });
+
+  shell.append(head, meter, notice, grid, footer);
+  panel.appendChild(shell);
+  refresh();
   return panel;
 }

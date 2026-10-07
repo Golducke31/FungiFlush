@@ -1572,6 +1572,23 @@
       "weakness": "It depends on consistency: a poor hand has no plan B."
     }
   },
+  "customDeck": {
+    "title": "Own deck",
+    "subtitle": "Build your deck card by card. It saves itself.",
+    "open": "Own deck",
+    "locked": "Locked",
+    "lockedToast": "Own decks unlock at Colony level {level}.",
+    "size": "{size} / {min}-{max} cards",
+    "needMore": "Add {count} more card(s) to play.",
+    "needLess": "You're {count} card(s) over. Remove some.",
+    "tooManyCopies": "Max {max} copies of the same card.",
+    "ready": "Ready to play.",
+    "clear": "Clear",
+    "start": "Play with {size} cards",
+    "invalid": "That deck isn't valid. Check the size and the copies per card.",
+    "addOne": "Add one copy of {name}",
+    "removeOne": "Remove one copy of {name}"
+  },
   "colony": {
     "title": "Fungi Colony",
     "levelLabel": "Level {level}",

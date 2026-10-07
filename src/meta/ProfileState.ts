@@ -12,12 +12,14 @@
 
 import type { ColonyProgress } from './Colony';
 import { defaultColonyProgress } from './Colony';
+import type { DeckState } from './DeckPresets';
+import { defaultDeckState } from './DeckPresets';
 import type { PackInventory } from './Packs';
 import { defaultPackInventory } from './Packs';
 import type { LeaderboardSnapshot } from './Leaderboard';
 import { emptySnapshot } from './Leaderboard';
 
-export const PROFILE_SAVE_VERSION = 6;
+export const PROFILE_SAVE_VERSION = 7;
 
 export type Language = 'en' | 'es';
 
@@ -285,6 +287,18 @@ export interface ProfileSave {
    * migracion arranca en cero (no se le inventan sobres por partidas viejas).
    */
   packs: PackInventory;
+  /**
+   * Mazos personalizados (v7). Ver `src/meta/DeckPresets.ts`.
+   *
+   * `presets` es la lista de mazos guardados y `selectedId` el que se juega
+   * (o `''` = clasico). Es una PREFERENCIA, como `archetype.selected`, asi que
+   * se persiste a proposito: quien armo su mazo no quiere re-armarlo.
+   *
+   * Aditivo: los perfiles v6 no lo tienen y la migracion cae a un preset vacio
+   * sin elegir (nadie armo un mazo todavia). Los mazos se guardan como ids, no
+   * como objetos de carta, para poder rebalancear sin invalidar guardados.
+   */
+  decks: DeckState;
 }
 
 /** Tope de resultados de run sin subir que se conservan. */
@@ -378,5 +392,6 @@ export function defaultProfile(): ProfileSave {
       leaderboard: emptySnapshot(),
     },
     packs: defaultPackInventory(),
+    decks: defaultDeckState(),
   };
 }

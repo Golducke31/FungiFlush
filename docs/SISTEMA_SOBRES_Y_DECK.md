@@ -321,6 +321,25 @@ en el perfil (`colony.level`, `stats.wins`).
 | Panel demasiado denso en móvil landscape | Reusar el patrón de grilla con scroll de la Colección y el `min tap 26px` de `audit-mobile-buttons.mjs` |
 | Migración que descarta los campos nuevos | Agregar `decks` y `deck` al `return` explícito de `migrateProfileSave` + test de migración |
 
+#### B.8-bis Calibración medida de `MAX_COPIES_PER_CARD`
+
+`tools/simulate.ts` acepta `--deck <cardId>:<copies>,...` para medir el impacto
+de un mazo custom antes de publicarlo. Corridas sobre A0:
+
+| Mazo | Victorias | Ante prom. | Mejor mano prom. |
+|---|---|---|---|
+| Clásico (base) | 0.7% | 2.41 | 15 599 |
+| Custom legal (20, 5 cartas ×4) | 1.3% | 3.29 | 74 005 |
+| Mono-elemento (5 cartas de spore ×4) | 2.3% | 4.21 | 101 622 |
+| **40 copias de la carta mítica** | **3.0%** | **4.93** | **20 925 766** |
+| 40 copias de un starter | 1.0% | 4.76 | 59 249 |
+
+Conclusión: el mazo custom es **una mejora moderada pero real** (el jugador que
+arma un mazo gana más que el clásico, que es el punto del modo), y el caso
+verdaderamente degenerado —40 copias de `destroying_angel`— queda **fuera del
+alcance del tope de 4 copias**. El tope es lo que hace la diferencia; sin él, la
+mejor mano promedio sube 1300×. Se mantiene **4**.
+
 ### B.9 Orden de implementación sugerido
 
 1. `src/meta/DeckPresets.ts` + tests (puro, sin UI).
@@ -363,8 +382,36 @@ que `SceneManager.update()` recorra cada frame.** Hoy es `flyingCards: Set<Card3
   en dos tweens con relojes distintos es lo que producía el tirón en móvil.
 
 | Perfil v6 (`packs`, `collection.ownedCounts`) | `src/meta/ProfileState.ts` |
-| Migraciones (`migrateProfileV5toV6`) | `src/persistence/migrations.ts` |
+| Migraciones (`migrateProfileV5toV6`, `migrateProfileV6toV7`) | `src/persistence/migrations.ts` |
 | Mazo inicial / override | `src/engine/cards/CardRegistry.ts` (`buildStarterDeck`) |
 | Carga de un mazo arbitrario | `src/engine/GameEngine.ts` (`setArchetypeLoadout`) |
 | Arquetipos (único lector de `archetypes.json`) | `src/meta/Archetypes.ts` |
+| **Deck propio: validación, topes, add/remove (puro)** | `src/meta/DeckPresets.ts` |
+| **Deck propio: catálogo poseído + arranque de la run** | `src/main.ts` (`buildDeckCatalog`, `onStartRunWithDeck`) |
+| **Deck propio: constructor (UI)** | `src/ui/MenuScreen.ts` (`buildCustomDeckPanel`) |
+| **Deck propio: probe end-to-end** | `tools/probe-custom-deck.mjs` |
+| **Mazo custom en la simulación de balance** | `tools/simulate.ts` (`--deck`) |
+
+## Parte C — Estado de implementación de la Parte B (2026-10-07)
+
+Implementado y verificado:
+
+1. ✅ `src/meta/DeckPresets.ts` puro (`validateDeck`, `addCopy`, `removeCopy`,
+   `sanitizeDeck`, `biasFromDeck`) + `tests/deck-presets.test.ts` (25 tests).
+2. ✅ Migración v6 → v7 (`decks` + `deck.selectedId` normalizado) + tests.
+3. ✅ Panel "Mazo propio" (`buildCustomDeckPanel`), con grilla de catálogo, +/−,
+   barra de tamaño 20–40 en vivo y validación que deshabilita el arranque.
+4. ✅ `onStartRunWithDeck` en `main.ts`: inyecta el mazo y el sesgo (elementos
+   dominantes del mazo) y arranca con `archetype: ''`.
+5. ✅ Gate de desbloqueo: **Colonia nivel ≥ 3** (el botón aparece bloqueado y
+   explica el requisito).
+6. ✅ `sim:balance --deck` para calibrar `MAX_COPIES_PER_CARD` (ver B.8-bis): se
+   mantiene en **4**.
+7. ✅ Probe `tools/probe-custom-deck.mjs` (10/10): bloqueado/desbloqueado,
+   catálogo, tope de copias, validación en vivo, persistencia y arranque con el
+   mazo exacto.
+
+Pendiente (fuera de alcance de esta pasada): múltiples presets con nombre
+editable (`MAX_DECK_PRESETS = 3` ya reservado en el modelo; la UI usa el primero).
+
 | Panel de selección de arquetipo | `src/ui/MenuScreen.ts` (`buildArchetypePanel`) |

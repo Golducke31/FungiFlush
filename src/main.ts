@@ -61,8 +61,9 @@ import {
   createOfflineTransport,
   leaderboardEndpointFromEnv,
 } from './net/LeaderboardClient';
-import type { LeaderboardPanelState, LeaderboardScopeView } from '@ui/MenuScreen';
+import type { DeckCatalogCard, LeaderboardPanelState, LeaderboardScopeView } from '@ui/MenuScreen';
 import { ARCHETYPES, biasFor, starterFor } from '@meta/Archetypes';
+import { DEFAULT_DECK_ID, MAX_DECK_PRESETS, biasFromDeck, sanitizeDeck, validateDeck } from '@meta/DeckPresets';
 import { notifier } from '@notify/notify';
 import {
   AchievementTracker,
@@ -1024,6 +1025,60 @@ async function boot(): Promise<void> {
     hud?.setHistoryState(profileStore.current.history.map((h) => ({ ...h })));
   };
 
+  // --- Deck propio ---
+  // El HUD no conoce ni el registro ni el perfil: se le empuja el CATALOGO ya
+  // filtrado (solo cartas que el jugador puede poner) y el mazo guardado.
+  //
+  // El filtro es la union de dos puertas:
+  //   - `gate.contentState(id) === 'allowed'`: la carta esta desbloqueada (pack
+  //     comprado o ganada jugando).
+  //   - es una CARTA (no un joker): un mazo se arma con cartas.
+  // No se exige `ownedCounts`: el contador de sobres es PROGRESO, no un
+  // requisito. Exigirlo dejaria el modo inutil para quien no abrio sobres
+  // todavia, que es justo quien mas lo quiere.
+  const MIN_COLONY_LEVEL_FOR_DECK = 3;
+
+  const buildDeckCatalog = (): DeckCatalogCard[] => {
+    const out: DeckCatalogCard[] = [];
+    for (const def of content.registry.poolOf('card') as CardDefinition[]) {
+      if (gate.contentState(def.id) !== 'allowed') continue;
+      out.push({
+        id: def.id,
+        nameKey: def.nameKey,
+        element: def.element,
+        rarityColor: hexToCss(RARITY_COLOR[def.rarity] ?? ELEMENT_COLOR.neutral),
+        faceUrl: cardDefFaceUrl(def, t, scene.cardArt(def)),
+      });
+    }
+    // Orden estable por elemento y luego id: el jugador encuentra la carta por
+    // su afinidad, no por el orden de carga del glob de packs.
+    out.sort((a, b) => a.element.localeCompare(b.element) || a.id.localeCompare(b.id));
+    return out;
+  };
+
+  const currentDeckEntries = (): Array<{ cardId: string; copies: number }> => {
+    const decks = profileStore.current.decks;
+    const preset = decks.presets.find((p) => p.id === decks.selectedId) ?? decks.presets[0];
+    if (!preset) return [];
+    // Se sanea contra el catalogo: un guardado apuntando a una carta retirada o
+    // desbloqueada-perdida no debe mostrar una celda fantasma ni romper el panel.
+    const known = new Set((content.registry.poolOf('card') as CardDefinition[]).map((d) => d.id));
+    return sanitizeDeck(preset.entries, [...known]);
+  };
+
+  const syncDeck = (): void => {
+    const level = profileStore.current.colony.level;
+    hud?.setCustomDeck({
+      catalog: buildDeckCatalog(),
+      entries: currentDeckEntries(),
+      // Puerta de progreso: se desbloquea con la Colonia (nivel 3 ~ 220 esporas).
+      // El modo es potente: darlo desde el minuto uno le quita valor a los
+      // arquetipos. El aviso dice exactamente que hace falta.
+      locked: level < MIN_COLONY_LEVEL_FOR_DECK,
+      unlockLevel: MIN_COLONY_LEVEL_FOR_DECK,
+    });
+  };
+
   // --- Arquetipos ---
   // El HUD no conoce ni el perfil ni `archetypes.json`: se le empuja la lista
   // (con las claves i18n) y el total de cartas de cada mazo inicial. El total se
@@ -1222,6 +1277,53 @@ async function boot(): Promise<void> {
         // El menu se redibuja para que el chip muestre el nivel nuevo.
         syncAscension();
         hud?.showAscension();
+      },
+      // --- Deck propio ---
+      // El mazo se persiste en CADA cambio (no hay boton de guardar): cerrar el
+      // panel con la X no puede perder el trabajo de armar 20 cartas a mano.
+      onDeckChanged: (entries) => {
+        profileStore.patch((p) => {
+          const preset = p.decks.presets[0] ?? { id: DEFAULT_DECK_ID, name: '', entries: [] };
+          preset.entries = entries.map((e) => ({ ...e }));
+          // Se reemplaza el array para que el patch sea serializable (JSON plano).
+          p.decks.presets = [preset, ...p.decks.presets.slice(1, MAX_DECK_PRESETS)];
+        });
+      },
+      // Arrancar con el mazo propio: mismo camino que el arquetipo (el motor no
+      // conoce `decks`, se le inyecta el mazo y el sesgo YA resueltos).
+      onStartRunWithDeck: (entries) => {
+        // Doble red: la UI ya deshabilita el boton, pero el perfil es la fuente
+        // de verdad. Se valida contra el catalogo antes de arrancar.
+        const catalogIds = buildDeckCatalog().map((c) => c.id);
+        if (!validateDeck(entries, catalogIds, catalogIds).ok) {
+          hud?.toast(t('customDeck.invalid'), 'warn');
+          return;
+        }
+        void runStore.clear();
+        // El id de arquetipo va VACIO: un mazo custom no es un arquetipo con
+        // nombre. La run queda con `archetype: ''` (clasico) para que el
+        // historial no la etiquete con algo que no eligio.
+        const bias = biasFromDeck(entries, (cardId) => {
+          const def = (content.registry.poolOf('card') as CardDefinition[]).find(
+            (d) => d.id === cardId,
+          );
+          return def?.element;
+        });
+        engine.setArchetypeLoadout(entries, bias);
+        // Se persiste lo que efectivamente se jugo, sanea por si el perfil venia
+        // de un guardado viejo.
+        const clean = sanitizeDeck(entries, catalogIds);
+        profileStore.patch((p) => {
+          const preset = p.decks.presets[0] ?? { id: DEFAULT_DECK_ID, name: '', entries: [] };
+          preset.entries = clean.map((e) => ({ ...e }));
+          p.decks.presets = [preset, ...p.decks.presets.slice(1, MAX_DECK_PRESETS)];
+          p.decks.selectedId = preset.id;
+        });
+        engine.startRun(seed, profileStore.current.ascension.selected, '');
+        scene.setMode('run');
+        if (!profileStore.current.seenTutorial) {
+          window.setTimeout(() => hud?.showTutorial(), 420);
+        }
       },
       onPanelOpened: (isCarousel) => {
         // Un panel que NO monta sobre el carrusel apaga la escena 3D: si no, el
@@ -2098,6 +2200,8 @@ async function boot(): Promise<void> {
   syncHistory();
   // Arquetipos: el panel de Desafios y el de "Nueva partida" leen esto.
   syncArchetypes();
+  // Deck propio: el catalogo poseido y el mazo guardado.
+  syncDeck();
   syncMenuMeta();
 
   engine.enterMenu();
@@ -2147,6 +2251,10 @@ async function boot(): Promise<void> {
         // el smoke la necesita para abrir un sobre sin depender de la UI.
         openPack: openPacks,
         openCollection,
+        // Deck propio: re-empuja el estado al HUD (catalogo, mazo guardado y la
+        // puerta de progreso). Lo necesitan los probes: subir `colony.level` en
+        // caliente no dispara la sincronizacion sola.
+        syncDeck,
         // El duelo vive en una clausura de `boot()`. Se expone como funcion
         // porque la sesion se reemplaza en cada revancha, y el smoke test
         // necesita leer el estado real (sobre todo para comprobar que la mano

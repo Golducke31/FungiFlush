@@ -7546,6 +7546,13 @@ body {
   justify-content: center;
 }
 
+/* El constructor de mazo propio comparte el encuadre del panel de arquetipos:
+   es una pantalla centrada, no un panel lateral. */
+.panel.is-deck-builder {
+  align-items: center;
+  justify-content: center;
+}
+
 .archetypes-shell {
   display: flex;
   flex-direction: column;
@@ -9267,5 +9274,307 @@ body {
   .panel.is-shop .btn {
     min-height: 28px;
     padding: 4px 9px;
+  }
+}
+
+/* ==========================================================================
+   MAZO PROPIO (Deck propio) — construido en el panel de arquetipos
+   --------------------------------------------------------------------------
+   Base = ESCRITORIO (congelado). El movil va integro dentro del bloque
+   `@media (pointer: coarse)` de abajo, con la referencia 915x412.
+   ========================================================================== */
+
+/* Boton que abre el modo, en el pie del panel de arquetipos. */
+.deck-open {
+  position: relative;
+  padding-right: 30px;
+}
+
+.deck-open-count {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(94, 240, 138, 0.18);
+  border: 1px solid rgba(94, 240, 138, 0.5);
+  color: #5ef08a;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.deck-open.is-locked {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.deck-open-lock {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tag-penalty);
+}
+
+/* --- Panel del constructor --- */
+
+.deck-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(760px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  padding: clamp(14px, 3vh, 24px);
+}
+
+/* Barra de tamano: el numero que el jugador mira mientras arma. */
+.deck-meter {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deck-meter-bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.deck-meter-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--dim);
+  transition: width 0.18s ease, background 0.18s ease;
+}
+
+.deck-meter.is-under .deck-meter-fill {
+  background: #7f8ea3;
+}
+
+.deck-meter.is-ok .deck-meter-fill {
+  background: linear-gradient(90deg, #4fd1b0, #5ef08a);
+}
+
+.deck-meter.is-over .deck-meter-fill {
+  background: linear-gradient(90deg, #ffb45a, #ff6b6b);
+}
+
+.deck-meter-text {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Aviso de validacion. */
+.deck-notice {
+  flex: 0 0 auto;
+  margin: 0;
+  min-height: 15px;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--dim);
+}
+
+.deck-notice.is-warn {
+  color: var(--tag-penalty);
+}
+
+.deck-notice.is-ok {
+  color: #5ef08a;
+}
+
+/* Grilla del catalogo. Cuatro columnas en escritorio. */
+.deck-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px;
+  align-content: start;
+}
+
+.deck-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.deck-card.is-picked {
+  border-color: rgba(94, 240, 138, 0.55);
+  background: rgba(24, 44, 34, 0.72);
+}
+
+.deck-card.is-max {
+  border-color: rgba(94, 240, 138, 0.9);
+}
+
+/* La cara es 2:3 (512x744), igual que la carta real. */
+.deck-card-art {
+  position: relative;
+  aspect-ratio: 512 / 744;
+  width: 100%;
+  border-radius: 5px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.deck-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.deck-card-art.is-empty {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.03) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+/* Pildora "xN" arriba a la derecha, como el badge ×N de la Coleccion. */
+.deck-card-count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(6, 14, 12, 0.82);
+  border: 1px solid rgba(94, 240, 138, 0.7);
+  color: #5ef08a;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.deck-card-count:empty {
+  display: none;
+}
+
+/* Controles +/-. Botones separados (no "tocar la carta"): restar tiene que ser
+   obvio y un toque accidental no debe sumar. */
+.deck-card-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.deck-step {
+  flex: 1 1 0;
+  min-height: 26px;
+  padding: 2px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-family: var(--font-ui, inherit);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.deck-step:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(94, 240, 138, 0.6);
+}
+
+.deck-step:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.deck-card-name {
+  font-size: 10.5px;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Movil tactil (referencia 915x412) ---
+   El alto es el recurso escaso: la cara se achica y la grilla gana una columna
+   para que entren mas cartas sin scroll. Los botones +/- conservan el minimo
+   tactil del audit (26px). */
+@media (pointer: coarse) {
+  .deck-shell {
+    width: 100%;
+    gap: 8px;
+    padding: clamp(10px, 2.4vh, 16px);
+  }
+
+  .deck-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .deck-card {
+    padding: 4px;
+    gap: 3px;
+  }
+
+  .deck-step {
+    min-height: 26px;
+    font-size: 14px;
+  }
+
+  .deck-card-name {
+    font-size: 9.5px;
+  }
+
+  .deck-meter-text,
+  .deck-notice {
+    font-size: 11px;
+  }
+}
+
+/* En landscape muy bajo (360-430) la cara cede otro poco: la prioridad es que
+   el boton de arranque y los +/- sigan clickeables. */
+@media (pointer: coarse) and (max-height: 430px) {
+  .deck-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .deck-shell {
+    padding: 8px 10px;
+  }
+}
+
+/* Tablet tactil: mas aire, sigue siendo tactil. */
+@media (pointer: coarse) and (min-height: 600px) {
+  .deck-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
   }
 }

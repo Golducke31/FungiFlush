@@ -14,6 +14,7 @@
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
 import { levelForSpores } from '../meta/Colony';
+import { MAX_DECK_PRESETS, defaultDeckState } from '../meta/DeckPresets';
 import { defaultPackInventory } from '../meta/Packs';
 import { emptySnapshot } from '../meta/Leaderboard';
 import { PROFILE_SAVE_VERSION, defaultProfile, type ProfileSave } from '../meta/ProfileState';
@@ -35,6 +36,7 @@ export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   3: migrateProfileV3toV4,
   4: migrateProfileV4toV5,
   5: migrateProfileV5toV6,
+  6: migrateProfileV6toV7,
 };
 
 export function migrateChain(
@@ -246,6 +248,29 @@ export function migrateProfileV5toV6(input: UnknownRecord): UnknownRecord {
 }
 
 /**
+ * Perfil: v6 -> v7
+ *
+ * v7 agrega los mazos personalizados (`decks`): la lista de presets guardados y
+ * cual esta elegido. Ver `src/meta/DeckPresets.ts`.
+ *
+ * Default a proposito: un preset VACIO sin elegir. Un perfil v6 es de alguien
+ * que jugo antes de que existiera el modo; no tiene mazo armado y lo correcto es
+ * que arranque con el clasico hasta que el jugador entre a la pestaña y lo arme.
+ * Inventarle un mazo seria decidir por el.
+ *
+ * Se normaliza con `defaultDeckState()` en vez de confiar en la forma cruda: si
+ * el campo viniera con basura (numero suelto, edicion a mano, formato futuro),
+ * cae al default en vez de romper el panel al leer `presets.length`.
+ */
+export function migrateProfileV6toV7(input: UnknownRecord): UnknownRecord {
+  return {
+    ...input,
+    version: 7,
+    decks: defaultDeckState(),
+  };
+}
+
+/**
  * Migra un guardado de run. Devuelve null si es ilegible o de una version
  * futura (en ese caso la capa superior lo pone en cuarentena).
  */
@@ -416,6 +441,24 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
       : emptySnapshot();
   if (typeof account.verifiedSpores !== 'number') account.verifiedSpores = null;
 
+  // Mazos personalizados (v7): OBJETO anidado ADITIVO. Un perfil v6 no lo tiene
+  // y cae al default (preset vacio, ninguno elegido). Se valida la FORMA aca
+  // (que `presets` sea array, que cada preset tenga id/entries validos) pero NO
+  // el CONTENIDO: la migracion no conoce el registro de cartas. El filtrado por
+  // `knownIds`/`ownedIds` lo hace `main.ts` al cargar, con `sanitizeDeck`.
+  const decksRaw = migrated['decks'];
+  const decks = {
+    ...fallback.decks,
+    ...((typeof decksRaw === 'object' && decksRaw !== null ? decksRaw : {}) as object),
+  };
+  decks.presets = normalizeDeckPresets(decks.presets);
+  if (typeof decks.selectedId !== 'string') decks.selectedId = '';
+  // Si el id elegido no apunta a ningun preset, se cae a "ninguno" (clasico):
+  // un `selectedId` huerfano dejaria el panel sin nada marcado.
+  if (!decks.presets.some((preset) => preset.id === decks.selectedId)) {
+    decks.selectedId = '';
+  }
+
   return {
     version: CURRENT_PROFILE_VERSION,
     updatedAt: typeof migrated['updatedAt'] === 'string' ? migrated['updatedAt'] : fallback.updatedAt,
@@ -441,7 +484,52 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     colony,
     account,
     packs,
+    decks,
   };
+}
+
+/**
+ * Normaliza la lista de presets de un guardado crudo.
+ *
+ * Reglas:
+ *   - `presets` no-array o vacio -> un preset vacio por defecto (la UI necesita
+ *     al menos uno para tener donde escribir).
+ *   - Cada preset sin `id` string se descarta; sin `entries` array queda vacio.
+ *   - Las entradas se limpian a `{cardId, copies}` con `copies` entero > 0.
+ *   - Se capea a `MAX_DECK_PRESETS` para que un perfil editado a mano no llene
+ *     el panel.
+ *
+ * NO filtra por catalogo: eso lo hace `sanitizeDeck` con el registro real.
+ */
+function normalizeDeckPresets(raw: unknown): ProfileSave['decks']['presets'] {
+  const fallback = defaultDeckState().presets;
+  if (!Array.isArray(raw)) return fallback;
+  const out: ProfileSave['decks']['presets'] = [];
+  for (const item of raw) {
+    if (out.length >= MAX_DECK_PRESETS) break;
+    if (typeof item !== 'object' || item === null) continue;
+    const record = item as UnknownRecord;
+    const id = record['id'];
+    if (typeof id !== 'string' || id.length === 0) continue;
+    const name = typeof record['name'] === 'string' ? record['name'] : '';
+    const entries: Array<{ cardId: string; copies: number }> = [];
+    const rawEntries = record['entries'];
+    if (Array.isArray(rawEntries)) {
+      for (const rawEntry of rawEntries) {
+        if (typeof rawEntry !== 'object' || rawEntry === null) continue;
+        const entry = rawEntry as UnknownRecord;
+        const cardId = entry['cardId'];
+        if (typeof cardId !== 'string' || cardId.length === 0) continue;
+        const copies = numberOr(entry['copies'], 0);
+        if (copies <= 0) continue;
+        entries.push({ cardId, copies: Math.floor(copies) });
+      }
+    }
+    out.push({ id, name, entries });
+  }
+  // Si TODO era basura, se cae al default: un array vacio dejaria la pestaña
+  // sin ningun preset que seleccionar.
+  return out.length > 0 ? out : fallback;
 }
 
 function numberOr(value: unknown, fallback: number): number {

@@ -47,6 +47,27 @@ const SEED = Number(flag('seed', '20260927')) || 20260927;
  * publicarlo. Sin el flag, corre A0 (la curva base de siempre).
  */
 const ASCENSION = Number(flag('ascension', '0')) || 0;
+/**
+ * Mazo CUSTOM a simular: `--deck <cardId>:<copies>,<cardId>:<copies>`.
+ *
+ * Existe para calibrar `MAX_COPIES_PER_CARD` del modo "Mazo propio": el riesgo
+ * documentado es un mazo degenerado (N copias de la carta mas fuerte) que
+ * trivialice el juego. Sin esta palanca no hay forma de medirlo antes de que un
+ * jugador lo encuentre. Ej: `--deck spore_puffball:4,decay_rotwood:4`.
+ */
+const DECK_SPEC = flag('deck');
+/** Mazo custom parseado, o `null` para jugar el clasico. */
+const CUSTOM_DECK: Array<{ cardId: string; copies: number }> | null = (() => {
+  if (!DECK_SPEC) return null;
+  const entries: Array<{ cardId: string; copies: number }> = [];
+  for (const part of DECK_SPEC.split(',')) {
+    const [cardId, copiesRaw] = part.split(':');
+    if (!cardId) continue;
+    const copies = Math.max(1, Math.floor(Number(copiesRaw ?? '1')) || 1);
+    entries.push({ cardId, copies });
+  }
+  return entries.length > 0 ? entries : null;
+})();
 
 const C = {
   reset: '\x1b[0m',
@@ -241,6 +262,11 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   let rewardsTaken = 0;
   let upgradesBought = 0;
   let interludesResolved = 0;
+  // Mazo custom (modo "Mazo propio"): se inyecta ANTES de arrancar. El motor no
+  // conoce perfiles; esto replica lo que hace `onStartRunWithDeck` en main.ts.
+  if (CUSTOM_DECK) {
+    engine.setArchetypeLoadout(CUSTOM_DECK, []);
+  }
   engine.startRun(seed, ASCENSION);
 
   const track = (label: string, res: ResolutionContext | null) => {

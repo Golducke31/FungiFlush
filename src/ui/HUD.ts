@@ -37,6 +37,7 @@ import {
   buildAscensionPanel,
   buildChallengesPanel,
   buildColonyRewardsPanel,
+  buildCustomDeckPanel,
   buildLeaderboardPanel,
   buildMenuPanel,
   buildProfilePanel,
@@ -44,6 +45,7 @@ import {
   type AccountView,
   type ColonyResultView,
   type ColonyView,
+  type DeckCatalogCard,
   type LeaderboardPanelState,
 } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
@@ -194,6 +196,17 @@ export interface HudCallbacks {
    * `''` = clasico (mazo base, sin sesgo de tienda).
    */
   onStartRunWithArchetype: (archetypeId: string) => void;
+  // --- Deck propio: mazo personalizado armado por el jugador ---
+  /**
+   * El jugador confirmo su mazo propio y quiere arrancar con el. `entries` ya
+   * viene validado contra el catalogo (la UI no llama si `validateDeck` falla).
+   */
+  onStartRunWithDeck: (entries: Array<{ cardId: string; copies: number }>) => void;
+  /**
+   * El mazo cambio mientras lo armaba: se persiste ya, sin boton de guardar.
+   * Asi cerrar el panel no pierde el trabajo.
+   */
+  onDeckChanged: (entries: Array<{ cardId: string; copies: number }>) => void;
   /** P1.5 — Cambio de estado de paneles UI (misiones, ayuda). */
   onUiStateChange?: (state: { missionsOpen: boolean; helpOpen: boolean }) => void;
 }
@@ -439,6 +452,21 @@ export class HUD {
     selected: string;
     starterSizes: Record<string, number>;
   } = { list: [], selected: '', starterSizes: {} };
+  /**
+   * Estado del constructor de mazo propio. Lo empuja el controlador: el HUD no
+   * conoce el registro ni el perfil.
+   *
+   * `catalog` son SOLO las cartas que el jugador puede poner (poseidas y
+   * conocidas): el filtrado vive en `main.ts`, que tiene el gate y el perfil.
+   * `entries` es el mazo guardado, `locked` la puerta de progreso.
+   */
+  private customDeck: {
+    catalog: DeckCatalogCard[];
+    entries: Array<{ cardId: string; copies: number }>;
+    locked: boolean;
+    /** Copias minimas de esporas para desbloquear, para el aviso. */
+    unlockLevel: number;
+  } = { catalog: [], entries: [], locked: false, unlockLevel: 3 };
   /** Contador de cierres: invalida el `animationend` de un cierre viejo. */
   private closeSeq = 0;
   /** Respaldo por si `animationend` no llega (animacion desactivada). */
@@ -2477,8 +2505,59 @@ export class HUD {
       {
         onStart: (id) => this.callbacks.onStartRunWithArchetype(id),
         onClose: () => this.showMenu(),
+        // El boton de "Deck propio" solo aparece si el controlador lo expone.
+        // Se re-entra al mismo overlay (no se abre uno encima) para no apilar
+        // paneles: `openOverlay` ya reemplaza el contenido.
+        onOpenDeckBuilder: () => this.showCustomDeck(),
+        deckSize: this.customDeck.entries.reduce((sum, e) => sum + e.copies, 0),
+        deckLocked: this.customDeck.locked,
       },
     );
+    this.openOverlay(panel);
+  }
+
+  /**
+   * Estado del constructor de mazo propio. Lo empuja el controlador antes de
+   * `showArchetypes`, igual que el estado de arquetipos.
+   */
+  setCustomDeck(state: {
+    catalog: DeckCatalogCard[];
+    entries: Array<{ cardId: string; copies: number }>;
+    locked: boolean;
+    unlockLevel?: number;
+  }): void {
+    this.customDeck = {
+      catalog: state.catalog,
+      entries: state.entries,
+      locked: state.locked,
+      unlockLevel: state.unlockLevel ?? 3,
+    };
+  }
+
+  /**
+   * Constructor de mazo propio.
+   *
+   * Si el modo esta bloqueado por progreso, se sale ANTES de dibujar: el boton
+   * de apertura ya no navega en ese caso, pero esto es la segunda red (un
+   * `data-act` disparado por una tool no pasa por el boton).
+   */
+  showCustomDeck(): void {
+    if (this.customDeck.locked) {
+      this.toast(t('customDeck.lockedToast', { level: this.customDeck.unlockLevel }), 'warn');
+      return;
+    }
+    const panel = buildCustomDeckPanel(this.customDeck.catalog, this.customDeck.entries, {
+      onStart: (entries) => this.callbacks.onStartRunWithDeck(entries),
+      onClose: () => this.showArchetypes(),
+      // Persistir en cada toque: si el jugador cierra con la X, lo armado no se
+      // pierde. No hay boton de "guardar" a proposito.
+      onChange: (entries) => {
+        // Se actualiza el estado local para que reabrir el panel muestre lo
+        // ultimo sin esperar a que el controlador vuelva a empujar.
+        this.customDeck.entries = entries;
+        this.callbacks.onDeckChanged(entries);
+      },
+    });
     this.openOverlay(panel);
   }
 

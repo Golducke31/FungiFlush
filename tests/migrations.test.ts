@@ -16,6 +16,7 @@ import {
   RUN_MIGRATIONS,
 } from '../src/persistence/migrations.ts';
 import { EntitlementStore } from '../src/meta/EntitlementStore.ts';
+import { MAX_DECK_PRESETS } from '../src/meta/DeckPresets.ts';
 import { defaultProfile, PROFILE_SAVE_VERSION } from '../src/meta/ProfileState.ts';
 
 function v1Save() {
@@ -248,6 +249,64 @@ test('v6: un packs con contadores basura se fuerza a enteros >= 0', () => {
   assert.equal(migrated.packs.opened, 0);
   assert.equal(migrated.packs.expansionPending, 1);
   assert.equal(migrated.packs.bossMisses, 0);
+});
+
+// ---------------------------------------------------------------------------
+// v6 -> v7: mazos personalizados
+// ---------------------------------------------------------------------------
+
+test('v6 -> v7: decks arranca con un preset vacio y ninguno elegido', () => {
+  const migrated = migrateProfileSave({ version: 6, stats: { runs: 7 } });
+  assert.equal(migrated.version, PROFILE_SAVE_VERSION);
+  // El perfil viejo sobrevive...
+  assert.equal(migrated.stats.runs, 7);
+  // ...y el modo nuevo arranca vacio: nadie armo un mazo todavia.
+  assert.equal(migrated.decks.selectedId, '');
+  assert.equal(migrated.decks.presets.length, 1);
+  assert.deepEqual(migrated.decks.presets[0]?.entries, []);
+});
+
+test('v7: un decks con basura cae al default sin romper', () => {
+  for (const junk of [42, 'roto', null, [], { presets: 'nope' }]) {
+    const migrated = migrateProfileSave({ version: 7, decks: junk });
+    assert.equal(migrated.decks.selectedId, '');
+    assert.equal(migrated.decks.presets.length, 1);
+    assert.deepEqual(migrated.decks.presets[0]?.entries, []);
+  }
+});
+
+test('v7: un preset sin id se descarta y las entradas basura se limpian', () => {
+  const migrated = migrateProfileSave({
+    version: 7,
+    decks: {
+      selectedId: 'custom',
+      presets: [
+        { id: 'custom', name: 'Mi mazo', entries: [{ cardId: 'a', copies: 3 }, { cardId: '', copies: 2 }, { cardId: 'b', copies: 0 }, 'basura'] },
+        { name: 'sin id', entries: [{ cardId: 'c', copies: 1 }] },
+      ],
+    },
+  });
+  assert.equal(migrated.decks.presets.length, 1);
+  assert.deepEqual(migrated.decks.presets[0], {
+    id: 'custom',
+    name: 'Mi mazo',
+    entries: [{ cardId: 'a', copies: 3 }],
+  });
+  assert.equal(migrated.decks.selectedId, 'custom');
+});
+
+test('v7: un selectedId huerfano cae a "ninguno" (clasico)', () => {
+  const migrated = migrateProfileSave({
+    version: 7,
+    decks: { selectedId: 'no-existe', presets: [{ id: 'custom', name: '', entries: [] }] },
+  });
+  assert.equal(migrated.decks.selectedId, '');
+});
+
+test('v7: la lista de presets se capea a MAX_DECK_PRESETS', () => {
+  const many = Array.from({ length: 10 }, (_, i) => ({ id: `d${i}`, name: '', entries: [] }));
+  const migrated = migrateProfileSave({ version: 7, decks: { selectedId: '', presets: many } });
+  assert.equal(migrated.decks.presets.length, MAX_DECK_PRESETS);
 });
 
 test('EntitlementStore es serializable y estable', () => {

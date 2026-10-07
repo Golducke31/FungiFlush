@@ -1572,6 +1572,23 @@
       "weakness": "Depende de la consistencia: una mano pobre no tiene plan B."
     }
   },
+  "customDeck": {
+    "title": "Mazo propio",
+    "subtitle": "Armá tu mazo carta por carta. Se guarda solo.",
+    "open": "Mazo propio",
+    "locked": "Bloqueado",
+    "lockedToast": "El mazo propio se abre en el nivel {level} de la Colonia.",
+    "size": "{size} / {min}-{max} cartas",
+    "needMore": "Sumá {count} carta(s) más para poder jugar.",
+    "needLess": "Te sobran {count} carta(s). Quitá algunas.",
+    "tooManyCopies": "Máximo {max} copias de la misma carta.",
+    "ready": "Listo para jugar.",
+    "clear": "Vaciar",
+    "start": "Jugar con {size} cartas",
+    "invalid": "Ese mazo no es válido. Revisá el tamaño y las copias por carta.",
+    "addOne": "Sumar una copia de {name}",
+    "removeOne": "Quitar una copia de {name}"
+  },
   "colony": {
     "title": "Colonia Fungi",
     "levelLabel": "Nivel {level}",
