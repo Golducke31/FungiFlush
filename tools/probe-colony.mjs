@@ -18,12 +18,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const URL_TO_TEST = process.env.FF_URL ?? 'http://127.0.0.1:1420/?daily=0';
+// `FF_POINTER=fine` corre con puntero de escritorio: el panel usa la rejilla
+// `auto-fit` y conserva la linea de stats, asi que hay que poder mirarlo sin el
+// bloque `@media (pointer: coarse)`.
+const FINE = process.env.FF_POINTER === 'fine';
 const VIEWPORT =
   process.env.FF_VIEWPORT === 'smoke'
     ? { width: 844, height: 390 }
     : process.env.FF_VIEWPORT === 'tablet'
       ? { width: 1180, height: 820 }
-      : { width: 915, height: 412 };
+      : FINE
+        ? { width: 1440, height: 810 }
+        : { width: 915, height: 412 };
 
 const PW = ['C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/playwright-core/index.js'];
 async function loadPlaywright() {
@@ -53,7 +59,12 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--disable-dev-shm-usage'],
 });
-const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const context = await browser.newContext({
+  viewport: VIEWPORT,
+  deviceScaleFactor: 2,
+  isMobile: !FINE,
+  hasTouch: !FINE,
+});
 const page = await context.newPage();
 const errors = [];
 page.on('console', (m) => {
