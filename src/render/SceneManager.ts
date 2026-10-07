@@ -391,6 +391,21 @@ export class SceneManager {
   /** Cartas que estan en la zona de puntuacion (ya salieron de la mano). */
   private readonly scoringCards: Card3D[] = [];
 
+  /**
+   * Cartas EN VUELO que ya no pertenecen a ninguna lista logica.
+   *
+   * Hace falta porque `update()` (que es quien llama a `applyTransform()`) solo
+   * recorre `handCards`, `jokerCards` y `scoringCards`. Una carta jugada que
+   * viaja al descarte sale de las TRES al instante —para que el motor no la
+   * reclame— y entonces sus tweens escribian `home` pero NADIE lo leia: la carta
+   * se quedaba clavada en el centro haciendo el flip. Se veia sobre todo en
+   * movil, donde el vuelo dura mas frames.
+   *
+   * Es un Set y no un contador para que sea idempotente: agregar dos veces la
+   * misma carta no la duplica.
+   */
+  private readonly flyingCards = new Set<Card3D>();
+
   /** Raices que unen las cartas jugadas durante el combo. Pool fijo. */
   private readonly mycelium: Mycelium;
   /**
@@ -1008,6 +1023,25 @@ export class SceneManager {
     for (const card of this.handCards.values()) visit(card);
     for (const card of this.jokerCards.values()) visit(card);
     for (const card of this.scoringCards) visit(card);
+    for (const card of this.flyingCards) visit(card);
+  }
+
+  /**
+   * Instantanea de las cartas vivas (uid + posicion), para el probe de vuelo.
+   * Incluye las que estan en vuelo al descarte, que es justo lo que hay que
+   * medir cuando se investiga un cuelgue.
+   */
+  cardFlightDebug(): Array<{ uid: string; x: number; z: number; y: number }> {
+    const out: Array<{ uid: string; x: number; z: number; y: number }> = [];
+    this.forEachCard((card) =>
+      out.push({
+        uid: card.uid,
+        x: Number(card.group.position.x.toFixed(4)),
+        y: Number(card.group.position.y.toFixed(4)),
+        z: Number(card.group.position.z.toFixed(4)),
+      }),
+    );
+    return out;
   }
 
   /** Pila de cartas (mazo o descarte): N planos apilados con el dorso. */
@@ -1994,8 +2028,10 @@ export class SceneManager {
     for (const [uid, card3d] of [...this.handCards]) {
       if (alive.has(uid)) continue;
       this.handCards.delete(uid);
-      // Si esta en la zona de puntuacion, la maneja la secuencia de scoring.
-      if (!this.scoringCards.includes(card3d)) {
+      // Si esta en la zona de puntuacion, la maneja la secuencia de scoring. Si
+      // esta EN VUELO al descarte, la maneja su propia timeline (y ya no deberia
+      // estar aca, pero por si acaso no se la destruye dos veces).
+      if (!this.scoringCards.includes(card3d) && !this.flyingCards.has(card3d)) {
         this.stopCard(card3d);
         card3d.dispose();
         this.scene.remove(card3d.group);
@@ -2339,6 +2375,20 @@ export class SceneManager {
   // es el único punto que sabe qué arte corresponde a cada cosmético: hoy solo
   // existe `default`, pero un fieltro/dorso nuevo se cuelga aqui sin tocar la UI.
   // ==========================================================================
+
+  /**
+   * Arte del dorso `id` (imagen cruda), o `undefined` si ese dorso no tiene
+   * archivo cargado. `default` resuelve al dorso base (`art_cardback`).
+   *
+   * La UI (el overlay de Sobres) necesita la IMAGEN, no la textura: compone su
+   * propio canvas con `createCardBackCanvas`. Exponer el resolutor aca evita que
+   * la UI tenga que saber que el archivo de un dorso se llama
+   * `art_cardback_<id>.webp`.
+   */
+  cardBackArt(id: string): HTMLImageElement | undefined {
+    const key: ArtKey = id === 'default' ? CARD_BACK_KEY : (`cardback_${id}` as ArtKey);
+    return this.assets.get(key);
+  }
 
   /**
    * Aplica el dorso de carta `id`. `default` usa el arte base del dorso. El
@@ -3144,12 +3194,17 @@ export class SceneManager {
 
   /** Saca una carta de escena con una animacion corta. */
   private retire(card3d: Card3D): void {
+    // Igual que en `flyScoredToDiscard`: la carta ya no esta en ninguna lista,
+    // pero sus tweens siguen escribiendo `home`. Sin esto el giro y el hundido
+    // no se verian (la carta quedaria congelada en la pose anterior).
+    this.flyingCards.add(card3d);
     // Se va boca abajo: es a donde va a parar (el descarte), y el descarte no
-    // tiene por que mostrar caras que el jugador ya no puede usar.
-    card3d.setFaceUp(false, { tweens: this.tweens, duration: 0.3 });
+    // tiene por que mostrar caras que el jugador ya no puede usar. El giro va en
+    // la MISMA timeline que el hundido (un solo reloj, ver `flyScoredToDiscard`).
     // Squash -> se hunde -> se libera.
     anim
       .sequence()
+      .to(card3d.home, { flip: 1, duration: anim.d(0.26), ease: anim.EASE.cubicInOut }, 0)
       .to(card3d.home, { sx: 1.15, sy: 0.85, duration: anim.d(0.08), ease: anim.EASE.quadOut })
       .to(card3d.home, {
         y: -1.2,
@@ -3159,6 +3214,7 @@ export class SceneManager {
         duration: anim.d(0.35),
         ease: anim.EASE.quadIn,
         onComplete: () => {
+          this.flyingCards.delete(card3d);
           card3d.dispose();
           this.scene.remove(card3d.group);
         },
@@ -3182,15 +3238,32 @@ export class SceneManager {
       if (this.scoringCards.length === 0) return;
       const cards = [...this.scoringCards];
       this.scoringCards.length = 0;
+      // Salen de `scoringCards` (para que el motor no las reclame) pero entran a
+      // `flyingCards`: siguen vivas y `update()` las sigue transformando mientras
+      // viajan al descarte.
+      for (const card of cards) this.flyingCards.add(card);
 
       cards.forEach((card3d, i) => {
         const jitter = (Math.random() - 0.5) * 0.5;
         const rz = (Math.random() - 0.5) * 0.5;
-        const stagger = i * 0.07;
-        // Al descarte van boca abajo.
-        card3d.setFaceUp(false, { tweens: this.tweens, duration: 0.3 });
+        // Stagger CORTO y con tope: con la mano llena (6+) un stagger lineal
+        // empujaba la ultima carta casi un segundo, y el vuelo se leia como una
+        // cola lenta. El tope mantiene la cascada sin estirar el final.
+        const stagger = Math.min(i * 0.06, 0.24);
+        // El giro va EN LA MISMA timeline que el vuelo (no por `TweenManager`):
+        // asi los dos corren con el MISMO reloj y la carta no llega al descarte
+        // con el flip a medias cuando el framerate baja (el caso de movil).
         anim
           .sequence()
+          .to(
+            card3d.home,
+            {
+              flip: 1,
+              duration: anim.d(0.26),
+              ease: anim.EASE.cubicInOut,
+            },
+            stagger,
+          )
           .to(
             card3d.home,
             {
@@ -3202,24 +3275,25 @@ export class SceneManager {
               rx: -Math.PI / 2,
               ry: 0,
               rz,
-              duration: anim.d(0.5),
+              duration: anim.d(0.46),
               ease: anim.EASE.quadOut,
             },
             stagger,
           )
-          // Arco por encima del borde de la mesa.
+          // Arco por encima del borde de la mesa. El pico va a mitad del vuelo
+          // para que sea un arco y no un salto con rebote.
           .to(
             card3d.home,
             {
               keyframes: [
-                { arc: 0.9, duration: anim.d(0.2), ease: anim.EASE.quadOut },
-                { arc: 0, duration: anim.d(0.3), ease: anim.EASE.quadIn },
+                { arc: 0.9, duration: anim.d(0.18), ease: anim.EASE.quadOut },
+                { arc: 0, duration: anim.d(0.28), ease: anim.EASE.quadIn },
               ],
             },
             stagger,
           )
           // Se achica al aterrizar y se libera.
-          .to(card3d.home, { sx: 0.7, sy: 0.7, sz: 0.7, duration: anim.d(0.12) }, stagger + 0.5)
+          .to(card3d.home, { sx: 0.7, sy: 0.7, sz: 0.7, duration: anim.d(0.1) }, stagger + 0.46)
           .add(() => {
             this.particles.burst(card3d.worldPosition(), 6, {
               color: 0x7a8794,
@@ -3229,9 +3303,10 @@ export class SceneManager {
               life: 0.5,
             });
             this.water?.ripple(this.discardX + jitter, DISCARD_Z, 0.95);
+            this.flyingCards.delete(card3d);
             card3d.dispose();
             this.scene.remove(card3d.group);
-          }, stagger + 0.62);
+          }, stagger + 0.56);
       });
 
       // La pila del descarte late al recibirlas.
@@ -3498,6 +3573,10 @@ export class SceneManager {
         for (const card3d of this.handCards.values()) card3d.update(step, this.clock);
         for (const card3d of this.jokerCards.values()) card3d.update(step, this.clock);
         for (const card3d of this.scoringCards) card3d.update(step, this.clock);
+        // Las que vuelan al descarte ya no estan en ninguna lista logica, pero
+        // sus tweens siguen escribiendo `home`: sin este `update()` la carta se
+        // quedaba clavada en el centro (el flip se veia, el vuelo no).
+        for (const card3d of this.flyingCards) card3d.update(step, this.clock);
         // Putrefaccion ambiental (P2.6): despues de `update()` para que el aura
         // del frame sea la del estado actual de la carta.
         this.updateStatusAmbient();
@@ -3980,9 +4059,11 @@ export class SceneManager {
     for (const card3d of this.handCards.values()) card3d.dispose();
     for (const card3d of this.jokerCards.values()) card3d.dispose();
     for (const card3d of this.scoringCards) card3d.dispose();
+    for (const card3d of this.flyingCards) card3d.dispose();
     this.handCards.clear();
     this.jokerCards.clear();
     this.scoringCards.length = 0;
+    this.flyingCards.clear();
 
     // P6 — Ranuras de Simbionte: geometria, relleno y contorno.
     for (const mesh of this.jokerSlotMeshes) {

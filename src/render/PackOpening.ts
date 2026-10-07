@@ -30,7 +30,7 @@ import { fxTween, sleep, startExternal, stopExternal, updateAnim } from '@render
 import { audio } from '@audio/AudioBus';
 import { createCardBackCanvas } from '@render/CardTexture';
 import { t } from '@i18n/index';
-import type { PackCard } from '@meta/Packs';
+import type { PackCard, PackDropKind } from '@meta/Packs';
 
 /** Una carta ya resuelta para dibujar (el sorteo ocurrio en `Packs.ts`). */
 export interface PackCardView {
@@ -57,7 +57,21 @@ export interface PackOpeningCallbacks {
 
 export interface PackOpeningOptions {
   cards: PackCardView[];
-  backUrl?: string;
+  /**
+   * Dorso con el que se dibujan las cartas ANTES de girarse.
+   *
+   * Lo pasa el llamador (el Render resolvio el arte): asi el sobre de EXPANSION
+   * saca sus cartas con SU dorso (`cardback_mycelial`) en vez del dorso base, y
+   * el jugador ve de que familia viene lo que esta a punto de revelar. `undefined`
+   * cae al dorso procedural de `createCardBackCanvas`.
+   */
+  backArt?: HTMLImageElement;
+  /**
+   * Familia del sobre: cambia la PALETA del envoltorio (y su leyenda) para que un
+   * sobre de expansión no se vea igual que uno base. `base` (por defecto) es el
+   * verde del prototipo; `expansion` es cian/violeta con "MICELIO PROFUNDO".
+   */
+  kind?: PackDropKind;
   callbacks: PackOpeningCallbacks;
 }
 
@@ -192,7 +206,8 @@ export class PackOpening {
 
   /** El sobre: cuerpo + tapa, con la textura del prototipo pero sin emoji. */
   private buildPack(): void {
-    const tex = makePackTexture();
+    const kind: PackDropKind = this.options.kind ?? 'base';
+    const tex = makePackTexture(kind);
     const texBody = tex.clone();
     const texLid = tex.clone();
     texBody.repeat.set(1, 0.85);
@@ -202,9 +217,12 @@ export class PackOpening {
     texBody.needsUpdate = true;
     texLid.needsUpdate = true;
 
+    // El color de los LATERALES tambien cambia con la familia: es lo que se ve
+    // cuando el sobre gira, y sin esto los dos sobres se verian iguales de canto.
+    const sideColor = kind === 'expansion' ? '#2a6a9e' : '#2a8f78';
     const side = (): THREE.MeshPhongMaterial =>
       new THREE.MeshPhongMaterial({
-        color: '#2a8f78',
+        color: sideColor,
         shininess: 90,
         specular: '#ffffff',
         transparent: true,
@@ -288,8 +306,11 @@ export class PackOpening {
     flash(this.flashEl);
 
     const lidPos = this.worldPos(this.lidMesh);
-    this.particles.emit(lidPos, 130, '#ffe9a8', 5);
-    this.particles.emit(lidPos, 70, '#4fd1b0', 3.5);
+    // El sobre de expansión revienta en cian/violeta; el base, en su verde/ámbar.
+    const sparkA = this.options.kind === 'expansion' ? '#b6f0ff' : '#ffe9a8';
+    const sparkB = this.options.kind === 'expansion' ? '#6ad0ff' : '#4fd1b0';
+    this.particles.emit(lidPos, 130, sparkA, 5);
+    this.particles.emit(lidPos, 70, sparkB, 3.5);
     this.pack.rotation.z = 0;
     this.pack.position.x = 0;
 
@@ -524,8 +545,9 @@ export class PackOpening {
     const front = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: faceMap }));
     front.position.z = 0.003;
 
-    const backMap = new THREE.CanvasTexture(createCardBackCanvas());
+    const backMap = new THREE.CanvasTexture(createCardBackCanvas(this.options.backArt));
     backMap.colorSpace = THREE.SRGBColorSpace;
+    backMap.needsUpdate = true;
     const back = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: backMap }));
     back.rotation.y = Math.PI;
     back.position.z = -0.003;
@@ -543,6 +565,25 @@ export class PackOpening {
 
   private worldPos(object: THREE.Object3D): THREE.Vector3 {
     return object.getWorldPosition(new THREE.Vector3());
+  }
+
+  /**
+   * Instantanea para el probe/smoke: que familia de sobre se abrio, si trae
+   * dorso propio y cuantas cartas salieron. Sin esto, la unica forma de saber
+   * que el sobre de expansion salio con SU dorso seria leer pixeles.
+   */
+  debugState(): {
+    kind: PackDropKind;
+    hasBackArt: boolean;
+    state: PackState;
+    cardIds: string[];
+  } {
+    return {
+      kind: this.options.kind ?? 'base',
+      hasBackArt: this.options.backArt !== undefined,
+      state: this.state,
+      cardIds: this.options.cards.map((c) => c.cardId),
+    };
   }
 
   dispose(): void {
@@ -619,22 +660,34 @@ function radialTexture(color: string): THREE.CanvasTexture {
 /**
  * Textura del sobre, dibujada a mano (nada de emoji: el render por software no
  * tiene la fuente de emoji garantizada y saldria un cuadrado).
+ *
+ * `kind` cambia la PALETA y la LEYENDA: el sobre base es verde con "SOBRE DE
+ * ESPORAS"; el de expansión es marino/cian con "MICELIO PROFUNDO". Es la señal
+ * mas barata de que lo que se va a abrir NO es el catalogo base.
  */
-function makePackTexture(): THREE.CanvasTexture {
+function makePackTexture(kind: PackDropKind = 'base'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 384;
   const ctx = canvas.getContext('2d');
   if (!ctx) return new THREE.CanvasTexture(canvas);
 
+  const expansion = kind === 'expansion';
+  const top = expansion ? '#1b4f7a' : '#1f6f5c';
+  const mid = expansion ? '#2a6a9e' : '#2a8f78';
+  const bottom = expansion ? '#12324d' : '#14493e';
+  const motif = expansion ? '#7fe6ff' : '#e9dcc0';
+  const label = expansion ? '#9fe8ff' : '#ffd36b';
+  const labelText = expansion ? 'MICELIO PROFUNDO' : 'SOBRE DE ESPORAS';
+
   const bg = ctx.createLinearGradient(0, 0, 0, 384);
-  bg.addColorStop(0, '#1f6f5c');
-  bg.addColorStop(0.5, '#2a8f78');
-  bg.addColorStop(1, '#14493e');
+  bg.addColorStop(0, top);
+  bg.addColorStop(0.5, mid);
+  bg.addColorStop(1, bottom);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 256, 384);
 
-  ctx.strokeStyle = 'rgba(233,220,192,.14)';
+  ctx.strokeStyle = expansion ? 'rgba(127,230,255,.16)' : 'rgba(233,220,192,.14)';
   ctx.lineWidth = 2;
   for (let i = 0; i < 14; i++) {
     ctx.beginPath();
@@ -651,7 +704,7 @@ function makePackTexture(): THREE.CanvasTexture {
   }
 
   // Setas de linea (mismo lenguaje que el icono de Colonia).
-  ctx.strokeStyle = '#e9dcc0';
+  ctx.strokeStyle = motif;
   ctx.lineWidth = 7;
   ctx.beginPath();
   ctx.arc(128, 196, 38, Math.PI, 0);
@@ -661,10 +714,21 @@ function makePackTexture(): THREE.CanvasTexture {
   ctx.lineTo(128, 246);
   ctx.stroke();
 
-  ctx.fillStyle = '#ffd36b';
+  // El de expansión lleva ademas un aro micelial: la silueta del dorso propio.
+  if (expansion) {
+    ctx.strokeStyle = 'rgba(127,230,255,.5)';
+    ctx.lineWidth = 2;
+    for (let r = 46; r <= 74; r += 14) {
+      ctx.beginPath();
+      ctx.arc(128, 214, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = label;
   ctx.textAlign = 'center';
   ctx.font = '700 20px Georgia, serif';
-  ctx.fillText('SOBRE DE ESPORAS', 128, 316);
+  ctx.fillText(labelText, 128, 316);
 
   // Franja de sellado arriba y abajo.
   for (let x = 0; x < 256; x += 8) {

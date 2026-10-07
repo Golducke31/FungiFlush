@@ -15,6 +15,8 @@ import { RNG } from '../src/engine/rng.ts';
 import {
   BOSS_PACK_DROP_CHANCE,
   DEFAULT_CARDS_PER_PACK,
+  EXPANSION_PACK_ID,
+  EXPANSION_PACK_SHARE,
   PACK_PITY_AFTER,
   PACK_RARITY_ORDER,
   PACK_RARITY_WEIGHTS,
@@ -185,6 +187,51 @@ test('BOSS_PACK_DROP_CHANCE y el pity tienen los valores calibrados', () => {
 test('rollPackKind: con expansionShare 1 es expansion; con 0 es base', () => {
   assert.equal(rollPackKind(new RNG(5), 1), 'expansion');
   assert.equal(rollPackKind(new RNG(5), 0), 'base');
+});
+
+test('rollPackKind es determinista con la misma semilla', () => {
+  const a = Array.from({ length: 40 }, (_, i) => rollPackKind(new RNG(100 + i), EXPANSION_PACK_SHARE));
+  const b = Array.from({ length: 40 }, (_, i) => rollPackKind(new RNG(100 + i), EXPANSION_PACK_SHARE));
+  assert.deepEqual(a, b);
+});
+
+test('rollPackKind: la cuota por defecto es la calibrada (25%) y es un reparto real', () => {
+  assert.equal(EXPANSION_PACK_SHARE, 0.25);
+  // Muestra grande: la expansion es la MINORIA pero aparece. Si el sorteo
+  // degenerara (todo base o todo expansion) el sobre nuevo dejaria de ser
+  // obtenible o canibalizaria al base.
+  const rng = new RNG(4242);
+  let expansion = 0;
+  const total = 4000;
+  for (let i = 0; i < total; i++) {
+    if (rollPackKind(rng, EXPANSION_PACK_SHARE) === 'expansion') expansion++;
+  }
+  const share = expansion / total;
+  assert.ok(share > 0.18 && share < 0.32, `cuota fuera de rango: ${share}`);
+});
+
+test('EXPANSION_PACK_ID es el id estable del sobre nuevo', () => {
+  assert.equal(EXPANSION_PACK_ID, 'deep_mycelium');
+});
+
+test('los dos tipos de sobre caen del MISMO jefe en la misma tirada', () => {
+  // Diferenciacion real: el drop del jefe decide SI cae sobre, y aparte el
+  // TIPO. Un mismo `rollPackDrop` no puede entregar los dos a la vez, pero la
+  // combinacion de las dos tiradas cubre ambos casos a lo largo del tiempo.
+  const rng = new RNG(2026);
+  let bases = 0;
+  let expansions = 0;
+  let bossMisses = 0;
+  for (let boss = 0; boss < 600; boss++) {
+    const drop = rollPackDrop(rng, bossMisses, BOSS_PACK_DROP_CHANCE, PACK_PITY_AFTER);
+    bossMisses = drop.misses;
+    if (!drop.drop) continue;
+    if (rollPackKind(rng, EXPANSION_PACK_SHARE) === 'expansion') expansions++;
+    else bases++;
+  }
+  assert.ok(bases > 0, 'el sobre base dejo de caer');
+  assert.ok(expansions > 0, 'el sobre de expansion dejo de caer');
+  assert.ok(bases > expansions, 'el base debe seguir siendo el mayoritario');
 });
 
 // ---------------------------------------------------------------------------

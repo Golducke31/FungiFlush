@@ -1483,6 +1483,14 @@ async function boot(): Promise<void> {
         openPacks();
       },
       packsPending: profileStore.current.packs.pending,
+      // El sobre de EXPANSION tiene su propio boton: abre un pool distinto, asi
+      // que el jugador elige cual gastar en vez de que el juego decida por el.
+      onOpenExpansionPacks: () => {
+        carouselActivate = null;
+        scene.setCarousel(null);
+        openPacks('expansion');
+      },
+      expansionPacksPending: profileStore.current.packs.expansionPending,
     });
     // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
     carouselActivate = (index) => frame.setFocus(index);
@@ -1574,6 +1582,12 @@ async function boot(): Promise<void> {
 
     hud?.showPackOpening({
       cards: views,
+      kind,
+      // El sobre de expansión saca sus cartas con SU dorso (`cardback_mycelial`):
+      // es lo que lo distingue de un sobre base ya ANTES de girar la primera
+      // carta. `cardBackArt` lo resuelve el Render; si el arte no esta cargado
+      // cae al dorso procedural (mismo camino que el dorso base).
+      backArt: kind === 'expansion' ? scene.cardBackArt('mycelial') : undefined,
       pendingLeft: () =>
         kind === 'expansion'
           ? profileStore.current.packs.expansionPending

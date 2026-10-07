@@ -9202,6 +9202,18 @@ body {
   line-height: 1;
 }
 
+/* Sobres de EXPANSION: mismo boton, señal cian para que se distinga de un
+   vistazo del sobre base sin depender del texto. */
+.btn.is-packs-expansion.has-pending {
+  border-color: #5fd8e8;
+  color: #d8f6ff;
+}
+
+.btn.is-packs-expansion.has-pending .pack-count {
+  background: #5fd8e8;
+  color: #06222b;
+}
+
 /* --------------------------------------------------------------------------
    Tienda: recortar CROMO para agrandar la CARTA
    --------------------------------------------------------------------------

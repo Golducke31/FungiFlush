@@ -60,6 +60,14 @@ export interface CollectionCallbacks {
   onOpenPacks?: () => void;
   /** Sobres sin abrir, para el contador del boton. */
   packsPending?: number;
+  /**
+   * Opcional: abrir los Sobres de EXPANSION. Son un boton APARTE del base a
+   * proposito: abren un pool distinto (`deep_mycelium`), asi que mezclarlos en un
+   * solo boton obligaria al jugador a saber cual se va a gastar.
+   */
+  onOpenExpansionPacks?: () => void;
+  /** Sobres de expansion sin abrir, para su propio contador. */
+  expansionPacksPending?: number;
 }
 
 type Filter = 'all' | 'cards' | 'jokers' | 'locked' | 'unlocked';
@@ -107,11 +115,13 @@ function countBadge(entry: CollectionEntry): HTMLElement | null {
 function buildPacksButton(
   onOpen: () => void,
   pending: number,
+  kind: 'base' | 'expansion' = 'base',
 ): HTMLButtonElement {
+  const expansion = kind === 'expansion';
   const button = document.createElement('button');
-  button.className = 'btn is-ghost is-packs';
-  button.dataset['act'] = 'sobres';
-  button.textContent = t('packs.title');
+  button.className = expansion ? 'btn is-ghost is-packs is-packs-expansion' : 'btn is-ghost is-packs';
+  button.dataset['act'] = expansion ? 'sobres-expansion' : 'sobres';
+  button.textContent = expansion ? t('packs.expansion.title') : t('packs.title');
   if (pending > 0) {
     button.classList.add('has-pending');
     const count = document.createElement('span');
@@ -150,6 +160,8 @@ export function buildCollectionCarousel(
     onOpenCosmetics?: () => void;
     onOpenPacks?: () => void;
     packsPending?: number;
+    onOpenExpansionPacks?: () => void;
+    expansionPacksPending?: number;
   },
 ): CollectionCarouselFrame {
   const panel = document.createElement('div');
@@ -251,6 +263,15 @@ export function buildCollectionCarousel(
   // venta. El contador de pendientes es lo que invita a entrar.
   if (callbacks.onOpenPacks) {
     actions.appendChild(buildPacksButton(callbacks.onOpenPacks, callbacks.packsPending ?? 0));
+  }
+  if (callbacks.onOpenExpansionPacks) {
+    actions.appendChild(
+      buildPacksButton(
+        callbacks.onOpenExpansionPacks,
+        callbacks.expansionPacksPending ?? 0,
+        'expansion',
+      ),
+    );
   }
   if (callbacks.onOpenStore) {
     const store = document.createElement('button');
@@ -422,6 +443,15 @@ export function buildCollectionPanel(
   // pantalla de contenido. Asi ya no ocupan lugar en el menu principal.
   if (callbacks.onOpenPacks) {
     actions.appendChild(buildPacksButton(callbacks.onOpenPacks, callbacks.packsPending ?? 0));
+  }
+  if (callbacks.onOpenExpansionPacks) {
+    actions.appendChild(
+      buildPacksButton(
+        callbacks.onOpenExpansionPacks,
+        callbacks.expansionPacksPending ?? 0,
+        'expansion',
+      ),
+    );
   }
   if (callbacks.onOpenStore) {
     const store = document.createElement('button');

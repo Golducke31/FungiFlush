@@ -2686,10 +2686,19 @@ export class HUD {
     cards: PackCardView[];
     onClose: () => void;
     pendingLeft: () => number;
+    /**
+     * Familia del sobre. Decide la paleta del envoltorio (verde base vs
+     * cian/violeta de expansión) y, con `backArt`, el dorso de las cartas.
+     */
+    kind?: 'base' | 'expansion';
+    /** Imagen del dorso con el que salen las cartas del sobre. */
+    backArt?: HTMLImageElement;
   }): void {
     this.closePackOpening();
     const opening = new PackOpening({
       cards: options.cards,
+      ...(options.kind ? { kind: options.kind } : {}),
+      ...(options.backArt ? { backArt: options.backArt } : {}),
       callbacks: {
         onClose: () => {
           this.closePackOpening();
@@ -2706,12 +2715,21 @@ export class HUD {
     opening.start();
   }
 
-  /** Cierra y destruye el overlay de sobres si esta abierto. */
+  /** Cierra y destruye el overlay de sobres si está abierto. */
   closePackOpening(): void {
     if (!this.packOpening) return;
     this.packOpening.dispose();
     this.packOpening = null;
     this.syncPanelOpen();
+  }
+
+  /**
+   * Estado del overlay de Sobres, para el probe/smoke. `null` si no hay ninguno
+   * abierto. Se reenvia tal cual el `debugState()` del controlador: el HUD no
+   * interpreta nada.
+   */
+  packOpeningState(): ReturnType<PackOpening['debugState']> | null {
+    return this.packOpening?.debugState() ?? null;
   }
 
   showCosmetics(returnTo?: () => void): void {
