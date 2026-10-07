@@ -345,27 +345,119 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
 // ---------------------------------------------------------------------------
 
 export interface ProfilePanelCallbacks {
+  /** Escalera de niveles de la Colonia (Recompensas). */
+  onOpenColonyRewards: () => void;
+  /** Cosmeticos (Personalizar): dorso de carta y tapete. */
+  onOpenCosmetics: () => void;
   onOpenAchievements: () => void;
   onOpenHistory: () => void;
+  /** Vincular el progreso a Google Play Games. */
+  onLinkAccount: () => void;
+  /** Desvincular (el progreso local se conserva). */
+  onUnlinkAccount: () => void;
   onClose: () => void;
 }
 
+/**
+ * Vista de la Colonia Fungi para el panel de Perfil.
+ *
+ * La UI NO conoce el perfil ni el modulo de meta: el controlador le empuja esta
+ * vista ya resuelta (mismo contrato que el resto del HUD).
+ */
+export interface ColonyView {
+  level: number;
+  /** Clave i18n del nombre de la banda del nivel ("Brote Micelial"). */
+  levelNameKey: string;
+  /** Esporas de Colonia acumuladas. */
+  spores: number;
+  /** Esporas acumuladas al entrar al nivel actual. */
+  current: number;
+  /** Esporas acumuladas del proximo nivel. */
+  next: number;
+  remaining: number;
+  /** Progreso dentro del nivel, 0..1. */
+  progress: number;
+  /** Clave i18n de la recompensa del proximo nivel, o null. */
+  nextRewardNameKey: string | null;
+  /** Esporas ganadas en la temporada en curso. */
+  seasonSpores: number;
+  rewards: ColonyRewardView[];
+}
+
+export interface ColonyRewardView {
+  level: number;
+  spores: number;
+  nextSpores: number;
+  rewardId: string | null;
+  rewardNameKey: string | null;
+  unlocked: boolean;
+}
+
+/** Estado de la cuenta (Google Play Games / local). */
+export interface AccountView {
+  linked: boolean;
+  provider: 'none' | 'google-play' | 'local';
+  displayName: string | null;
+  syncState: 'offline' | 'pending' | 'synced' | 'conflict';
+  /** El dispositivo soporta el proveedor. */
+  available: boolean;
+}
+
+/** Esporas de Colonia ganadas en la run que acaba de terminar. */
+export interface ColonyResultView {
+  spores: number;
+  bonuses: Array<{ nameKey: string; amount: number }>;
+}
+
 export interface ProfilePanelState {
-  /** Nivel de la Colonia Fungi (meta-progresion futura). 0/ausente = aun no existe. */
+  /** Nivel de la Colonia Fungi (0/ausente = aun no existe). */
   colonyLevel?: number;
+  /** Colonia resuelta (nivel, Esporas, barra, proximo desbloqueo). */
+  colony?: ColonyView | null;
+  account?: AccountView | null;
   bestAnte?: number;
   wins?: number;
   streak?: number;
   achievements?: { unlocked: number; total: number };
 }
 
+/** Esporas con separador de miles. Es un numero de cuenta, no de puntaje. */
+function formatSpores(value: number): string {
+  return Math.round(value).toLocaleString();
+}
+
+/**
+ * Icono de las Esporas de Colonia (`public/art/ui_icon_colony.svg`).
+ *
+ * Se resuelve contra `document.baseURI` y se pinta por MASCARA (mismo patron
+ * que los contadores del HUD): asi el color lo pone el CSS y el mismo archivo
+ * sirve en el dev server y bajo el `asset://` de Tauri. Deliberadamente
+ * DISTINTO del hongo de la moneda de partida: una Espora de Colonia es un
+ * recurso permanente de la cuenta, no el multiplicador de una mano.
+ */
+export function colonyIconEl(extraClass = ''): HTMLSpanElement {
+  const el = document.createElement('span');
+  el.className = `colony-icon ${extraClass}`.trim();
+  el.setAttribute('aria-hidden', 'true');
+  el.style.setProperty(
+    '--icon',
+    `url("${new URL('art/ui_icon_colony.svg', document.baseURI).href}")`,
+  );
+  return el;
+}
+
+/** Clave i18n del estado de sincronizacion de la cuenta. */
+function syncKey(state: AccountView['syncState']): string {
+  return `colony.account.sync.${state}`;
+}
+
 /**
  * Panel de PERFIL: la identidad de la cuenta.
  *
- * Agrupa lo que "es tuyo" y no "que vas a jugar": el nivel de la Colonia Fungi
- * (meta-progresion futura, hoy en placeholder), el progreso y los accesos a
- * Logros e Historial. La Coleccion NO vive aca: es contenido y tiene su propia
- * puerta en el menu desplegable.
+ * Agrupa lo que "es tuyo" y no "que vas a jugar": la Colonia Fungi (nivel,
+ * Esporas de Colonia y proximo desbloqueo), el progreso, la cuenta y los
+ * accesos a Recompensas / Personalizar / Logros / Historial. La Coleccion NO
+ * vive aca: es contenido y tiene su propia puerta en el menu desplegable.
  */
 export function buildProfilePanel(
   state: ProfilePanelState,
@@ -385,29 +477,56 @@ export function buildProfilePanel(
   const body = document.createElement('div');
   body.className = 'profile-body';
 
-  // --- Colonia Fungi (meta-progresion futura) ---
-  const level = state.colonyLevel ?? 0;
-  const colony = document.createElement('div');
-  colony.className = 'profile-colony is-soon';
+  // --- Colonia Fungi: nivel + Esporas de Colonia + proximo desbloqueo ---
+  const colony = state.colony ?? null;
+  const block = document.createElement('div');
+  block.className = 'profile-colony';
+  block.dataset['act'] = 'colony-block';
+
   const colonyTop = document.createElement('div');
   colonyTop.className = 'profile-colony-top';
   const colonyName = document.createElement('span');
   colonyName.className = 'profile-colony-name';
-  colonyName.textContent =
-    level > 0 ? `${t('menu.colony')} · ${t('menu.colonyLevel', { level })}` : t('menu.colony');
-  const soon = document.createElement('span');
-  soon.className = 'profile-colony-soon';
-  soon.textContent = t('menu.colonySoon');
-  colonyTop.append(colonyName, soon);
+  colonyName.textContent = t('colony.title');
+  const colonyLevel = document.createElement('span');
+  colonyLevel.className = 'profile-colony-level';
+  colonyLevel.textContent = colony
+    ? `${t(colony.levelNameKey)} · ${t('colony.levelLabel', { level: colony.level })}`
+    : t('menu.colonySoon');
+  colonyTop.append(colonyName, colonyLevel);
+
+  const sporesRow = document.createElement('div');
+  sporesRow.className = 'profile-colony-spores';
+  const sporesLabel = document.createElement('span');
+  sporesLabel.className = 'profile-colony-spores-label';
+  const sporesText = document.createElement('span');
+  sporesText.textContent = t('colony.spores');
+  sporesLabel.append(colonyIconEl('is-small'), sporesText);
+  const sporesValue = document.createElement('span');
+  sporesValue.className = 'profile-colony-spores-value';
+  sporesValue.dataset['counter'] = 'colony-spores';
+  sporesValue.textContent = colony
+    ? `${formatSpores(colony.spores)} / ${formatSpores(colony.next)}`
+    : '—';
+  sporesRow.append(sporesLabel, sporesValue);
+
   const bar = document.createElement('div');
   bar.className = 'profile-colony-bar';
   const fill = document.createElement('div');
   fill.className = 'profile-colony-fill';
-  fill.style.width = '0%';
+  fill.style.width = `${Math.round((colony?.progress ?? 0) * 100)}%`;
   bar.appendChild(fill);
-  colony.append(colonyTop, bar);
 
-  // --- Progreso actual (hoy: ante / victorias / racha) ---
+  const nextRow = document.createElement('div');
+  nextRow.className = 'profile-colony-next';
+  nextRow.textContent =
+    colony && colony.nextRewardNameKey
+      ? t('colony.nextUnlock', { name: t(colony.nextRewardNameKey) })
+      : t('colony.noNext');
+
+  block.append(colonyTop, sporesRow, bar, nextRow);
+
+  // --- Progreso actual (ante / victorias / racha) ---
   const stats = document.createElement('div');
   stats.className = 'profile-stats';
   const stat = (label: string, value: string): HTMLElement => {
@@ -428,7 +547,7 @@ export function buildProfilePanel(
     stat(t('menu.progress.streak'), String(state.streak ?? 0)),
   );
 
-  // --- Accesos: Logros + Historial ---
+  // --- Accesos: Recompensas / Personalizar / Logros / Historial ---
   const grid = document.createElement('div');
   grid.className = 'profile-grid';
   const card = (label: string, detail: string, act: string, onClick: () => void): HTMLButtonElement => {
@@ -449,6 +568,13 @@ export function buildProfilePanel(
   const ach = state.achievements;
   grid.append(
     card(
+      t('colony.rewards'),
+      colony ? `${colony.rewards.filter((r) => r.unlocked).length}/${colony.rewards.length}` : '',
+      'colony-rewards',
+      callbacks.onOpenColonyRewards,
+    ),
+    card(t('menu.cosmetics'), '', 'cosmetics', callbacks.onOpenCosmetics),
+    card(
       t('menu.achievements'),
       ach ? `${ach.unlocked}/${ach.total}` : '',
       'achievements',
@@ -457,7 +583,42 @@ export function buildProfilePanel(
     card(t('menu.history'), '', 'history', callbacks.onOpenHistory),
   );
 
-  body.append(colony, stats, grid);
+  // --- Cuenta (opcional): Google Play Games ---
+  //
+  // El estado de sync vive DENTRO de la misma fila (segunda linea del texto) y
+  // no en una fila propia: en 844x390 una linea de mas empujaba el boton fuera
+  // de la ventana, y un control que no se puede tocar no existe.
+  const account = state.account ?? null;
+  const accountRow = document.createElement('div');
+  accountRow.className = 'profile-account';
+  const accountInfo = document.createElement('span');
+  accountInfo.className = 'profile-account-info';
+  const accountText = document.createElement('span');
+  accountText.className = 'profile-account-text';
+  accountText.dataset['act'] = 'account-state';
+  accountText.textContent = account?.linked
+    ? t('colony.account.linkedAs', { name: account.displayName ?? '—' })
+    : account?.available
+      ? t('colony.account.notLinked')
+      : t('colony.account.unavailable');
+  const syncLine = document.createElement('span');
+  syncLine.className = 'profile-account-sync';
+  syncLine.textContent = t(syncKey(account?.syncState ?? 'offline'));
+  accountInfo.append(accountText, syncLine);
+
+  const accountBtn = document.createElement('button');
+  accountBtn.type = 'button';
+  accountBtn.className = 'profile-account-btn';
+  accountBtn.dataset['act'] = account?.linked ? 'account-unlink' : 'account-link';
+  accountBtn.textContent = account?.linked ? t('colony.account.unlink') : t('colony.account.link');
+  if (!account?.linked && !account?.available) accountBtn.disabled = true;
+  accountBtn.addEventListener('click', () => {
+    if (account?.linked) callbacks.onUnlinkAccount();
+    else callbacks.onLinkAccount();
+  });
+  accountRow.append(accountInfo, accountBtn);
+
+  body.append(block, stats, grid, accountRow);
 
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
@@ -470,6 +631,90 @@ export function buildProfilePanel(
   actions.appendChild(close);
 
   panel.append(title, sub, body, actions);
+  return panel;
+}
+
+// ---------------------------------------------------------------------------
+// Panel de Recompensas de la Colonia
+// ---------------------------------------------------------------------------
+
+/**
+ * Escalera de niveles: que otorga cada uno y cuanto falta.
+ *
+ * No es una tienda: las recompensas se DESBLOQUEAN al alcanzar el nivel, no se
+ * compran. El panel solo las muestra (y marca las ya desbloqueadas) porque el
+ * jugador necesita saber "que gano si sigo jugando".
+ */
+export function buildColonyRewardsPanel(
+  state: { level: number; spores: number; rewards: ColonyRewardView[] },
+  callbacks: { onClose: () => void },
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'panel is-colony-rewards';
+
+  const shell = document.createElement('div');
+  shell.className = 'colony-rewards-shell';
+
+  const head = document.createElement('div');
+  head.className = 'colony-rewards-head';
+  const title = document.createElement('h2');
+  title.className = 'colony-rewards-title';
+  const titleText = document.createElement('span');
+  titleText.textContent = t('colony.rewards');
+  title.append(colonyIconEl('is-title'), titleText);
+  const sub = document.createElement('p');
+  sub.className = 'colony-rewards-subtitle';
+  sub.textContent = t('colony.rewardsSubtitle');
+  const total = document.createElement('p');
+  total.className = 'colony-rewards-total';
+  total.dataset['counter'] = 'colony-spores-total';
+  total.textContent = t('colony.sporesTotal', { value: formatSpores(state.spores) });
+  head.append(title, sub, total);
+
+  const list = document.createElement('div');
+  list.className = 'colony-rewards-list';
+
+  for (const reward of state.rewards) {
+    const row = document.createElement('div');
+    row.className = `colony-reward-row${reward.unlocked ? ' is-unlocked' : ''}`;
+    row.dataset['level'] = String(reward.level);
+
+    const badge = document.createElement('span');
+    badge.className = 'colony-reward-badge';
+    badge.textContent = `N${reward.level}`;
+
+    const body = document.createElement('span');
+    body.className = 'colony-reward-body';
+    const name = document.createElement('span');
+    name.className = 'colony-reward-name';
+    name.textContent = reward.rewardNameKey
+      ? t(reward.rewardNameKey)
+      : t('colony.reward.start');
+    const cost = document.createElement('span');
+    cost.className = 'colony-reward-cost';
+    cost.textContent = t('colony.rewardCost', { value: formatSpores(reward.spores) });
+    body.append(name, cost);
+
+    const tag = document.createElement('span');
+    tag.className = 'colony-reward-tag';
+    tag.textContent = reward.unlocked ? t('colony.reward.unlocked') : t('colony.reward.locked');
+
+    row.append(badge, body, tag);
+    list.appendChild(row);
+  }
+
+  const footer = document.createElement('div');
+  footer.className = 'colony-rewards-footer';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'colony-rewards-close';
+  close.dataset['act'] = 'colony-rewards-close';
+  close.textContent = t('ui.close');
+  close.addEventListener('click', callbacks.onClose);
+  footer.appendChild(close);
+
+  shell.append(head, list, footer);
+  panel.appendChild(shell);
   return panel;
 }
 

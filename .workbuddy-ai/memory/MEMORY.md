@@ -67,3 +67,12 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo: Goldu
 ## Dev debug / traps
 - `window.__fungiflush`={engine,scene,hud,bus,content,profileStore,runStore}; `content` es façade NO registry (`content.registry.instantiateJoker`). NUNCA emitir `state:changed` a mano.
 - Smoke context 844×390 ⇒ `@media (pointer:coarse)` ACTIVO; verificar escritorio con `shot-desktop.mjs` (no hay bloque fine). Panel abierto oculta run HUD (`is-panel-open`). `.hud-missions`/`.hud-jokers` `pointer-events:none` (smoke `sellHittable`). Flakes: pool `waitForFunction(el===null)` no `waitForTimeout`.
+
+## Colonia Fungi / Esporas de Colonia (desde P20, 2026-10-06)
+- Doc: `docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md`. **La Colonia NO toca el combate** (no compra cartas ni da stats de partida). Dos recursos con nombre distinto: **Esporas** (partida, `RunState`) vs **Esporas de Colonia** (permanente, `ProfileSave.colony`). Iconos distintos: `public/ui/fungi.png` vs `public/art/ui_icon_colony.svg`.
+- `src/meta/Colony.ts` **puro**: base por ante `[50,75,100,130,165,205,250,300]`; bonos chicos (1ª mano +10, descartes +5, misión +20, diaria +50); anti-farm de 3 frenos (1ª vez 100 % con clave `"ante:blindIndex"` en `firstClears`, repetición 40 %, tope blando 5/día). Niveles con tabla hasta el 10 + extrapolación; **nombres por bandas** (`colony.band.*`). `level` es DERIVADO de `lifetimeSpores` (se recalcula al cargar).
+- Perfil **v4**: `colony` + `account` (`src/meta/Account.ts`, estados `offline|pending|synced|conflict`). Migración `migrateProfileV3toV4` + **líneas explícitas en el merge** de `migrateProfileSave`.
+- Anti-trampa: se sube `ColonyRunResult` (resultado), NUNCA las Esporas del cliente.
+- `src-tauri/src/play_games.rs` = **stubs** del contrato de Play Games. ⚠️ NO hay cargo/rustc/`@tauri-apps/cli`: `src-tauri/` **no se compila en los gates**.
+- Gate nuevo: `node tools/probe-colony.mjs` (siembra en `localStorage` + `reload`; NO `patch` en caliente, el HUD lee `menuMeta` y sólo se empuja al entrar al menú).
+- ⚠️ **Medir contra el SCROLLER, no contra el viewport**: `getBoundingClientRect()` puede dar "dentro de la ventana" con el elemento recortado por el `overflow` del cuerpo. En 844×390 el panel de Perfil tiene ~210 px útiles: los 4 accesos van en UNA fila y los stats se ocultan en `(pointer: coarse) and (max-height: 560px)`, o la fila de cuenta queda recortada y el smoke falla (cliquea en el centro REAL del botón).

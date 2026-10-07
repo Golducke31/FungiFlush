@@ -39,7 +39,18 @@ import { Storage } from '@persistence/Storage';
 import { isTouchOnly } from './pointer';
 import { EntitlementStore } from '@meta/EntitlementStore';
 import { PackGate } from '@meta/PackGate';
-import { HISTORY_CAP } from '@meta/ProfileState';
+import { HISTORY_CAP, type ColonyRunResult } from '@meta/ProfileState';
+import {
+  applyBlindAward,
+  bonusForMission,
+  colonyLevelNameKey,
+  computeBlindAward,
+  grantSpores,
+  levelViews,
+  nextLevelInfo,
+  type ColonyBonus,
+} from '@meta/Colony';
+import { createGooglePlayProvider, linkAccount, makeRunResult, queueRunResult, unlinkAccount } from '@meta/Account';
 import { ARCHETYPES, biasFor, starterFor } from '@meta/Archetypes';
 import { notifier } from '@notify/notify';
 import {
@@ -342,6 +353,87 @@ async function boot(): Promise<void> {
     for (const joker of engine.run?.jokers ?? []) markSeen(joker.def.id);
   });
 
+  // --------------------------------------------------------------------------
+  // Colonia Fungi: Esporas de Colonia (meta-progresion)
+  // --------------------------------------------------------------------------
+  //
+  // CAPA SEPARADA DEL COMBATE. El motor NO sabe que existe: superar un Ciego
+  // acredita Esporas de Colonia en el perfil, y la Colonia no altera reglas,
+  // cartas ni puntuaciones (no compra cartas mas fuertes, no da Sustrato ni
+  // Esporas de partida, no recupera manos ni descartes).
+  //
+  // `runColony` es el acumulador de la run EN CURSO: es lo que la pantalla de
+  // resultados muestra como "+N Esporas de Colonia". Se resetea en `run:start`.
+  let runColony = {
+    runId: '',
+    startedAt: '',
+    spores: 0,
+    bonuses: [] as ColonyBonus[],
+  };
+
+  const pushColonyResult = (): void => {
+    hud?.setColonyResult({
+      spores: runColony.spores,
+      bonuses: runColony.bonuses.map((b) => ({ ...b })),
+    });
+  };
+
+  bus.on('run:start', () => {
+    runColony = {
+      runId: `${engine.run.seed}-${Date.now()}`,
+      startedAt: new Date().toISOString(),
+      spores: 0,
+      bonuses: [],
+    };
+    pushColonyResult();
+  });
+
+  // Superar un Ciego es la fuente PRINCIPAL de Esporas de Colonia.
+  bus.on('round:win', () => {
+    const run = engine.run;
+    const round = engine.round;
+    if (!run || !round) return;
+    const now = Date.now();
+    const award = computeBlindAward(profileStore.current.colony, {
+      ante: run.ante,
+      blindIndex: run.blindIndex,
+      // `history` guarda las manos jugadas del Ciego: si solo hay una, se
+      // supero en la primera mano (bonificacion chica, el grueso es el Ciego).
+      firstHandClear: round.history.length <= 1,
+      discardsLeft: round.discardsLeft,
+      now,
+    });
+
+    let levelAfter = 0;
+    let newRewards: string[] = [];
+    profileStore.patch((p) => {
+      const result = applyBlindAward(p.colony, award, now);
+      levelAfter = result.levelAfter;
+      newRewards = result.newRewards;
+    });
+
+    runColony.spores += award.total;
+    runColony.bonuses.push(...award.bonuses);
+    pushColonyResult();
+
+    if (newRewards.length > 0) {
+      bus.emit('banner:show', {
+        key: 'banner.colony.levelUp',
+        params: { level: levelAfter },
+        kind: 'success',
+      });
+    }
+  });
+
+  // Una mision cumplida tambien alimenta a la colonia (bonificacion chica).
+  bus.on('mission:completed', () => {
+    const bonus = bonusForMission();
+    profileStore.patch((p) => grantSpores(p.colony, bonus.amount));
+    runColony.spores += bonus.amount;
+    runColony.bonuses.push(bonus);
+    pushColonyResult();
+  });
+
   // --- Estadisticas de perfil ---
   bus.on('game:over', ({ reason, ante }) => {
     // El banner se emite FUERA del patch: `patch` es sincrono y devuelve una
@@ -389,7 +481,25 @@ async function boot(): Promise<void> {
       }
       // P4: XP de temporada por run (ante * 50, +200 si gana).
       if (seasonDef) addXp(p, seasonDef.id, ante * 50 + (reason === 'victory' ? 200 : 0));
+      // Colonia (v4): el resultado de la run queda ENCOLADO para el sync.
+      // Anti-trampa: se encola el RESULTADO (modo, Ciegos superados, score y
+      // version), nunca las Esporas calculadas en el cliente: el servidor las
+      // recalcula. Sin cuenta vinculada el estado queda `offline` y la cola
+      // espera (el juego es offline-first).
+      const colonyResult: ColonyRunResult = makeRunResult({
+        runId: runColony.runId || `${engine.run.seed}-${Date.now()}`,
+        startedAt: runColony.startedAt || new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        mode: engine.run.ascension > 0 ? 'ascension' : 'classic',
+        highestBlind: ante,
+        completedBlinds: engine.run.stats.blindsCleared,
+        scoreSummary: engine.run.totalScore,
+        clientVersion: APP_VERSION,
+      });
+      queueRunResult(p, colonyResult);
     });
+    // El desglose de la run ya esta cerrado: el panel de resultados lo lee.
+    pushColonyResult();
     if (seasonDef) {
       const total =
         profileStore.current.entitlements.passes.find((x) => x.seasonId === seasonDef.id)?.xp ?? 0;
@@ -1128,6 +1238,10 @@ async function boot(): Promise<void> {
       },
       // --- R5: historial ---
       onOpenHistory: () => hud?.showHistory(),
+      // --- Colonia Fungi (meta-progresion) ---
+      onOpenColonyRewards: () => hud?.showColonyRewards(),
+      onLinkAccount: () => void onLinkAccount(),
+      onUnlinkAccount: () => onUnlinkAccount(),
       // --- Fase 2 ---
       onPickReward: (offerId) => {
         if (!engine.chooseReward(offerId)) hud?.toast(t('log.rewardUnavailable'), 'warn');
@@ -1277,6 +1391,12 @@ async function boot(): Promise<void> {
     });
 
   /**
+   * El contenedor soporta Google Play Games. Se sondea UNA vez al arrancar y
+   * se cachea: en el navegador (dev, smoke, escritorio) siempre es `false`.
+   */
+  let googlePlayAvailable = false;
+
+  /**
    * Empuja al HUD el estado meta del menu: progreso, Colonia (futura) y la
    * RECOMENDACION contextual — la que responde "que deberia hacer ahora?".
    *
@@ -1296,10 +1416,30 @@ async function boot(): Promise<void> {
           ? { key: 'menu.recommend.continue', params: { ante: savedRun.ante } }
           : { key: 'menu.recommend.beatBest', params: { ante: p.stats.bestAnte } };
     hud?.setAchievementsState(views);
+    // Colonia Fungi: la meta-progresion REAL (Esporas de Colonia + nivel).
+    const colony = p.colony;
+    const next = nextLevelInfo(colony);
     hud?.setMenuMeta({
-      // Colonia Fungi: meta-progresion futura (esporas, niveles, cosmeticos).
-      // Hoy todavia no existe: el icono de Perfil se dibuja sin insignia.
-      colonyLevel: 0,
+      colonyLevel: colony.level,
+      colony: {
+        level: colony.level,
+        levelNameKey: colonyLevelNameKey(colony.level),
+        spores: colony.lifetimeSpores,
+        current: next.current,
+        next: next.next,
+        remaining: next.remaining,
+        progress: next.progress,
+        nextRewardNameKey: next.rewardNameKey,
+        seasonSpores: colony.seasonSpores,
+        rewards: levelViews(colony),
+      },
+      account: {
+        linked: p.account.provider !== 'none',
+        provider: p.account.provider,
+        displayName: p.account.displayName,
+        syncState: p.account.syncState,
+        available: googlePlayAvailable,
+      },
       bestAnte: p.stats.bestAnte,
       wins: p.stats.wins,
       streak: p.daily.streak,
@@ -1308,6 +1448,44 @@ async function boot(): Promise<void> {
       recommendation,
     });
   };
+
+  // --- Cuenta (Google Play Games) ---
+  //
+  // La cuenta es OPCIONAL: el juego se juega entero offline. El proveedor solo
+  // se activa dentro del contenedor Tauri en Android; en el navegador
+  // `isAvailable()` devuelve false y la UI ofrece el estado "no disponible" en
+  // vez de un boton que va a fallar.
+  const googlePlay = createGooglePlayProvider();
+
+  const onLinkAccount = async (): Promise<void> => {
+    if (!googlePlayAvailable) {
+      hud?.toast(t('colony.account.unavailable'), 'warn');
+      return;
+    }
+    try {
+      const identity = await googlePlay.signIn();
+      if (!identity) return; // El jugador cerro el flujo de Google.
+      profileStore.patch((p) => linkAccount(p, identity));
+      syncMenuMeta();
+      hud?.showProfile();
+      hud?.toast(t('colony.account.linked', { name: identity.displayName }), 'info');
+    } catch {
+      hud?.toast(t('colony.account.error'), 'warn');
+    }
+  };
+
+  const onUnlinkAccount = (): void => {
+    profileStore.patch((p) => unlinkAccount(p));
+    syncMenuMeta();
+    hud?.showProfile();
+  };
+
+  // El sondeo es barato y no bloquea el arranque: si el contenedor no trae el
+  // plugin, queda en "no disponible" para siempre.
+  void googlePlay.isAvailable().then((available) => {
+    googlePlayAvailable = available;
+    syncMenuMeta();
+  });
 
   /**
    * Contexto de partida para los predicados de logros. Es un snapshot y no el

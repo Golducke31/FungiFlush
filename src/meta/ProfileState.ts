@@ -10,7 +10,10 @@
  * la migracion sea una funcion pura testeable.
  */
 
-export const PROFILE_SAVE_VERSION = 3;
+import type { ColonyProgress } from './Colony';
+import { defaultColonyProgress } from './Colony';
+
+export const PROFILE_SAVE_VERSION = 4;
 
 export type Language = 'en' | 'es';
 
@@ -90,6 +93,57 @@ export interface EntitlementSnapshot {
   checkedAt?: number;
   /** Cuanto se confia en `owned` sin volver a consultar. Default 14 dias. */
   offlineGraceMs: number;
+}
+
+/**
+ * Estado de sincronizacion del progreso meta.
+ *
+ * Existe desde la v1 local aunque todavia no haya backend: el juego se puede
+ * jugar entero offline, asi que el perfil tiene que poder decir en que estado
+ * esta sin depender de una red. Es la maquina de estados del plan:
+ *   offline  -> no hay cuenta vinculada (o no hay red): todo local.
+ *   pending  -> hay resultados de run sin subir.
+ *   synced   -> el servidor confirmo el progreso.
+ *   conflict -> el servidor tiene progreso distinto (dos dispositivos).
+ */
+export type ColonySyncState = 'offline' | 'pending' | 'synced' | 'conflict';
+
+/**
+ * Resumen de una run terminada, listo para subir.
+ *
+ * ANTI-TRAMPA: el cliente NO manda las Esporas que cree haber ganado. Manda el
+ * RESULTADO (que Ciegos supero, con que modo y que version) y el servidor
+ * recalcula la recompensa. Mandar `{ sporesEarned: 999999 }` seria trivial de
+ * modificar.
+ */
+export interface ColonyRunResult {
+  runId: string;
+  startedAt: string;
+  completedAt: string;
+  mode: 'classic' | 'daily' | 'ascension';
+  /** Ante mas alto alcanzado (1..8). */
+  highestBlind: number;
+  /** Ciegos superados en la run. */
+  completedBlinds: number;
+  /** Score total de la run. */
+  scoreSummary: number;
+  /** Version del juego que genero el resultado. */
+  clientVersion: string;
+}
+
+/** Identidad de la cuenta y estado del sync. Ver `src/meta/Account.ts`. */
+export interface AccountState {
+  /** Proveedor con el que se vinculo el progreso. */
+  provider: 'none' | 'google-play' | 'local';
+  /** Id persistente del jugador (Play Games player id, o id local). */
+  accountId: string | null;
+  /** Nombre visible que devolvio el proveedor. */
+  displayName: string | null;
+  syncState: ColonySyncState;
+  /** Fecha (ISO) del ultimo sync exitoso. */
+  lastSyncAt: string | null;
+  /** Resultados de run pendientes de subir. Capeado por `PENDING_RESULTS_CAP`. */
+  pendingResults: ColonyRunResult[];
 }
 
 export interface ProfileSave {
@@ -190,7 +244,19 @@ export interface ProfileSave {
     missionsOpen: boolean;
     helpOpen: boolean;
   };
+  /**
+   * Meta-progresion de la Colonia Fungi (v4). Ver `src/meta/Colony.ts`.
+   *
+   * Es la "Esporas de Colonia": currency PERMANENTE, separada de las Esporas de
+   * partida. No entra al motor: no altera reglas, cartas ni puntuaciones.
+   */
+  colony: ColonyProgress;
+  /** Cuenta y sincronizacion (v4). Ver `AccountState`. */
+  account: AccountState;
 }
+
+/** Tope de resultados de run sin subir que se conservan. */
+export const PENDING_RESULTS_CAP = 20;
 
 /** Tope de entradas que se conservan en `history` (las mas viejas se descartan). */
 export const HISTORY_CAP = 20;
@@ -266,5 +332,14 @@ export function defaultProfile(): ProfileSave {
     history: [],
     seenTutorial: false,
     ui: { missionsOpen: false, helpOpen: false },
+    colony: defaultColonyProgress(),
+    account: {
+      provider: 'none',
+      accountId: null,
+      displayName: null,
+      syncState: 'offline',
+      lastSyncAt: null,
+      pendingResults: [],
+    },
   };
 }

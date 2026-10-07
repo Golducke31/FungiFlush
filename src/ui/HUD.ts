@@ -36,8 +36,13 @@ import {
   buildArchetypePanel,
   buildAscensionPanel,
   buildChallengesPanel,
+  buildColonyRewardsPanel,
   buildMenuPanel,
   buildProfilePanel,
+  colonyIconEl,
+  type AccountView,
+  type ColonyResultView,
+  type ColonyView,
 } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
@@ -79,6 +84,10 @@ function createPileLabelEl(): HTMLDivElement {
 export interface MenuMetaState {
   /** Nivel de Colonia (0 = todavia no existe). */
   colonyLevel: number;
+  /** Colonia resuelta (nivel, Esporas de Colonia, barra, proximo desbloqueo). */
+  colony: ColonyView | null;
+  /** Cuenta y estado de sincronizacion (Google Play Games / local). */
+  account: AccountView | null;
   bestAnte: number;
   wins: number;
   streak: number;
@@ -167,6 +176,13 @@ export interface HudCallbacks {
   onEquip: (kind: 'cardback' | 'felt', id: string) => void;
   // --- R5: historial de partidas ---
   onOpenHistory: () => void;
+  // --- Colonia Fungi (meta-progresion) ---
+  /** Escalera de niveles de la Colonia (Recompensas). */
+  onOpenColonyRewards: () => void;
+  /** Vincular el progreso a Google Play Games. */
+  onLinkAccount: () => void;
+  /** Desvincular la cuenta (el progreso local se conserva). */
+  onUnlinkAccount: () => void;
   // --- Arquetipos: la forma de puntuar de la run ---
   /**
    * El jugador eligio un arquetipo y quiere arrancar la run con el.
@@ -354,6 +370,8 @@ export class HUD {
    */
   private menuMeta: MenuMetaState = {
     colonyLevel: 0,
+    colony: null,
+    account: null,
     bestAnte: 0,
     wins: 0,
     streak: 0,
@@ -361,6 +379,12 @@ export class HUD {
     dailyPending: false,
     recommendation: null,
   };
+  /**
+   * Esporas de Colonia ganadas en la run en curso. Lo empuja el controlador en
+   * cada Ciego superado, asi que cuando `game:over` abre el panel el desglose
+   * ya esta completo (el panel se dibuja DESPUES de los listeners de `main.ts`).
+   */
+  private colonyResult: ColonyResultView = { spores: 0, bonuses: [] };
   /** Logros ya redactados por el controlador, para abrirlos desde el Perfil. */
   private achievementsState: AchievementView[] = [];
   /** Ascension (R1): se la empuja el controlador desde el perfil. */
@@ -2173,16 +2197,51 @@ export class HUD {
     const panel = buildProfilePanel(
       {
         colonyLevel: meta.colonyLevel,
+        colony: meta.colony,
+        account: meta.account,
         bestAnte: meta.bestAnte,
         wins: meta.wins,
         streak: meta.streak,
         achievements: { ...meta.achievements },
       },
       {
+        onOpenColonyRewards: () => this.showColonyRewards(),
+        onOpenCosmetics: () => this.showCosmetics(() => this.showProfile()),
         onOpenAchievements: () => this.showAchievements(this.achievementsState, () => this.showProfile()),
         onOpenHistory: () => this.showHistory(() => this.showProfile()),
+        onLinkAccount: () => this.callbacks.onLinkAccount(),
+        onUnlinkAccount: () => this.callbacks.onUnlinkAccount(),
         onClose: () => this.showMenu(),
       },
+    );
+    this.openOverlay(panel);
+  }
+
+  /**
+   * Esporas de Colonia de la run que acaba de terminar.
+   *
+   * El controlador lo empuja en CADA Ciego superado (no solo al final): asi,
+   * cuando `game:over` abre el panel de resultados, el desglose ya esta
+   * completo. Depender del orden de los listeners de `game:over` seria fragil.
+   */
+  setColonyResult(result: ColonyResultView): void {
+    this.colonyResult = { spores: result.spores, bonuses: result.bonuses.map((b) => ({ ...b })) };
+  }
+
+  /**
+   * Escalera de niveles de la Colonia (Recompensas): que otorga cada nivel y
+   * cuanto falta. No es una tienda: las recompensas se desbloquean al alcanzar
+   * el nivel, el jugador solo necesita saber que gana si sigue jugando.
+   */
+  showColonyRewards(): void {
+    const colony = this.menuMeta.colony;
+    const panel = buildColonyRewardsPanel(
+      {
+        level: colony?.level ?? 1,
+        spores: colony?.spores ?? 0,
+        rewards: colony?.rewards ?? [],
+      },
+      { onClose: () => this.showProfile() },
     );
     this.openOverlay(panel);
   }
@@ -3692,6 +3751,48 @@ export class HUD {
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
+    // --- Esporas de Colonia ganadas en esta run ---
+    //
+    // Es el puente entre "jugue" y "mi colonia crecio": sin este numero, la
+    // meta-progresion es invisible justo en el momento en que el jugador mira
+    // el resultado de su partida.
+    const colony = this.colonyResult;
+    const colonyBox = document.createElement('div');
+    colonyBox.className = 'colony-result';
+    colonyBox.dataset['act'] = 'colony-result';
+
+    const colonyHead = document.createElement('div');
+    colonyHead.className = 'colony-result-head';
+    const colonyLabel = document.createElement('span');
+    colonyLabel.className = 'colony-result-label';
+    const colonyLabelText = document.createElement('span');
+    colonyLabelText.textContent = t('colony.earned');
+    colonyLabel.append(colonyIconEl('is-small'), colonyLabelText);
+    const colonyValue = document.createElement('span');
+    colonyValue.className = 'colony-result-value';
+    colonyValue.dataset['counter'] = 'colony-earned';
+    colonyValue.textContent = `+${formatNumber(colony.spores)}`;
+    colonyHead.append(colonyLabel, colonyValue);
+    colonyBox.appendChild(colonyHead);
+
+    if (colony.bonuses.length > 0) {
+      // Se AGRUPA por clave: repetir "Ciego sin perder manos +10" seis veces no
+      // es un desglose, es ruido. El total ya esta arriba.
+      const grouped = new Map<string, number>();
+      for (const bonus of colony.bonuses) {
+        grouped.set(bonus.nameKey, (grouped.get(bonus.nameKey) ?? 0) + bonus.amount);
+      }
+      const list = document.createElement('div');
+      list.className = 'colony-result-bonuses';
+      for (const [key, amount] of grouped) {
+        const row = document.createElement('span');
+        row.className = 'colony-result-bonus';
+        row.textContent = `${t(key)} +${formatNumber(amount)}`;
+        list.appendChild(row);
+      }
+      colonyBox.appendChild(list);
+    }
+
     // El idioma se saco de aca tambien: este panel es el resumen de la run, no
     // un menu de sistema. Cambiar de idioma se hace en Ajustes (menu principal)
     // o en el MENU INGAME.
@@ -3701,7 +3802,7 @@ export class HUD {
     restart.addEventListener('click', () => this.callbacks.onRestart());
 
     actions.append(restart);
-    panel.append(title, subtitle, grid, actions);
+    panel.append(title, subtitle, grid, colonyBox, actions);
     this.openOverlay(panel);
   }
 

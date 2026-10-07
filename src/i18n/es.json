@@ -747,8 +747,6 @@
     "history": "Historial",
     "profile": "Perfil",
     "profileSubtitle": "Tu progreso y tu colección",
-    "colony": "Colonia",
-    "colonyLevel": "Nivel {level}",
     "colonySoon": "Próximamente",
     "openMenu": "Menú",
     "challenges": "Desafíos",
@@ -1026,6 +1024,9 @@
     },
     "mission": {
       "completed": "Mision cumplida: {name} — +{reward} Fungis"
+    },
+    "colony": {
+      "levelUp": "¡Tu Colonia subió al nivel {level}!"
     }
   },
   "unlockRule": {
@@ -1460,6 +1461,61 @@
       "desc": "El cristal premia las manos completas: cuando todo encaja, multiplica en grande; cuando no, se queda opaco.",
       "how": "Buscá manos llenas y perfectas para disparar multiplicadores altos. Abaratás purgas para quedarte solo con lo que sirve.",
       "weakness": "Depende de la consistencia: una mano pobre no tiene plan B."
+    }
+  },
+  "colony": {
+    "title": "Colonia Fungi",
+    "levelLabel": "Nivel {level}",
+    "spores": "Esporas de Colonia",
+    "sporesTotal": "Esporas de Colonia: {value}",
+    "earned": "Esporas de Colonia",
+    "nextUnlock": "Próximo desbloqueo: {name}",
+    "noNext": "Ya desbloqueaste todas las recompensas por nivel",
+    "rewards": "Recompensas",
+    "rewardsSubtitle": "Tu colonia crece cada vez que superás un Ciego.",
+    "rewardCost": "Se alcanza con {value} Esporas de Colonia",
+    "band": {
+      "dormant": "Espora Dormida",
+      "sprout": "Brote Micelial",
+      "emerging": "Colonia Emergente",
+      "deep": "Red Profunda",
+      "underground": "Bosque Subterráneo",
+      "primordial": "Colonia Primordial"
+    },
+    "reward": {
+      "start": "Colonia inicial",
+      "frame_common": "Marco común",
+      "pack_spores": "Sobre de Esporas",
+      "bg_new": "Fondo nuevo",
+      "title_mycelium": "Título: Micelio Naciente",
+      "victory_fx": "Efecto de victoria",
+      "pack_colony": "Sobre de Colonia",
+      "avatar": "Avatar de hongo",
+      "frame_uncommon": "Marco poco común",
+      "title_established": "Título: Colonia Establecida",
+      "unlocked": "Desbloqueada",
+      "locked": "Bloqueada"
+    },
+    "bonus": {
+      "firstHand": "Ciego en la primera mano",
+      "discards": "Terminaste con descartes",
+      "mission": "Misión cumplida",
+      "daily": "Desafío diario"
+    },
+    "account": {
+      "link": "Vincular",
+      "unlink": "Desvincular",
+      "linked": "Progreso vinculado a {name}",
+      "linkedAs": "Google Play · {name}",
+      "notLinked": "Sin vincular — tu progreso es local",
+      "unavailable": "No disponible en este dispositivo",
+      "error": "No pudimos vincular la cuenta",
+      "sync": {
+        "offline": "Progreso guardado en este dispositivo",
+        "pending": "Se sincronizará cuando vuelvas a conectarte",
+        "synced": "Colonia actualizada",
+        "conflict": "Encontramos progreso distinto: elegí cuál conservar"
+      }
     }
   }
 }

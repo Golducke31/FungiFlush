@@ -263,6 +263,22 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
     (`gap: 4px`, `padding: 4px 10px`) para no meter scroll.
   - **Cortina del duelo**: es un modal a propósito (se destapa con "Listo"), NO un botón
     tapado. El gate lo clasifica como informativo.
+- **Colonia Fungi + Esporas de Colonia (2026-10-06)** — feature GLOBAL nueva
+  (`docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md`). El escritorio conserva la rejilla
+  `auto-fit` y la línea de stats; lo que hay que mirar:
+  - **Panel de Perfil**: bloque de la Colonia (nivel, Esporas, barra, próximo desbloqueo),
+    **cuatro accesos** (Recompensas · Cosméticos · Logros · Historial) y una **fila de
+    cuenta** (Google Play / local + estado de sync). En escritorio la rejilla no está
+    apretada (las reglas de compactado viven en `@media (pointer: coarse)`), pero el panel
+    es más alto: verificar que no scrollee de más con 720 px de alto.
+  - **Panel de resultados**: bloque nuevo "+N Esporas de Colonia" con desglose agrupado
+    (`.colony-result`). Comparte estilos con las dos plataformas.
+  - **Panel de Recompensas** (`.panel.is-colony-rewards`): escalera de 10 niveles. Es una
+    pantalla nueva: en escritorio no la cubre ningún gate visual.
+  - **Icono nuevo**: `public/art/ui_icon_colony.svg` (racimo micelial). Se pinta por
+    máscara, así que el color lo fija el CSS en cada contexto.
+  - ⚠️ `src-tauri/` **no se compila en los gates** (no hay Rust ni CLI de Tauri en el
+    entorno): el puente de Play Games está escrito pero **sin compilar**.
 
 ---
 

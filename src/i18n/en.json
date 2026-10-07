@@ -747,8 +747,6 @@
     "history": "History",
     "profile": "Profile",
     "profileSubtitle": "Your progress and collection",
-    "colony": "Colony",
-    "colonyLevel": "Level {level}",
     "colonySoon": "Coming soon",
     "openMenu": "Menu",
     "challenges": "Challenges",
@@ -1026,6 +1024,9 @@
     },
     "mission": {
       "completed": "Mission complete: {name} — +{reward} Fungis"
+    },
+    "colony": {
+      "levelUp": "Your Colony reached level {level}!"
     }
   },
   "unlockRule": {
@@ -1460,6 +1461,61 @@
       "desc": "Crystal rewards complete hands: when everything lines up it multiplies hard; when it doesn't, it stays dull.",
       "how": "Chase full, perfect hands to fire high multipliers. You get cheap purges to keep only what works.",
       "weakness": "It depends on consistency: a poor hand has no plan B."
+    }
+  },
+  "colony": {
+    "title": "Fungi Colony",
+    "levelLabel": "Level {level}",
+    "spores": "Colony Spores",
+    "sporesTotal": "Colony Spores: {value}",
+    "earned": "Colony Spores",
+    "nextUnlock": "Next unlock: {name}",
+    "noNext": "You unlocked every level reward",
+    "rewards": "Rewards",
+    "rewardsSubtitle": "Your colony grows every time you clear a Blind.",
+    "rewardCost": "Reached at {value} Colony Spores",
+    "band": {
+      "dormant": "Dormant Spore",
+      "sprout": "Mycelial Sprout",
+      "emerging": "Emerging Colony",
+      "deep": "Deep Network",
+      "underground": "Underground Forest",
+      "primordial": "Primordial Colony"
+    },
+    "reward": {
+      "start": "Starting colony",
+      "frame_common": "Common frame",
+      "pack_spores": "Spore Pack",
+      "bg_new": "New background",
+      "title_mycelium": "Title: Rising Mycelium",
+      "victory_fx": "Victory effect",
+      "pack_colony": "Colony Pack",
+      "avatar": "Mushroom avatar",
+      "frame_uncommon": "Uncommon frame",
+      "title_established": "Title: Established Colony",
+      "unlocked": "Unlocked",
+      "locked": "Locked"
+    },
+    "bonus": {
+      "firstHand": "Blind on the first hand",
+      "discards": "Finished with discards left",
+      "mission": "Mission complete",
+      "daily": "Daily challenge"
+    },
+    "account": {
+      "link": "Link",
+      "unlink": "Unlink",
+      "linked": "Progress linked to {name}",
+      "linkedAs": "Google Play · {name}",
+      "notLinked": "Not linked — your progress is local",
+      "unavailable": "Not available on this device",
+      "error": "We couldn't link your account",
+      "sync": {
+        "offline": "Progress saved on this device",
+        "pending": "It will sync when you're back online",
+        "synced": "Colony updated",
+        "conflict": "We found different progress: choose which to keep"
+      }
     }
   }
 }

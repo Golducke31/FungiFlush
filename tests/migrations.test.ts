@@ -143,6 +143,73 @@ test('v2: la guia vista sobrevive la migracion y un perfil v1 la muestra de nuev
   assert.equal(junk.seenTutorial, false);
 });
 
+test('v3 -> v4: la Colonia arranca en cero y la cuenta en offline', () => {
+  // Un perfil v3 es de alguien que jugo ANTES de que existieran las Esporas de
+  // Colonia: no se le puede reconstruir hacia atras el historial de Ciegos.
+  const migrated = migrateProfileSave({ version: 3, stats: { runs: 5, bestAnte: 4 } });
+  assert.equal(migrated.version, 4);
+  assert.equal(migrated.colony.lifetimeSpores, 0);
+  assert.equal(migrated.colony.level, 1);
+  assert.deepEqual(migrated.colony.firstClears, []);
+  assert.deepEqual(migrated.colony.unlockedRewards, []);
+  assert.equal(migrated.account.provider, 'none');
+  assert.equal(migrated.account.syncState, 'offline');
+  assert.deepEqual(migrated.account.pendingResults, []);
+  // El resto del perfil v3 no se pierde en el camino.
+  assert.equal(migrated.stats.runs, 5);
+  assert.equal(migrated.stats.bestAnte, 4);
+});
+
+test('v4: la Colonia sobrevive el merge y el nivel se DERIVA de las Esporas', () => {
+  // Guarda de la trampa de merge: sin las lineas explicitas en el return,
+  // `colony` y `account` se descartarian en silencio al reconstruir el perfil.
+  const migrated = migrateProfileSave({
+    version: 4,
+    colony: {
+      lifetimeSpores: 1200,
+      level: 99,
+      firstClears: ['1:0'],
+      unlockedRewards: ['frame_common'],
+    },
+    account: {
+      provider: 'google-play',
+      accountId: 'abc',
+      displayName: 'Nova',
+      syncState: 'pending',
+      pendingResults: [{ runId: 'r1' }],
+    },
+  });
+  assert.equal(migrated.colony.lifetimeSpores, 1200);
+  // El nivel NO se confia: un perfil editado a mano no puede mostrar un estado
+  // imposible. 1200 Esporas son nivel 6.
+  assert.equal(migrated.colony.level, 6);
+  assert.deepEqual(migrated.colony.firstClears, ['1:0']);
+  assert.deepEqual(migrated.colony.unlockedRewards, ['frame_common']);
+  assert.equal(migrated.account.provider, 'google-play');
+  assert.equal(migrated.account.accountId, 'abc');
+  assert.equal(migrated.account.displayName, 'Nova');
+  assert.equal(migrated.account.syncState, 'pending');
+  assert.equal(migrated.account.pendingResults.length, 1);
+});
+
+test('v1 -> v4 recorre la cadena entera sin perder nada', () => {
+  const migrated = migrateProfileSave({ version: 1, stats: { runs: 2 } });
+  assert.equal(migrated.version, 4);
+  assert.equal(migrated.stats.runs, 2);
+  assert.equal(migrated.seenTutorial, false);
+  assert.equal(migrated.ui.missionsOpen, false);
+  assert.equal(migrated.colony.level, 1);
+  assert.equal(migrated.account.syncState, 'offline');
+});
+
+test('basura en colony/account no rompe el arranque', () => {
+  const migrated = migrateProfileSave({ version: 4, colony: 'roto', account: 42 });
+  assert.equal(migrated.colony.level, 1);
+  assert.equal(migrated.colony.lifetimeSpores, 0);
+  assert.equal(migrated.account.provider, 'none');
+  assert.deepEqual(migrated.account.pendingResults, []);
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);

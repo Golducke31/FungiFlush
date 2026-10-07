@@ -13,6 +13,7 @@
  */
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
+import { levelForSpores } from '../meta/Colony';
 import { PROFILE_SAVE_VERSION, defaultProfile, type ProfileSave } from '../meta/ProfileState';
 
 export type UnknownRecord = Record<string, unknown>;
@@ -29,6 +30,7 @@ export const RUN_MIGRATIONS: Record<number, Migration> = {
 export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   1: migrateProfileV1toV2,
   2: migrateProfileV2toV3,
+  3: migrateProfileV3toV4,
 };
 
 export function migrateChain(
@@ -125,6 +127,47 @@ export function migrateProfileV2toV3(input: UnknownRecord): UnknownRecord {
 }
 
 /**
+ * Perfil: v3 -> v4
+ *
+ * v4 agrega la meta-progresion de la Colonia Fungi (`colony`) y la cuenta
+ * (`account`).
+ *
+ * Defaults a proposito:
+ *   - `colony` arranca en cero. Un perfil v3 es de alguien que jugo ANTES de
+ *     que existieran las Esporas de Colonia: no se le puede reconstruir hacia
+ *     atras el historial de Ciegos, asi que empieza a acumular desde ahora.
+ *     Inventarle Esporas por partidas viejas seria regalar progreso que nadie
+ *     gano (y el ranking futuro lo notaria).
+ *   - `account.syncState` cae a `'offline'`: sin cuenta vinculada el progreso
+ *     es local, que es exactamente lo que era un perfil v3.
+ */
+export function migrateProfileV3toV4(input: UnknownRecord): UnknownRecord {
+  return {
+    ...input,
+    version: 4,
+    colony: {
+      lifetimeSpores: 0,
+      level: 1,
+      unlockedRewards: [],
+      seasonSpores: 0,
+      seasonId: '',
+      lastSyncAt: null,
+      firstClears: [],
+      dailyAwardedDate: '',
+      dailyAwardedCount: 0,
+    },
+    account: {
+      provider: 'none',
+      accountId: null,
+      displayName: null,
+      syncState: 'offline',
+      lastSyncAt: null,
+      pendingResults: [],
+    },
+  };
+}
+
+/**
  * Migra un guardado de run. Devuelve null si es ilegible o de una version
  * futura (en ese caso la capa superior lo pone en cuarentena).
  */
@@ -209,6 +252,29 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   };
   if (typeof archetype.selected !== 'string') archetype.selected = '';
 
+  // Colonia Fungi (v4): OBJETO anidado ADITIVO. Un perfil v3 no lo tiene y cae
+  // al default (cero Esporas). El merge sobre el default protege de un perfil
+  // editado a mano al que le falte un campo.
+  const colonyRaw = migrated['colony'];
+  const colony = {
+    ...fallback.colony,
+    ...((typeof colonyRaw === 'object' && colonyRaw !== null ? colonyRaw : {}) as object),
+  };
+  // El nivel es DERIVADO de las Esporas: si un perfil llegara con un nivel
+  // incoherente (editado a mano, o migrado de un formato futuro), se recalcula
+  // para que la UI no muestre un estado imposible.
+  colony.level = Math.max(1, Math.floor(levelForSpores(colony.lifetimeSpores)));
+  if (!Array.isArray(colony.firstClears)) colony.firstClears = [];
+  if (!Array.isArray(colony.unlockedRewards)) colony.unlockedRewards = [];
+
+  // Cuenta (v4): OBJETO anidado ADITIVO.
+  const accountRaw = migrated['account'];
+  const account = {
+    ...fallback.account,
+    ...((typeof accountRaw === 'object' && accountRaw !== null ? accountRaw : {}) as object),
+  };
+  if (!Array.isArray(account.pendingResults)) account.pendingResults = [];
+
   return {
     version: CURRENT_PROFILE_VERSION,
     updatedAt: typeof migrated['updatedAt'] === 'string' ? migrated['updatedAt'] : fallback.updatedAt,
@@ -231,6 +297,8 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
       missionsOpen: (migrated['ui'] as UnknownRecord)?.['missionsOpen'] === true,
       helpOpen: (migrated['ui'] as UnknownRecord)?.['helpOpen'] === true,
     },
+    colony,
+    account,
   };
 }
 
