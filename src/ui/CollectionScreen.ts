@@ -61,13 +61,35 @@ export interface CollectionEntry {
    * Cara ya compuesta (data-URL) para la vista de GRILLA. La arma `main.ts`, que
    * es quien tiene las imagenes reales decodificadas; el panel no conoce el
    * registro ni el render. `null` = sin arte disponible.
+   *
+   * Opcional: en modo perezoso `main.ts` NO la compone de entrada (componer 101
+   * caras por apertura es lo que hacia lenta la Coleccion) y en su lugar pasa
+   * `faceProvider`, que solo se evalua cuando la celda entra en viewport.
+   * `resolveFace()` usa el proveedor si existe y sino cae a `faceUrl`.
    */
   faceUrl?: string | null;
+  /**
+   * Proveedor perezoso de la cara. Se evalua UNA vez, cuando la celda (o el
+   * detalle) entra en pantalla; la composicion en si esta memoizada en
+   * `cardArt.ts`, asi que volver a abrir la Coleccion no la recalcula.
+   */
+  faceProvider?: () => string | null;
   /** Clave i18n de la descripcion de la carta, para el detalle. */
   descKey?: string;
   /** Sustrato base / Esporas base, solo para las cartas (detalle de la grilla). */
   substrate?: number;
   spores?: number;
+}
+
+/**
+ * Resuelve la cara de una entrada: prefiere el proveedor perezoso (que solo
+ * compone la cara al entrar en viewport) y cae a `faceUrl` precompuesto si
+ * existe. La composicion esta memoizada en `cardArt.ts`, asi que repetir la
+ * llamada (celda + detalle) no la recalcula.
+ */
+function resolveFace(entry: CollectionEntry): string | null {
+  if (entry.faceProvider) return entry.faceProvider();
+  return entry.faceUrl ?? null;
 }
 
 export interface CollectionCallbacks {
@@ -434,6 +456,38 @@ export function buildCollectionGrid(
   };
   let openDetail: (entry: CollectionEntry) => void = () => {};
 
+  /**
+   * Carga perezosa de caras. `buildCell` marca las imagenes con `.is-lazy` y
+   * guarda la entrada en este mapa; el observer compone la cara (via
+   * `faceProvider`, memoizada en `cardArt.ts`) y la asigna como `src` solo
+   * cuando la celda asoma al viewport. Asi abrir la Coleccion no compone ni
+   * decodifica las ~101 caras de golpe: solo las que se ven (y las cercanas,
+   * por el `rootMargin`).
+   */
+  const lazyFaces = new WeakMap<HTMLImageElement, CollectionEntry>();
+  const faceObserver = new IntersectionObserver(
+    (records) => {
+      for (const rec of records) {
+        if (!rec.isIntersecting) continue;
+        const img = rec.target as HTMLImageElement;
+        const entry = lazyFaces.get(img);
+        if (entry) {
+          const url = resolveFace(entry);
+          if (url) img.src = url;
+        }
+        img.classList.remove('is-lazy');
+        faceObserver.unobserve(img);
+      }
+    },
+    { root: null, rootMargin: '200px', threshold: 0 },
+  );
+  /** (Re)observa las caras perezosas tras cada `render()` (filtros/colapsos). */
+  const observeLazyFaces = (): void => {
+    grid
+      .querySelectorAll<HTMLImageElement>('.collection-tile-img.is-lazy')
+      .forEach((el) => faceObserver.observe(el));
+  };
+
   /** Celda con la CARA real de la pieza (o silueta si no se descubrio). */
   const buildCell = (entry: CollectionEntry): HTMLElement => {
     const locked = entry.state === 'locked';
@@ -455,13 +509,17 @@ export function buildCollectionGrid(
       '--tile-accent',
       hexToCss(locked ? 0x2a3440 : (ELEMENT_COLOR[entry.element] ?? ELEMENT_COLOR.neutral)),
     );
-    if (entry.faceUrl && !undiscovered && !locked) {
+    const showFace = !undiscovered && !locked;
+    if (showFace && (entry.faceUrl || entry.faceProvider)) {
+      // Cara perezosa: se compone y asigna como `src` cuando la celda entra en
+      // viewport (ver `faceObserver`), no aqui. Abrir la Coleccion no debe
+      // componer ni decodificar las 101 caras de golpe.
       const img = document.createElement('img');
-      img.className = 'collection-tile-img';
-      img.src = entry.faceUrl;
+      img.className = 'collection-tile-img is-lazy';
       img.alt = '';
       img.loading = 'lazy';
       img.decoding = 'async';
+      lazyFaces.set(img, entry);
       frame.appendChild(img);
     } else {
       // Sin cara: silueta. La carta desconocida NO revela su arte (es el punto
@@ -553,12 +611,15 @@ export function buildCollectionGrid(
     const card = document.createElement('div');
     card.className = 'collection-detail-card';
 
-    if (entry.faceUrl && entry.state !== 'locked') {
-      const img = document.createElement('img');
-      img.className = 'collection-detail-art';
-      img.src = entry.faceUrl;
-      img.alt = t(entry.nameKey);
-      card.appendChild(img);
+    if (entry.state !== 'locked') {
+      const detailFace = resolveFace(entry);
+      if (detailFace) {
+        const img = document.createElement('img');
+        img.className = 'collection-detail-art';
+        img.src = detailFace;
+        img.alt = t(entry.nameKey);
+        card.appendChild(img);
+      }
     }
 
     const body = document.createElement('div');
@@ -705,6 +766,9 @@ export function buildCollectionGrid(
       empty.textContent = t('collection.empty');
       grid.appendChild(empty);
     }
+
+    // Las caras se cargan solo al entrar en viewport: observa las recien creadas.
+    observeLazyFaces();
   };
 
   // --- Construccion de los chips de filtro ---

@@ -324,7 +324,7 @@ body {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end; /* el nombre queda abajo, la insignia arriba-der. */
   gap: 2px;
   padding: 3px;
   box-sizing: border-box;
@@ -334,7 +334,8 @@ body {
   box-shadow: none;
   pointer-events: none;
   text-align: center;
-  overflow: hidden;
+  /* Visible: la insignia sobresale arriba-derecha del dorso. */
+  overflow: visible;
   z-index: 4;
 }
 
@@ -342,30 +343,119 @@ body {
   display: flex;
 }
 
-/* Contorno oscuro: el texto tiene que leerse sobre la ILUSTRACION del dorso,
-   que es clara y con detalle. Sin esto la leyenda desaparece sobre el arte. */
 .pile-label-name {
   font-family: var(--font-display, inherit);
-  font-size: 12px;
-  line-height: 1.1;
+  font-size: clamp(11px, 3.2vh, 16px);
+  line-height: 1.05;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #d6fff2;
-  text-shadow:
-    0 0 4px rgba(0, 0, 0, 0.95),
-    0 1px 2px rgba(0, 0, 0, 0.95),
-    0 0 12px rgba(0, 0, 0, 0.8);
+  color: #effffb;
+  /* Contorno oscuro: el texto tiene que leerse sobre la ILUSTRACION del dorso. */
+  -webkit-text-stroke: 0.16em #04241c;
+  paint-order: stroke fill;
+  text-shadow: 0 0.06em 0 #04241c;
 }
 
+.pile-label-sub {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #bfeee6;
+  -webkit-text-stroke: 0.2em #04241c;
+  paint-order: stroke fill;
+  margin-top: 1px;
+}
+
+/* Insignia dorada de contador (componente de pilas adjunto). */
 .pile-label-count {
-  font-size: 13px;
+  position: absolute;
+  top: -0.5em;
+  right: -0.55em;
+  display: grid;
+  place-items: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 0.35em;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-family: var(--font-display, inherit);
+  font-size: clamp(13px, 3.4vh, 20px);
   font-weight: 800;
-  line-height: 1.15;
-  color: #ffffff;
-  text-shadow:
-    0 0 4px rgba(0, 0, 0, 0.95),
-    0 1px 2px rgba(0, 0, 0, 0.95),
-    0 0 12px rgba(0, 0, 0, 0.8);
+  line-height: 1;
+  color: #3a2300;
+  background: radial-gradient(circle at 35% 28%, #fff6c4 0, #ffd25a 45%, #e39a1c 100%);
+  box-shadow:
+    0 0 0 0.1em #04241c,
+    0 0 0 0.18em rgba(255, 255, 255, 0.7),
+    0 0.18em 0.5em rgba(0, 0, 0, 0.5),
+    0 0 0.9em rgba(255, 200, 70, 0.45),
+    inset 0 -0.18em 0.25em rgba(150, 80, 0, 0.35);
+  transition: filter 0.3s;
+}
+
+.pile-label-count::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 0.08em solid #ffe08a;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pile-label-count.ping {
+  animation: pile-ping 0.4s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.pile-label-count.ping::after {
+  animation: pile-ping-ring 0.55s ease-out;
+}
+@keyframes pile-ping {
+  from { transform: scale(0.55); }
+}
+@keyframes pile-ping-ring {
+  from { opacity: 0.8; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.9); }
+}
+
+/* Numero que "rueda" hacia arriba/abajo al cambiar. */
+.pile-label-num {
+  display: grid;
+  overflow: hidden;
+}
+.pile-label-num span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+/* Estados: mazo casi vacio (naranja alerta) y vacio (gris). */
+.pile-label[data-nivel='bajo'] .pile-label-count {
+  background: radial-gradient(circle at 35% 28%, #ffe0b0 0, #ff9a3c 45%, #d4560e 100%);
+  color: #3b1200;
+  animation: pile-alerta 1.4s ease-in-out infinite;
+}
+.pile-label[data-nivel='bajo'] .pile-label-sub {
+  color: #ffc58a;
+}
+@keyframes pile-alerta {
+  50% { transform: scale(1.12); filter: brightness(1.15); }
+}
+.pile-label[data-nivel='vacio'] .pile-label-count {
+  background: radial-gradient(circle at 35% 28%, #9fb2ad 0, #5d716c 60%, #3d4f4b 100%);
+  color: #142522;
+  box-shadow:
+    0 0 0 0.1em #04241c,
+    0 0 0 0.18em rgba(255, 255, 255, 0.35),
+    0 0.18em 0.5em rgba(0, 0, 0, 0.4);
+}
+.pile-label[data-nivel='vacio'] .pile-label-name {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pile-label-count.ping,
+  .pile-label-count.ping::after,
+  .pile-label[data-nivel='bajo'] .pile-label-count {
+    animation: none;
+  }
 }
 
 /* Destello al reciclarse el descarte: la mesa avisa que las DOS pilas cambiaron. */
@@ -1288,6 +1378,11 @@ body {
   padding: 10px calc(14px + var(--safe-r)) calc(12px + var(--safe-b)) calc(14px + var(--safe-l));
 }
 
+/* (F4) Franja de accion: en escritorio el wrapper se deshace (contents) para no
+   tocar el layout actual; en movil se vuelve una fila (ver bloque coarse). */
+.hud-action-row { display: contents; }
+.hud-consequence { display: none; }
+
 .hud-counters {
   display: flex;
   gap: 6px;
@@ -2058,6 +2153,21 @@ body {
    boton de 30px no se comprime. */
 .panel.is-cleared > .panel-actions {
   flex: 0 0 auto;
+}
+
+/* Cuerpo del aviso de ciego superado: los dos desgloses + la linea del mazo.
+   Es la parte que CRECE con el contenido, asi que es la que scrollea; titulo,
+   total y pie quedan fijos. `align-self: stretch` anula el centrado del panel,
+   que si no dejaria el cuerpo del ancho de su contenido y el scroll no entraria
+   nunca. El `overflow-y` real lo pone la regla de zona flexible de movil
+   (`.panel > .cleared-body`), donde el panel si tiene alto acotado. */
+.cleared-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  align-self: stretch;
 }
 
 .cleared-title {
@@ -3691,6 +3801,7 @@ body {
 .menu-top-right {
   position: relative;
   display: flex;
+  gap: 8px;
 }
 
 /* ==========================================================================
@@ -4099,6 +4210,45 @@ body {
 .menu-icon-badge .badge-prefix {
   font-size: 0.82em;
   opacity: 0.75;
+}
+
+/* --- Chip de RECOMPENSA DIARIA (arriba-derecha, junto al boton de menu) ---
+   No es una accion secundaria mas: es un AVISO. Cuando hay algo para reclamar
+   lleva un punto dorado que late suave; al reclamarlo el chip queda sin punto.
+   Antes la recompensa se abria SOLA al arrancar el juego: ahora espera aca. */
+.menu-daily {
+  position: relative;
+}
+
+.menu-daily-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff4c8 0, #ffd25a 46%, #e0931a 100%);
+  box-shadow:
+    0 0 0 2px rgba(6, 12, 18, 0.85),
+    0 0 10px rgba(255, 205, 80, 0.85);
+  pointer-events: none;
+  animation: menu-daily-pulse 2s ease-in-out infinite;
+}
+
+@keyframes menu-daily-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-daily-dot {
+    animation: none;
+  }
 }
 
 /* --- Desplegable del menu (Ajustes / Coleccion / Desafios) --- */
@@ -7557,7 +7707,9 @@ body {
      texto que se retiro. */
   .hud-counters {
     display: flex;
-    justify-content: center;
+    /* (F4/D) Flanquean el boton: Manos a la izquierda, Descartes a la derecha. */
+    justify-content: space-between;
+    flex: 1 1 auto;
     gap: 8px;
     flex-wrap: nowrap;
   }
@@ -7594,9 +7746,60 @@ body {
   }
 
   .hud-actions {
-    flex: 0 0 auto;
-    gap: 7px;
-    align-items: stretch;
+    /* (F4/D) El boton JUGAR MANO queda CENTRADO encima de los contadores, que
+       flanquean la franja. `inset:0` + centro lo mantiene en medio mientras los
+       chips de recursos ocupan los extremos. `pointer-events:none` deja pasar el
+       toque a traves del hueco de la franja; los botones lo recuperan. */
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  .hud-actions .btn {
+    pointer-events: auto;
+    flex: 0 1 auto;
+  }
+
+  /* (F4/D) Franja de accion unica: la fila envuelve contadores + accion y da el
+     alto a la banda; la consecuencia va una linea encima. */
+  .hud-action-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    position: relative;
+    min-height: 66px;
+    gap: 8px;
+  }
+
+  /* (F4/C) Consecuencia en UNA linea antes del boton. Oculta por defecto; la
+     muestra `renderScoreTicker` solo cuando hay un resultado que mostrar. */
+  .hud-consequence {
+    display: none;
+  }
+
+  .hud-consequence.is-visible {
+    display: block;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    min-height: 15px;
+    padding: 0 10px;
+  }
+
+  /* (F4/C) El ticker flotante de 2 lineas se sustituye en movil por la linea
+     unica de consecuencia de la franja de accion. */
+  .score-ticker {
+    display: none !important;
   }
 
   .hud-actions .btn {
@@ -7859,6 +8062,9 @@ body {
      donde ya existe la franja `.hud-missions-panel` (control duplicado). */
   .hud-missions-toggle.is-visible {
     display: inline-flex;
+    /* (F4/A) Misiones a la IZQUIERDA, junto al ANTE (antes arriba a la derecha). */
+    left: calc(10px + var(--safe-l));
+    right: auto;
   }
 
   .hud-missions-title {
@@ -8677,6 +8883,7 @@ body {
   .panel > .board-grid,
   .panel > .profile-body,
   .panel > .challenges-body,
+  .panel > .cleared-body,
   .panel > .tutorial-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -8927,10 +9134,12 @@ body {
   }
 
   /* --- Ciego superado: el desglose y el pie entran sin recortarse ---
-     El panel es una columna CENTRADA con `overflow: hidden`: si el contenido
-     pasa el alto disponible, se recorta por arriba Y por abajo (el centrado
-     reparte el desborde) y el boton Continuar quedaba cortado. Se comprime el
-     bloque entero para que sobre aire. */
+     El panel es una columna que ocupa TODO el alto y NO scrollea: el scroll
+     vive en `.cleared-body` (zona flexible, mas arriba), que es donde esta el
+     contenido que crece (los dos desgloses). Antes el panel entero intentaba
+     scrollear, pero la regla generica de paneles de movil le ganaba por
+     especificidad y le dejaba `overflow: hidden`: el desglose de Fungis quedaba
+     cortado y el boton "Continuar" fuera de la pantalla. */
   .panel.is-cleared {
     gap: 3px;
     padding: 8px 14px;
@@ -8939,7 +9148,17 @@ body {
        se va abajo de la pantalla. `dvh` resta las barras del navegador movil. */
     height: 100dvh;
     justify-content: flex-start;
+    /* Explicito: el panel no scrollea, scrollea su cuerpo. Evita el doble scroll. */
+    overflow: hidden;
     padding-bottom: calc(8px + var(--safe-b, 0px));
+  }
+
+  /* El cuerpo es quien scrollea: se lleva todo el alto que sobra entre el total
+     y el pie. */
+  .panel.is-cleared > .cleared-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
   }
 
   /* El pie va pegado al fondo del panel, siempre visible: el desglose scrollea

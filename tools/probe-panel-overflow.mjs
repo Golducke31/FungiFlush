@@ -109,6 +109,7 @@ async function measure() {
 }
 
 const results = [];
+let f11Fail = false; // F1.1 — desglose de Fungis cortado en "Ciego superado"
 async function visit(label, name) {
   await page.waitForTimeout(350);
   const m = await measure();
@@ -187,6 +188,50 @@ await waitPanel('.panel.is-cleared, .panel.is-reward', 12000);
 await page.waitForTimeout(400);
 if (await has('.panel.is-cleared')) {
   await visit('cleared', 'cleared');
+
+  // --- F1.1: el desglose de FUNGIS no debe quedar cortado ---
+  // Se lleva el cuerpo al fondo y se mide la ULTIMA fila del bloque de Fungis
+  // y el pie. Si el cuerpo scrollea (`overflow-y: auto`) y despues de scrollear
+  // la ultima fila entra, el desglose es alcanzable; si no, sigue recortado.
+  const fungiFit = await page.evaluate(() => {
+    const panel = document.querySelector('.panel.is-cleared');
+    if (!panel) return { none: true };
+    const body = panel.querySelector('.cleared-body');
+    const fungi = panel.querySelector('.score-breakdown.is-fungi');
+    const actions = panel.querySelector('.panel-actions');
+    if (body) body.scrollTop = body.scrollHeight;
+    const lr = fungi?.lastElementChild?.getBoundingClientRect() ?? null;
+    const ar = actions?.getBoundingClientRect() ?? null;
+    const vh = window.innerHeight;
+    return {
+      none: false,
+      vh,
+      fungiRows: fungi ? fungi.querySelectorAll('.score-breakdown-row').length : 0,
+      lastRowBottom: lr ? Math.round(lr.bottom) : null,
+      lastRowVisible: lr ? lr.bottom <= vh + 1 && lr.top >= -1 : null,
+      actionsBottom: ar ? Math.round(ar.bottom) : null,
+      actionsVisible: ar ? ar.bottom <= vh + 1 : null,
+      bodyScroll: body ? Math.round(body.scrollHeight - body.clientHeight) : null,
+      bodyOverflowY: body ? getComputedStyle(body).overflowY : null,
+    };
+  });
+  if (fungiFit.none) {
+    console.log('  XX [F1.1] no se encontro el panel .is-cleared');
+    f11Fail = true;
+  } else {
+    const ok =
+      fungiFit.actionsVisible === true &&
+      fungiFit.lastRowVisible === true &&
+      fungiFit.bodyOverflowY === 'auto';
+    if (!ok) f11Fail = true;
+    console.log(
+      `  ${ok ? 'OK' : 'XX'} [F1.1] desglose Fungis: filas=${fungiFit.fungiRows} ` +
+        `ultimaFilaBottom=${fungiFit.lastRowBottom}/${fungiFit.vh} visible=${fungiFit.lastRowVisible} | ` +
+        `pieBottom=${fungiFit.actionsBottom} visible=${fungiFit.actionsVisible} | ` +
+        `bodyScroll=${fungiFit.bodyScroll} overflowY=${fungiFit.bodyOverflowY}`,
+    );
+  }
+
   await click('.panel.is-cleared [data-act="cleared-continue"]');
   await waitPanel('.panel.is-reward', 8000);
   await page.waitForTimeout(400);
@@ -269,3 +314,9 @@ for (const r of results) {
   );
 }
 console.log(`\n${badCount} pantalla(s) con scroll vertical. Shots: tools/shots/probe-*.png`);
+if (f11Fail) {
+  console.log('F1.1 FALLO: el desglose de Fungis ("Ciego superado") sigue cortado.');
+  process.exitCode = 1;
+} else {
+  console.log('F1.1 OK: el desglose de Fungis entra (o scrollea) sin recortarse.');
+}

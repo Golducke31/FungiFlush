@@ -124,6 +124,12 @@ const MENU_ICONS = {
   // (`boton-hongo.html`), pensado para leerse sobre el gel claro.
   profile:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--gel-stroke, #06303c)" stroke-width="5" stroke-linejoin="round"><path d="M3 12.5a9 8.5 0 0 1 18 0z"/><path d="M9.5 12.5v5.5a2.5 2.5 0 0 0 5 0v-5.5z"/></g><path d="M9.5 12.5v5.5a2.5 2.5 0 0 0 5 0v-5.5z" fill="#d9fff8" stroke="#d9fff8" stroke-width="1.2" stroke-linejoin="round"/><path d="M3 12.5a9 8.5 0 0 1 18 0z" fill="#effffb" stroke="#effffb" stroke-width="1.2" stroke-linejoin="round"/><g fill="#3fe0d0"><circle cx="8" cy="9.4" r="1.5"/><circle cx="13.6" cy="7.4" r="1.8"/><circle cx="17.2" cy="10.6" r="1.2"/></g></svg>',
+  // Regalo: acceso a la RECOMPENSA DIARIA. A diferencia del perfil va RELLENO
+  // (no a trazo): a ~30px el trazo grueso fusionaba los bucles del moño en una
+  // mancha y el chip se leia como una casa. Con relleno solido + la cinta clara
+  // la silueta se lee "regalo" sin ambiguedad.
+  gift:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="8.6" cy="4.4" rx="3.2" ry="2.5" transform="rotate(-20 8.6 4.4)" fill="var(--gel-stroke, #06303c)"/><ellipse cx="15.4" cy="4.4" rx="3.2" ry="2.5" transform="rotate(20 15.4 4.4)" fill="var(--gel-stroke, #06303c)"/><rect x="3.4" y="10.6" width="17.2" height="10.2" rx="1.7" fill="var(--gel-stroke, #06303c)"/><rect x="2.4" y="7.2" width="19.2" height="2.9" rx="1.1" fill="var(--gel-stroke, #06303c)"/><rect x="10.7" y="7.2" width="2.6" height="13.6" fill="#effffb"/></svg>',
 } as const;
 
 /** Icono de la hamburguesa: las tres barras del prototipo (`boton-menu.html`). */
@@ -160,6 +166,34 @@ function dropItem(label: string, act: string, onClick: () => void): HTMLButtonEl
   el.className = 'menu-drop-item';
   el.dataset['act'] = act;
   el.textContent = label;
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+/**
+ * Chip de RECOMPENSA DIARIA de la esquina superior derecha.
+ *
+ * No es una accion secundaria mas: es un AVISO. Lleva el punto de notificacion
+ * cuando hay algo para reclamar. Antes la recompensa se abria SOLA al arrancar
+ * el juego (un modal encima del menu, sin que el jugador lo pidiera); ahora
+ * espera aca, sin interrumpir. El chip sigue en el DOM aunque ya se haya
+ * reclamado, para que la escalera de dias siga siendo alcanzable.
+ */
+function dailyChip(pending: boolean, label: string, onClick: () => void): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'menu-gel menu-gel--icon menu-daily';
+  el.dataset['act'] = 'daily';
+  el.setAttribute('aria-label', label);
+  el.title = label;
+  el.innerHTML = MENU_ICONS.gift;
+  if (pending) {
+    el.classList.add('is-pending');
+    const dot = document.createElement('span');
+    dot.className = 'menu-daily-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    el.appendChild(dot);
+  }
   el.addEventListener('click', onClick);
   return el;
 }
@@ -344,7 +378,15 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   menuBtn.setAttribute('aria-expanded', 'false');
   menuBtn.setAttribute('aria-haspopup', 'true');
 
-  topRight.append(drop, menuBtn);
+  topRight.append(
+    dailyChip(
+      state.dailyPending === true,
+      t(state.dailyPending === true ? 'menu.dailyReady' : 'menu.daily'),
+      callbacks.onOpenDaily,
+    ),
+    drop,
+    menuBtn,
+  );
   top.append(profileBtn, topRight);
   layout.appendChild(top);
 

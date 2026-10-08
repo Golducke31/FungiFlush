@@ -52,7 +52,11 @@
     "deck": "Deck",
     "discard": "Discard",
     "drawable": "{count} drawable",
-    "discardCount": "{count} cards"
+    "discardCount": "{count} cards",
+    "deckOne": "drawable",
+    "deckMany": "drawables",
+    "discardOne": "card",
+    "discardMany": "cards"
   },
   "blindCard": {
     "mult": "Multiplier",
@@ -828,6 +832,7 @@
     "saveLabel": "Ante {ante} · Seed {seed}",
     "version": "Version {version}",
     "daily": "Daily",
+    "dailyReady": "Daily reward available!",
     "achievements": "Achievements",
     "cosmetics": "Cosmetics",
     "history": "History",

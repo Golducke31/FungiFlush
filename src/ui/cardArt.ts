@@ -28,12 +28,58 @@ export interface CardArtSources {
 }
 
 /**
+ * Cache de caras compuestas.
+ *
+ * POR QUE. Abrir la Coleccion arma la cara de TODAS las piezas del registro
+ * (77 cartas + 24 simbiontes + 6 mutaciones). Cada cara es un canvas de 512x744
+ * mas su encode WebP: ~1-2 s de trabajo SINCRONO en el hilo principal, dentro
+ * del click. Y se rehacia entero en cada apertura, porque la cara de una pieza
+ * del catalogo no cambia nunca dentro de una sesion.
+ *
+ * La clave incluye el TEXTO YA TRADUCIDO (nombre + descripcion) porque el idioma
+ * va horneado en la cara. Asi un cambio de idioma produce claves nuevas y el
+ * cache se invalida solo, sin tener que avisarle a nadie.
+ */
+const faceCache = new Map<string, string | null>();
+
+/** Cuantas caras se COMPUSIERON de verdad (misses del cache). Lo lee el probe. */
+let composed = 0;
+
+/** Tamanio actual del cache. Lo lee el probe. */
+export function faceCacheSize(): number {
+  return faceCache.size;
+}
+
+/** Cuantas composiciones reales (canvas + encode) se hicieron en esta sesion. */
+export function faceComposeCount(): number {
+  return composed;
+}
+
+/** Vacia el cache. Solo para tests: en runtime la clave se auto-invalida. */
+export function clearFaceCache(): void {
+  faceCache.clear();
+  composed = 0;
+}
+
+function memoFace(key: string, build: () => string | null): string | null {
+  const hit = faceCache.get(key);
+  if (hit !== undefined) return hit;
+  composed++;
+  const value = build();
+  faceCache.set(key, value);
+  return value;
+}
+
+/**
  * Compone la cara de una carta y la devuelve como data-URL lista para un `<img>`.
  * Devuelve `null` si no hay nada que dibujar: el llamador decide el respaldo.
  *
  * `createCardCanvas` usa la ilustracion real como fondo a sangre y dibuja encima
  * el nombre y los chips; sin ella cae a la silueta procedural, que no es la cara
  * que el jugador tiene en la mano.
+ *
+ * NO cachea: la usan tambien las ofertas de tienda, que son efimeras. Quien
+ * quiere cache usa `cardDefFaceUrl` / `jokerDefFaceUrl`.
  */
 export function cardFaceUrl(spec: CardTextureSpec, realArt?: HTMLImageElement): string | null {
   try {
@@ -54,33 +100,40 @@ export function cardFaceUrl(spec: CardTextureSpec, realArt?: HTMLImageElement): 
  * Cara de una carta del catalogo (no de una oferta). La usan la recompensa y
  * cualquier panel que quiera mostrar una carta real con su arte. La definicion
  * ya trae todo lo que la cara necesita, asi que no hace falta el motor.
+ *
+ * MEMOIZADA por (id, nombre, descripcion): la cara de una pieza del catalogo es
+ * estable dentro de una sesion y se pide muchas veces (Coleccion, mazo, sobres).
  */
 export function cardDefFaceUrl(
   def: CardDefinition,
   translate: (key: string) => string,
   realArt?: HTMLImageElement,
 ): string | null {
-  const spec: CardTextureSpec = {
-    kind: 'card',
-    name: translate(def.nameKey),
-    desc: translate(def.descKey),
-    element: def.element,
-    family: def.family,
-    rarity: def.rarity,
-    art: def.art,
-    substrate: def.baseSubstrate,
-    spores: def.baseSpores,
-    // Taxonomia traducida para la cabecera: Elemento · Familia se leen en la
-    // CARA, no solo en el tooltip. La spec no traduce, asi que las etiquetas
-    // viajan ya resueltas.
-    elementLabel: translate(`element.${def.element}`),
-    familyLabel: translate(`family.${def.family}`),
-    // P1.1/P1.2 — Misma jerarquia que en la mesa: si la carta tiene habilidad,
-    // la cara de la tienda/recompensa/coleccion dibuja la etiqueta y el panel
-    // lila. El plan exige el mismo tratamiento en la carta ampliada.
-    hasAbility: (def.effects?.length ?? 0) > 0,
-  };
-  return cardFaceUrl(spec, realArt);
+  const name = translate(def.nameKey);
+  const desc = translate(def.descKey);
+  return memoFace(`card:${def.id}:${name}:${desc}`, () => {
+    const spec: CardTextureSpec = {
+      kind: 'card',
+      name,
+      desc,
+      element: def.element,
+      family: def.family,
+      rarity: def.rarity,
+      art: def.art,
+      substrate: def.baseSubstrate,
+      spores: def.baseSpores,
+      // Taxonomia traducida para la cabecera: Elemento · Familia se leen en la
+      // CARA, no solo en el tooltip. La spec no traduce, asi que las etiquetas
+      // viajan ya resueltas.
+      elementLabel: translate(`element.${def.element}`),
+      familyLabel: translate(`family.${def.family}`),
+      // P1.1/P1.2 — Misma jerarquia que en la mesa: si la carta tiene habilidad,
+      // la cara de la tienda/recompensa/coleccion dibuja la etiqueta y el panel
+      // lila. El plan exige el mismo tratamiento en la carta ampliada.
+      hasAbility: (def.effects?.length ?? 0) > 0,
+    };
+    return cardFaceUrl(spec, realArt);
+  });
 }
 
 /**
@@ -90,23 +143,28 @@ export function cardDefFaceUrl(
  *
  * Los jokers NO tienen ilustracion propia: reusan el arte por elemento x rareza
  * (`artKeysForJoker`), asi que `realArt` es opcional y suele venir del render.
+ * MEMOIZADA igual que las cartas.
  */
 export function jokerDefFaceUrl(
   def: JokerDefinition,
   translate: (key: string) => string,
   realArt?: HTMLImageElement,
 ): string | null {
-  const spec: CardTextureSpec = {
-    kind: 'joker',
-    name: translate(def.nameKey),
-    desc: translate(def.descKey),
-    element: 'neutral',
-    family: 'agaricaceae',
-    rarity: def.rarity,
-    art: def.art,
-    cost: def.cost,
-  };
-  return cardFaceUrl(spec, realArt);
+  const name = translate(def.nameKey);
+  const desc = translate(def.descKey);
+  return memoFace(`joker:${def.id}:${name}:${desc}`, () => {
+    const spec: CardTextureSpec = {
+      kind: 'joker',
+      name,
+      desc,
+      element: 'neutral',
+      family: 'agaricaceae',
+      rarity: def.rarity,
+      art: def.art,
+      cost: def.cost,
+    };
+    return cardFaceUrl(spec, realArt);
+  });
 }
 
 /**

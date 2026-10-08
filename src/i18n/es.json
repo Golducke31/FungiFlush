@@ -52,7 +52,11 @@
     "deck": "Mazo",
     "discard": "Descarte",
     "drawable": "{count} robables",
-    "discardCount": "{count} cartas"
+    "discardCount": "{count} cartas",
+    "deckOne": "rotable",
+    "deckMany": "robables",
+    "discardOne": "carta",
+    "discardMany": "cartas"
   },
   "blindCard": {
     "mult": "Multiplicador",
@@ -828,6 +832,7 @@
     "saveLabel": "Ante {ante} · Semilla {seed}",
     "version": "Versión {version}",
     "daily": "Diaria",
+    "dailyReady": "¡Recompensa diaria disponible!",
     "achievements": "Logros",
     "cosmetics": "Cosméticos",
     "history": "Historial",

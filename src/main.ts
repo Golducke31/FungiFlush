@@ -113,7 +113,7 @@ import {
   type DeckCarouselFrame,
 } from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
-import { cardDefFaceUrl, jokerDefFaceUrl } from '@ui/cardArt';
+import { cardDefFaceUrl, jokerDefFaceUrl, faceComposeCount, faceCacheSize } from '@ui/cardArt';
 import {
   TUTORIAL_SEED,
   TUTORIAL_STEPS,
@@ -673,10 +673,11 @@ async function boot(): Promise<void> {
         descKey: card.descKey,
         substrate: card.baseSubstrate,
         spores: card.baseSpores,
-        // Cara real compuesta aca: `scene.cardArt` es quien tiene la imagen ya
-        // decodificada, y armar el data-URL es caro, asi que se hace UNA vez al
-        // abrir la Coleccion y no por cada re-render de la grilla.
-        faceUrl: cardDefFaceUrl(card, t, scene.cardArt(card)),
+        // Cara real: NO se compone aca (componer 101 caras al abrir la
+        // Coleccion era lo que la hacia lenta). Se pasa un proveedor perezoso
+        // que la compone solo cuando la celda entra en viewport; la composicion
+        // esta memoizada en `cardArt.ts`, asi que reabrir no la recalcula.
+        faceProvider: () => cardDefFaceUrl(card, t, scene.cardArt(card)),
         // Cuantas copias se obtuvieron de sobres: la Coleccion muestra "xN" en
         // vez de repetir la carta. Los jokers no llevan contador (los sobres
         // nunca dan jokers).
@@ -704,7 +705,7 @@ async function boot(): Promise<void> {
         family: 'agaricaceae',
         packId: packIdOf(joker.id),
         descKey: joker.descKey,
-        faceUrl: jokerDefFaceUrl(joker, t, scene.jokerArt(joker)),
+        faceProvider: () => jokerDefFaceUrl(joker, t, scene.jokerArt(joker)),
         ...(profile.collection.unlockSource[joker.id]
           ? { unlockSource: profile.collection.unlockSource[joker.id] }
           : {}),
@@ -1726,8 +1727,18 @@ async function boot(): Promise<void> {
     });
   };
 
-  /** P4: abre (o re-renderiza) el panel del Pase de Temporada. */
-  const showPass = (): void => {
+  /**
+   * P4: abre (o re-renderiza) el panel del Pase de Temporada.
+   *
+   * `returnTo` es a donde vuelve el cierre. Antes el cierre llamaba a
+   * `hud.hideOverlay()`, que anima la salida y VACIA el overlay sin resetear el
+   * estado ni re-renderizar: quedaba una pantalla vacia sobre la escena del
+   * menu, sin cromo ni botones, y el juego parecia congelado. Ahora, como
+   * Cosmeticos e Historial, el panel declara a donde vuelve; sin destino
+   * explicito se cae a `closePanel()`, que reconstruye la pantalla del estado
+   * actual (el menu, si se abrio desde ahi).
+   */
+  const showPass = (returnTo?: () => void): void => {
     if (!seasonDef) {
       hud?.toast(t('pass.comingSoon'), 'info');
       return;
@@ -1743,9 +1754,10 @@ async function boot(): Promise<void> {
         });
         if (granted) hud?.toast(t('pass.claimed'), 'info');
         // Re-renderiza para reflejar el nuevo estado (reclamado / mas XP).
-        showPass();
+        // Conserva el destino: reclamar un tier no debe perder de donde vino.
+        showPass(returnTo);
       },
-      onClose: () => hud?.hideOverlay(),
+      onClose: () => (returnTo ? returnTo() : hud?.closePanel()),
     });
     hud?.showPanel(panel);
   };
@@ -1777,12 +1789,15 @@ async function boot(): Promise<void> {
         hud?.closePanel();
       },
       onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
-      onOpenPass: () => showPass(),
+      // El Pase y los Cosmeticos vuelven a la COLECCION, que es de donde se
+      // abren. Sin `returnTo` el default del cierre era `showMenu()` (y en el
+      // Pase, un `hideOverlay()` que dejaba la pantalla vacia).
+      onOpenPass: () => showPass(() => openCollection()),
       onOpenExhibition: () => viewExhibition?.(),
       onOpenCosmetics: () => {
         carouselActivate = null;
         scene.setCarousel(null);
-        hud?.showCosmetics();
+        hud?.showCosmetics(() => openCollection());
       },
       onOpenPacks: () => {
         carouselActivate = null;
@@ -1813,11 +1828,12 @@ async function boot(): Promise<void> {
         },
         onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
         onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
-        onOpenPass: () => showPass(),
+        // Igual que en la grilla: la Exhibicion devuelve a la Coleccion.
+        onOpenPass: () => showPass(() => openCollection()),
         onOpenCosmetics: () => {
           carouselActivate = null;
           scene.setCarousel(null);
-          hud?.showCosmetics();
+          hud?.showCosmetics(() => openCollection());
         },
         onOpenPacks: () => {
           carouselActivate = null;
@@ -2451,15 +2467,13 @@ async function boot(): Promise<void> {
   loader.setProgress(1);
   loader.hide();
 
-  // --- Primera apertura del dia: la recompensa se ofrece sola ---
-  // El boot entra directo al menu y no hay vuelta al menu a mitad de run, asi
-  // que este es el UNICO momento donde el daily puede aparecer sin que el
-  // jugador lo pida. `?daily=0` lo apaga: lo usa el smoke para poder seguir
-  // midiendo la pantalla de inicio sin que un modal se le cruce.
-  if (params.get('daily') !== '0') {
-    const state = evaluateDaily(profileStore.current, Date.now(), dailyTable);
-    if (!state.alreadyClaimedToday) openDaily();
-  }
+  // --- Recompensa diaria: NO se abre sola al arrancar ---
+  // Antes el boot evaluaba la diaria y abria el modal encima del menu si no se
+  // habia reclamado hoy. Quedaba mal: el jugador recien abre el juego y ya tiene
+  // una pantalla que no pidio. Ahora la recompensa espera en el CHIP de regalo
+  // de la esquina superior derecha del menu (con punto de notificacion) y solo
+  // se abre cuando el jugador lo toca. `syncMenuMeta()` (mas arriba) ya calcula
+  // `dailyPending` para ese punto, asi que no hay estado nuevo que mantener.
 
   if (import.meta.env.DEV) {
     console.info(
@@ -2488,6 +2502,26 @@ async function boot(): Promise<void> {
         unlocks,
         gate,
         collection: buildCollection,
+        // Contadores de composicion de caras: permiten al probe medir que abrir
+        // la Coleccion ya NO compone las ~101 caras de golpe (solo las que
+        // entran en viewport), y que reabrir no las recalcula (cache).
+        faceComposeCount,
+        faceCacheSize,
+        // F6: permite a los probes componer la cara propia de un simbionte y
+        // comprobar que cada uno sale distinto (y distinto de una carta), sin
+        // depender de la Coleccion ni de un perfil con simbiontes descubiertos.
+        jokerDefFaceUrl: (def: Parameters<typeof jokerDefFaceUrl>[0], realArt?: HTMLImageElement) =>
+          jokerDefFaceUrl(def, t, realArt),
+        cardDefFaceUrl: (def: Parameters<typeof cardDefFaceUrl>[0], realArt?: HTMLImageElement) =>
+          cardDefFaceUrl(def, t, realArt),
+        // Paridad con el componente de pilas adjunto: `FungiPilas.set({mazo, descarte})`
+        // actualiza las insignias con la animacion de "rueda" (solo inspeccion).
+        FungiPilas: {
+          set: (o: { mazo?: number; descarte?: number }) => {
+            if (typeof o.mazo === 'number') hud.updatePileBadge('mazo', o.mazo);
+            if (typeof o.descarte === 'number') hud.updatePileBadge('descarte', o.descarte);
+          },
+        },
         // Sobres: el plan pide exponer una API invocable desde el menu, y ademas
         // el smoke la necesita para abrir un sobre sin depender de la UI.
         openPack: openPacks,

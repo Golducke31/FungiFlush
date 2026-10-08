@@ -2356,16 +2356,12 @@ export class SceneManager {
    * tienda tiene que mostrar la misma imagen que la carta en la mano.
    */
   jokerArt(def: JokerDefinition): HTMLImageElement | undefined {
-    // El elemento del joker se deduce de su primer efecto con condicion de
-    // elemento; si no tiene, cae al arquetipo de micelio.
-    for (const effect of def.effects) {
-      for (const cond of effect.conditions ?? []) {
-        if (cond.type === 'element_is') {
-          return this.assets.getFirst(artKeysForJoker(cond.value, def.rarity));
-        }
-      }
-    }
-    return this.assets.getFirst(artKeysForJoker('neutral', def.rarity));
+    // Ilustracion propia del simbionte (`art_card_own_<id>.webp`), si existe.
+    // Sin ella, `getFirst` devuelve `undefined` y el render compone el arte
+    // PROCEDURAL del joker (su `art`: hue/silueta/patron/glow), que ya es
+    // distinto por pieza. Antes se heredaba el arte de carta (card_<element>_<rarity>)
+    // y todos los simbiontes mostraban la cara de una carta.
+    return this.assets.getFirst(artKeysForJoker(def.id, def.rarity));
   }
 
   private artForJoker(joker: JokerInstance): HTMLImageElement | undefined {

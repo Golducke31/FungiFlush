@@ -319,9 +319,21 @@ export function artKeysFor(element: ElementType, rarity: Rarity, cardId?: string
   return [...new Set(keys)];
 }
 
-/** Igual que `artKeysFor`: los jokers usan el elemento de su efecto dominante. */
-export function artKeysForJoker(element: ElementType, rarity: Rarity): ArtKey[] {
-  return artKeysFor(element, rarity);
+/**
+ * Cadena de arte de un SIMBIONTE (joker).
+ *
+ * Un simbionte tiene su PROPIA ilustracion (`art_card_own_<id>.webp`) si el
+ * equipo la genera; si no existe, la cadena queda vacia y el render compone el
+ * arte PROCEDURAL del simbionte a partir de su `art` (hue/silueta/patron/glow),
+ * que ya es distinto por pieza.
+ *
+ * A PROPOSITO no hereda el arte de carta (`card_<element>_<rarity>`): eso era el
+ * bug que hacia que todos los simbiontes mostraran la cara de una carta comun en
+ * vez de su propio hongo. El render sabe caer al dibujo procedural cuando
+ * `getFirst` devuelve `undefined`.
+ */
+export function artKeysForJoker(jokerId: string, _rarity: Rarity): ArtKey[] {
+  return [`card_own_${jokerId}` as ArtKey];
 }
 
 /**

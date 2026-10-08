@@ -145,6 +145,92 @@ const carousel = await page.evaluate(() => Boolean(window.__fungiflush.scene.car
 check(!carousel, 'el anillo 3D NO esta montado en la vista de grilla');
 check(base.cells > 20, 'la grilla dibuja las celdas de la coleccion', `${base.cells} celdas`);
 
+// --- F3. Render perezoso: abrir NO compone las ~101 caras de golpe ---
+const totalEntries = await page.evaluate(() => window.__fungiflush.collection().length);
+const composeAtOpen = await page.evaluate(() => window.__fungiflush.faceComposeCount());
+const imgStats = await page.evaluate(() => {
+  const imgs = [...document.querySelectorAll('.collection-tile-img')];
+  return {
+    total: imgs.length,
+    withSrc: imgs.filter((i) => i.getAttribute('src')).length,
+    lazy: imgs.filter((i) => i.classList.contains('is-lazy')).length,
+  };
+});
+console.log('--- F3 render perezoso ---');
+console.log(JSON.stringify({ totalEntries, composeAtOpen, ...imgStats }));
+check(
+  imgStats.withSrc < imgStats.total,
+  'F3: al abrir NO estan cargadas TODAS las caras (render perezoso)',
+  `${imgStats.withSrc}/${imgStats.total} cargadas`,
+);
+check(
+  composeAtOpen <= totalEntries,
+  'F3: la composicion de caras no desborda el total de piezas',
+  `${composeAtOpen}/${totalEntries}`,
+);
+check(imgStats.lazy > 0, 'F3: hay caras pendientes de cargar (IntersectionObserver)', `${imgStats.lazy} pendientes`);
+check(imgStats.withSrc > 0, 'F3: las caras visibles SI se cargaron', `${imgStats.withSrc} cargadas`);
+
+// Hacer scroll hasta el fondo: deben componerse/mostrarse mas caras.
+await page.evaluate(() => {
+  const sc = document.querySelector('.panel.is-grid-frame .collection-scroll');
+  if (sc) sc.scrollTop = sc.scrollHeight;
+});
+await wait(600);
+const composeAfterScroll = await page.evaluate(() => window.__fungiflush.faceComposeCount());
+const imgStats2 = await page.evaluate(() => {
+  const imgs = [...document.querySelectorAll('.collection-tile-img')];
+  return {
+    withSrc: imgs.filter((i) => i.getAttribute('src')).length,
+    lazy: imgs.filter((i) => i.classList.contains('is-lazy')).length,
+  };
+});
+check(
+  composeAfterScroll > composeAtOpen,
+  'F3: al hacer scroll se componen MAS caras (perezoso progresivo)',
+  `${composeAtOpen} -> ${composeAfterScroll}`,
+);
+check(
+  imgStats2.lazy < imgStats.lazy,
+  'F3: al hacer scroll bajan las caras pendientes',
+  `${imgStats.lazy} -> ${imgStats2.lazy}`,
+);
+
+// Reabrir: con el cache, NO se recomponen caras nuevas. Medimos tambien la
+// LATENCIA de abrir: al diferir la composicion de caras, el click->panel-listo
+// es rapido (antes componia las ~101 caras de golpe).
+await closeCollection();
+await click('[data-act="menu-toggle"]');
+await wait(350);
+const openLatencyMs = await page.evaluate(async () => {
+  // Mide solo el tramo click-en-Coleccion -> panel de grilla listo.
+  const t0 = performance.now();
+  document.querySelector('[data-act="collection"]')?.click();
+  const ok = await new Promise((res) => {
+    const start = performance.now();
+    const tick = () => {
+      if (document.querySelector('.panel.is-grid-frame .collection-card.is-tile')) return res(true);
+      if (performance.now() - start > 4000) return res(false);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  return { ms: performance.now() - t0, ok };
+});
+await wait(600);
+const composeAfterReopen = await page.evaluate(() => window.__fungiflush.faceComposeCount());
+check(
+  openLatencyMs.ok && openLatencyMs.ms < 600,
+  'F3: la Coleccion abre rapido (caras diferidas)',
+  `${(openLatencyMs.ms ?? 0).toFixed(0)} ms`,
+);
+check(
+  composeAfterReopen === composeAfterScroll,
+  'F3: reabrir NO recomponse caras (cache memoizado)',
+  `${composeAfterScroll} -> ${composeAfterReopen}`,
+);
+// Dejar la Coleccion abierta para el resto de las verificaciones.
+
 // --- 2. Agrupacion por pack y familia ---
 check(base.sections >= 2, 'hay cabeceras de seccion (pack + familia)', `${base.sections}`);
 const hasJokerSection = base.sectionLabels.some((l) => /simbiont/i.test(l));

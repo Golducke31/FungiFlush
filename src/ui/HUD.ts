@@ -75,9 +75,10 @@ import type { RetentionReward } from '../retention/types';
  * El tamano y la posicion los fija `positionPileLabels` con la caja proyectada
  * del dorso.
  */
-function createPileLabelEl(): HTMLDivElement {
+function createPileLabelEl(pile: 'deck' | 'descarte'): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'pile-label';
+  el.dataset['pile'] = pile;
   return el;
 }
 
@@ -348,8 +349,8 @@ export class HUD {
    * Se anclan a la proyeccion real de cada pila (`setPileAnchors`), asi que
    * siguen al encuadre sin numeros a ojo.
    */
-  private elPileDeck = createPileLabelEl();
-  private elPileDiscard = createPileLabelEl();
+  private elPileDeck = createPileLabelEl('deck');
+  private elPileDiscard = createPileLabelEl('descarte');
   private pileAnchors: {
     deck: { x: number; y: number; w: number; h: number };
     discard: { x: number; y: number; w: number; h: number };
@@ -359,6 +360,8 @@ export class HUD {
   private elTickerOp = document.createElement('span');
   private elTickerTotal = document.createElement('span');
   private elTickerSource = document.createElement('div');
+  /** (F4/C) Consecuencia en UNA linea sobre la banda de accion movil. */
+  private elConsequence = document.createElement('div');
   /** Pasos del calculo de la mano actual (el motor los emite todos juntos). */
   private scoreStepCount = 0;
   /** Puntaje final de la mano, para repartir el conteo entre los pasos. */
@@ -673,11 +676,20 @@ export class HUD {
     this.elJokers.className = 'hud-jokers';
 
     // --- Barra inferior ---
+    // (F4/D) Una sola franja de accion: los contadores FLANQUEAN el boton JUGAR
+    // MANO (izquierda/derecha) y el boton queda centrado encima de ellos. Para
+    // eso los contadores y la accion van en una fila propia (`.hud-action-row`),
+    // y la consecuencia en una linea va encima (`.hud-consequence`).
     const bottom = document.createElement('footer');
     bottom.className = 'hud-bottom';
     this.elCounters.className = 'hud-counters';
     this.elActions.className = 'hud-actions';
-    bottom.append(this.elCounters, this.elActions);
+    this.elConsequence.className = 'hud-consequence';
+    this.elConsequence.dataset['act'] = 'consequence';
+    const actionRow = document.createElement('div');
+    actionRow.className = 'hud-action-row';
+    actionRow.append(this.elCounters, this.elActions);
+    bottom.append(this.elConsequence, actionRow);
 
     // --- Capas flotantes ---
     // OJO: `className = base` BORRA las clases de ESTADO que la capa lleva
@@ -1515,28 +1527,112 @@ export class HUD {
     this.elPileDeck.classList.toggle('is-visible', playing);
     this.elPileDiscard.classList.toggle('is-visible', playing);
     if (!playing) return;
+    const deckN = this.engine.deckDrawPile;
+    const discN = this.engine.deckDiscardPile;
     this.setPileLabel(
       this.elPileDeck,
       t('pile.deck'),
-      t('pile.drawable', { count: formatNumber(this.engine.deckDrawPile) }),
+      deckN,
+      deckN === 1 ? t('pile.deckOne') : t('pile.deckMany'),
     );
     this.setPileLabel(
       this.elPileDiscard,
       t('pile.discard'),
-      t('pile.discardCount', { count: formatNumber(this.engine.deckDiscardPile) }),
+      discN,
+      discN === 1 ? t('pile.discardOne') : t('pile.discardMany'),
     );
     this.positionPileLabels();
   }
 
-  private setPileLabel(el: HTMLElement, name: string, count: string): void {
-    el.innerHTML = '';
-    const nameEl = document.createElement('span');
-    nameEl.className = 'pile-label-name';
+  /**
+   * Etiqueta de pila con la INSIGNIA DORADA del componente de pilas: nombre
+   * abajo, subetiqueta ("robables"/"cartas") y contador dorado arriba a la
+   * derecha que RUEDA al cambiar. `data-nivel` (ok/bajo/vacio) controla el
+   * estado de color (naranja alerta si el mazo<=3, gris si esta vacio).
+   */
+  private setPileLabel(el: HTMLElement, name: string, count: number, sub: string): void {
+    let nameEl = el.querySelector('.pile-label-name') as HTMLElement | null;
+    if (!nameEl) {
+      nameEl = document.createElement('span');
+      nameEl.className = 'pile-label-name';
+      el.appendChild(nameEl);
+    }
     nameEl.textContent = name;
-    const countEl = document.createElement('span');
-    countEl.className = 'pile-label-count';
-    countEl.textContent = count;
-    el.append(nameEl, countEl);
+
+    let subEl = el.querySelector('.pile-label-sub') as HTMLElement | null;
+    if (!subEl) {
+      subEl = document.createElement('span');
+      subEl.className = 'pile-label-sub';
+      el.appendChild(subEl);
+    }
+    subEl.textContent = sub;
+
+    let cntEl = el.querySelector('.pile-label-count') as HTMLElement | null;
+    if (!cntEl) {
+      cntEl = document.createElement('span');
+      cntEl.className = 'pile-label-count';
+      const num = document.createElement('span');
+      num.className = 'pile-label-num';
+      cntEl.appendChild(num);
+      el.appendChild(cntEl);
+    }
+
+    const key = el.dataset['pile'];
+    let nivel: 'ok' | 'bajo' | 'vacio' = 'ok';
+    if (count <= 0) nivel = 'vacio';
+    else if (key === 'deck' && count <= 3) nivel = 'bajo';
+    el.dataset['nivel'] = nivel;
+    el.setAttribute('aria-label', `${name}: ${count} ${sub}`);
+
+    this.rollPileNumber(cntEl, count);
+  }
+
+  /**
+   * Rueda el numero del contador (sube/baja) y dispara el "ping" de la insignia.
+   *
+   * Usa UN UNICO span vivo dentro de `.pile-label-num`: el texto del contador
+   * refleja SIEMPRE el valor actual, aunque el motor re-renderice las pilas en
+   * medio de la animacion (no deja spans huerfanos que se concatenen en
+   * `textContent`). El efecto "rueda" es el deslizamiento de entrada del numero.
+   */
+  private rollPileNumber(cntEl: HTMLElement, count: number): void {
+    const numEl = cntEl.querySelector('.pile-label-num') as HTMLElement;
+    const prev = Number(cntEl.dataset['count'] ?? count);
+    cntEl.dataset['count'] = String(count);
+
+    let cur = numEl.lastElementChild as HTMLElement | null;
+    if (!cur || cur.tagName !== 'SPAN') {
+      cur = document.createElement('span');
+      numEl.appendChild(cur);
+    }
+    cur.textContent = String(count);
+
+    const reduce =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prev === count || reduce) return;
+
+    const up = count > prev;
+    cur.animate(
+      [
+        { transform: `translateY(${up ? '110' : '-110'}%)`, opacity: 0 },
+        { transform: 'translateY(0)', opacity: 1 },
+      ],
+      { duration: 260, easing: 'cubic-bezier(.3,.8,.3,1)' },
+    );
+    cntEl.classList.remove('ping');
+    void cntEl.offsetWidth;
+    cntEl.classList.add('ping');
+  }
+
+  /** API de inspeccion/paridad: actualiza una pila como `FungiPilas.set`. */
+  updatePileBadge(key: 'mazo' | 'descarte', count: number): void {
+    const el = key === 'mazo' ? this.elPileDeck : this.elPileDiscard;
+    const name = t(key === 'mazo' ? 'pile.deck' : 'pile.discard');
+    const sub = count === 1
+      ? t(key === 'mazo' ? 'pile.deckOne' : 'pile.discardOne')
+      : t(key === 'mazo' ? 'pile.deckMany' : 'pile.discardMany');
+    this.setPileLabel(el, name, count, sub);
   }
 
   /** Destello corto de las dos etiquetas (al reciclarse el descarte). */
@@ -1973,21 +2069,32 @@ export class HUD {
     });
     panel.appendChild(total);
 
+    // CUERPO SCROLLEABLE. Los desgloses son la parte que CRECE (dos bloques de
+    // ~4-5 filas cada uno) y en movil el viewport es bajo (390-412px): si viven
+    // sueltos en el panel, el panel los recorta y el de Fungis se ve cortado.
+    // El cuerpo es quien scrollea; el titulo, el total y el pie quedan fijos.
+    const body = document.createElement('div');
+    body.className = 'cleared-body';
+
     // P0.4 — Desglose de la mano que cerro el ciego. Se arma con el ULTIMO
     // `score:hand`, que es el que efectivamente supero el objetivo.
     const breakdown = this.buildBreakdown();
-    if (breakdown) panel.appendChild(breakdown);
+    if (breakdown) body.appendChild(breakdown);
 
     // Desglose de FUNGIS: de donde salio cada moneda de la recompensa. Va
     // despues del de puntaje (primero "como puntue", despues "cuanto cobre").
     const fungi = this.buildFungiBreakdown();
-    if (fungi) panel.appendChild(fungi);
+    if (fungi) body.appendChild(fungi);
 
     // P1.5 — Estado del mazo: "Mazo conservado: 40 cartas / +1 carta obtenida".
     // Es la respuesta VISIBLE a la pregunta que el plan detecta como central:
     // "que paso con mis cartas despues de superar el Ciego".
     const deckLine = this.buildDeckStateLine();
-    if (deckLine) panel.appendChild(deckLine);
+    if (deckLine) body.appendChild(deckLine);
+
+    // Sin contenido no hay cuerpo: un `flex: 1 1 auto` vacio abriria un hueco
+    // entre el total y el pie.
+    if (body.childElementCount > 0) panel.appendChild(body);
 
     // HUD DE CONTINUAR: el panel ya NO avanza solo por un `setTimeout`. Antes el
     // jugador no tenia tiempo de leer el desglose: la pantalla se cerraba y
@@ -4760,6 +4867,10 @@ export class HUD {
     this.elTickerTotal.textContent = formatNumber(shown);
     this.elTicker.classList.toggle('is-bonus', info.isBonus);
     this.elTicker.classList.add('is-visible');
+    // (F4/C) Espejo del ticker en UNA linea para la franja de accion movil:
+    // el ticker flotante de 2 lineas se oculta en movil, esta linea lo sustituye.
+    this.elConsequence.textContent = `${info.text}  +${formatNumber(shown)}  ·  ${t(info.sourceKey)}`;
+    this.elConsequence.classList.add('is-visible');
 
     // "Golpe" del numero con GSAP: reemplaza el truco de quitar/poner la clase
     // con un reflow FORZADO en medio (una lectura sincronica de layout por cada

@@ -478,7 +478,11 @@ export class Card3D {
       compact: this.compactFace,
     };
 
-    const artKey = art?.src ?? `proc|${spec.kind}|neutral|${spec.rarity}`;
+    // Sin ilustracion real, el simbionte cae al arte PROCEDURAL. La clave tiene
+    // que incluir el id del simbionte: sino todos los de la misma rareza
+    // compartirian UNA sola cara procedural y se perderia la silueta/hue propios
+    // de cada uno (def.art).
+    const artKey = art?.src ?? `proc|${spec.kind}|${joker.def.id}|${spec.rarity}`;
     this.applyTexture(cache.getArt(artKey, spec, art), cache.getTop(key, spec), 'neutral', art);
   }
 
