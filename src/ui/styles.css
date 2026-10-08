@@ -7644,11 +7644,18 @@ body {
 
 @media (pointer: coarse) {
   /* Alto REAL de las dos barras en tactil de celular (medido a 915x412:
-     `.hud-top` 0->66px, `.hud-bottom` 322->412px). Los elementos que se anclan
-     a ellas (`.hud-select-hint`, `.hud-missions-toggle`, `.hud-missions-panel`)
-     los leen en vez de repetir un px suelto. Ver `:root`. */
+     `.hud-top` 0->66px). Los elementos que se anclan a ellas (`.hud-select-hint`,
+     `.hud-missions-toggle`, `.hud-missions-panel`) los leen en vez de repetir
+     un px suelto. Ver `:root`.
+     SUBIDA de la banda: la fila de accion paso de 66px a 78px, asi que el borde
+     superior de la banda SUBIO 12px (de ~76px a 88px de alto, y ~104px cuando
+     la linea de consecuencia esta visible, que es su estado mas alto y el que
+     cubre esta variable). Estaba apretada: al habilitarse JUGAR MANO el boton
+     rozaba la fila de contadores. El hueco que libera `.hud-select-hint` — que
+     ya no muestra ni el texto de tutorial ni el contador "N seleccionadas" —
+     es justo el que se usa para subirla. */
   :root {
-    --hud-bottom-h: 90px;
+    --hud-bottom-h: 104px;
     --hud-top-h: 66px;
   }
 
@@ -7765,13 +7772,15 @@ body {
   }
 
   /* (F4/D) Franja de accion unica: la fila envuelve contadores + accion y da el
-     alto a la banda; la consecuencia va una linea encima. */
+     alto a la banda; la consecuencia va una linea encima.
+     `min-height` sube de 66px a 78px para que JUGAR MANO, al habilitarse, no
+     roce ni la fila de contadores ni el borde de la banda (ver `--hud-bottom-h`). */
   .hud-action-row {
     display: flex;
     flex-direction: row;
     align-items: center;
     position: relative;
-    min-height: 66px;
+    min-height: 78px;
     gap: 8px;
   }
 
@@ -7782,7 +7791,10 @@ body {
   }
 
   .hud-consequence.is-visible {
-    display: block;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
     text-align: center;
     font-size: 13px;
     line-height: 1.15;
@@ -7794,6 +7806,23 @@ body {
     max-width: 100%;
     min-height: 15px;
     padding: 0 10px;
+  }
+
+  /* La OPERACION va pintada por el render con el color SEMANTICO del paso
+     (`UI_COLORS`): ambar = sustrato, verde = esporas, dorado = multiplicador.
+     El total y la fuente quedan neutros para que el color senale QUE suma y no
+     compita con la lectura del numero. */
+  .hud-consequence-op {
+    font-weight: 800;
+  }
+  .hud-consequence-total {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .hud-consequence-source {
+    color: var(--text-dim);
+    font-weight: 600;
+    opacity: 0.85;
   }
 
   /* (F4/C) El ticker flotante de 2 lineas se sustituye en movil por la linea
@@ -7834,7 +7863,9 @@ body {
      mantienen contraste de lectura (no se ven "rotos"). */
   .hud-actions .btn.is-play {
     flex: 1 1 auto;
-    min-height: 48px;
+    /* 48px -> 54px: con la banda mas alta el protagonista respira y su brillo
+       de "habilitado" deja de rozar los contadores que lo flanquean. */
+    min-height: 54px;
     padding: 9px 18px;
     font-size: 14px;
     font-weight: 800;

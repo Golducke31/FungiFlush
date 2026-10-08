@@ -254,6 +254,15 @@ export interface SceneCallbacks {
    * el hover necesita `pointermove`, que no llega si el dedo no se mueve.
    */
   onLongPressChange?: (card: CardInstance) => void;
+  /**
+   * El dedo se mantuvo quieto sobre un SIMBIONTE (joker) de la mesa.
+   *
+   * Es la contracara de `onLongPressChange` para la fila de simbiontes: la
+   * etiqueta rica (habilidad/rareza/descripcion) se consulta MANTENIENDO pulsado
+   * el Simbionte en la mesa, no leyendola en la caja del HUD (que por eso dejo
+   * de mostrarla). Sin esto, mantener pulsado un simbionte no hacian nada.
+   */
+  onLongPressJoker?: (joker: JokerInstance) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
   /**
    * Numero flotante. `combo` (0..1) escala su tamaño: el combo se SIENTE porque
@@ -3401,7 +3410,14 @@ export class SceneManager {
    * no la selecciona: solo pide el tooltip. La UI decide DONDE ponerlo.
    */
   private handleLongPress(card: Card3D): void {
-    if (card.card) this.callbacks.onLongPressChange?.(card.card);
+    // Una carta de la MANO abre su etiqueta (ya estaba). Un SIMBIONTE de la mesa
+    // abre la SUYA: es la via que pidio el equipo para consultar la habilidad,
+    // ahora que la caja del HUD dejo de mostrarla.
+    if (card.card) {
+      this.callbacks.onLongPressChange?.(card.card);
+      return;
+    }
+    if (card.joker) this.callbacks.onLongPressJoker?.(card.joker);
   }
 
   // -------------------------------------------------------------------------

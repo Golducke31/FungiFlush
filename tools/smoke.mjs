@@ -807,9 +807,12 @@ await page.waitForTimeout(420);
 const afterTap = await page.evaluate((uid) => {
   const ff = window.__fungiflush;
   const card = ff.scene.handState().find((c) => c.uid === uid);
-  // FIX badge "N seleccionadas": el contador tiene que APARECER en cuanto hay
-  // una carta seleccionada, no solo durante la primera mano. Antes se ocultaba
-  // despues de la primera mano jugada y el jugador perdia la cuenta.
+  // La guia de seleccion YA NO muestra ni el contador ("N seleccionadas") ni
+  // el texto de tutorial ("Tocá hasta 5 cartas...") — el tutorial los explica
+  // y ocupaban la franja que la banda de accion necesita. Con UNA carta
+  // seleccionada la guia esta OCULTA; solo se enciende cuando hay sinergia de
+  // FAMILIA (>=2 cartas de la misma familia). El feedback del conteo lo da
+  // ahora el BADGE de la propia carta (ver abajo).
   const hint = document.querySelector('[data-act="select-hint"]');
   // Fase A: la carta seleccionada lleva BADGE con su numero de orden (1-5).
   const card3d = ff.scene.handCards.get(uid);
@@ -2294,7 +2297,9 @@ const ok =
   chk('afterBlind?.missionsClip?.toggleVisible === true', afterBlind?.missionsClip?.toggleVisible === true) &&
   // --- Fase 4: tap, arrastre y flip ---
   chk('afterTap?.selected === true', afterTap?.selected === true) &&
-  chk('afterTap?.hintVisible === true', afterTap?.hintVisible === true) &&
+  // La guia esta oculta con 1 sola carta: el feedback del conteo lo da el
+  // badge de la carta (siguiente asercion), no la franja "N seleccionadas".
+  chk('afterTap?.hintVisible === false', afterTap?.hintVisible === false) &&
   chk('afterTap?.count === 1', afterTap?.count === 1) &&
   // Fase A: la primera carta elegida lleva el badge con el numero 1.
   chk('afterTap?.badgeVisible === true', afterTap?.badgeVisible === true) &&

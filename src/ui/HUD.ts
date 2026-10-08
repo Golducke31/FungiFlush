@@ -13,7 +13,6 @@
 import {
   bus,
   jokerSellValue,
-  MAX_PLAY_SIZE,
   type CardDefinition,
   type CardInstance,
   type GameEngine,
@@ -367,6 +366,15 @@ export class HUD {
   /** Puntaje final de la mano, para repartir el conteo entre los pasos. */
   private scoreHandTotal = 0;
   private tickerTimer: number | null = null;
+  /**
+   * Vencimiento de la linea de consecuencia (`.hud-consequence`).
+   *
+   * La consecuencia es TRANSITORIA: si se queda en pantalla despues de puntuar,
+   * el jugador lee un "+25% esporas" viejo colgado en la franja de accion y
+   * cree que ese dato sigue sumando en la mano siguiente (confusion reportada).
+   * Se apaga sola con el mismo ritmo del ticker y ademas al cerrar el ciego.
+   */
+  private consequenceTimer: number | null = null;
   /** La secuencia de puntaje esta corriendo: ningun panel puede taparla. */
   private scoreSettling = false;
   /**
@@ -920,10 +928,14 @@ export class HUD {
         // lleva el total; el detalle vive en `buildFungiBreakdown`.
         this.lastRewardParts = rewardParts ?? null;
         const bonus = (rewardParts?.firstHand ?? 0) > 0 ? ` ${t('blindCleared.firstHandTag')}` : '';
+        // Ciego cerrado: la consecuencia de la ultima mano NO puede sobrevivir
+        // al ciego (pareceria un bonus activo en el siguiente).
+        this.hideConsequence();
         this.toast(`${t('result.blindCleared')} +${reward}${bonus}`, 'info');
       }),
 
       bus.on('round:loss', () => {
+        this.hideConsequence();
         this.toast(t('result.blindFailed'), 'error');
       }),
 
@@ -1210,66 +1222,48 @@ export class HUD {
    *   - si las cartas elegidas comparten Familia, que es la pista de sinergia
    *     que el plan pide (P1/P2.2) y que el jugador no puede ver de otro modo.
    *
-   * QUE DESAPARECE Y QUE NO
-   * -----------------------
-   * El TEXTO de tutorial ("Toca hasta 5 cartas...") sale solo ANTES de jugar la
-   * primera mano: una vez que el jugador jugo una, ya sabe que hace seleccionar.
-   * El CONTADOR ("3 seleccionadas"), en cambio, se muestra SIEMPRE que haya al
-   * menos una carta elegida, en toda la run: es el feedback de cuantas cartas
-   * vas a jugar y desaparecerlo hacia que el jugador perdiera la cuenta (el bug
-   * reportado: "a veces no aparece"). Solo se apaga cuando no hay seleccion y ya
-   * paso la primera mano, o cuando no estas jugando.
+   * QUE SE MUESTRA HOY
+   * -------------------
+   * Solo la pista de Familia compartida. El TEXTO de tutorial ("Toca hasta 5
+   * cartas...") y el CONTADOR ("3 seleccionadas") se QUITARON a pedido del
+   * equipo: eso ya lo explica el tutorial, y ademas ocupaban la franja libre
+   * que la banda de accion necesita para no quedar apretada contra las cartas.
    */
   private renderSelectHint(): void {
     const round = this.engine.round;
     const run = this.engine.run;
     const selected = round?.selected.length ?? 0;
 
-    // Fuera de la fase de juego no hay nada que mostrar.
-    if (!run || !round || run.status !== 'playing') {
+    // Fuera de la fase de juego, o sin ninguna carta elegida, no hay nada que
+    // mostrar (el contador y el texto de tutorial ya no existen).
+    if (!run || !round || run.status !== 'playing' || selected === 0) {
       this.elSelectHint.classList.remove('is-visible');
       return;
     }
 
-    const firstHand = round.cardsPlayedThisRound === 0;
-
-    // Sin seleccion: solo el texto de tutorial, y solo la primera mano.
-    if (selected === 0) {
-      if (!firstHand) {
-        this.elSelectHint.classList.remove('is-visible');
-        return;
-      }
-      this.elSelectHint.innerHTML = '';
-      const hint = document.createElement('span');
-      hint.className = 'hud-select-hint-text';
-      hint.textContent = t('guide.tutorialSelect', { count: MAX_PLAY_SIZE });
-      this.elSelectHint.appendChild(hint);
-      this.elSelectHint.classList.add('is-visible');
-      return;
-    }
-
-    // Con seleccion: el contador SIEMPRE (toda la run), con la pista de familia.
-    this.elSelectHint.innerHTML = '';
-
-    const count = document.createElement('span');
-    count.className = 'hud-select-hint-count';
-    count.textContent =
-      selected === 1 ? t('guide.selectedOne') : t('guide.selectedMany', { count: selected });
-
     // Sinergia de Familia entre las cartas elegidas. Se compara contra la
     // Familia de la primera seleccionada: es la lectura mas simple ("estas
     // cartas son de la misma familia") y la que el plan describe.
+    //
+    // Es lo UNICO que queda de la guia: el texto ("Toca hasta 5 cartas...") y
+    // el contador ("3 seleccionadas") se quitaron porque el tutorial ya los
+    // explica, y ocupaban la franja libre que necesita la banda de accion.
+    // La Familia compartida, en cambio, es la unica pista de sinergia que el
+    // jugador no puede leer de otro modo (no esta en el tutorial ni en la cara).
     const chosen = round.hand.filter((c) => round.selected.includes(c.uid));
     const families = new Set(chosen.map((c) => c.def.family));
     const sameFamily = families.size === 1 && chosen.length > 1;
 
-    const family = document.createElement('span');
-    family.className = `hud-select-hint-family${sameFamily ? ' is-shared' : ''}`;
-    if (sameFamily) {
-      family.textContent = `${t('family.' + chosen[0]!.def.family)} · ${t('guide.sharedFamily')}`;
+    if (!sameFamily) {
+      this.elSelectHint.classList.remove('is-visible');
+      return;
     }
 
-    this.elSelectHint.append(count, family);
+    this.elSelectHint.innerHTML = '';
+    const family = document.createElement('span');
+    family.className = 'hud-select-hint-family is-shared';
+    family.textContent = `${t('family.' + chosen[0]!.def.family)} · ${t('guide.sharedFamily')}`;
+    this.elSelectHint.appendChild(family);
     this.elSelectHint.classList.add('is-visible');
   }
 
@@ -1676,18 +1670,11 @@ export class HUD {
       name.className = 'joker-chip-name';
       name.textContent = t(joker.def.nameKey);
 
-      // Linea de HABILIDAD: la primera etiqueta de efecto del Simbionte, en el
-      // color de su rareza. Es la respuesta directa a "hacer mas visibles los
-      // Simbiontes": el nombre solo es una etiqueta, la habilidad es lo que
-      // importa. Sin etiquetas (el Simbionte activo del dado no tiene efectos
-      // disparables en la mano) se muestra la rareza, que nunca queda vacia.
-      const ability = document.createElement('span');
-      ability.className = 'joker-chip-ability';
-      const labelKey = joker.def.effects.find((e) => e.labelKey)?.labelKey;
-      ability.textContent = labelKey
-        ? t(labelKey)
-        : t(`rarity.${rarity}`);
-
+      // La linea de HABILIDAD ya NO va en la ficha. El equipo la pidio en la
+      // CARTA: mantener pulsado el Simbionte en la mesa abre la etiqueta rica
+      // (`showJokerTooltip`, con habilidad/rareza/descripcion), que es donde se
+      // consulta de verdad. Aca la ficha queda compacta: nombre + disparos, y
+      // el ancho libre lo aprovecha el nombre (antes se cortaba).
       const fires = document.createElement('span');
       fires.className = 'joker-chip-fires';
       fires.textContent = `x${joker.firedCount}`;
@@ -1779,7 +1766,7 @@ export class HUD {
 
       const body = document.createElement('span');
       body.className = 'joker-chip-body';
-      body.append(name, ability);
+      body.append(name);
 
       chip.append(body, fires, sell);
       this.elJokers.appendChild(chip);
@@ -4834,6 +4821,26 @@ export class HUD {
     this.elTooltip.classList.remove('is-visible', 'is-joker');
   }
 
+  /**
+   * Apaga la linea de consecuencia de la franja de accion.
+   *
+   * Es la contracara de `scoreTick`: la consecuencia es un dato TRANSITORIO de
+   * la mano que se acaba de puntuar. Si sobrevive al ciego (o a la siguiente
+   * mano) el jugador ve un "+25% esporas" viejo colgado y cree que ese bonus le
+   * sigue sumando, cuando en realidad ya se consumio. Se llama:
+   *   - por su propio temporizador (mismo ritmo que el ticker);
+   *   - al GANAR o PERDER el ciego (`round:win` / `round:loss`);
+   *   - al cambiar de fase (ver `renderActions`/`setStatus`).
+   */
+  hideConsequence(): void {
+    if (this.consequenceTimer !== null) {
+      window.clearTimeout(this.consequenceTimer);
+      this.consequenceTimer = null;
+    }
+    this.elConsequence.classList.remove('is-visible');
+    this.elConsequence.innerHTML = '';
+  }
+
   /** Numero flotante de puntos. `color` es un hex numerico. */
   /**
    * Un paso del calculo acaba de aparecer en pantalla: se muestra la operacion
@@ -4869,8 +4876,32 @@ export class HUD {
     this.elTicker.classList.add('is-visible');
     // (F4/C) Espejo del ticker en UNA linea para la franja de accion movil:
     // el ticker flotante de 2 lineas se oculta en movil, esta linea lo sustituye.
-    this.elConsequence.textContent = `${info.text}  +${formatNumber(shown)}  ·  ${t(info.sourceKey)}`;
+    //
+    // COLOR: la operacion va pintada con el color SEMANTICO del paso (el mismo
+    // `UI_COLORS` que usan los popups y el ticker): ambar = sustrato, verde =
+    // esporas, dorado = multiplicador (x2). Asi "+20" y "x1.5" dejan de verse
+    // iguales y el jugador distingue QUE esta sumando.
+    this.elConsequence.innerHTML = '';
+    const conOp = document.createElement('span');
+    conOp.className = 'hud-consequence-op';
+    conOp.textContent = info.text;
+    conOp.style.color = hexToCss(info.color);
+    const conTotal = document.createElement('span');
+    conTotal.className = 'hud-consequence-total';
+    conTotal.textContent = `+${formatNumber(shown)}`;
+    const conSource = document.createElement('span');
+    conSource.className = 'hud-consequence-source';
+    conSource.textContent = `· ${t(info.sourceKey)}`;
+    this.elConsequence.append(conOp, conTotal, conSource);
     this.elConsequence.classList.add('is-visible');
+    // SE APAGA SOLA: mismo ritmo que el ticker (el ultimo paso dura mas porque
+    // es el numero que el jugador se lleva). Sin esto el dato quedaba colgado y
+    // parecia que seguias sumando en la mano siguiente.
+    if (this.consequenceTimer !== null) window.clearTimeout(this.consequenceTimer);
+    this.consequenceTimer = window.setTimeout(() => {
+      this.hideConsequence();
+      this.consequenceTimer = null;
+    }, isLast ? 2600 : 1500);
 
     // "Golpe" del numero con GSAP: reemplaza el truco de quitar/poner la clase
     // con un reflow FORZADO en medio (una lectura sincronica de layout por cada

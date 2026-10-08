@@ -813,6 +813,10 @@ async function boot(): Promise<void> {
         showCardTooltip(card);
       },
       onLongPressChange: (card) => showCardTooltip(card),
+      // Simbionte de la mesa: mantener pulsado abre SU etiqueta rica (habilidad,
+      // rareza y descripcion). Es la via que reemplaza a la linea de habilidad
+      // que la caja del HUD dejo de mostrar.
+      onLongPressJoker: (joker) => hud?.showJokerTooltip(joker, lastPointer.x, lastPointer.y),
       onScorePopup: (x, y, text, color, combo) => hud?.popup(x, y, text, color, combo ?? 0),
       onScoreTick: (info) => hud?.scoreTick(info),
       // El monitor de frames bajo el nivel solo. El render no muestra avisos:
