@@ -20,6 +20,7 @@ import {
   type InterludeChoice,
   type InterludeEffect,
   type JokerDefinition,
+  type JokerInstance,
   type RunSnapshot,
   type ScoreBreakdown,
   type ShopOffer,
@@ -59,7 +60,7 @@ import {
   type DeckBuilderState,
   type DeckCardInfo,
 } from './DeckBuilderScreen';
-import { buildCollectionPanel, type CollectionEntry } from './CollectionScreen';
+import { buildCollectionGrid, type CollectionEntry } from './CollectionScreen';
 import { buildDailyRewardPanel } from './DailyRewardPanel';
 import { buildAchievementsPanel, type AchievementView } from './AchievementsScreen';
 import { BoardScreen, type BoardResolvers, type BoardScreenCallbacks } from './BoardScreen';
@@ -196,6 +197,13 @@ export interface HudCallbacks {
    * `''` = clasico (mazo base, sin sesgo de tienda).
    */
   onStartRunWithArchetype: (archetypeId: string) => void;
+  /**
+   * El jugador pidio el TUTORIAL optativo (boton extra del selector de
+   * arquetipo). Arranca una run sembrada y guiada: el controlador se encarga
+   * de fijar `run.tutorial = true` y de ir avanzando los pasos.
+   * Es OPCIONAL: si no se expone, el boton no se dibuja.
+   */
+  onStartTutorial?: () => void;
   // --- Deck propio: mazo personalizado armado por el jugador ---
   /**
    * El jugador confirmo su mazo propio y quiere arrancar con el. `entries` ya
@@ -280,6 +288,19 @@ export class HUD {
   /** P1.4 — Icono de ayuda contextual (?). */
   private elHelp = document.createElement('button');
   private elCounters = document.createElement('div');
+  /**
+   * Franja de PUTREFACCION (Frente 2.C).
+   *
+   * Va DEBAJO de la mano y es deliberadamente SEPARADA del contador de cartas:
+   * el jugador perdia manos con 0 de puntaje sin entender por que, y el estado
+   * vivia solo en un borde tenue sobre la carta. Aca se lee de un vistazo
+   * CUANTA putrefaccion hay repartida por el mazo y CUANTO Sustrato resta en
+   * total, que es el numero que explica el 0.
+   *
+   * `pointer-events: none` (lo pone el CSS): es informativa, nunca se toca, y
+   * no puede comerse el arrastre de una carta justo encima suyo.
+   */
+  private elDecay = document.createElement('div');
   private elJokers = document.createElement('div');
   private elActions = document.createElement('div');
   private elOverlay = document.createElement('div');
@@ -373,6 +394,17 @@ export class HUD {
     breakdown: ScoreBreakdown;
     total: number;
     handSize: number;
+  } | null = null;
+  /**
+   * Desglose de Fungis de la ultima recompensa de ciego, tal cual lo mando
+   * `round:win`. Lo usa `buildFungiBreakdown` para el panel de fin de ciego.
+   */
+  private lastRewardParts: {
+    blind: number;
+    base: number;
+    unusedHands: number;
+    unusedCount: number;
+    firstHand: number;
   } | null = null;
 
   // --- Ciego: el panel ya es solo informativo (la ruta del ante) ---
@@ -661,6 +693,7 @@ export class HUD {
 
     // Contador en vivo. Va entre la barra de arriba y las cartas jugadas: es la
     // franja libre de la mesa, asi no tapa ni el HUD ni el resultado.
+    this.elDecay.className = 'hud-decay';
     this.elTicker.className = 'score-ticker';
     this.elTickerOp.className = 'score-ticker-op';
     this.elTickerTotal.className = 'score-ticker-total';
@@ -697,6 +730,7 @@ export class HUD {
       this.elPileDeck,
       this.elPileDiscard,
       bottom,
+      this.elDecay,
       this.elSelectHint,
       this.elTicker,
       this.elPopups,
@@ -869,8 +903,12 @@ export class HUD {
       // cobro, y la oferta tiene que quedar marcada en el mismo refresco.
       bus.on('shop:purchase', () => this.shopRefresh?.()),
 
-      bus.on('round:win', ({ reward }) => {
-        this.toast(`${t('result.blindCleared')} +${reward}`, 'info');
+      bus.on('round:win', ({ reward, rewardParts }) => {
+        // Se guarda el desglose para el panel de fin de ciego. El toast solo
+        // lleva el total; el detalle vive en `buildFungiBreakdown`.
+        this.lastRewardParts = rewardParts ?? null;
+        const bonus = (rewardParts?.firstHand ?? 0) > 0 ? ` ${t('blindCleared.firstHandTag')}` : '';
+        this.toast(`${t('result.blindCleared')} +${reward}${bonus}`, 'info');
       }),
 
       bus.on('round:loss', () => {
@@ -920,6 +958,7 @@ export class HUD {
       bus.on('round:start', () => {
         this.lastDeckDelta = null;
         this.lastBreakdown = null;
+        this.lastRewardParts = null;
       }),
 
       bus.on('i18n:changed', () => {
@@ -967,6 +1006,7 @@ export class HUD {
     }
 
     this.renderCounters();
+    this.renderDecay();
     this.renderPileLabels();
     this.renderJokers();
     this.renderMissions();
@@ -1360,6 +1400,88 @@ export class HUD {
   }
 
   /**
+   * Franja de putrefaccion (Frente 2.C).
+   *
+   * Cuenta las cartas con `decay` en TODO el mazo (pilas + mano) y suma su
+   * Sustrato perdido. El numero que importa es el SEGUNDO: "−N Sustrato" es
+   * literalmente lo que se le resta al total de la mano; con el estado
+   * permanente (antes) N crecia sin techo y explicaba los ceros.
+   *
+   * Se oculta sola cuando no hay putrefaccion: una franja siempre presente que
+   * dice "0" es ruido y le roba altura a la mesa en movil.
+   */
+  private renderDecay(): void {
+    const round = this.engine.round;
+    const run = this.engine.run;
+    this.elDecay.innerHTML = '';
+    // Solo durante la partida: en tienda/recompensa la franja no aporta y
+    // taparia el panel. El estado `playing` es el unico donde se juega la mano.
+    if (!round || run.status !== 'playing') {
+      this.elDecay.classList.remove('is-visible');
+      this.setDecayReserve(0);
+      return;
+    }
+
+    const seen = new Set<string>();
+    const cards = [...run.deck.allCards, ...round.hand];
+    let cardsAffected = 0;
+    let substrateLost = 0;
+    for (const card of cards) {
+      if (seen.has(card.uid)) continue;
+      seen.add(card.uid);
+      const decay = card.statuses.find((s) => s.type === 'decay');
+      if (!decay) continue;
+      cardsAffected += 1;
+      substrateLost += decay.value;
+    }
+
+    if (cardsAffected === 0) {
+      this.elDecay.classList.remove('is-visible');
+      this.setDecayReserve(0);
+      return;
+    }
+
+    this.elDecay.classList.add('is-visible');
+
+    // El ROTULO usa el NOMBRE DE LA MECANICA (`hud.decay` = "Putrefacción"), no
+    // el nombre del estado ("Pudriéndose"): quedaba repetido en la misma frase
+    // ("Pudriéndose · 2 pudriéndose") y el primero no aportaba nada.
+    const label = document.createElement('span');
+    label.className = 'hud-decay-label';
+    label.textContent = t('hud.decay');
+
+    const cardsEl = document.createElement('span');
+    cardsEl.className = 'hud-decay-cards';
+    cardsEl.textContent = t('hud.decayCards', { count: cardsAffected });
+
+    const lossEl = document.createElement('span');
+    lossEl.className = 'hud-decay-loss';
+    lossEl.textContent = t('hud.decayLoss', { value: substrateLost });
+
+    this.elDecay.append(label, cardsEl, lossEl);
+    this.elDecay.setAttribute(
+      'aria-label',
+      t('hud.decayAria', { cards: cardsAffected, value: substrateLost }),
+    );
+
+    // La franja y la guia de seleccion comparten la franja libre sobre la barra:
+    // se ANUNCIA la altura de esta para que la guia se corra hacia arriba y no
+    // se pisen. Se mide tras el layout (`requestAnimationFrame`) porque el alto
+    // recien existe cuando el navegador aplica el `display:flex` de `is-visible`.
+    requestAnimationFrame(() => this.setDecayReserve(this.elDecay.offsetHeight));
+  }
+
+  /**
+   * Publica la altura reservada por la franja de putrefaccion en
+   * `--hud-decay-h`. La lee `.hud-select-hint` para subir cuando la franja esta
+   * visible; con la franja oculta queda en 0 y la guia vuelve a su sitio.
+   */
+  private setDecayReserve(h: number): void {
+    if (this.root.style.getPropertyValue('--hud-decay-h') === `${h}px`) return;
+    this.root.style.setProperty('--hud-decay-h', `${h}px`);
+  }
+
+  /**
    * Ancla las etiquetas de las pilas a la CAJA proyectada de mazo y descarte,
    * para que queden DENTRO del dorso y ajustadas a su tamano. Lo llama el render.
    */
@@ -1508,6 +1630,56 @@ export class HUD {
 
       // El cuerpo de la ficha solo señala la carta: el joker late en la mesa.
       chip.addEventListener('click', () => this.callbacks.onFocusJoker(joker.uid));
+
+      // --- Etiqueta rica del Simbionte (Frente 4a) ---
+      // Las DOS vias que usan las cartas, para que la ficha no sea la unica
+      // pieza del juego sin etiqueta:
+      //   - raton: `pointerenter`/`pointerleave`.
+      //   - tactil: mantener el dedo quieto (long-press), porque el hover
+      //     necesita `pointermove` y con el dedo quieto no llega.
+      // El `title` nativo se QUITA: aparecia el rectangulito gris encima del
+      // panel rico en escritorio (dos etiquetas a la vez).
+      chip.removeAttribute('title');
+      chip.addEventListener('pointerenter', (event) => {
+        if (isCoarsePointer()) return;
+        this.showJokerTooltip(joker, event.clientX, event.clientY);
+      });
+      chip.addEventListener('pointerleave', () => {
+        if (isCoarsePointer()) return;
+        this.hideTooltip();
+      });
+      let longPress: number | null = null;
+      let pressOrigin: { x: number; y: number } | null = null;
+      const cancelLongPress = (): void => {
+        if (longPress !== null) {
+          window.clearTimeout(longPress);
+          longPress = null;
+        }
+        pressOrigin = null;
+        chip.classList.remove('is-pressing');
+      };
+      chip.addEventListener('pointerdown', (event) => {
+        if (!isCoarsePointer()) return; // el raton ya tiene el hover
+        pressOrigin = { x: event.clientX, y: event.clientY };
+        chip.classList.add('is-pressing');
+        longPress = window.setTimeout(() => {
+          longPress = null;
+          chip.classList.remove('is-pressing');
+          this.showJokerTooltip(joker, pressOrigin?.x ?? event.clientX, pressOrigin?.y ?? event.clientY);
+        }, 420);
+      });
+      // Solo se cancela si el dedo se MUEVE de verdad: un temblor de 2px no
+      // debe abortar el long-press. Mismo umbral que la seleccion de cartas
+      // (<=6px) para que la ficha y la carta se sientan igual.
+      chip.addEventListener('pointermove', (event) => {
+        if (!pressOrigin || longPress === null) return;
+        if (Math.hypot(event.clientX - pressOrigin.x, event.clientY - pressOrigin.y) > 6) {
+          cancelLongPress();
+        }
+      });
+      for (const evt of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+        chip.addEventListener(evt, cancelLongPress);
+      }
 
       const body = document.createElement('span');
       body.className = 'joker-chip-body';
@@ -1806,6 +1978,11 @@ export class HUD {
     const breakdown = this.buildBreakdown();
     if (breakdown) panel.appendChild(breakdown);
 
+    // Desglose de FUNGIS: de donde salio cada moneda de la recompensa. Va
+    // despues del de puntaje (primero "como puntue", despues "cuanto cobre").
+    const fungi = this.buildFungiBreakdown();
+    if (fungi) panel.appendChild(fungi);
+
     // P1.5 — Estado del mazo: "Mazo conservado: 40 cartas / +1 carta obtenida".
     // Es la respuesta VISIBLE a la pregunta que el plan detecta como central:
     // "que paso con mis cartas despues de superar el Ciego".
@@ -1937,6 +2114,74 @@ export class HUD {
   }
 
   /**
+   * Desglose de FUNGIS obtenidos al cerrar el ciego.
+   *
+   * El jugador gana Fungis por varios motivos a la vez (valor del ciego, base
+   * fija, manos que no gasto y —si gano de una— un bono extra). Antes solo veia
+   * el total en un toast; aca ve la suma desarmada, fila por fila, con el total
+   * destacado y en el dorado de la moneda. Reusa las clases del desglose de
+   * puntaje para que los dos bloques se lean como hermanos.
+   */
+  private buildFungiBreakdown(): HTMLElement | null {
+    const parts = this.lastRewardParts;
+    if (!parts) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'score-breakdown is-fungi';
+    wrap.dataset['act'] = 'fungi-breakdown';
+
+    const heading = document.createElement('div');
+    heading.className = 'score-breakdown-title';
+    heading.textContent = t('blindCleared.fungiTitle');
+    wrap.appendChild(heading);
+
+    const rows: Array<[string, number, string]> = [
+      [t('blindCleared.fungiBlind'), parts.blind, ''],
+      [t('blindCleared.fungiBase'), parts.base, ''],
+      [
+        t('blindCleared.fungiUnused', { count: parts.unusedCount }),
+        parts.unusedHands,
+        parts.unusedHands > 0 ? 'is-positive' : '',
+      ],
+      // El bono de una sola mano solo se muestra cuando aplico: una fila en 0
+      // solo ensuciaria el desglose en la mayoria de los ciegos.
+      ...(parts.firstHand > 0
+        ? ([[t('blindCleared.fungiFirstHand'), parts.firstHand, 'is-bonus']] as Array<
+            [string, number, string]
+          >)
+        : []),
+    ];
+
+    let total = 0;
+    for (const [label, value, kind] of rows) {
+      total += value;
+      const row = document.createElement('div');
+      row.className = `score-breakdown-row${kind ? ` ${kind}` : ''}`;
+      const labelEl = document.createElement('span');
+      labelEl.className = 'score-breakdown-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'score-breakdown-value';
+      valueEl.textContent = `+${formatNumber(value)}`;
+      row.append(labelEl, valueEl);
+      wrap.appendChild(row);
+    }
+
+    const totalRow = document.createElement('div');
+    totalRow.className = 'score-breakdown-row is-total';
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'score-breakdown-label';
+    totalLabel.textContent = t('blindCleared.fungiTotal');
+    const totalValue = document.createElement('span');
+    totalValue.className = 'score-breakdown-value';
+    totalValue.textContent = `+${formatNumber(total)}`;
+    totalRow.append(totalLabel, totalValue);
+    wrap.appendChild(totalRow);
+
+    return wrap;
+  }
+
+  /**
    * P1.5 — Estado del mazo al cerrar el ciego.
    *
    * Se calcula comparando el mazo AHORA contra lo que el motor aviso por
@@ -2009,7 +2254,7 @@ export class HUD {
     panel.addEventListener('pointerleave', reset);
   }
 
-  private openOverlay(content: HTMLElement, carousel = false): void {
+  private openOverlay(content: HTMLElement, carousel = false, collectionGrid = false): void {
     this.cancelPendingClose();
     // El panel anterior deja de existir: su refresco tambien. `showShop` vuelve
     // a asignarlo justo despues de llamar aca.
@@ -2023,6 +2268,7 @@ export class HUD {
     // escena 3D (el anillo) quede a la vista y reciba rueda/arrastre/tap. El
     // marco de la coleccion re-habilita `pointer-events` solo en sus controles.
     this.elOverlay.classList.toggle('is-carousel', carousel);
+    this.elOverlay.classList.toggle('is-collection-grid', collectionGrid);
     this.elOverlay.appendChild(content);
     this.attachDepth(content);
     this.callbacks.onPanelOpened?.(carousel);
@@ -2268,9 +2514,19 @@ export class HUD {
   // Pantalla de inicio
   // ==========================================================================
 
-  /** Muestra un panel propio (ajustes, acerca de, coleccion...). */
-  showPanel(content: HTMLElement, opts?: { carousel?: boolean }): void {
-    this.openOverlay(content, opts?.carousel ?? false);
+  /**
+   * Muestra un panel propio (ajustes, acerca de, coleccion...).
+   *
+   * `carousel` deja el centro del overlay libre para el anillo 3D; `collectionGrid`
+   * solo marca el panel para que el CSS le de el alto/scroll que necesita una
+   * grilla larga (sin el, la grilla comparte el `max-height` del carrusel y
+   * queda con un scroll de 300px en un viewport de movil).
+   */
+  showPanel(
+    content: HTMLElement,
+    opts?: { carousel?: boolean; collectionGrid?: boolean },
+  ): void {
+    this.openOverlay(content, opts?.carousel ?? false, opts?.collectionGrid ?? false);
   }
 
   /**
@@ -2511,6 +2767,10 @@ export class HUD {
         onOpenDeckBuilder: () => this.showCustomDeck(),
         deckSize: this.customDeck.entries.reduce((sum, e) => sum + e.copies, 0),
         deckLocked: this.customDeck.locked,
+        // Tutorial optativo: solo si el controlador lo expone.
+        onTutorialStart: this.callbacks.onStartTutorial
+          ? () => this.callbacks.onStartTutorial?.()
+          : undefined,
       },
     );
     this.openOverlay(panel);
@@ -2559,6 +2819,150 @@ export class HUD {
       },
     });
     this.openOverlay(panel);
+  }
+
+  // ==========================================================================
+  // Tutorial GUIADO (Frente 1) — pasos con spotlight
+  // ==========================================================================
+
+  /**
+   * Muestra la tarjeta de UN paso del tutorial guiado, resaltando el elemento
+   * del `anchor` con la tecnica del spotlight.
+   *
+   * NO es un panel del overlay: es una capa propia (`#ui-root > .tut-layer`) que
+   * se dibuja ENCIMA de cualquier panel (incluido el de ciego, que vive en el
+   * overlay). Si fuera un `openOverlay` mas, reemplazaria el panel del juego y el
+   * jugador no veria lo que el paso le senala.
+   *
+   * `pointer-events`:
+   *   - la capa entera NO captura: el jugador tiene que poder tocar el juego en
+   *     los pasos que piden una accion (`advanceOn: 'player_action'`);
+   *   - la tarjeta SI captura (sus botones);
+   *   - en un paso que espera una accion, un `blocker` invisible cubre todo
+   *     MENOS el ancla, para que el unico toque util sea el correcto.
+   */
+  showTutorialStep(
+    view: {
+      title: string;
+      body: string;
+      stepOf: string;
+      anchor: string;
+      /** `true` = el paso espera una accion del jugador (muestra "Saltar"). */
+      waitsForAction: boolean;
+      /** `true` cuando es el ultimo paso (el boton dice "Empezar a jugar"). */
+      isLast: boolean;
+    },
+    onNext: () => void,
+    onSkipStep: () => void,
+    onSkipAll: () => void,
+  ): void {
+    this.hideTutorialStep();
+
+    const layer = document.createElement('div');
+    layer.className = 'tut-layer';
+    layer.dataset['act'] = 'tut-layer';
+
+    // --- Spotlight sobre el ancla ---
+    // Se mide el rect REAL del elemento. Si el selector no matchea nada (contenido
+    // cambiado), no hay spotlight: se muestra solo la tarjeta centrada. Degrada,
+    // no rompe.
+    let rect: DOMRect | null = null;
+    if (view.anchor) {
+      const target = document.querySelector(view.anchor);
+      if (target) rect = target.getBoundingClientRect();
+    }
+    if (rect) {
+      const spot = document.createElement('div');
+      spot.className = 'tut-spotlight';
+      // El selector que se resalto, para depurar desde la consola y para que los
+      // probes puedan comprobar QUE se resalto, no solo que hay un halo.
+      spot.dataset['anchor'] = view.anchor;
+      spot.style.left = `${Math.round(rect.left - 6)}px`;
+      spot.style.top = `${Math.round(rect.top - 6)}px`;
+      spot.style.width = `${Math.round(rect.width + 12)}px`;
+      spot.style.height = `${Math.round(rect.height + 12)}px`;
+      layer.appendChild(spot);
+
+      // Un paso que espera una accion bloquea el resto para que el unico gesto
+      // util sea el del ancla. Sin esto el jugador puede jugar cualquier carta y
+      // el paso que explica "selecciona" pierde su sentido.
+      if (view.waitsForAction) {
+        const blocker = document.createElement('div');
+        blocker.className = 'tut-blocker';
+        layer.appendChild(blocker);
+      }
+    }
+
+    // --- Tarjeta ---
+    const card = document.createElement('div');
+    card.className = 'tut-card';
+    card.dataset['act'] = 'tut-card';
+
+    // Se ubica DEBAJO del ancla si hay lugar; si no, arriba; si no, al centro.
+    if (rect) {
+      const below = rect.bottom + 14;
+      const cardSpace = 150;
+      const vh = window.innerHeight;
+      if (below + cardSpace < vh) {
+        card.style.top = `${Math.round(below)}px`;
+        card.style.left = `${Math.round(Math.min(Math.max(rect.left, 10), window.innerWidth - 320))}px`;
+      } else if (rect.top - cardSpace > 0) {
+        card.style.bottom = `${Math.round(vh - rect.top + 14)}px`;
+        card.style.left = `${Math.round(Math.min(Math.max(rect.left, 10), window.innerWidth - 320))}px`;
+      }
+    }
+
+    const stepOf = document.createElement('div');
+    stepOf.className = 'tut-step-of';
+    stepOf.textContent = view.stepOf;
+
+    const title = document.createElement('div');
+    title.className = 'tut-title';
+    title.textContent = view.title;
+
+    const body = document.createElement('div');
+    body.className = 'tut-body';
+    body.textContent = view.body;
+
+    const actions = document.createElement('div');
+    actions.className = 'tut-actions';
+
+    // "Saltar paso" solo en los pasos que esperan una accion: en los de boton
+    // "Siguiente" no hay nada que saltar.
+    if (view.waitsForAction) {
+      const skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = 'btn is-ghost is-small';
+      skip.dataset['act'] = 'tut-skip-step';
+      skip.textContent = t('tutorial.skipStep');
+      skip.addEventListener('click', onSkipStep);
+      actions.appendChild(skip);
+    }
+
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'btn is-ghost is-small';
+    all.dataset['act'] = 'tut-skip-all';
+    all.textContent = t('tutorial.skipAll');
+    all.addEventListener('click', onSkipAll);
+    actions.appendChild(all);
+
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'btn is-play is-small';
+    next.dataset['act'] = 'tut-next';
+    next.textContent = view.isLast ? t('tutorial.finish') : t('tutorial.next');
+    next.addEventListener('click', onNext);
+    actions.appendChild(next);
+
+    card.append(stepOf, title, body, actions);
+    layer.appendChild(card);
+    this.root.appendChild(layer);
+  }
+
+  /** Quita la capa del tutorial guiado, si esta. */
+  hideTutorialStep(): void {
+    this.root.querySelector('.tut-layer')?.remove();
   }
 
   /**
@@ -2990,6 +3394,8 @@ export class HUD {
       cards,
       money: this.engine.run.money,
       purgeCost: this.engine.purgeCost,
+      purgesLeft: this.engine.purgesLeft,
+      purgesPerAnte: this.engine.purgesPerAnte,
       canEdit: this.engine.canEditDeck(),
       info,
       ...(highlightUid ? { highlightUid } : {}),
@@ -3020,19 +3426,18 @@ export class HUD {
 
   showCollection(): void {
     const entries = this.collectionProvider?.() ?? [];
-    this.showPanel(
-      buildCollectionPanel(entries, {
-        // Se puede abrir la coleccion desde el menu o desde una run en curso:
-        // al cerrar se vuelve al overlay que corresponda al estado actual.
-        onClose: () => {
-          this.lastStatus = null;
-          this.render();
-        },
-        onOpenStore: () => this.callbacks.onOpenExpansions(),
-        onOpenPass: () => this.callbacks.onOpenPass(),
-        onOpenCosmetics: () => this.showCosmetics(() => this.showCollection()),
-      }),
-    );
+    const frame = buildCollectionGrid(entries, {
+      // Se puede abrir la coleccion desde el menu o desde una run en curso:
+      // al cerrar se vuelve al overlay que corresponda al estado actual.
+      onClose: () => {
+        this.lastStatus = null;
+        this.render();
+      },
+      onOpenStore: () => this.callbacks.onOpenExpansions(),
+      onOpenPass: () => this.callbacks.onOpenPass(),
+      onOpenCosmetics: () => this.showCosmetics(() => this.showCollection()),
+    });
+    this.showPanel(frame.panel, { collectionGrid: true });
   }
 
   // ==========================================================================
@@ -3790,6 +4195,10 @@ export class HUD {
       const kindLabel = offerLabel(offer.kind);
       card.dataset['kind'] = offer.kind;
       card.dataset['kindLabel'] = kindLabel;
+      // Ancla estable para el tutorial y para los probes: la clase `offer*` se
+      // reusa en recompensa/tienda/otros grids, pero `data-act="offer"` marca
+      // solo las ofertas COMPRABLES de la tienda.
+      card.dataset['act'] = 'offer';
       card.setAttribute('aria-label', `${kindLabel}: ${t(offer.nameKey)}`);
 
       const footer = document.createElement('div');
@@ -4082,6 +4491,9 @@ export class HUD {
   showTooltip(card: CardInstance, x: number, y: number, comboHint?: string): void {
     const def = card.def;
     this.elTooltip.innerHTML = '';
+    // El panel es COMPARTIDO con el tooltip de Simbionte: hay que quitarle la
+    // marca, o una carta heredaria el estilo lila de Simbionte.
+    this.elTooltip.classList.remove('is-joker');
 
     const name = document.createElement('div');
     name.className = 'tooltip-name';
@@ -4197,10 +4609,100 @@ export class HUD {
       this.elTooltip.appendChild(combos);
     }
 
-    // En TACTIL el tooltip NO puede ir pegado al puntero: el dedo tapa
-    // exactamente lo que el jugador quiere leer (y con el long-press el dedo
-    // esta encima de la carta). Se ancla ARRIBA y centrado, en la franja libre
-    // entre la barra superior y la mano.
+    this.placeTooltip(x, y);
+  }
+
+  /**
+   * Tooltip de un SIMBIONTE (Frente 4a).
+   *
+   * Antes la ficha del Simbionte solo llevaba el `title` nativo del navegador
+   * (el rectangulito gris, que en movil no aparece nunca). Ahora recibe el MISMO
+   * panel rico que las cartas: nombre, rareza, habilidad marcada con la ✦ y el
+   * valor de venta, con la taxonomia del efecto. Es lo que Emanuel pedia con
+   * "que los simbiontes tengan la misma etiqueta que las demas cartas".
+   *
+   * Reusa el mismo `elTooltip`, asi que el posicionamiento (arriba en tactil,
+   * junto al puntero en escritorio) sale gratis y no hay dos paneles compitiendo.
+   */
+  showJokerTooltip(joker: JokerInstance, x: number, y: number): void {
+    const def = joker.def;
+    this.elTooltip.innerHTML = '';
+    // La ficha del Simbionte SIEMPRE es "habilidad": su razon de ser es el
+    // efecto. La clase lila la marca igual que en las cartas de habilidad.
+    this.elTooltip.classList.add('is-joker');
+
+    const name = document.createElement('div');
+    name.className = 'tooltip-name';
+    name.textContent = t(def.nameKey);
+    name.style.color = hexToCss(RARITY_COLOR[def.rarity]);
+    const marker = document.createElement('span');
+    marker.className = 'tooltip-ability-marker';
+    marker.dataset['act'] = 'tooltip-ability';
+    marker.textContent = '✦';
+    marker.title = t('guide.abilityTag');
+    name.appendChild(marker);
+
+    // Rotulo SIMBIONTE: separa la ficha del Simbionte de una carta en el
+    // tooltip, con la misma palabra que usa el resto del juego.
+    const kind = document.createElement('div');
+    kind.className = 'tooltip-rarity';
+    kind.dataset['jokerKind'] = def.rarity;
+    kind.textContent = `${t('hud.jokers')} · ${t(`rarity.${def.rarity}`)}`;
+
+    const desc = document.createElement('div');
+    desc.className = 'tooltip-desc is-ability';
+    desc.textContent = t(def.descKey);
+
+    // La etiqueta del PRIMER efecto con `labelKey` (la habilidad concreta),
+    // que es el dato que la ficha ya mostraba en pequeno.
+    const labelKey = def.effects.find((e) => e.labelKey)?.labelKey;
+    if (labelKey) {
+      const ability = document.createElement('div');
+      ability.className = 'tooltip-joker-ability';
+      ability.dataset['act'] = 'tooltip-joker-ability';
+      ability.textContent = t(labelKey);
+      this.elTooltip.append(name, kind, desc, ability);
+    } else {
+      this.elTooltip.append(name, kind, desc);
+    }
+
+    // Pie: disparos acumulados + valor de venta. Son los dos numeros que el
+    // jugador consulta antes de decidir si vende.
+    const stats = document.createElement('div');
+    stats.className = 'tooltip-stats';
+    const fires = document.createElement('div');
+    fires.className = 'tooltip-stat is-substrate';
+    fires.dataset['tooltipStat'] = 'joker-fires';
+    const fVal = document.createElement('div');
+    fVal.className = 'tooltip-stat-value';
+    fVal.textContent = `x${joker.firedCount}`;
+    const fLabel = document.createElement('div');
+    fLabel.className = 'tooltip-stat-label';
+    fLabel.textContent = t('hud.jokerFires');
+    fires.append(fVal, fLabel);
+
+    const sell = document.createElement('div');
+    sell.className = 'tooltip-stat is-spores';
+    sell.dataset['tooltipStat'] = 'joker-sell';
+    const sVal = document.createElement('div');
+    sVal.className = 'tooltip-stat-value';
+    sVal.textContent = `${jokerSellValue(joker)}`;
+    const sLabel = document.createElement('div');
+    sLabel.className = 'tooltip-stat-label';
+    sLabel.textContent = t('hud.jokerSell');
+    sell.append(sVal, sLabel);
+    stats.append(fires, sell);
+    this.elTooltip.appendChild(stats);
+
+    this.placeTooltip(x, y);
+  }
+
+  /**
+   * Coloca el tooltip: en TACTIL arriba y centrado (el dedo taparia la carta
+   * justo cuando se hace long-press); en ESCRITORIO junto al puntero, con
+   * volcado al lado opuesto si no entra en pantalla.
+   */
+  private placeTooltip(x: number, y: number): void {
     if (isCoarsePointer()) {
       const width = this.elTooltip.offsetWidth;
       this.elTooltip.style.left = `${Math.max(14, Math.round((window.innerWidth - width) / 2))}px`;
@@ -4222,7 +4724,7 @@ export class HUD {
   }
 
   hideTooltip(): void {
-    this.elTooltip.classList.remove('is-visible');
+    this.elTooltip.classList.remove('is-visible', 'is-joker');
   }
 
   /** Numero flotante de puntos. `color` es un hex numerico. */

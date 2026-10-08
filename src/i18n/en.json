@@ -28,7 +28,13 @@
     "drawable": "Drawable",
     "discardPile": "Discard",
     "deckFull": "Drawable: {remaining} · Discard: {discard} · Total: {total}",
+    "decay": "Decay",
+    "decayCards": "{count} cards",
+    "decayLoss": "−{value} Substrate",
+    "decayAria": "Decay: {cards} decaying cards, {value} Substrate lost in hand",
     "reshuffle": "The discard is shuffled back into the deck",
+    "jokerFires": "Triggers",
+    "jokerSell": "Sell",
     "jokers": "Simbionts",
     "jokerSlots": "Slots",
     "handSize": "Hand size",
@@ -408,7 +414,7 @@
     },
     "deep_carrion_lattice": {
       "name": "Carrion Lattice",
-      "desc": "Rots a card in hand; when scoring with Decay: +12 Substrate."
+      "desc": "Rots a card in hand for 3 blinds; when scoring with Decay: +12 Substrate."
     },
     "spore_puffball": {
       "name": "Puffball",
@@ -588,7 +594,7 @@
     },
     "decay_compost_heap": {
       "name": "Compost Heap",
-      "desc": "When played, rots a random card in your hand (−2 Substrate per trigger)."
+      "desc": "When played, rots a random card in your hand: −2 Substrate for 3 blinds."
     },
     "decay_carrion_bloom": {
       "name": "Carrion Bloom",
@@ -640,7 +646,7 @@
     },
     "decay_agaric_mould": {
       "name": "Agaric Mould",
-      "desc": "When played it rots a random card in hand. Decay of the Agaricaceae family."
+      "desc": "When played it rots a random card in hand: −1 Substrate for 3 blinds. Agaricaceae family."
     },
     "decay_boletus_slime": {
       "name": "Bolete Slime",
@@ -652,7 +658,7 @@
     },
     "decay_amanita_blight": {
       "name": "Amanita Blight",
-      "desc": "When played it rots 2 points on a random card in hand. Decay of the Amanitaceae family."
+      "desc": "When played it rots 2 points on a random card in hand: −2 Substrate for 3 blinds. Amanitaceae family."
     },
     "crystal_agaric_facet": {
       "name": "Agaric Facet",
@@ -887,7 +893,12 @@
       "daily": "Daily streak",
       "achievement": "Achievement",
       "season": "Season pass"
-    }
+    },
+    "filterAllStates": "All",
+    "filterSeen": "Discovered",
+    "filterUnseen": "Undiscovered",
+    "exhibition": "Showcase",
+    "empty": "Nothing matches this filter."
   },
   "store": {
     "title": "Expansions",
@@ -913,7 +924,14 @@
     "title": "Blind cleared!",
     "score": "{score} / {target}",
     "total": "Run total score: {score}",
-    "continue": "Continue"
+    "continue": "Continue",
+    "fungiTitle": "Fungis earned",
+    "fungiBlind": "Blind reward",
+    "fungiBase": "Base for clearing",
+    "fungiUnused": "Unused hands ({count})",
+    "fungiFirstHand": "One-hand clear!",
+    "fungiTotal": "Total earned",
+    "firstHandTag": "· one-hand clear!"
   },
   "packs": {
     "title": "Packs",
@@ -932,7 +950,12 @@
       "title": "Expansion pack",
       "none": "You have no expansion packs. Defeat a Boss to earn one.",
       "pending": "{n} expansion"
-    }
+    },
+    "helpTitle": "Where do pack cards go?",
+    "helpBody": "Packs fill your COLLECTION, not your run deck. Every specimen you pull adds copies (shown as “xN” in the grid) and becomes available to build your OWN DECK. The deck you play with is chosen separately.",
+    "helpHint": "Packs drop when you defeat a Boss.",
+    "helpClose": "Got it",
+    "helpButton": "Where do cards go?"
   },
   "die": {
     "title": "Spore die",
@@ -1001,6 +1024,9 @@
     "title": "Deck",
     "open": "Deck",
     "purge": "Purge ({cost})",
+    "purgeLeft": "Purge ({cost}) · {left}/{total}",
+    "purgeHint": "Costs {cost} Fungis. You have {left} purges left this Ante.",
+    "purgeNone": "No purges left this Ante",
     "purged": "{name} was purged",
     "cannotAfford": "Not enough money to purge",
     "onlyBetweenBlinds": "You can only edit the deck between blinds",
@@ -1667,6 +1693,63 @@
         "synced": "Colony updated",
         "conflict": "We found different progress: choose which to keep"
       }
+    }
+  },
+  "tutorial": {
+    "start": "Guided tutorial",
+    "startHint": "Learn by playing a full Ante (2 challenges + Boss).",
+    "next": "Next",
+    "skipStep": "Skip step",
+    "skipAll": "Leave tutorial",
+    "finish": "Start playing!",
+    "stepOf": "Step {n} of {total}",
+    "blindSelect": {
+      "title": "Pick your first challenge",
+      "body": "Each Blind asks for a score (the target). You get a limited number of hands and discards. Beat it and you move on."
+    },
+    "handDealt": {
+      "title": "Your hand",
+      "body": "These are the cards you drew. Each has an ELEMENT, a FAMILY, and a Substrate and Spore value."
+    },
+    "selectCards": {
+      "title": "Select 3 to 5 cards",
+      "body": "Tap cards to pick them (a green border and a number appear). The more you put on the table, the more Substrate you add."
+    },
+    "comboHint": {
+      "title": "A combo!",
+      "body": "Sharing a Family or Element triggers a combo: Family cards add flat Substrate, Element cards multiply Spores. The combo closes every hand."
+    },
+    "playHand": {
+      "title": "Play the hand",
+      "body": "Press PLAY. The cards’ Substrate is multiplied by your Spores, and that’s the hand score."
+    },
+    "scoreBreakdown": {
+      "title": "How the score was built",
+      "body": "The breakdown shows base Substrate, combo bonuses and the Spore multiplier. That’s how you hit (or missed) the target."
+    },
+    "rewardDraft": {
+      "title": "Pick a reward",
+      "body": "You beat the Blind: choose 1 of the offered cards. It enters your deck right away and you’ll draw it in upcoming Blinds."
+    },
+    "shopIntro": {
+      "title": "The shop",
+      "body": "Spend the Fungi you earned on Symbionts (they give passive effects), cards and upgrades. You can also sell what you no longer use."
+    },
+    "purgeIntro": {
+      "title": "Purging the deck",
+      "body": "You can remove cards to make the deck more consistent. Careful: you can purge at most 2 cards per Ante."
+    },
+    "upgradeIntro": {
+      "title": "Upgrading cards",
+      "body": "Leveling a card multiplies its Substrate or Spores. There is no upgrade cap: a small card can become your best card."
+    },
+    "bossIntro": {
+      "title": "The Ante Boss",
+      "body": "The third Blind is the Boss, with its own rules (fewer hands, higher targets or odd effects). Read them in its panel before entering."
+    },
+    "anteComplete": {
+      "title": "Ante complete!",
+      "body": "You just played a full Ante: that’s how FungiFlush plays. Now go solo — the next Ante asks for a higher score. Good luck!"
     }
   }
 }

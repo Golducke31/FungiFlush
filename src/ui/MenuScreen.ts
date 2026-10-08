@@ -1483,6 +1483,12 @@ export interface ArchetypePanelCallbacks {
   deckSize?: number;
   /** Opcional: `true` si el modo esta bloqueado por progreso. */
   deckLocked?: boolean;
+  /**
+   * Opcional: arrancar el TUTORIAL guiado en vez de una run normal. Si se
+   * omite, el boton no se dibuja (los tests que solo miran los arquetipos
+   * siguen funcionando sin exponer nada nuevo).
+   */
+  onTutorialStart?: () => void;
 }
 
 /**
@@ -1671,6 +1677,24 @@ export function buildArchetypePanel(
   }
 
   footer.append(startBtn);
+
+  // Tutorial optativo: va ULTIMO y en estilo fantasma, para que nunca compita
+  // visualmente con "Empezar". Quien ya sabe jugar no lo necesita; quien no,
+  // lo encuentra justo al lado de donde arrancaria la run.
+  if (callbacks.onTutorialStart) {
+    const tutBtn = document.createElement('button');
+    tutBtn.type = 'button';
+    tutBtn.className = 'btn is-ghost archetypes-tutorial';
+    tutBtn.dataset['act'] = 'tutorial-start';
+    tutBtn.textContent = t('tutorial.start');
+    const hint = document.createElement('span');
+    hint.className = 'archetypes-tutorial-hint';
+    hint.textContent = t('tutorial.startHint');
+    tutBtn.title = t('tutorial.startHint');
+    tutBtn.appendChild(hint);
+    tutBtn.addEventListener('click', () => callbacks.onTutorialStart?.());
+    footer.append(tutBtn);
+  }
 
   shell.append(head, list, footer);
   panel.appendChild(shell);

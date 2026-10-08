@@ -13,7 +13,7 @@
  * resueltas. Eso lo mantiene testeable y desacoplado.
  */
 
-import type { ElementType, Rarity } from '@engine/index';
+import type { ElementType, FamilyType, Rarity } from '@engine/index';
 import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 
@@ -46,6 +46,28 @@ export interface CollectionEntry {
    * veces como copias haya. `0`/`undefined` = no mostrar badge.
    */
   count?: number;
+  /**
+   * Familia taxonomica. Los Simbiontes van a `neutral` (no pertenecen a una
+   * familia micologica): la GRILLA los agrupa aparte, en su propia seccion.
+   */
+  family: FamilyType;
+  /**
+   * Id del pack que aporta la pieza (`base`, `deep_mycelium`, ...). La grilla
+   * agrupa por pack ANTES que por familia: es la unidad de compra, asi que el
+   * jugador ve de un golpe que agrego el sobre que abrio.
+   */
+  packId: string;
+  /**
+   * Cara ya compuesta (data-URL) para la vista de GRILLA. La arma `main.ts`, que
+   * es quien tiene las imagenes reales decodificadas; el panel no conoce el
+   * registro ni el render. `null` = sin arte disponible.
+   */
+  faceUrl?: string | null;
+  /** Clave i18n de la descripcion de la carta, para el detalle. */
+  descKey?: string;
+  /** Sustrato base / Esporas base, solo para las cartas (detalle de la grilla). */
+  substrate?: number;
+  spores?: number;
 }
 
 export interface CollectionCallbacks {
@@ -58,6 +80,11 @@ export interface CollectionCallbacks {
   onOpenCosmetics?: () => void;
   /** Opcional: los Sobres viven dentro de la Coleccion. */
   onOpenPacks?: () => void;
+  /**
+   * Opcional: cambiar a la vista de EXHIBICION (carrusel 3D). Solo lo ofrece la
+   * grilla: es la unica superficie desde la que se puede pedir el cambio.
+   */
+  onOpenExhibition?: () => void;
   /** Sobres sin abrir, para el contador del boton. */
   packsPending?: number;
   /**
@@ -139,6 +166,19 @@ export interface CollectionCarouselFrame {
   /** Actualiza el recuadro de detalle con la entrada enfocada. */
   setFocus: (index: number) => void;
 }
+
+/**
+ * Marco DOM de la coleccion en modo GRILLA.
+ *
+ * Igual que el carrusel, expone `panel` para que el controlador lo monte, pero
+ * no necesita `setFocus`: la grilla es autonoma y abre su propio detalle.
+ */
+export interface CollectionGridFrame {
+  panel: HTMLElement;
+}
+
+/** Modos de filtro de la grilla. `state` reemplaza a los viejos chips locked/unlocked. */
+export type GridState = 'all' | 'seen' | 'unseen' | 'locked';
 
 /**
  * Coleccion sobre el CARRUSEL 3D.
@@ -320,124 +360,492 @@ export function buildCollectionCarousel(
 
   return { panel, setFocus };
 }
-
-export function buildCollectionPanel(
+/**
+ * Coleccion en modo GRILLA, agrupada por pack -> familia.
+ *
+ * POR QUE UNA GRILLA. El carrusel 3D obliga a recorrer las entradas una por
+ * una: sirve para MIRAR una carta, es malo para GESTIONAR una coleccion. Con 77
+ * entradas, el jugador no puede ver sus huecos ("me faltan 3 amatoxinas") sin
+ * girar el anillo entero. La grilla con cabeceras por pack y familia pone los
+ * faltantes a la vista, que es de lo que se trata coleccionar.
+ *
+ * La grilla NO dibuja nada del juego: recibe `CollectionEntry[]` ya resueltas,
+ * cada una con su `faceUrl` armada por el controlador. Es una funcion de
+ * presentacion pura.
+ */
+export function buildCollectionGrid(
   entries: CollectionEntry[],
   callbacks: CollectionCallbacks,
-): HTMLElement {
+): CollectionGridFrame {
   const panel = document.createElement('div');
-  panel.className = 'panel is-collection';
+  panel.className = 'panel is-collection is-grid-frame';
 
   const title = document.createElement('h2');
   title.className = 'panel-title';
   title.textContent = t('collection.title');
 
-  const visible = entries.filter((e) => e.state !== 'hidden');
-
   const subtitle = document.createElement('p');
   subtitle.className = 'panel-subtitle';
 
+  // --- Barra de filtros (dos grupos: TIPO y ESTADO) ---
   const toolbar = document.createElement('div');
-  toolbar.className = 'deck-toolbar';
+  toolbar.className = 'deck-toolbar collection-toolbar';
 
+  const typeGroup = document.createElement('div');
+  typeGroup.className = 'collection-filter-group';
+  const stateGroup = document.createElement('div');
+  stateGroup.className = 'collection-filter-group';
+  toolbar.append(typeGroup, stateGroup);
+
+  // --- Grilla con secciones colapsables ---
+  const scroll = document.createElement('div');
+  scroll.className = 'collection-scroll';
   const grid = document.createElement('div');
-  grid.className = 'collection-grid';
+  grid.className = 'collection-grid is-grouped';
+  scroll.appendChild(grid);
 
-  let filter: Filter = 'all';
+  const visible = entries.filter((e) => e.state !== 'hidden');
 
-  const render = () => {
-    grid.innerHTML = '';
-    const list = visible.filter((entry) => {
-      if (filter === 'cards') return entry.kind === 'card';
-      if (filter === 'jokers') return entry.kind === 'joker';
-      if (filter === 'locked') return entry.state === 'locked';
-      if (filter === 'unlocked') return entry.state === 'unlocked';
-      return true;
-    });
+  type GridType = 'all' | 'cards' | 'jokers';
+  let typeFilter: GridType = 'all';
+  let stateFilter: GridState = 'all';
 
-    // El contador sigue al FILTRO. Antes se calculaba UNA vez con la lista
-    // completa y al elegir "Simbiontes" el subtitulo seguia diciendo "de 90"
-    // (cartas + simbiontes), asi que el "0 de 25" del filtro no aparecia nunca.
-    const seen = list.filter((entry) => entry.seen).length;
-    subtitle.textContent = t('collection.seen', { seen, total: list.length });
+  /**
+   * Cabeceras que el jugador colapso. Vive en memoria (no se persiste): es una
+   * preferencia de sesion, no una decision que merezca guardarse en el perfil.
+   */
+  const collapsed = new Set<string>();
 
-    for (const entry of list) {
-      const cell = document.createElement('div');
-      const locked = entry.state === 'locked';
-      const unlocked = entry.state === 'unlocked';
-      // Un desbloqueo de retencion se muestra completo aunque tecnicamente no
-      // lo hayas "visto": lo ganaste, es tuyo.
-      const undiscovered = !entry.seen && !locked && !unlocked;
-      cell.className = `collection-card${locked ? ' is-locked' : ''}${unlocked ? ' is-unlocked' : ''}${undiscovered ? ' is-unknown' : ''}`;
+  const matches = (entry: CollectionEntry): boolean => {
+    if (typeFilter === 'cards' && entry.kind !== 'card') return false;
+    if (typeFilter === 'jokers' && entry.kind !== 'joker') return false;
+    if (stateFilter === 'seen' && !entry.seen) return false;
+    if (stateFilter === 'unseen' && entry.seen) return false;
+    if (stateFilter === 'locked' && entry.state !== 'locked') return false;
+    return true;
+  };
 
-      const swatch = document.createElement('span');
-      swatch.className = 'collection-swatch';
-      swatch.style.background = hexToCss(
-        locked ? 0x2a3440 : ELEMENT_COLOR[entry.element] ?? ELEMENT_COLOR.neutral,
-      );
+  // El detalle se declara antes de `buildCell` porque la celda lo abre; la
+  // asignacion real ocurre mas tarde (los listeners corren al hacer click).
+  let detail: HTMLElement | null = null;
+  const closeDetail = (): void => {
+    detail?.remove();
+    detail = null;
+  };
+  let openDetail: (entry: CollectionEntry) => void = () => {};
 
-      const name = document.createElement('span');
-      name.className = 'collection-name';
-      name.textContent = undiscovered ? t('collection.unknown') : t(entry.nameKey);
-      name.style.color = locked
-        ? 'var(--dim)'
-        : undiscovered
-          ? 'var(--dim)'
-          : hexToCss(RARITY_COLOR[entry.rarity] ?? ELEMENT_COLOR.neutral);
+  /** Celda con la CARA real de la pieza (o silueta si no se descubrio). */
+  const buildCell = (entry: CollectionEntry): HTMLElement => {
+    const locked = entry.state === 'locked';
+    const unlocked = entry.state === 'unlocked';
+    const undiscovered = !entry.seen && !locked && !unlocked;
 
-      cell.append(swatch, name);
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = `collection-card is-tile${locked ? ' is-locked' : ''}${unlocked ? ' is-unlocked' : ''}${undiscovered ? ' is-unknown' : ''}`;
+    cell.dataset['id'] = entry.id;
+    cell.dataset['kind'] = entry.kind;
+    cell.dataset['state'] = entry.state;
+    cell.setAttribute('aria-label', locked ? lockLabel(entry) : t(entry.nameKey));
 
-      // Copias poseidas: una carta, un badge "xN" (no N celdas repetidas).
-      const copies = countBadge(entry);
-      if (copies) cell.appendChild(copies);
-
-      if (locked) {
-        const badge = document.createElement('span');
-        badge.className = 'collection-lock';
-        badge.textContent = lockLabel(entry);
-        cell.appendChild(badge);
-        if (callbacks.onOpenStore) {
-          cell.addEventListener('click', () => callbacks.onOpenStore?.());
-          cell.classList.add('is-clickable');
-        }
-      } else if (unlocked && entry.unlockSource) {
-        // "Desbloqueado · Racha diaria" — distinto del candado generico.
-        const badge = document.createElement('span');
-        badge.className = 'collection-unlock';
-        badge.textContent = `${t('collection.unlocked')} · ${t('collection.unlockSource.' + entry.unlockSource)}`;
-        cell.appendChild(badge);
+    // Marco de la cara: la imagen real, o una silueta con el color del elemento.
+    const frame = document.createElement('span');
+    frame.className = 'collection-tile-art';
+    frame.style.setProperty(
+      '--tile-accent',
+      hexToCss(locked ? 0x2a3440 : (ELEMENT_COLOR[entry.element] ?? ELEMENT_COLOR.neutral)),
+    );
+    if (entry.faceUrl && !undiscovered && !locked) {
+      const img = document.createElement('img');
+      img.className = 'collection-tile-img';
+      img.src = entry.faceUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      frame.appendChild(img);
+    } else {
+      // Sin cara: silueta. La carta desconocida NO revela su arte (es el punto
+      // de coleccionar), y una bloqueada muestra su candado encima.
+      const sil = document.createElement('span');
+      sil.className = 'collection-tile-silhouette';
+      frame.appendChild(sil);
+      if (undiscovered) {
+        const q = document.createElement('span');
+        q.className = 'collection-tile-question';
+        q.textContent = '?';
+        frame.appendChild(q);
       }
+    }
+    cell.appendChild(frame);
 
-      grid.appendChild(cell);
+    // Pie: nombre + copias. En una carta bloqueada el nombre es el candado.
+    const name = document.createElement('span');
+    name.className = 'collection-name';
+    if (locked) {
+      name.textContent = lockLabel(entry);
+    } else {
+      name.textContent = undiscovered ? t('collection.unknown') : t(entry.nameKey);
+    }
+    name.style.color =
+      locked || undiscovered
+        ? 'var(--dim)'
+        : hexToCss(RARITY_COLOR[entry.rarity] ?? ELEMENT_COLOR.neutral);
+    cell.appendChild(name);
+
+    const copies = countBadge(entry);
+    if (copies) cell.appendChild(copies);
+
+    if (unlocked && entry.unlockSource) {
+      const badge = document.createElement('span');
+      badge.className = 'collection-unlock';
+      badge.textContent = `${t('collection.unlocked')} · ${t('collection.unlockSource.' + entry.unlockSource)}`;
+      cell.appendChild(badge);
+    }
+
+    cell.addEventListener('click', () => {
+      if (locked && callbacks.onOpenStore) {
+        callbacks.onOpenStore();
+        return;
+      }
+      openDetail(entry);
+    });
+    return cell;
+  };
+
+  /** Cabecera de seccion colapsable ("Base — Amatoxinas"). */
+  const buildSectionHeader = (key: string, label: string, count: number): HTMLElement => {
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'collection-section';
+    header.dataset['act'] = 'section';
+    header.dataset['section'] = key;
+    const isCollapsed = collapsed.has(key);
+    header.classList.toggle('is-collapsed', isCollapsed);
+    header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+
+    const caret = document.createElement('span');
+    caret.className = 'collection-section-caret';
+    caret.textContent = isCollapsed ? '\u25b8' : '\u25be';
+    const text = document.createElement('span');
+    text.className = 'collection-section-label';
+    text.textContent = label;
+    const badge = document.createElement('span');
+    badge.className = 'collection-section-count';
+    badge.textContent = String(count);
+    header.append(caret, text, badge);
+
+    header.addEventListener('click', () => {
+      if (collapsed.has(key)) collapsed.delete(key);
+      else collapsed.add(key);
+      render();
+    });
+    return header;
+  };
+
+  /** Panel de detalle: reusa la etiqueta rica, con la cara grande. */
+  openDetail = (entry: CollectionEntry): void => {
+    closeDetail();
+    const box = document.createElement('div');
+    box.className = 'collection-detail';
+    box.dataset['act'] = 'collection-detail';
+    box.setAttribute('role', 'dialog');
+
+    const card = document.createElement('div');
+    card.className = 'collection-detail-card';
+
+    if (entry.faceUrl && entry.state !== 'locked') {
+      const img = document.createElement('img');
+      img.className = 'collection-detail-art';
+      img.src = entry.faceUrl;
+      img.alt = t(entry.nameKey);
+      card.appendChild(img);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'collection-detail-body';
+
+    const name = document.createElement('h3');
+    name.className = 'collection-detail-name';
+    name.textContent = entry.seen ? t(entry.nameKey) : t('collection.unknown');
+    name.style.color = hexToCss(RARITY_COLOR[entry.rarity] ?? ELEMENT_COLOR.neutral);
+
+    const meta = document.createElement('p');
+    meta.className = 'collection-detail-meta';
+    const kindLabel = entry.kind === 'joker' ? t('collection.jokers') : t('collection.cards');
+    const bits = [kindLabel];
+    if (entry.kind === 'card') {
+      bits.push(t(`element.${entry.element}`), t(`family.${entry.family}`));
+    }
+    bits.push(t(`rarity.${entry.rarity}`));
+    meta.textContent = bits.join(' · ');
+
+    body.append(name, meta);
+
+    if (entry.kind === 'card' && entry.seen) {
+      const stats = document.createElement('div');
+      stats.className = 'collection-detail-stats';
+      const sub = document.createElement('span');
+      sub.textContent = `${t('deck.substrate')} ${entry.substrate ?? 0}`;
+      const spo = document.createElement('span');
+      spo.textContent = `${t('deck.spores')} ${entry.spores ?? 0}`;
+      stats.append(sub, spo);
+      if ((entry.count ?? 0) > 0) {
+        const cp = document.createElement('span');
+        cp.textContent = t('collection.copies', { count: entry.count ?? 0 });
+        stats.appendChild(cp);
+      }
+      body.appendChild(stats);
+    }
+
+    if (entry.descKey && entry.seen) {
+      const desc = document.createElement('p');
+      desc.className = 'collection-detail-desc';
+      desc.textContent = t(entry.descKey);
+      body.appendChild(desc);
+    }
+
+    if (entry.state === 'locked') {
+      const lock = document.createElement('p');
+      lock.className = 'collection-detail-lock';
+      lock.textContent = lockLabel(entry);
+      body.appendChild(lock);
+    } else if (entry.state === 'unlocked' && entry.unlockSource) {
+      const unl = document.createElement('p');
+      unl.className = 'collection-detail-lock';
+      unl.textContent = `${t('collection.unlocked')} · ${t('collection.unlockSource.' + entry.unlockSource)}`;
+      body.appendChild(unl);
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn is-ghost is-small';
+    closeBtn.dataset['act'] = 'detail-close';
+    closeBtn.textContent = t('ui.close');
+    closeBtn.addEventListener('click', closeDetail);
+
+    card.append(body, closeBtn);
+    box.appendChild(card);
+    box.addEventListener('click', (e) => {
+      if (e.target === box) closeDetail();
+    });
+    panel.appendChild(box);
+    detail = box;
+  };
+
+  /** Agrupa por pack -> familia y dibuja secciones. */
+  const render = (): void => {
+    grid.innerHTML = '';
+    const list = visible.filter(matches);
+    const seenCount = list.filter((e) => e.seen).length;
+    subtitle.textContent = t('collection.seen', { seen: seenCount, total: list.length });
+
+    // pack -> familia -> entradas
+    const byPack = new Map<string, Map<string, CollectionEntry[]>>();
+    for (const entry of list) {
+      const famKey = entry.kind === 'joker' ? '__jokers' : entry.family;
+      let fam = byPack.get(entry.packId);
+      if (!fam) {
+        fam = new Map();
+        byPack.set(entry.packId, fam);
+      }
+      let arr = fam.get(famKey);
+      if (!arr) {
+        arr = [];
+        fam.set(famKey, arr);
+      }
+      arr.push(entry);
+    }
+
+    const rank: Record<string, number> = { common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4 };
+    // Orden estable de packs y familias: el orden de carga del glob no es
+    // determinista entre builds, y un grid que baila confunde.
+    const packKeys = [...byPack.keys()].sort((a, b) => a.localeCompare(b));
+
+    for (const packId of packKeys) {
+      const fams = byPack.get(packId)!;
+      const packTitle = list.find((e) => e.packId === packId)?.packTitleKey;
+      const packLabel = packTitle ? t(packTitle) : packId;
+      const headerKey = `pack:${packId}`;
+      let totalInPack = 0;
+      for (const arr of fams.values()) totalInPack += arr.length;
+      grid.appendChild(buildSectionHeader(headerKey, packLabel, totalInPack));
+      const packBox = document.createElement('div');
+      packBox.className = 'collection-pack';
+      packBox.classList.toggle('is-collapsed', collapsed.has(headerKey));
+      grid.appendChild(packBox);
+
+      const famKeys = [...fams.keys()].sort((a, b) => {
+        if (a === '__jokers') return 1;
+        if (b === '__jokers') return -1;
+        return a.localeCompare(b);
+      });
+      for (const famKey of famKeys) {
+        const items = fams.get(famKey)!.sort(
+          (a, b) =>
+            Number(b.seen) - Number(a.seen) ||
+            (rank[b.rarity] ?? 0) - (rank[a.rarity] ?? 0) ||
+            a.id.localeCompare(b.id),
+        );
+        const famHeaderKey = `fam:${packId}:${famKey}`;
+        const famLabel =
+          famKey === '__jokers' ? t('collection.jokers') : `${packLabel} — ${t(`family.${famKey}`)}`;
+        packBox.appendChild(buildSectionHeader(famHeaderKey, famLabel, items.length));
+        const famBox = document.createElement('div');
+        famBox.className = 'collection-family';
+        famBox.dataset['family'] = famKey;
+        famBox.classList.toggle('is-collapsed', collapsed.has(famHeaderKey));
+        for (const entry of items) famBox.appendChild(buildCell(entry));
+        packBox.appendChild(famBox);
+      }
+    }
+
+    if (list.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'collection-empty';
+      empty.textContent = t('collection.empty');
+      grid.appendChild(empty);
     }
   };
 
-  const filters: Array<[Filter, string]> = [
-    ['all', 'collection.all'],
-    ['cards', 'collection.cards'],
-    ['jokers', 'collection.jokers'],
-    ['locked', 'collection.locked'],
-    ['unlocked', 'collection.unlocked'],
+  // --- Construccion de los chips de filtro ---
+  // `prefix` separa los `data-act` de los DOS grupos. Sin el, TIPO y ESTADO
+  // comparten `filter-all` y un `querySelector('[data-act="filter-all"]')`
+  // —el que usan las tools— tocaria siempre el primero y dejaria el otro
+  // filtro puesto en silencio.
+  const buildChips = <T extends string>(
+    group: HTMLElement,
+    prefix: string,
+    options: Array<[T, string]>,
+    get: () => T,
+    set: (v: T) => void,
+  ): void => {
+    for (const [value, label] of options) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `btn is-ghost is-small${get() === value ? ' is-current' : ''}`;
+      button.textContent = label;
+      button.dataset['act'] = `${prefix}-${value}`;
+      button.dataset['filter'] = value;
+      button.dataset['group'] = prefix;
+      button.addEventListener('click', () => {
+        set(value);
+        for (const sibling of group.querySelectorAll('button')) {
+          sibling.classList.toggle('is-current', sibling === button);
+        }
+        render();
+      });
+      group.appendChild(button);
+    }
+  };
+
+  const typeOptions: Array<[GridType, string]> = [
+    ['all', t('collection.all')],
+    ['cards', t('collection.cards')],
+    ['jokers', t('collection.jokers')],
   ];
-  for (const [mode, key] of filters) {
-    const button = document.createElement('button');
-    button.className = `btn is-ghost is-small${mode === filter ? ' is-current' : ''}`;
-    button.textContent = mode === 'locked' ? t('store.locked') : t(key);
-    button.dataset['act'] = `filter-${mode}`;
-    button.addEventListener('click', () => {
-      filter = mode;
-      for (const sibling of toolbar.querySelectorAll('button')) {
-        sibling.classList.toggle('is-current', sibling === button);
-      }
-      render();
-    });
-    toolbar.appendChild(button);
-  }
+  buildChips<GridType>(
+    typeGroup,
+    'filter',
+    typeOptions,
+    () => typeFilter,
+    (v) => {
+      typeFilter = v;
+    },
+  );
+  const stateOptions: Array<[GridState, string]> = [
+    ['all', t('collection.filterAllStates')],
+    ['seen', t('collection.filterSeen')],
+    ['unseen', t('collection.filterUnseen')],
+    ['locked', t('store.locked')],
+  ];
+  buildChips<GridState>(
+    stateGroup,
+    'filter-state',
+    stateOptions,
+    () => stateFilter,
+    (v) => {
+      stateFilter = v;
+    },
+  );
 
   render();
 
+  /**
+   * FRENTE 3 — Ayuda de Sobres.
+   *
+   * Explica la dos cosas que el jugador no podia deducir: que un sobre NO toca
+   * el mazo de la run (llena la Coleccion) y que esas copias sirven para el
+   * MAZO PROPIO. Es la respuesta visible a "¿y estas cartas para que sirven?".
+   */
+  const openPacksHelp = (): void => {
+    closeDetail();
+    const box = document.createElement('div');
+    box.className = 'collection-detail';
+    box.dataset['act'] = 'packs-help-modal';
+    box.setAttribute('role', 'dialog');
+
+    const card = document.createElement('div');
+    card.className = 'collection-detail-card is-help';
+
+    const body = document.createElement('div');
+    body.className = 'collection-detail-body';
+
+    const name = document.createElement('h3');
+    name.className = 'collection-detail-name';
+    name.textContent = t('packs.helpTitle');
+
+    const text = document.createElement('p');
+    text.className = 'collection-detail-desc';
+    text.textContent = t('packs.helpBody');
+
+    const hint = document.createElement('p');
+    hint.className = 'collection-detail-meta';
+    hint.textContent = t('packs.helpHint');
+
+    body.append(name, text, hint);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn is-ghost is-small';
+    closeBtn.dataset['act'] = 'detail-close';
+    closeBtn.textContent = t('packs.helpClose');
+    closeBtn.addEventListener('click', closeDetail);
+
+    card.append(body, closeBtn);
+    box.appendChild(card);
+    box.addEventListener('click', (e) => {
+      if (e.target === box) closeDetail();
+    });
+    panel.appendChild(box);
+    detail = box;
+  };
+
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
+
+  // FRENTE 3 — La ayuda de Sobres. El jugador no tenia forma de saber a donde
+  // iban las cartas de un sobre: parecia que se perdian. Este boton abre el
+  // texto que lo explica, al lado del boton que las entrega.
+  if (callbacks.onOpenPacks) {
+    const help = document.createElement('button');
+    help.type = 'button';
+    help.className = 'btn is-ghost';
+    help.textContent = t('packs.helpButton');
+    help.dataset['act'] = 'packs-help';
+    help.addEventListener('click', () => openPacksHelp());
+    actions.appendChild(help);
+  }
+
+  // "Exhibicion": la unica forma de girar una carta en 3D. Va PRIMERO porque es
+  // la accion propia de esta pantalla; los Sobres y la tienda son contenido.
+  if (callbacks.onOpenExhibition) {
+    const ex = document.createElement('button');
+    ex.className = 'btn is-ghost';
+    ex.textContent = t('collection.exhibition');
+    ex.dataset['act'] = 'collection-view-carousel';
+    ex.addEventListener('click', () => callbacks.onOpenExhibition?.());
+    actions.appendChild(ex);
+  }
 
   // La tienda de expansiones y el pase viven aca: son contenido, y esta es la
   // pantalla de contenido. Asi ya no ocupan lugar en el menu principal.
@@ -485,6 +893,6 @@ export function buildCollectionPanel(
   close.addEventListener('click', () => callbacks.onClose());
   actions.appendChild(close);
 
-  panel.append(title, subtitle, toolbar, grid, actions);
-  return panel;
+  panel.append(title, subtitle, toolbar, scroll, actions);
+  return { panel };
 }

@@ -124,11 +124,14 @@ export class TriggerEngine {
             bus.emit('trigger:chain', { fromId: source.uid, toId: triggerCard.uid, depth });
           }
 
-          // Status 'decay': cada disparo de esa carta cuesta Substrate.
+          // Status 'decay': cada disparo de esa carta cuesta Substrato. Se
+          // registra como PENALIZACION (no como Substrato negativo suelto) para
+          // que la resolucion la topee contra el aporte de las cartas: una carta
+          // podrida aporta 0 como mucho, pero la mano NUNCA puntua 0 por esto.
           if (source.card) {
             const decay = statusValue(source.card, 'decay');
             if (decay > 0) {
-              res.addSubstrate(-decay, source.uid, source.nameKey, depth);
+              res.addDecaySubstrate(decay, source.uid, source.nameKey, depth);
             }
           }
 

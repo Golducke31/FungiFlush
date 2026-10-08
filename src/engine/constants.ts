@@ -94,10 +94,21 @@ export const RUN_DEFAULTS = {
 export const ECONOMY = {
   /** Coste de eliminar una carta del mazo en el constructor de mazo. */
   purgeCost: 4,
+  /** Purgas permitidas por ANTE. Tope duro, se resetea al entrar a un ante nuevo. */
+  purgesPerAnte: 2,
   /** Monedas por mano sobrante al superar el blind. */
   moneyPerUnusedHand: 1,
   /** Monedas base por superar un blind. */
   baseBlindReward: 3,
+  /**
+   * Bono ADICIONAL por superar el ciego en UNA sola mano.
+   *
+   * Es un premio explicito a la jugada optima: el bono implicito por manos sin
+   * usar (`moneyPerUnusedHand`) ya recompensa ahorrar manos, pero no distingue
+   * "gane usando 1 de 4" de "gane usando 3 de 4 con dos sobrantes". Este extra
+   * hace visible esa diferencia. Se SUMA al bono por manos sin usar.
+   */
+  firstHandBonus: 3,
   /** Coste de reroll en tienda (escala por uso). */
   rerollBaseCost: 5,
   rerollCostStep: 1,

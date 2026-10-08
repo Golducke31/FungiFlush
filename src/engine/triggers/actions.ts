@@ -139,22 +139,24 @@ const HANDLERS: HandlerMap = {
     const target = env.target ?? env.source.card;
     if (!target) return;
     const turns = a.turns ?? 1;
-    const existing = target.statuses.find((s) => s.type === a.status);
-    if (existing) {
-      existing.value += a.value;
-      existing.turnsLeft = Math.max(existing.turnsLeft, turns);
-    } else {
-      target.statuses.push({ type: a.status, value: a.value, turnsLeft: turns });
-    }
-    // El EVENTO no se registra en dryRun: `preview()` corre la resolucion entera
-    // para calcular el score, y el render no puede animar algo que no paso.
-    //
-    // OJO (bug latente, NO tocado aca): la MUTACION de arriba tampoco respeta
-    // `dryRun`, a diferencia de CONSUME_STATUS. Como `preview()` corre en cada
-    // cambio de seleccion, un efecto APPLY_STATUS deja el estado en la carta de
-    // verdad con solo seleccionarla. Blindar el evento es lo correcto para las
-    // animaciones; arreglar la mutacion cambia el score previsualizado y merece
-    // su propia tanda con tests.
+    // MUTACION DIFERIDA (mismo patron que LEVEL_UP_CARD): el estado NO se aplica
+    // aca. `previewSelection()` corre la resolucion entera en `dryRun` en cada
+    // cambio de seleccion, asi que mutar la instancia en el acto ponia la
+    // putrefaccion de verdad con solo SELECCIONAR la carta — y como el estado es
+    // permanente y `decayStatuses()` no recorre la mano, se acumulaba hasta
+    // hundir el Sustrato a 0 (la mano puntuaba 0 sin que el jugador tocara nada).
+    // Se acumula en `statusRequests` y GameEngine la aplica al cerrar la
+    // resolucion SOLO si `!dryRun`.
+    env.res.statusRequests.push({
+      uid: target.uid,
+      status: a.status,
+      value: a.value,
+      turns,
+      sourceId: env.source.uid,
+    });
+
+    // El EVENTO solo se registra fuera de dryRun: el render no puede animar algo
+    // que no paso.
     if (!env.res.dryRun) {
       env.res.statusEvents.push({
         kind: 'applied',

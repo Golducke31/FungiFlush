@@ -192,7 +192,7 @@
         "id": "agaric_mould_rot",
         "trigger": "ON_PLAY",
         "target": "random_hand",
-        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 1, "turns": -1 }],
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 1, "turns": 3 }],
         "labelKey": "effect.compost"
       }
     ]
@@ -258,7 +258,7 @@
         "id": "amanita_blight_spread",
         "trigger": "ON_PLAY",
         "target": "random_hand",
-        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": -1 }],
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": 3 }],
         "labelKey": "effect.compost"
       }
     ]

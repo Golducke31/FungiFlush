@@ -72,6 +72,17 @@ interface Slot {
   card: Card3D;
   /** Indice de entrada que muestra ahora (para no re-aplicar textura). */
   entryIndex: number;
+  /**
+   * La entrada pide mostrar el DORSO (carta sin descubrir).
+   *
+   * Existe porque el update del carrusel escribe `home.flip = 0` en CADA frame
+   * para mantener las cartas planas; sin memoria del estado, el `setFaceUp`
+   * que hace `applyEntry` para una carta no descubierta se pisaba al frame
+   * siguiente y la carta salia por su CARA —que no tiene textura aplicada—
+   * como un rectangulo blanco. Es el "los simbiontes no tienen imagen" de la
+   * Coleccion: no era que faltara el arte, era que se veia la cara vacia.
+   */
+  showBack: boolean;
 }
 
 /** Velocidad del giro hacia el objetivo. Mas alto = mas pegajoso. */
@@ -311,7 +322,12 @@ export class CardCarousel {
 
       if (slot.entryIndex !== index) {
         const entry = this.entries[index];
-        if (entry) this.options.applyEntry(slot.card, entry);
+        if (entry) {
+          this.options.applyEntry(slot.card, entry);
+          // El dorso se marca ACA, junto a la entrada que lo pide: el update
+          // escribe `flip` mas abajo, asi que el dato tiene que estar antes.
+          slot.showBack = !entry.discovered;
+        }
         slot.entryIndex = index;
       }
 
@@ -323,7 +339,10 @@ export class CardCarousel {
       slot.card.home.ry = angle;
       slot.card.home.rz = 0;
       slot.card.home.arc = 0;
-      slot.card.home.flip = 0;
+      // Las entradas sin descubrir van BOCA ABAJO: `flip = 1` gira la carta y
+      // deja a la vista el dorso (que ya se le aplico en `applyEntry`). Las
+      // descubiertas se mantienen planas (0).
+      slot.card.home.flip = slot.showBack ? 1 : 0;
 
       // Escala por PROFUNDIDAD (la del frente es la mas grande) mas el realce
       // de la carta enfocada. Va por `setBaseScale`, que es el canal estructural
@@ -471,7 +490,7 @@ export class CardCarousel {
       const card = this.options.createCard();
       card.group.visible = false;
       this.group.add(card.group);
-      this.slots.push({ card, entryIndex: -1 });
+      this.slots.push({ card, entryIndex: -1, showBack: false });
     }
   }
 

@@ -96,7 +96,29 @@ export interface GameEventMap {
   'run:start': { seed: number; ante: number };
   'blind:selected': { blind: BlindDefinition; target: number };
   'round:start': { snapshot: RoundSnapshot };
-  'round:win': { score: number; target: number; reward: number; money: number };
+  /**
+   * Ciego superado. `rewardParts` es el DESGLOSE de `reward`: el panel de fin de
+   * ciego lo muestra para que el jugador vea de donde salen los Fungis (base del
+   * ciego, base fija, manos sin usar, bono de una sola mano). La suma de las
+   * partes ES `reward`.
+   *
+   * OPCIONAL a proposito: el motor SIEMPRE lo manda, pero los consumidores que
+   * no lo necesitan (logros, retencion) y los tests pueden emitir el evento sin
+   * el sin romper el tipo.
+   */
+  'round:win': {
+    score: number;
+    target: number;
+    reward: number;
+    money: number;
+    rewardParts?: {
+      blind: number;
+      base: number;
+      unusedHands: number;
+      unusedCount: number;
+      firstHand: number;
+    };
+  };
   'round:loss': { score: number; target: number };
   'game:over': { reason: 'loss' | 'victory'; ante: number };
 
@@ -215,6 +237,11 @@ export interface GameEventMap {
 
   // --- Deckbuilding y cultivo ---
   'deck:purged': { card: CardInstance; cost: number };
+  /**
+   * Cambio en el cupo de purgas del ante: al purgar (sube `used`) y al entrar a
+   * un ante nuevo (vuelve a 0). `left` es lo que el boton muestra.
+   */
+  'purge:changed': { used: number; left: number; perAnte: number; ante: number };
   /**
    * Al cerrar un ciego, las cartas que sobraban en la mano vuelven al mazo.
    * La UI lo usa para la linea "Mazo conservado: N cartas": sin este dato el

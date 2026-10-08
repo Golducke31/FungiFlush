@@ -67,6 +67,48 @@ function drawPileOf(engine: GameEngine): CardInstance[] {
   return (engine.run.deck as unknown as { drawPile: CardInstance[] }).drawPile;
 }
 
+test('el PREVIEW no MUTA la carta (bug de putrefaccion que se acumulaba)', () => {
+  // Mismo fixture que el test de eventos, pero aca se mira la CARTA. El bug:
+  // `APPLY_STATUS` mutaba la instancia aunque `dryRun` fuera true, asi que
+  // SELECCIONAR una carta de putrefaccion la dejaba podrida de verdad, y como
+  // el estado es permanente y se acumulaba en cada preview, la mano terminaba
+  // puntuando 0.
+  const rotter = card('fixture_rotter_mut', {
+    effects: [
+      {
+        id: 'fixture_rot_mut',
+        trigger: 'ON_PLAY',
+        actions: [{ type: 'APPLY_STATUS', status: 'decay', value: 2, turns: -1 }],
+      },
+    ],
+  });
+  const engine = started([rotter]);
+
+  const first = engine.roundSnapshot().hand[0];
+  assert.ok(first, 'hay una carta en la mano');
+  const target = engine.run.deck.allCards.find((c) => c.uid === first.uid) ?? first;
+  assert.equal(target.statuses.length, 0, 'arranca sin estados');
+
+  // Muchos previews (el HUD corre uno por cada cambio de seleccion).
+  for (let i = 0; i < 5; i += 1) {
+    engine.toggleSelect(first.uid);
+    engine.previewSelection();
+    engine.toggleSelect(first.uid);
+  }
+  assert.equal(
+    target.statuses.length,
+    0,
+    'el preview NO puede dejar el estado puesto en la carta',
+  );
+
+  // Jugar SI lo aplica, una sola vez.
+  engine.toggleSelect(first.uid);
+  engine.playHand();
+  const applied = target.statuses.find((s) => s.type === 'decay');
+  assert.ok(applied, 'jugar la mano aplica la putrefaccion');
+  assert.equal(applied?.value, 2, 'y con el valor del efecto, sin multiplicarse');
+});
+
 test('aplicar un estado emite status:applied, pero el PREVIEW no', () => {
   // Sin `target`, el efecto se aplica a la propia carta: determinista.
   const rotter = card('fixture_rotter', {

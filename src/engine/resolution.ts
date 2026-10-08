@@ -12,7 +12,7 @@
 
 import { MAX_TRIGGERS_PER_RESOLUTION } from './constants';
 import type { ComboResult } from './scoring/combos';
-import type { CardInstance, ScoreStep, StatusEvent } from './types';
+import type { CardInstance, ScoreStep, StatusEvent, StatusType } from './types';
 
 export interface ResolutionInit {
   scoredCards?: CardInstance[];
@@ -34,6 +34,12 @@ export class ResolutionContext {
   // --- Puntuacion desglosada ---
   substrateFromCards = 0;
   substrateFromEffects = 0;
+  /**
+   * Penalizacion acumulada de putrefaccion (siempre ≥ 0). Se resta del Sustrato
+   * con TOPE contra el aporte de las cartas, para que no pueda llevar la mano a
+   * 0. Ver el getter `substrate`.
+   */
+  decayedSubstrate = 0;
   sporesFromCards = 0;
   sporesFromEffects = 0;
   sporesMultiplier = 1;
@@ -92,6 +98,23 @@ export class ResolutionContext {
    * subia de nivel sola con solo pasar el mouse por encima.
    */
   readonly levelUps: Array<{ uid: string; levels: number; sourceId: string }> = [];
+  /**
+   * Estados pedidos por efectos (APPLY_STATUS) — MUTACION DIFERIDA.
+   *
+   * Mismo motivo que `levelUps`: el HUD llama a `previewSelection()` (dryRun) en
+   * CADA cambio de seleccion, asi que aplicar el estado en el acto dejaba la
+   * putrefaccion puesta con solo seleccionar una carta, y como el estado es
+   * PERMANENTE (`turns: -1`) y `decayStatuses()` no recorre la mano, se acumulaba
+   * sin remedio hasta hundir el Suatrato a 0. Ahora se ACUMULA aca y GameEngine
+   * la aplica al cerrar la resolucion SOLO si `!dryRun`.
+   */
+  readonly statusRequests: Array<{
+    uid: string;
+    status: StatusType;
+    value: number;
+    turns: number;
+    sourceId: string;
+  }> = [];
 
   constructor(init: ResolutionInit = {}) {
     this.scoredCards = init.scoredCards ?? [];
@@ -107,7 +130,16 @@ export class ResolutionContext {
   // --- Valores derivados ----------------------------------------------------
 
   get substrate(): number {
-    return this.substrateFromCards + this.substrateFromEffects;
+    // La putrefaccion (decay) se resta APARTE y con TOPE: nunca puede hundir el
+    // Sustrato por debajo de 0, ni restar mas de lo que las CARTAS aportan. Sin
+    // este tope, una carta con putrefaccion acumulada restaba por cada disparo
+    // hasta que `substrate ≤ 0` y la mano entera puntuaba 0 — una derrota que el
+    // jugador no podia leer en ningun lado. Ahora una carta podrida aporta 0 como
+    // mucho, pero el RESTO de la mano sigue puntuando.
+    const raw = this.substrateFromCards + this.substrateFromEffects;
+    const cardBase = Math.max(0, this.substrateFromCards);
+    const penalty = Math.min(this.decayedSubstrate, cardBase);
+    return Math.max(0, raw - penalty);
   }
 
   get spores(): number {
@@ -128,6 +160,18 @@ export class ResolutionContext {
   addSubstrate(value: number, sourceId: string, sourceNameKey: string, depth: number, targetUid?: string): void {
     this.substrateFromEffects += value;
     this.pushStep('ADD_SUBSTRATE', value, sourceId, sourceNameKey, depth, targetUid);
+  }
+
+  /**
+   * Registra una PENALIZACION de putrefaccion (no un Substrato negativo suelto).
+   *
+   * Va por su propio carril para poder topearla contra el aporte de las cartas
+   * (ver `substrate`): asi puntuar 0 por pudricion deja de ser posible, pero el
+   * jugador SI ve la penalizacion en el desglose con su valor real.
+   */
+  addDecaySubstrate(value: number, sourceId: string, sourceNameKey: string, depth: number, targetUid?: string): void {
+    this.decayedSubstrate += value;
+    this.pushStep('ADD_SUBSTRATE', -value, sourceId, sourceNameKey, depth, targetUid);
   }
 
   /** Multiplica Substrate (poco comun, reservado a legendarios). */

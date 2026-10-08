@@ -100,8 +100,10 @@ import { HUD } from '@ui/HUD';
 import { sortHand } from '@ui/handSort';
 import {
   buildCollectionCarousel,
+  buildCollectionGrid,
   type CollectionCarouselFrame,
   type CollectionEntry,
+  type CollectionGridFrame,
   type CollectionState,
 } from '@ui/CollectionScreen';
 import type { CarouselEntryView } from '@render/CardCarousel';
@@ -111,7 +113,16 @@ import {
   type DeckCarouselFrame,
 } from '@ui/DeckBuilderScreen';
 import { buildPassPanel } from '@ui/EventPassPanel';
-import { cardDefFaceUrl } from '@ui/cardArt';
+import { cardDefFaceUrl, jokerDefFaceUrl } from '@ui/cardArt';
+import {
+  TUTORIAL_SEED,
+  TUTORIAL_STEPS,
+  allStepIds,
+  currentStep,
+  isFinalStep,
+  type TutorialContext,
+  type TutorialStepId,
+} from '@meta/Tutorial';
 import type { PackCardView } from '@render/PackOpening';
 import {
   DEFAULT_CARDS_PER_PACK,
@@ -637,6 +648,11 @@ async function boot(): Promise<void> {
       return packId ? content.registry.manifestOf(packId)?.titleKey : undefined;
     };
     /**
+     * Id del pack de una pieza. `base` cuando el registro no lo sabe: un pack
+     * desconocido nunca debe dejar la entrada sin seccion en la grilla.
+     */
+    const packIdOf = (id: string): string => content.registry.packOf(id) ?? 'base';
+    /**
      * Por que esta bloqueado. Solo tiene sentido para las puertas por jugar: el
      * candado de un DLC ya lo explica el pack.
      */
@@ -652,6 +668,15 @@ async function boot(): Promise<void> {
         kind: 'card',
         state: stateOf(card.id),
         seen: seen.has(card.id),
+        family: card.family,
+        packId: packIdOf(card.id),
+        descKey: card.descKey,
+        substrate: card.baseSubstrate,
+        spores: card.baseSpores,
+        // Cara real compuesta aca: `scene.cardArt` es quien tiene la imagen ya
+        // decodificada, y armar el data-URL es caro, asi que se hace UNA vez al
+        // abrir la Coleccion y no por cada re-render de la grilla.
+        faceUrl: cardDefFaceUrl(card, t, scene.cardArt(card)),
         // Cuantas copias se obtuvieron de sobres: la Coleccion muestra "xN" en
         // vez de repetir la carta. Los jokers no llevan contador (los sobres
         // nunca dan jokers).
@@ -672,6 +697,14 @@ async function boot(): Promise<void> {
         kind: 'joker',
         state: stateOf(joker.id),
         seen: seen.has(joker.id),
+        // Los Simbiontes no tienen familia micologica propia: la grilla los
+        // separa con `kind === 'joker'`, no con la familia. Se guarda
+        // `agaricaceae` (la misma que usa la cara de la tienda) para no dejar el
+        // campo vacio.
+        family: 'agaricaceae',
+        packId: packIdOf(joker.id),
+        descKey: joker.descKey,
+        faceUrl: jokerDefFaceUrl(joker, t, scene.jokerArt(joker)),
         ...(profile.collection.unlockSource[joker.id]
           ? { unlockSource: profile.collection.unlockSource[joker.id] }
           : {}),
@@ -887,6 +920,100 @@ async function boot(): Promise<void> {
    */
   let carouselActivate: ((index: number) => void) | null = null;
 
+  /**
+   * Cambia la Coleccion de la GRILLA al carrusel 3D ("Exhibicion"). Lo registra
+   * `openCollection`; el boton `data-act="collection-view-carousel"` de la grilla
+   * lo invoca. `null` fuera de la Coleccion.
+   */
+  let viewExhibition: (() => void) | null = null;
+
+  // ==========================================================================
+  // Tutorial guiado (Frente 1)
+  // ==========================================================================
+  //
+  // El tutorial es una RUN NORMAL con `run.tutorial === true`: mismas reglas,
+  // mismo balance. El GUION vive en `src/meta/Tutorial.ts` (puro) y aca solo se
+  // lleva el historial que los pasos consultan y el disparo del paso correcto.
+  //
+  // El motor NUNCA sabe que hay un tutorial: no hay `if (tutorial)` en el engine.
+
+  /** Ultimo paso ya visto, o `null` antes del primero. */
+  let tutorialStep: TutorialStepId | null = null;
+  /** Historial que los pasos consultan (`require`). Se resetea por ciego. */
+  let tutorialCtx: {
+    handsPlayed: number;
+    lastComboKind: TutorialContext['lastComboKind'];
+    visitedShop: boolean;
+    sawPurge: boolean;
+  } = { handsPlayed: 0, lastComboKind: null, visitedShop: false, sawPurge: false };
+
+  /** El contexto completo del paso, leido del motor VIVO. */
+  const tutorialContext = (): TutorialContext => ({
+    status: engine.run?.status ?? 'menu',
+    blindIndex: engine.run?.blindIndex ?? 0,
+    ante: engine.run?.ante ?? 1,
+    selectedCount: engine.round?.selected?.length ?? 0,
+    handsPlayed: tutorialCtx.handsPlayed,
+    lastComboKind: tutorialCtx.lastComboKind,
+    visitedShop: tutorialCtx.visitedShop,
+    sawPurge: tutorialCtx.sawPurge,
+  });
+
+  /** Apaga el tutorial: quita la capa y libera la run. */
+  const endTutorial = (): void => {
+    if (engine.run) engine.run.tutorial = false;
+    hud?.hideTutorialStep();
+    tutorialStep = null;
+    profileStore.patch((p) => {
+      p.seenTutorial = true;
+    });
+  };
+
+  /**
+   * Muestra el paso que corresponde AHORA. Se llama en cada cambio de estado y
+   * cuando el jugador avanza o hace la accion que el paso pedia.
+   *
+   * REGLA CLAVE: si no hay un paso para el estado actual, la capa se OCULTA
+   * pero el tutorial SIGUE VIVO. Esto es lo que permite que un paso de `tap`
+   * ("elegi tu ciego y tocá Luchar") se cierre y el juego quede jugable hasta
+   * que el siguiente `state:changed` traiga el estado en el que vive el paso
+   * siguiente. Dejar la capa puesta mostrando el paso viejo congelaba el guion.
+   */
+  const advanceTutorial = (): void => {
+    if (!engine.run?.tutorial) return;
+    const ctx = tutorialContext();
+    const step = currentStep(tutorialStep, ctx);
+    if (!step) {
+      // No hay mas pasos para este estado: se esconde la capa (sin cerrar el
+      // tutorial) y se espera al proximo cambio de estado.
+      hud?.hideTutorialStep();
+      // Unico caso de cierre: ya se mostro el paso final y no queda nada mas.
+      if (tutorialStep === 'ante_complete') endTutorial();
+      return;
+    }
+    tutorialStep = step.id;
+    hud?.showTutorialStep(
+      {
+        title: t(step.titleKey),
+        body: t(step.bodyKey),
+        stepOf: t('tutorial.stepOf', {
+          n: allStepIds().indexOf(step.id) + 1,
+          total: TUTORIAL_STEPS.length,
+        }),
+        anchor: step.anchor,
+        waitsForAction: step.advanceOn === 'player_action',
+        isLast: isFinalStep(step.id),
+      },
+      () => {
+        if (isFinalStep(step.id)) endTutorial();
+        else advanceTutorial();
+      },
+      // "Saltar paso": marca el paso como visto y busca el siguiente.
+      () => advanceTutorial(),
+      () => endTutorial(),
+    );
+  };
+
   const openDeck = (highlightUid?: string): void => {
     const state = hud?.deckState(highlightUid);
     if (!hud || !state) return;
@@ -950,10 +1077,16 @@ async function boot(): Promise<void> {
 
   const doPurge = (uid: string): void => {
     if (!engine.purgeCard(uid)) {
-      hud?.toast(
-        engine.canEditDeck() ? t('deck.cannotAfford') : t('deck.onlyBetweenBlinds'),
-        'warn',
-      );
+      // Tres motivos posibles, en orden de prioridad: cupo agotado > dinero >
+      // estado. El aviso tiene que decir el motivo REAL, no siempre "no te
+      // alcanza" (que era el unico mensaje cuando no habia tope).
+      const reason =
+        engine.purgesLeft <= 0
+          ? t('deck.purgeNone')
+          : engine.canEditDeck()
+            ? t('deck.cannotAfford')
+            : t('deck.onlyBetweenBlinds');
+      hud?.toast(reason, 'warn');
       return;
     }
     openDeck();
@@ -1267,6 +1400,19 @@ async function boot(): Promise<void> {
           window.setTimeout(() => hud?.showTutorial(), 420);
         }
       },
+      // --- Tutorial guiado (Frente 1) ---
+      // Arranca una run NORMAL con semilla fija y arquetipo clasico, y marca
+      // `tutorial`. El motor no cambia ninguna regla: el guion lo lleva la UI.
+      onStartTutorial: () => {
+        void runStore.clear();
+        engine.setArchetypeLoadout(undefined, []);
+        engine.startRun(TUTORIAL_SEED, 0, '');
+        if (engine.run) engine.run.tutorial = true;
+        scene.setMode('run');
+        tutorialStep = null;
+        // El primer paso se empuja cuando el panel de ciego ya esta montado.
+        window.setTimeout(() => advanceTutorial(), 520);
+      },
       onSelectAscension: (level) => {
         // El nivel elegido nunca supera el desbloqueado en el perfil. El panel
         // ya no ofrece los trabados, pero se valida igual: el perfil es la
@@ -1464,6 +1610,70 @@ async function boot(): Promise<void> {
   });
 
   // ==========================================================================
+  // Tutorial guiado (Frente 1) — disparo de pasos
+  // ==========================================================================
+  //
+  // El motor no sabe que hay un tutorial: aca se ESCUCHA el mismo `bus` que
+  // alimenta al HUD y se traduce el estado a "toca tal paso". Cada paso espera
+  // que el contexto tenga un valor concreto, asi que se lleva el historial que
+  // los pasos consultan.
+
+  // Un ciego nuevo resetea el historial del ciego anterior: `select_cards` y
+  // `play_hand` vuelven a aplicar en el ciego 2 y en el Jefe.
+  bus.on('round:start', () => {
+    if (!engine.run?.tutorial) return;
+    tutorialCtx = { handsPlayed: 0, lastComboKind: null, visitedShop: false, sawPurge: false };
+  });
+
+  // `state:changed` es el unico punto de entrada: cubre blind_select, playing,
+  // reward y shop sin depender de que cada transicion avise.
+  bus.on('state:changed', () => {
+    if (!engine.run?.tutorial) return;
+    advanceTutorial();
+  });
+
+  bus.on('hand:dealt', () => {
+    if (!engine.run?.tutorial) return;
+    advanceTutorial();
+  });
+
+  // El combo de la mano que se cerro. Decide si `combo_hint` aparece.
+  bus.on('score:hand', ({ breakdown }) => {
+    if (!engine.run?.tutorial) return;
+    const combos = (breakdown as { combos?: Array<{ id: string }> }).combos ?? [];
+    const first = combos[0]?.id ?? '';
+    tutorialCtx.lastComboKind = first.startsWith('family:')
+      ? 'family'
+      : first.startsWith('element:')
+        ? 'element'
+        : first.startsWith('diversity:')
+          ? 'diversity'
+          : null;
+  });
+
+  // Contar manos jugadas: es lo que hace que `play_hand` deje de aplicar.
+  bus.on('round:win', () => {
+    if (!engine.run?.tutorial) return;
+    tutorialCtx.handsPlayed += 1;
+  });
+  bus.on('score:changed', () => {
+    if (!engine.run?.tutorial) return;
+    // Cada puntaje de mano es una mano jugada mas (el `round:win` es el cierre
+    // del ciego, no de la mano).
+    if (engine.run.status === 'playing') tutorialCtx.handsPlayed += 1;
+  });
+
+  // Purga y tienda: los pasos `shop_intro` / `purge_intro` dejan de aplicar una
+  // vez que el jugador YA hizo la accion.
+  bus.on('deck:purged', () => {
+    tutorialCtx.sawPurge = true;
+  });
+  bus.on('shop:enter', () => {
+    if (!engine.run?.tutorial) return;
+    tutorialCtx.visitedShop = true;
+  });
+
+  // ==========================================================================
   // Retencion: recompensa diaria y logros
   // ==========================================================================
   //
@@ -1557,36 +1767,29 @@ async function boot(): Promise<void> {
         ...(e.kind === 'joker' ? { jokerId: e.id } : { cardId: e.id }),
       }));
 
-    // `frame` se referencia desde sus propios callbacks: se declara antes
-    // y se asigna despues (los callbacks corren mas tarde, no al construir).
-    let frame: CollectionCarouselFrame;
-    const focusHandler = (i: number): void => frame.setFocus(i);
-    frame = buildCollectionCarousel(all, {
+    // --- Vista GRILLA (por defecto) ---
+    // Es la superficie de GESTION: agrupa por pack y familia y deja ver los
+    // huecos de un vistazo. El carrusel 3D sigue disponible como "Exhibición".
+    const gridFrame: CollectionGridFrame = buildCollectionGrid(all, {
       onClose: () => {
         carouselActivate = null;
         scene.setCarousel(null);
         hud?.closePanel();
       },
-      onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
       onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
       onOpenPass: () => showPass(),
-      // Los Cosméticos viven dentro de la Coleccion: apagar el carrusel 3D
-      // antes de abrir su panel, o el anillo seguiria vivo por detras.
+      onOpenExhibition: () => viewExhibition?.(),
       onOpenCosmetics: () => {
         carouselActivate = null;
         scene.setCarousel(null);
         hud?.showCosmetics();
       },
-      // Los Sobres tambien viven dentro de la Coleccion. Apagar el anillo por el
-      // mismo motivo: el overlay de apertura trae su propio canvas WebGL.
       onOpenPacks: () => {
         carouselActivate = null;
         scene.setCarousel(null);
         openPacks();
       },
       packsPending: profileStore.current.packs.pending,
-      // El sobre de EXPANSION tiene su propio boton: abre un pool distinto, asi
-      // que el jugador elige cual gastar en vez de que el juego decida por el.
       onOpenExpansionPacks: () => {
         carouselActivate = null;
         scene.setCarousel(null);
@@ -1594,10 +1797,48 @@ async function boot(): Promise<void> {
       },
       expansionPacksPending: profileStore.current.packs.expansionPending,
     });
-    // Tocar la carta centrada abre su detalle (mismo patron que el mazo).
-    carouselActivate = (index) => frame.setFocus(index);
-    hud?.showPanel(frame.panel, { carousel: true });
-    scene.setCarousel(toViews(all), focusHandler);
+
+    // --- Vista EXHIBICION (carrusel 3D) ---
+    // Se conserva porque es la unica forma de girar una carta en 3D, pero ya no
+    // es la vista por defecto: obligar a recorrer 77 entradas para encontrar una
+    // carta era el problema.
+    const openExhibition = (): void => {
+      let frame: CollectionCarouselFrame;
+      const focusHandler = (i: number): void => frame.setFocus(i);
+      frame = buildCollectionCarousel(all, {
+        onClose: () => {
+          carouselActivate = null;
+          scene.setCarousel(null);
+          hud?.closePanel();
+        },
+        onFiltered: (filtered) => scene.setCarousel(toViews(filtered), focusHandler),
+        onOpenStore: () => hud?.toast(t('store.comingSoon'), 'info'),
+        onOpenPass: () => showPass(),
+        onOpenCosmetics: () => {
+          carouselActivate = null;
+          scene.setCarousel(null);
+          hud?.showCosmetics();
+        },
+        onOpenPacks: () => {
+          carouselActivate = null;
+          scene.setCarousel(null);
+          openPacks();
+        },
+        packsPending: profileStore.current.packs.pending,
+        onOpenExpansionPacks: () => {
+          carouselActivate = null;
+          scene.setCarousel(null);
+          openPacks('expansion');
+        },
+        expansionPacksPending: profileStore.current.packs.expansionPending,
+      });
+      carouselActivate = (index) => frame.setFocus(index);
+      hud?.showPanel(frame.panel, { carousel: true });
+      scene.setCarousel(toViews(all), focusHandler);
+    };
+
+    viewExhibition = openExhibition;
+    hud?.showPanel(gridFrame.panel, { collectionGrid: true });
   };
 
   /**

@@ -72,6 +72,19 @@ export interface CardTextureSpec {
   spores?: number;
   cost?: number;
   statuses?: StatusType[];
+  /**
+   * Valor numerico de cada estado (p. ej. cuanta putrefaccion acumula la carta).
+   *
+   * El chip del estado lo necesita para mostrar la MAGNITUD y no solo el tipo:
+   * antes imprimia "DECA" y el jugador no sabia si eran 1 o 9 puntos de
+   * Sustrato, que es justo el dato que explica un puntaje bajo.
+   */
+  statusValues?: Partial<Record<StatusType, number>>;
+  /**
+   * Etiqueta TRADUCIDA de cada estado (`status.decay` -> "Pudriéndose"). La
+   * spec no tiene `t()`; quien la arma la deja aca ya resuelta.
+   */
+  statusLabels?: Partial<Record<StatusType, string>>;
   level?: number;
   /**
    * La carta tiene HABILIDAD (P1.1/P1.2).
@@ -1059,11 +1072,17 @@ export function createCardCanvas(
   // descripcion. Antes iban en `H - 46` (y=698), que caia dentro del area de
   // la descripcion: los chips de estado tapaban la ultima linea del texto.
   const statuses = spec.statuses ?? [];
+  // El chip lleva etiqueta + VALOR ("Pudriéndose 4"): 54px no alcanzaban y el
+  // texto se cortaba a "DECA". 76px entra la etiqueta completa en castellano
+  // ("Pudriéndose") en el cuerpo pequeno y el numero en negrita al lado. Se
+  // separan 84px entre chips para que no se toquen.
+  const statusW = 76;
+  const statusGap = 8;
   statuses.slice(0, 4).forEach((status, i) => {
     const color = STATUS_COLOR[status];
-    const x = pad + i * 62;
+    const x = pad + i * (statusW + statusGap);
     const y = statusTop;
-    const w = 54;
+    const w = statusW;
     const h = 30;
 
     ctx.fillStyle = hexToRgba(color, 0.22);
@@ -1102,10 +1121,22 @@ export function createCardCanvas(
       ctx.stroke();
     }
 
+    // Etiqueta TRADUCIDA + magnitud. Se recorta a 11 caracteres para que no se
+    // salga del chip en idiomas largos ("Pudriéndose" = 11 justos). El valor va
+    // en negrita a la derecha, pegado al borde interno.
+    const label = (spec.statusLabels?.[status] ?? status).slice(0, 11);
+    const value = spec.statusValues?.[status];
     ctx.fillStyle = hexToCss(color);
-    ctx.font = `700 15px ${CARD_TEXT_FONT}`;
+    ctx.font = `700 13px ${CARD_TEXT_FONT}`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(status.slice(0, 4).toUpperCase(), x + 27, y + 16);
+    ctx.fillText(label, x + 7, y + 16);
+    if (typeof value === 'number') {
+      ctx.font = `900 16px ${CARD_TEXT_FONT}`;
+      ctx.textAlign = 'right';
+      ctx.fillText(String(value), x + w - 7, y + 16);
+      ctx.textAlign = 'left';
+    }
 
     if (status === 'spore_lock') {
       ctx.strokeStyle = hexToCss(color);
@@ -1115,12 +1146,14 @@ export function createCardCanvas(
       ctx.lineTo(x + w - 8, y + 8);
       ctx.stroke();
     } else if (status === 'overgrowth') {
+      // Chevron ARRIBA de la etiqueta (no a la derecha): el borde derecho lo
+      // ocupa el valor numerico, y el chevron ahi encima se le montaba.
       ctx.strokeStyle = hexToCss(color);
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(x + w - 18, y + 11);
-      ctx.lineTo(x + w - 12, y + 5);
-      ctx.lineTo(x + w - 6, y + 11);
+      ctx.moveTo(x + 10, y + 9);
+      ctx.lineTo(x + 15, y + 4);
+      ctx.lineTo(x + 20, y + 9);
       ctx.stroke();
     }
     ctx.textBaseline = 'top';
@@ -1275,6 +1308,16 @@ export class CardTextureCache {
    */
   get size(): number {
     return this.cache.size + this.topCache.size + this.artCache.size;
+  }
+
+  /**
+   * Claves de la capa de TEXTO vivas. Lo usan los probes para comprobar que la
+   * clave incluye el VALOR de los estados (`decay:2`), que es lo que garantiza
+   * que subir la putrefaccion rehornea la cara. Leer `topCache` a mano desde un
+   * probe obligaba a adivinar el nombre del campo privado.
+   */
+  topKeys(): string[] {
+    return [...this.topCache.keys()];
   }
 
   /** Cuantas capas de arte vivas hay (para el panel de debug). */

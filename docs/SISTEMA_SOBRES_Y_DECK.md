@@ -415,3 +415,30 @@ Pendiente (fuera de alcance de esta pasada): múltiples presets con nombre
 editable (`MAX_DECK_PRESETS = 3` ya reservado en el modelo; la UI usa el primero).
 
 | Panel de selección de arquetipo | `src/ui/MenuScreen.ts` (`buildArchetypePanel`) |
+
+---
+
+## Parte D — Cómo se le explica al jugador (2026-10-08)
+
+**El problema de UX que resolvió esto.** El sistema de la Parte A es correcto pero
+INVISIBLE: un sobre entrega copias a la Colección y el jugador no ve ninguna
+carta nueva en su mazo, así que la conclusión natural es "se perdieron" o "no
+sirven para nada".
+
+La respuesta implementada es **copy en contexto**, no un tutorial aparte:
+
+1. La grilla de la Colección (Parte E) muestra cada espécimen con su badge `×N`:
+   el jugador VE crecer las copias al abrir un sobre.
+2. Al lado del botón de Sobres hay un botón de ayuda
+   (`data-act="packs-help"`) que abre un modal explicando las dos cosas que no
+   se deducen solas:
+   - el sobre llena la **COLECCIÓN**, no el mazo de la run;
+   - esas copias sirven para armar el **MAZO PROPIO** (Parte B), que se elige
+     aparte y requiere **Colonia nivel ≥ 3**.
+3. Claves i18n: `packs.helpTitle` / `helpBody` / `helpHint` / `helpButton`
+   (ES + EN, en `src/i18n/*.json`).
+
+**Lo que sigue siendo una decisión de diseño abierta** (no bloquea): hacer que
+`ownedCounts` habilite copias EXTRA en el Mazo propio por encima del catálogo.
+Hoy `MAX_COPIES_PER_CARD = 4` se aplica al catálogo, así que un sobre no cambia el
+techo de copias jugables.

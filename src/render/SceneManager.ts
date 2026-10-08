@@ -1879,6 +1879,14 @@ export class SceneManager {
       life: 0.7,
     });
     this.rig.addShake(status === 'decay' ? 0.06 : 0.03);
+    // La CARA se rehornea: el chip del estado lleva ahora la etiqueta traducida
+    // y el valor ACUMULADO ("Pudriéndose 4"), y la clave de textura incluye ese
+    // valor, asi que `setCard` produce una cara nueva. Sin esto el VFX se veia
+    // pero la carta seguia mostrando la putrefaccion vieja — el jugador no
+    // entendia por que su puntaje bajaba.
+    if (card3d.card) {
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+    }
   }
 
   /**
@@ -1914,12 +1922,21 @@ export class SceneManager {
     // 70ms: se siente el "cobro" sin cortar el ritmo de la mano.
     this.hitStop(70);
     this.rig.addShake(0.12);
+    // La cara se rehornea: al cosechar la putrefaccion el chip baja (o
+    // desaparece), y la textura vieja seguiria mostrando el valor anterior.
+    if (card3d.card) {
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+    }
   }
 
   /** Un estado se agoto por turnos: ultimo parpadeo suave y el aura se apaga. */
   private playStatusExpired(card3d: Card3D, status: StatusType): void {
     void card3d.flashStatus(STATUS_COLOR[status], 0.35);
     card3d.setRot(0);
+    // El chip del estado se va de la cara: rehornear para que desaparezca.
+    if (card3d.card) {
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+    }
   }
 
   /**

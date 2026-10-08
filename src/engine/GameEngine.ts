@@ -926,6 +926,20 @@ export class GameEngine {
     return this.run?.deck.discardSize ?? 0;
   }
 
+  /**
+   * Purgas permitidas por ante. La base es contenido (`ECONOMY.purgesPerAnte`);
+   * un efecto de la run podria subirla mas adelante, por eso se lee de aca y no
+   * de la constante directa en la UI.
+   */
+  get purgesPerAnte(): number {
+    return ECONOMY.purgesPerAnte;
+  }
+
+  /** Purgas que quedan en el ante actual (0 ⇒ el boton se deshabilita). */
+  get purgesLeft(): number {
+    return Math.max(0, this.purgesPerAnte - this.run.purgesThisAnte);
+  }
+
   /** Compat: la purga es una de las operaciones de edicion de mazo. */
   canPurge(): boolean {
     return this.canEditDeck();
@@ -1016,6 +1030,9 @@ export class GameEngine {
    */
   purgeCard(uid: string): boolean {
     if (!this.canPurge()) return false;
+    // Tope por ANTE: dos purgas y el mazo queda quieto hasta el proximo ante.
+    // El contador se resetea en `leaveShop` al entrar a un ante nuevo.
+    if (this.purgesLeft <= 0) return false;
     // El coste sale del GETTER, nunca de la constante: en A7+ purgar cuesta mas
     // y leer `ECONOMY.purgeCost` cobraria de menos en silencio (el boton diria
     // un precio y se descontaria otro).
@@ -1029,8 +1046,15 @@ export class GameEngine {
     if (this.round) this.round.hand = this.round.hand.filter((c) => c.uid !== uid);
     if (this.round) this.round.selected = this.round.selected.filter((id) => id !== uid);
 
+    this.run.purgesThisAnte += 1;
     this.setMoney(-cost);
     bus.emit('deck:purged', { card, cost });
+    bus.emit('purge:changed', {
+      used: this.run.purgesThisAnte,
+      left: this.purgesLeft,
+      perAnte: this.purgesPerAnte,
+      ante: this.run.ante,
+    });
     this.emitState();
     return true;
   }
@@ -1146,6 +1170,15 @@ export class GameEngine {
     } else {
       this.run.ante += 1;
       this.run.blindIndex = 0;
+      // Ante NUEVO ⇒ se devuelven las purgas. El reset va EN LA RAMA del ante,
+      // no en cada ciego: purgar es una decision de ante, no de ciego.
+      this.run.purgesThisAnte = 0;
+      bus.emit('purge:changed', {
+        used: 0,
+        left: this.purgesPerAnte,
+        perAnte: this.purgesPerAnte,
+        ante: this.run.ante,
+      });
       // El tope lo define el contenido: una expansion puede agregar antes.
       if (this.run.ante > this.registry.maxAnte()) {
         this.run.status = 'victory';
@@ -1384,6 +1417,16 @@ export class GameEngine {
       bus.emit('card:levelup', { card, cost: 0, level: card.level });
     }
 
+    // Estados pedidos por efectos (APPLY_STATUS): misma mutacion diferida que
+    // `levelUps`. Se aplican ACA, cuando la cadena termino, y NUNCA en un
+    // dryRun: era el bug por el que SELECCIONAR una carta de putrefaccion la
+    // dejaba podrida de verdad (y acumulaba hasta puntuar 0).
+    for (const request of res.statusRequests) {
+      const card = this.findCardEverywhere(request.uid);
+      if (!card) continue;
+      this.applyStatusToCard(card, request.status, request.value, request.turns);
+    }
+
     // Efectos "once" consumidos.
     if (round) {
       for (const key of res.consumedPerRound) round.consumedEffects.add(key);
@@ -1424,10 +1467,23 @@ export class GameEngine {
     if (round.score >= round.target) {
       // La cara cargada vale para UNA ronda: se consume al cerrarla.
       this.run.die = null;
+      // DESGLOSE de la recompensa: se calcula por partes y se expone tal cual
+      // al HUD para que el panel de "Ciego superado" muestre de donde sale cada
+      // Fungi. El bono de una sola mano solo aplica si el ciego se cerro en la
+      // PRIMERA jugada (el historial tiene una sola entrada).
+      const blindReward = round.blind.reward;
+      const unusedCount = round.handsLeft;
+      const unusedReward = unusedCount * ECONOMY.moneyPerUnusedHand;
+      const firstHand = round.history.length === 1 ? ECONOMY.firstHandBonus : 0;
+      const rewardParts = {
+        blind: blindReward,
+        base: ECONOMY.baseBlindReward,
+        unusedHands: unusedReward,
+        unusedCount,
+        firstHand,
+      };
       const reward =
-        round.blind.reward +
-        ECONOMY.baseBlindReward +
-        round.handsLeft * ECONOMY.moneyPerUnusedHand;
+        rewardParts.blind + rewardParts.base + rewardParts.unusedHands + rewardParts.firstHand;
       this.setMoney(reward);
       this.run.stats.blindsCleared += 1;
       // TOTAL DE LA RUN: se acumula el score REAL del ciego superado. Sin esto
@@ -1441,6 +1497,7 @@ export class GameEngine {
         target: round.target,
         reward,
         money: this.run.money,
+        rewardParts,
       });
 
       this.dispatchGlobal('ON_ROUND_WIN');
@@ -1665,12 +1722,58 @@ export class GameEngine {
     };
   }
 
+  /**
+   * Aplica (o acumula) un estado sobre una carta. Es la MUTACION REAL que antes
+   * vivia dentro de `APPLY_STATUS`, ahora diferida: la llama `applyDeltas`
+   * cuando la resolucion cierra y NO es un dryRun.
+   *
+   * `turnsLeft: -1` es PERMANENTE. Un estado temporal extiende su duracion al
+   * maximo de lo ya puesto (no se suma: dos aplicaciones de 3 turnos no son 6).
+   */
+  private applyStatusToCard(
+    card: CardInstance,
+    status: StatusType,
+    value: number,
+    turns: number,
+  ): void {
+    const existing = card.statuses.find((s) => s.type === status);
+    if (existing) {
+      existing.value += value;
+      existing.turnsLeft = Math.max(existing.turnsLeft, turns);
+    } else {
+      card.statuses.push({ type: status, value, turnsLeft: turns });
+    }
+  }
+
+  /**
+   * Envejece los estados al cerrar el ciego.
+   *
+   * Recorre `deck.allCards` MAS la mano: antes solo miraba las pilas
+   * (`drawPile`/`discardPile`), asi que un estado temporal sobre una carta que
+   * terminaba el ciego EN LA MANO no envejecia jamas — el caso concreto de la
+   * putrefaccion que se acumulaba sin remedio. `turnsLeft: -1` sigue siendo
+   * permanente (baja a -2, -3… y nunca llega a 0).
+   */
   private decayStatuses(): void {
+    const seen = new Set<string>();
+    const cards: CardInstance[] = [];
     for (const card of this.run.deck.allCards) {
+      if (seen.has(card.uid)) continue;
+      seen.add(card.uid);
+      cards.push(card);
+    }
+    // La mano puede contener cartas que ya no estan en las pilas (o al reves):
+    // se recorren ambas sin duplicar por uid.
+    for (const card of this.round?.hand ?? []) {
+      if (seen.has(card.uid)) continue;
+      seen.add(card.uid);
+      cards.push(card);
+    }
+
+    for (const card of cards) {
       if (card.statuses.length === 0) continue;
       // Se recolectan los que se agotan para poder AVISAR (P2.6): el render anima
       // la salida del estado en vez de descubrirla en el proximo repintado.
-      // `turnsLeft: -1` es permanente: baja a -2, -3... y nunca llega a 0.
       const expired: StatusType[] = [];
       card.statuses = card.statuses
         .map((s) => {
@@ -1900,6 +2003,11 @@ export class GameEngine {
       // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
       contentHash: this.contentHash,
       packIds: [...this.packIds],
+      // Cupo de purgas del ante (aditivo, sin bump de version).
+      purgesThisAnte: this.run.purgesThisAnte,
+      // Tutorial guiado (aditivo). NO es una regla: es una marca para la UI.
+      // Sobrevive al guardado para que una run-tutorial retomada siga guiada.
+      tutorial: this.run.tutorial,
     };
   }
 
@@ -1938,6 +2046,9 @@ export class GameEngine {
     // Score acumulado: OPCIONAL/ADITIVO (los guardados previos no lo tienen).
     // `?? 0` deja una run vieja jugable en vez de romper la carga.
     this.run.totalScore = typeof data.totalScore === 'number' ? data.totalScore : 0;
+    // Tutorial (aditivo): un guardado previo no trae el campo y la run sigue
+    // SIN tutorial. `=== true` para que un `undefined`/basura no lo active.
+    this.run.tutorial = data.tutorial === true;
     // Se mezcla sobre el estado por defecto: si un campo nuevo falta en un
     // guardado migrado, la run sigue siendo jugable.
     this.run.stats = { ...this.run.stats, ...data.stats };
@@ -1955,6 +2066,12 @@ export class GameEngine {
     };
     this.run.seenInterludes = (data.seenInterludes ?? []).filter((id) =>
       this.registry.interludeDefs.some((def) => def.id === id),
+    );
+    // Cupo de purgas: aditivo (los guardados previos no lo traen ⇒ 0 usadas).
+    // Se clampea a [0, tope] por si un guardado manipul ado trae basura.
+    this.run.purgesThisAnte = Math.min(
+      this.purgesPerAnte,
+      Math.max(0, Math.floor(Number(data.purgesThisAnte) || 0)),
     );
     // Misiones: se filtran por definiciones existentes (una mision borrada del
     // contenido no puede romper la carga) y se clampea el progreso.
@@ -2032,6 +2149,8 @@ export interface RunSaveData {
    * tienen y `restore` cae a 0. No hace falta subir `SAVE_VERSION`.
    */
   totalScore?: number;
+  /** Tutorial guiado (aditivo): una run-tutorial retomada sigue guiada. */
+  tutorial?: boolean;
   stats: {
     handsPlayed: number;
     bestHand: number;
@@ -2075,6 +2194,12 @@ export interface RunSaveData {
   contentHash: string | null;
   /** Packs activos cuando empezo la run. */
   packIds: string[];
+  /**
+   * Purgas usadas en el ante actual. OPCIONAL y aditivo: los guardados previos
+   * no lo tienen y `restore` cae a 0 (cupo completo). NO hace falta subir
+   * `SAVE_VERSION`.
+   */
+  purgesThisAnte?: number;
 }
 
 function serializeCard(card: CardInstance): SerializedCard {

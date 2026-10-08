@@ -87,6 +87,14 @@ export interface RunState {
    */
   purgeCostBonus: number;
   /**
+   * Purgas usadas en el ANTE actual.
+   *
+   * Se resetea a 0 al entrar a un ante nuevo (mismo punto donde sube `ante`).
+   * Vive en la run para que una partida retomada no regale purgas extra.
+   * El tope por ante es `ECONOMY.purgesPerAnte`.
+   */
+  purgesThisAnte: number;
+  /**
    * Arquetipo de la run (id; ver `src/data/archetypes.json`).
    *
    * Un arquetipo no cambia las REGLAS del juego: cambia el MAZO INICIAL y las
@@ -117,6 +125,15 @@ export interface RunState {
    * perdidos no aportan.
    */
   totalScore: number;
+  /**
+   * El tutorial guiado esta activo en esta run (Frente 1).
+   *
+   * OJO: el motor NO lee este campo para NADA. Es una marca que viaja con la run
+   * (y sobrevive a `serialize`/`restore`) para que la capa de UI sepa que tiene
+   * que mostrar el guion. Un `if (tutorial)` en el motor seria una segunda
+   * version de las reglas, y el tutorial es una run normal con semilla fija.
+   */
+  tutorial: boolean;
   /** Estadisticas para la pantalla final. */
   stats: {
     handsPlayed: number;
@@ -161,12 +178,14 @@ export function createRunState(seed: number, deck: Deck, ascension = 0, archetyp
     vouchers: [],
     ascension,
     purgeCostBonus: 0,
+    purgesThisAnte: 0,
     archetype,
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
     seenInterludes: [],
     missions: [],
     totalScore: 0,
+    tutorial: false,
     stats: {
       handsPlayed: 0,
       bestHand: 0,

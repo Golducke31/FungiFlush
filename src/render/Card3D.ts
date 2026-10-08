@@ -398,11 +398,16 @@ export class Card3D {
     this.card = card;
 
     const statuses = card.statuses.map((s) => s.type);
+    // La CLAVE de cache lleva el VALOR de cada estado, no solo su tipo: si no,
+    // subir la putrefaccion de 2 a 4 dejaba la textura vieja horneada (el chip
+    // seguia diciendo "DECA" sin numero y el numero nunca subia en pantalla).
+    const statusSig = card.statuses.map((s) => `${s.type}:${s.value}`).join(',');
     const key = [
       'card',
       card.def.id,
       lang,
       card.level,
+      statusSig,
       statuses.join(','),
       card.bonusSubstrate,
       card.bonusSpores,
@@ -431,6 +436,13 @@ export class Card3D {
       substrate: card.def.baseSubstrate + card.bonusSubstrate,
       spores: card.def.baseSpores + card.bonusSpores,
       statuses,
+      // El VALOR por estado (la putrefaccion acumulada) y su etiqueta TRADUCIDA.
+      // La spec es una capa de dibujo sin acceso a `t()`: sin estos mapas el
+      // chip solo podia imprimir "DECA", el corte crudo del id en ingles.
+      statusValues: Object.fromEntries(card.statuses.map((s) => [s.type, s.value])),
+      statusLabels: Object.fromEntries(
+        statuses.map((type) => [type, t(`status.${type}`)]),
+      ) as Record<StatusType, string>,
       level: card.level,
       hasAbility,
       compact: this.compactFace,

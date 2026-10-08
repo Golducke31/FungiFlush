@@ -108,6 +108,9 @@ async function snap(name) {
         const box = (el) => {
           if (!el) return null;
           const r = el.getBoundingClientRect();
+          // Un boton oculto (`is-hidden`) mide 0x0 en (0,0): contarlo como CTA
+          // "mas alto" arruinaria el peor caso. Se descarta.
+          if (r.width === 0 && r.height === 0) return null;
           return {
             x: +r.x.toFixed(1),
             y: +r.y.toFixed(1),
@@ -136,27 +139,40 @@ async function snap(name) {
         const titleBottom = artTop + artH * TITLE_BOTTOM_FRAC;
         const nb = box(btn);
         const clearance = nb ? +(nb.y - titleBottom).toFixed(1) : null;
+        // El CTA MAS ALTO del heroe es el que puede pisar el titulo: con DOS
+        // botones (`is-both`) hay que medir el minimo de los dos, no solo
+        // "Nueva partida" (que va primero y es el mas bajo... o no).
+        const cb = box(cont);
+        const topmost = [nb, cb].filter(Boolean).reduce((a, b) => (b.y < a.y ? b : a));
+        const clearanceBoth = topmost ? +(topmost.y - titleBottom).toFixed(1) : null;
         return {
           viewport: { vw, vh },
           wrapFontSize: cs,
           hero: box(hero),
           top: box(top),
           newBtn: nb,
-          continueBtn: box(cont),
+          continueBtn: cb,
           titleBottomY: +titleBottom.toFixed(1),
           // > 0 = el boton arranca por DEBAJO del titulo (bien).
           titleClearance: clearance,
+          topmostCtaY: topmost ? +topmost.y.toFixed(1) : null,
+          // Peor caso real: el CTA VISIBLE mas alto contra el titulo.
+          titleClearanceWorst: clearanceBoth,
+          isBoth: Boolean(q('.panel.is-menu .menu-hero.is-both')),
+          ctaCount: [nb, cb].filter(Boolean).length,
         };
       })(),
     };
   });
   report[name] = state;
   console.log(`\n[${name}]`, JSON.stringify(state, null, 2));
-  // Guard: el boton Nueva partida NUNCA debe pisar el titulo del arte.
-  const c = state.geom?.titleClearance;
-  if (typeof c === 'number') {
-    const tag = c >= 8 ? 'OK' : 'PISADO';
-    console.log(`  -> separacion titulo/boton: ${c}px  [${tag}]`);
+  // Guard: NINGUN CTA debe pisar el titulo del arte. Se evalua el peor caso
+  // (el CTA mas alto), que con dos botones activos es el que se ve apretado.
+  const worst = state.geom?.titleClearanceWorst;
+  if (typeof worst === 'number') {
+    const tag = worst >= 8 ? 'OK' : 'PISADO';
+    const both = state.geom?.isBoth ? ' (2 CTAs)' : ' (1 CTA)';
+    console.log(`  -> separacion titulo/CTA mas alto${both}: ${worst}px  [${tag}]`);
   }
 }
 

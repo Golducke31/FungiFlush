@@ -84,6 +84,32 @@ export function cardDefFaceUrl(
 }
 
 /**
+ * Cara de un SIMBIONTE del catalogo (no de una oferta). La usa la Coleccion en
+ * grilla: un simbionte se muestra con la misma cara que tendria en la tienda
+ * (marco lila + nombre + chips), no con la ilustracion suelta.
+ *
+ * Los jokers NO tienen ilustracion propia: reusan el arte por elemento x rareza
+ * (`artKeysForJoker`), asi que `realArt` es opcional y suele venir del render.
+ */
+export function jokerDefFaceUrl(
+  def: JokerDefinition,
+  translate: (key: string) => string,
+  realArt?: HTMLImageElement,
+): string | null {
+  const spec: CardTextureSpec = {
+    kind: 'joker',
+    name: translate(def.nameKey),
+    desc: translate(def.descKey),
+    element: 'neutral',
+    family: 'agaricaceae',
+    rarity: def.rarity,
+    art: def.art,
+    cost: def.cost,
+  };
+  return cardFaceUrl(spec, realArt);
+}
+
+/**
  * Cara de una oferta de tienda (carta, joker, mutacion o voucher). El dinero no
  * tiene carta: devuelve `null` y el llamador cae a su propio icono.
  *

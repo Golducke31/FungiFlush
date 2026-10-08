@@ -755,8 +755,11 @@ body {
   position: fixed;
   left: 50%;
   /* Justo encima de la fila de acciones, que es el hueco libre de la mesa.
-     El ancla sale del alto de la barra inferior (`--hud-bottom-h`) + un margen. */
-  bottom: calc(var(--hud-bottom-h) + 58px + var(--safe-b, 0px));
+     El ancla sale del alto de la barra inferior (`--hud-bottom-h`) + un margen
+     + la altura de la franja de putrefaccion si esta visible (`--hud-decay-h`,
+     que el HUD escribe). Sin ese termino, la guia y la franja —las dos ancladas
+     arriba de la barra— se pisaban. */
+  bottom: calc(var(--hud-bottom-h) + var(--hud-decay-h, 0px) + 58px + var(--safe-b, 0px));
   transform: translate(-50%, 8px);
   display: none;
   align-items: center;
@@ -800,6 +803,79 @@ body {
 /* Aviso de sinergia: solo aparece cuando las cartas elegidas comparten
    Familia. Es la pista que el plan pide para que el jugador vea la combinacion
    antes de jugarla. */
+/* --------------------------------------------------------------------------
+   Franja de putrefaccion (Frente 2.C)
+
+   Va DEBAJO de la mano, en el mismo hueco libre de la mesa que la guia de
+   seleccion pero pegado al borde inferior (mas abajo todavia). Informativa:
+   NO captura punteros, para no comerse el arrastre de una carta que caiga
+   encima suyo. Se oculta cuando no hay putrefaccion.
+   -------------------------------------------------------------------------- */
+
+.hud-decay {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b, 0px));
+  transform: translate(-50%, 8px);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  max-width: min(88vw, 520px);
+  padding: 4px 14px;
+  border-radius: 999px;
+  /* Tinte purpura/morado: es el color del estado `decay` en las cartas, asi
+     que la franja y el borde de la carta se leen como la misma cosa. */
+  background: rgba(28, 10, 34, 0.8);
+  border: 1px solid rgba(224, 92, 138, 0.55);
+  box-shadow: var(--shadow-2);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--dur-2, 180ms) var(--ease-out, ease),
+    transform var(--dur-2, 180ms) var(--ease-out, ease);
+}
+
+.hud-decay.is-visible {
+  display: flex;
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.hud-decay-label {
+  font-weight: 800;
+  color: #e05c8a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+}
+
+.hud-decay-cards {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-decay-loss {
+  font-weight: 900;
+  color: #ff7aa8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* En movil la franja se pega mas abajo y mas fina: la mesa tiene menos aire. */
+@media (pointer: coarse) {
+  .hud-decay {
+    bottom: calc(var(--hud-bottom-h) + 4px + var(--safe-b, 0px));
+    padding: 3px 11px;
+    font-size: 11px;
+    gap: 8px;
+  }
+
+  .hud-decay-label {
+    font-size: 9.5px;
+  }
+}
+
 .hud-select-hint-family.is-shared {
   color: var(--tag-taxonomy);
   font-weight: 600;
@@ -866,6 +942,31 @@ body {
 .score-breakdown-row.is-total .score-breakdown-value {
   color: var(--tag-score);
   font-size: 17px;
+}
+
+/* --- Desglose de FUNGIS al cerrar el ciego ---
+   Hermano del desglose de puntaje, pero con el dorado de la moneda: el bloque
+   de arriba explica COMO puntuo, este CUANTO cobro. El borde y el tinte dorado
+   los mantienen separados de un vistazo sin agregar ruido. */
+.score-breakdown.is-fungi {
+  border-color: rgba(255, 200, 87, 0.28);
+  background: rgba(24, 17, 4, 0.5);
+}
+
+.score-breakdown.is-fungi .score-breakdown-value {
+  color: var(--money);
+}
+
+.score-breakdown.is-fungi .score-breakdown-row.is-total .score-breakdown-value {
+  color: var(--money);
+}
+
+/* Bono de una sola mano: destacado en ambar brillante para que se note que es
+   un extra, no otro termino del ciego. */
+.score-breakdown-row.is-bonus .score-breakdown-label,
+.score-breakdown-row.is-bonus .score-breakdown-value {
+  color: #ffe08a;
+  font-weight: 700;
 }
 
 /* --------------------------------------------------------------------------
@@ -1101,6 +1202,14 @@ body {
     inset 0 -2px 0 rgba(0, 0, 0, 0.35),
     0 6px 18px rgba(0, 0, 0, 0.55),
     0 0 16px rgba(167, 139, 250, 0.28);
+}
+
+/* Long-press en tactil: la ficha se "hunde" mientras se mantiene el dedo, asi
+   el jugador sabe que la etiqueta esta por aparecer (mismo idioma que la
+   seleccion de cartas, que tambien da feedback antes de actuar). */
+.joker-chip.is-pressing {
+  transform: scale(0.96);
+  border-color: rgba(196, 168, 255, 0.7);
 }
 
 .joker-chip-name {
@@ -1609,6 +1718,15 @@ body {
   border-color: rgba(46, 178, 164, 0.5);
 }
 
+/* Purgar sin cupo en el ante: el boton queda deshabilitado y se lee el motivo
+   (el tooltip dice cuantas quedan). Un tinte apagado mas el subrayado punteado
+   lo separa del disabled por dinero, que es un caso reversible. */
+.btn.is-ghost.is-capped:disabled {
+  color: rgba(207, 230, 242, 0.38);
+  border-style: dashed;
+  border-color: rgba(207, 230, 242, 0.22);
+}
+
 /* Salida al MENU: mismo tablon que fantasma, pero con tinte ambar. Es la unica
    accion de SISTEMA de la barra superior (la otras son de partida), y el ambar
    la separa del verde de juego sin convertirla en un boton de peligro rojo, que
@@ -1803,6 +1921,24 @@ body {
   vertical-align: middle;
 }
 
+/* --- Tooltip del SIMBIONTE (Frente 4a) ---
+   Comparte panel con el de carta. La etiqueta de habilidad del Simbionte es una
+   linea propia DEBAJO de la descripcion: en la ficha ya vivia en su renglon, y
+   repetirla dentro de la descripcion era ruido. */
+.tooltip-joker-ability {
+  margin-top: 8px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(196, 168, 255, 0.16);
+  border: 1px solid rgba(196, 168, 255, 0.45);
+  color: #d8ccf5;
+}
+
 .tooltip-combos {
   margin-top: 9px;
   font-size: 11.5px;
@@ -1909,6 +2045,19 @@ body {
   border: none;
   background: transparent;
   box-shadow: none;
+  /* Con el desglose de Fungis (Frente 9) el panel crecio y en un viewport de
+     360px de alto el boton "Continuar" caia FUERA de la pantalla, tapado por el
+     overlay: no habia forma de avanzar. El panel ahora se limita al alto del
+     overlay y scrollea por dentro; el boton vive al final del scroll. */
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* El pie es lo ultimo del scroll, pero no debe encogerse si hay poco alto: un
+   boton de 30px no se comprime. */
+.panel.is-cleared > .panel-actions {
+  flex: 0 0 auto;
 }
 
 .cleared-title {
@@ -4002,9 +4151,12 @@ body {
    la palabra "FLUSH" (la mas baja) termina en el 47.7% del alto del arte, que
    en pantalla cae en ~194px con un halo suave hasta ~200px.
    Centrar los botones a secas los ponia encima de las letras (y=132, justo en
-   medio del titulo). De ahi `justify-content: flex-end` + un `padding-top` que
-   reserva el hueco del titulo: el contenido se empuja por DEBAJO, nunca por
-   encima. El 52% deja ~20px de aire sobre el halo del titulo. */
+   medio del titulo). De ahi `justify-content: flex-end` + el ESPACIADOR
+   `::after` (`flex: 1 1 52vh`, encogible hasta 0) que reserva el hueco del
+   titulo: el contenido se empuja por DEBAJO, nunca por encima. El 52% deja
+   ~20px de aire sobre el halo del titulo. Con DOS CTAs (`is-both`) el bloque
+   crece y el espaciador se encoge: primero se come el aire, luego el gap, pero
+   NUNCA sube del limite del titulo. */
 .menu-hero {
   position: relative;
   flex: 1 1 auto;
@@ -4012,10 +4164,32 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* `flex-end` apila el contenido contra el PIE del heroe. Con UN solo CTA el
+     `padding-top` fijo alcanzaba; con DOS (is-both) el bloque crece hacia
+     ARRIBA y el `padding-top` deja de alcanzar: el bloque termina por encima
+     del limite que reserva el titulo del arte. La solucion no es otro numero
+     fijo sino un ESPACIADOR (`::after` NO: usamos el primer hijo) que empuja el
+     contenido y que puede encogerse hasta 0: el bloque de CTAs nunca sube del
+     limite del titulo, y si no cabe, se comprime el gap en vez de pisar letras. */
   justify-content: flex-end;
   gap: 0.7em;
-  padding-top: 52vh;
+  padding-top: 0;
   padding-bottom: 1vh;
+}
+
+/* ESPACIADOR del titulo (`::after` para no chocar con el velo `::before`):
+   reserva la franja del "FUNGI FLUSH" horneado en el arte y es lo unico que el
+   bloque de CTAs puede "comerse" cuando hay dos llamadas. `flex: 1 1 52vh` con
+   `min-height: 0` = pide 52vh pero acepta encogerse hasta 0 si el contenido (2
+   CTAs + subtexto) no entra. Con eso el limite superior del bloque es SIEMPRE
+   el titulo, nunca por encima: el gap se comprime antes que pisar las letras. */
+.menu-hero::after {
+  content: '';
+  flex: 1 1 52vh;
+  min-height: 0;
+  width: 100%;
+  order: -1;
+  pointer-events: none;
 }
 
 /* Foco: un velo radial suave que separa los botones del fondo, sin dibujar una
@@ -4220,11 +4394,10 @@ body {
   .menu-layout {
     gap: 4px;
   }
-  /* El titulo del arte termina al ~48% del alto: el heroe reserva el 52% y los
-     botones se apilan en el resto, sin pisar las letras. */
+  /* El titulo del arte termina al ~48% del alto: el espaciador `::after` reserva
+     el 52% y los botones se apilan en el resto, sin pisar las letras. */
   .menu-hero {
     gap: 0.55em;
-    padding-top: 52vh;
     padding-bottom: 1.5vh;
   }
   .menu-cta-wrap {
@@ -4237,8 +4410,10 @@ body {
      del titulo (50vh en vez de 52vh) y la separacion, para ganar aire. */
   .menu-hero.is-both {
     gap: 0.45em;
-    padding-top: 50vh;
     padding-bottom: 1vh;
+  }
+  .menu-hero.is-both::after {
+    flex-basis: 50vh;
   }
   .menu-hero.is-both .menu-cta-wrap {
     font-size: min(clamp(19px, 4vw, 33px), 6.6vh);
@@ -4656,6 +4831,483 @@ body {
 
 .carousel-detail-copies.is-hidden {
   display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Coleccion en GRILLA (Frente 5)
+   --------------------------------------------------------------------------
+   La grilla es la superficie de GESTION de la coleccion: agrupa por pack y
+   familia y deja ver los huecos. El carrusel 3D queda como vista "Exhibicion".
+
+   El scroll vive en `.collection-scroll`, NO en `.collection-grid`: el grid
+   tiene cabeceras pegajosas (`position: sticky`) y un contenedor con scroll
+   propio es la unica forma de que se peguen contra el techo real del area.
+   -------------------------------------------------------------------------- */
+
+.collection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Los chips del toolbar de la grilla son mas chicos que un `is-small` normal:
+   7 chips en una fila en landscape de movil no entran con el padding de
+   escritorio, y envolver a dos filas le come ~34px de alto a la grilla. */
+.panel.is-grid-frame .collection-toolbar .btn {
+  padding: 4px 9px;
+  font-size: 11.5px;
+  min-height: 26px;
+}
+
+/* La grilla necesita COLUMNA y alto acotado: `.panel` es un bloque normal, asi
+   que sin esto el `.collection-scroll` no tiene contra que encogerse y la
+   grilla empuja los botones fuera de la pantalla.
+
+   El alto se reparte asi: cabecera (titulo+subtitulo+filtros) y pie (acciones)
+   toman lo suyo y NO se encogen (`flex: 0 0 auto`); el `.collection-scroll` se
+   queda con el resto. Sin el `flex-shrink: 0` de arriba, la cabecera se
+   comprimiria hasta desaparecer y el scroll se comeria todo el panel. */
+.panel.is-grid-frame {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  max-height: min(92vh, 660px);
+  /* El alto es el disponible, no una constante: en landscape de movil (412px)
+     el panel entra entero con sus botones. */
+  height: min(92vh, 660px);
+  padding: 14px 18px 12px;
+}
+
+.panel.is-grid-frame > .panel-title,
+.panel.is-grid-frame > .panel-subtitle,
+.panel.is-grid-frame > .collection-toolbar,
+.panel.is-grid-frame > .panel-actions {
+  flex: 0 0 auto;
+}
+
+/* El subtitulo no necesita el aire grande que lleva en un panel de texto: aca
+   le roba alto a la grilla. */
+.panel.is-grid-frame > .panel-subtitle {
+  margin: 0 0 8px;
+}
+
+.panel.is-grid-frame > .collection-toolbar {
+  margin-bottom: 8px;
+}
+
+.panel.is-grid-frame > .panel-actions {
+  margin-top: 6px;
+  gap: 6px;
+}
+
+.panel.is-grid-frame > .panel-actions .btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  min-height: 30px;
+}
+
+/* Cada grupo de chips (TIPO / ESTADO) se mantiene junto: envolver es del
+   toolbar, no de los chips de un mismo grupo. */
+.collection-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.collection-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+  margin-bottom: 10px;
+}
+
+.collection-grid.is-grouped {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+
+/* Cabecera de seccion: pack ("Base") o familia ("Base — Amatoxinas"). */
+.collection-section {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(24, 36, 48, 0.98), rgba(15, 23, 32, 0.98));
+  color: var(--text, #e8f2ee);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collection-section:first-child {
+  margin-top: 0;
+}
+
+.collection-section-caret {
+  flex: 0 0 auto;
+  width: 1em;
+  color: var(--frame-moss, #2eb2a4);
+}
+
+.collection-section-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-section-count {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #06170f;
+  background: rgba(94, 240, 138, 0.9);
+}
+
+/* Las familias van indentadas respecto de su pack: la jerarquia se LEE. */
+.collection-pack > .collection-section {
+  margin-left: 8px;
+  width: calc(100% - 8px);
+  background: linear-gradient(180deg, rgba(20, 30, 41, 0.96), rgba(13, 20, 28, 0.96));
+  font-size: 12px;
+}
+
+.collection-family {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px 8px;
+}
+
+.collection-pack.is-collapsed,
+.collection-family.is-collapsed {
+  display: none;
+}
+
+.collection-empty {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+/* Celda con CARA de carta (reemplaza la fila swatch+nombre del carrusel). */
+.collection-card.is-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 9px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.collection-tile-art {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--tile-accent, #2a3440) 45%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(9, 14, 20, 0.96), rgba(6, 10, 15, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.collection-tile-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Silueta de carta sin descubrir: un hongo abstracto, NO el arte real. */
+.collection-tile-silhouette {
+  position: absolute;
+  inset: 12% 22% 34%;
+  border-radius: 50% 50% 18% 18% / 62% 62% 38% 38%;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 -10px 0 -8px rgba(255, 255, 255, 0.05);
+}
+
+.collection-tile-question {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.collection-card.is-tile .collection-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-card.is-tile .collection-count {
+  align-self: center;
+}
+
+.collection-card.is-tile .collection-unlock,
+.collection-card.is-tile .collection-lock {
+  font-size: 9px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+/* Panel de detalle: modal centrado sobre la grilla. */
+.collection-detail {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(3, 6, 10, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.collection-detail-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  max-width: min(560px, 92vw);
+  max-height: 92%;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 30, 41, 0.98), rgba(12, 18, 26, 0.98));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.collection-detail-art {
+  flex: 0 0 auto;
+  width: 118px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.collection-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.collection-detail-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.collection-detail-meta,
+.collection-detail-desc,
+.collection-detail-lock {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim, #a9bcc4);
+}
+
+.collection-detail-desc {
+  color: var(--text, #e8f2ee);
+}
+
+.collection-detail-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--frame-moss, #2eb2a4);
+}
+
+.collection-detail-lock {
+  color: #e0a75c;
+  font-weight: 700;
+}
+
+/* Variante de AYUDA: sin cara al lado, el texto manda. El ancho es mas generoso
+   porque el parrafo explica una regla, no describe una pieza. */
+.collection-detail-card.is-help {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: min(440px, 92vw);
+  text-align: left;
+}
+
+.collection-detail-card.is-help .collection-detail-name {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.collection-detail-card.is-help .btn {
+  align-self: flex-end;
+}
+
+/* El overlay de la grilla SI captura punteros (a diferencia del carrusel, que
+   deja pasar la rueda a la escena 3D): es un panel normal, no un marco. */
+#ui-root .overlay.is-collection-grid {
+  pointer-events: auto;
+}
+
+@media (pointer: coarse) {
+  .collection-family {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 6px;
+  }
+
+  .collection-detail-art {
+    width: 88px;
+  }
+
+  .collection-detail-card {
+    gap: 10px;
+    padding: 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tutorial GUIADO (Frente 1) — tarjeta + spotlight
+   --------------------------------------------------------------------------
+   La capa vive DENTRO de `#ui-root` y por encima de todo (`--z-banner`). No es
+   un panel del overlay: si lo fuera, reemplazaria el panel del juego y el
+   jugador no veria lo que el paso le senala.
+
+   La capa NO captura punteros; la tarjeta SI. Eso deja jugar (seleccionar
+   cartas, pulsar Jugar) mientras el paso esta visible.
+   -------------------------------------------------------------------------- */
+
+#ui-root .tut-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-banner, 60);
+  pointer-events: none;
+}
+
+/* El spotlight es un agujero: el borde de 9999px de box-shadow oscurece TODO lo
+   que queda afuera del rect del ancla. Es CSS puro, sin canvas, y anda igual en
+   movil. */
+#ui-root .tut-spotlight {
+  position: absolute;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 9999px rgba(4, 7, 11, 0.78),
+    0 0 0 2px rgba(94, 240, 138, 0.85) inset;
+  pointer-events: none;
+}
+
+/* Bloqueo del resto durante un paso que pide una accion concreta. */
+#ui-root .tut-blocker {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: transparent;
+}
+
+#ui-root .tut-card {
+  position: fixed;
+  max-width: min(360px, 88vw);
+  padding: 12px 14px;
+  border: 1px solid rgba(94, 240, 138, 0.5);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(18, 28, 38, 0.99), rgba(10, 16, 23, 0.99));
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.66),
+    0 0 22px rgba(94, 240, 138, 0.16);
+  pointer-events: auto;
+}
+
+/* Sin ancla (pasos de texto puro): la tarjeta se centra sola. */
+#ui-root .tut-card:not([style*='top']):not([style*='bottom']) {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tut-step-of {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--frame-moss, #2eb2a4);
+  margin-bottom: 3px;
+}
+
+.tut-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: #eaf6ff;
+  margin-bottom: 4px;
+}
+
+.tut-body {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-dim, #b9c9d1);
+}
+
+.tut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+@media (pointer: coarse) {
+  #ui-root .tut-card {
+    max-width: min(320px, 84vw);
+    padding: 9px 11px;
+  }
+
+  .tut-title {
+    font-size: 15px;
+  }
+
+  .tut-body {
+    font-size: 11.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* La tarjeta no se anima: no hay nada que desactivar aca, pero el spotlight
+     no debe latir. Se declara por si se agrega un pulso. */
+  #ui-root .tut-spotlight {
+    animation: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -6967,7 +7619,7 @@ body {
        era un 104px fijo que habia que subir a mano cada vez que la barra
        crecia, y ya se habia desincronizado (el aviso caia ENCIMA de la linea
        de estado "4 Manos · 3 Descartes · ..." y la tapaba). */
-    bottom: calc(var(--hud-bottom-h) + 14px + var(--safe-b, 0px));
+    bottom: calc(var(--hud-bottom-h) + var(--hud-decay-h, 0px) + 14px + var(--safe-b, 0px));
     /* P0.8 — Legibilidad: el texto mas cercano a las cartas (badge "N
        seleccionadas") no baja de 14px en tactil, asi se lee sin zoom. */
     font-size: 14px;
@@ -7541,9 +8193,29 @@ body {
   color: var(--tag-ability);
 }
 
+/* El panel de arquetipos tiene que ENTRAR EN PANTALLA con su pie visible.
+
+   Sin esto, `.archetypes-shell` mide 669px en un viewport de 412px: la lista
+   NO scrollea (su `clientHeight` iguala al `scrollHeight`) y "Empezar" queda en
+   y=623, fuera del cuadro. El mismo contrato que `.panel.is-grid-frame`: alto
+   EXPLICITO (un `max-height: 100%` sobre un padre de alto automatico no acota
+   nada) y columna flex, para que la cabecera y el pie tomen lo suyo y la lista
+   se quede con el resto y scrollee. */
 .panel.is-archetypes {
   align-items: center;
   justify-content: center;
+  display: flex;
+  flex-direction: column;
+  height: min(94dvh, 680px);
+  padding: 12px 16px 10px;
+}
+
+@media (pointer: coarse) {
+  .panel.is-archetypes {
+    height: 100dvh;
+    /* Safe area: en movil el pie se pega al borde inferior fisico. */
+    padding-bottom: calc(10px + var(--safe-b, 0px));
+  }
 }
 
 /* El constructor de mazo propio comparte el encuadre del panel de arquetipos:
@@ -7560,6 +8232,9 @@ body {
   width: min(620px, 100%);
   max-height: 100%;
   min-height: 0;
+  /* Ocupa el alto disponible del panel (que ya tiene alto explicito): asi la
+     lista es la unica que scrollea y el pie nunca se sale del cuadro. */
+  flex: 1 1 auto;
   padding: clamp(14px, 3vh, 24px);
 }
 
@@ -7590,6 +8265,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 2px;
 }
 
@@ -7714,6 +8390,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* Con el tutorial son CUATRO controles en el pie. Si no entran en una fila,
+     se envuelven en vez de comprimirse hasta que el texto se corte. */
+  flex-wrap: wrap;
 }
 
 .archetypes-close {
@@ -7735,6 +8414,28 @@ body {
 .archetypes-start {
   flex: 1 1 auto;
   max-width: 60%;
+}
+
+/* Tutorial optativo: fantasma, chico y explicitamente secundario. Nunca debe
+   parecer una quinta opcion de arquetipo ni robarle ancho a "Empezar". */
+.archetypes-tutorial {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.archetypes-tutorial-hint {
+  display: none;
+}
+
+@media (pointer: coarse) and (min-width: 860px) {
+  .archetypes-tutorial-hint {
+    display: inline;
+  }
 }
 
 @media (pointer: coarse) and (max-height: 520px) {
@@ -8233,6 +8934,22 @@ body {
   .panel.is-cleared {
     gap: 3px;
     padding: 8px 14px;
+    /* Alto REAL, no `max-height: 100%`: en movil el overlay no impone una altura
+       utilizable al hijo, asi que sin esto el panel crece y el boton "Continuar"
+       se va abajo de la pantalla. `dvh` resta las barras del navegador movil. */
+    height: 100dvh;
+    justify-content: flex-start;
+    padding-bottom: calc(8px + var(--safe-b, 0px));
+  }
+
+  /* El pie va pegado al fondo del panel, siempre visible: el desglose scrollea
+     por encima y el boton no depende de que el jugador llegue al final. */
+  .panel.is-cleared > .panel-actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-top: 6px;
+    background: linear-gradient(180deg, rgba(6, 10, 15, 0) 0%, rgba(6, 10, 15, 0.88) 40%);
   }
 
   .panel.is-cleared .cleared-title {
@@ -9284,17 +10001,20 @@ body {
    `@media (pointer: coarse)` de abajo, con la referencia 915x412.
    ========================================================================== */
 
-/* Boton que abre el modo, en el pie del panel de arquetipos. */
+/* Boton que abre el modo, en el pie del panel de arquetipos.
+
+   El chip de la derecha es un hijo en FLUJO (no absoluto): el texto que lleva
+   cambia de ancho segun el estado ("12" vs "Bloqueado"), y posicionarlo en
+   absoluto con un `padding-right` fijo hacia que el badge se montara sobre la
+   etiqueta en cuanto el texto pasaba de dos digitos. Con `gap` el boton se
+   dimensiona solo y el chip nunca pisa el rotulo. */
 .deck-open {
-  position: relative;
-  padding-right: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .deck-open-count {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 999px;
@@ -9313,15 +10033,12 @@ body {
 }
 
 .deck-open-lock {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--tag-penalty);
+  white-space: nowrap;
 }
 
 /* --- Panel del constructor --- */

@@ -28,7 +28,13 @@
     "drawable": "Robables",
     "discardPile": "Descarte",
     "deckFull": "Robables: {remaining} · Descarte: {discard} · Total: {total}",
+    "decay": "Putrefacción",
+    "decayCards": "{count} cartas",
+    "decayLoss": "−{value} Sustrato",
+    "decayAria": "Putrefacción: {cards} cartas pudriéndose, {value} de Sustrato perdido en la mano",
     "reshuffle": "El descarte se baraja de nuevo al mazo",
+    "jokerFires": "Disparos",
+    "jokerSell": "Venta",
     "jokers": "Simbiontes",
     "jokerSlots": "Ranuras",
     "handSize": "Cartas en mano",
@@ -408,7 +414,7 @@
     },
     "deep_carrion_lattice": {
       "name": "Enrejado de Carroña",
-      "desc": "Pudre una carta de la mano; al puntuar con Putrefacción: +12 Sustrato."
+      "desc": "Pudre una carta de la mano por 3 ciegos; al puntuar con Putrefacción: +12 Sustrato."
     },
     "spore_puffball": {
       "name": "Bejín",
@@ -588,7 +594,7 @@
     },
     "decay_compost_heap": {
       "name": "Pila de Compost",
-      "desc": "Al jugarse, pudre una carta al azar de tu mano (−2 de Sustrato por disparo)."
+      "desc": "Al jugarse, pudre una carta al azar de tu mano: −2 de Sustrato durante 3 ciegos."
     },
     "decay_carrion_bloom": {
       "name": "Flor de Carroña",
@@ -640,7 +646,7 @@
     },
     "decay_agaric_mould": {
       "name": "Moho Agaricáceo",
-      "desc": "Al jugarse pudre una carta al azar de la mano. Putrefacción de familia Agaricácea."
+      "desc": "Al jugarse pudre una carta al azar de la mano: −1 de Sustrato por 3 ciegos. Familia Agaricácea."
     },
     "decay_boletus_slime": {
       "name": "Baba de Boleto",
@@ -652,7 +658,7 @@
     },
     "decay_amanita_blight": {
       "name": "Tizón de Amanita",
-      "desc": "Al jugarse pudre 2 puntos de una carta al azar de la mano. Putrefacción de familia Amanitácea."
+      "desc": "Al jugarse pudre 2 puntos de una carta al azar: −2 de Sustrato por 3 ciegos. Familia Amanitácea."
     },
     "crystal_agaric_facet": {
       "name": "Faceta Agaricácea",
@@ -887,7 +893,12 @@
       "daily": "Racha diaria",
       "achievement": "Logro",
       "season": "Pase de temporada"
-    }
+    },
+    "filterAllStates": "Todos",
+    "filterSeen": "Descubiertos",
+    "filterUnseen": "Sin descubrir",
+    "exhibition": "Exhibición",
+    "empty": "No hay nada con este filtro."
   },
   "store": {
     "title": "Expansiones",
@@ -913,7 +924,14 @@
     "title": "¡Ciego superado!",
     "score": "{score} / {target}",
     "total": "Score total de la run: {score}",
-    "continue": "Continuar"
+    "continue": "Continuar",
+    "fungiTitle": "Fungis obtenidos",
+    "fungiBlind": "Recompensa del ciego",
+    "fungiBase": "Base por superarlo",
+    "fungiUnused": "Manos sin usar ({count})",
+    "fungiFirstHand": "¡De una sola mano!",
+    "fungiTotal": "Total ganado",
+    "firstHandTag": "· ¡de una sola mano!"
   },
   "packs": {
     "title": "Sobres",
@@ -932,7 +950,12 @@
       "title": "Sobre de expansión",
       "none": "No tenés sobres de expansión. Derrotá a un Jefe y podés ganarte uno.",
       "pending": "{n} de expansión"
-    }
+    },
+    "helpTitle": "¿Dónde van las cartas de un sobre?",
+    "helpBody": "Los sobres llenan tu COLECCIÓN, no tu mazo de la partida. Cada espécimen que sale suma copias (ves «xN» en la grilla) y queda disponible para armar tu MAZO PROPIO. El mazo con el que jugás se elige aparte.",
+    "helpHint": "Los sobres caen al derrotar a un Jefe.",
+    "helpClose": "Entendido",
+    "helpButton": "¿Dónde van las cartas?"
   },
   "die": {
     "title": "Dado de esporas",
@@ -1001,6 +1024,9 @@
     "title": "Mazo",
     "open": "Mazo",
     "purge": "Purgar ({cost})",
+    "purgeLeft": "Purgar ({cost}) · {left}/{total}",
+    "purgeHint": "Cuesta {cost} Fungis. Te quedan {left} purgas en este Ante.",
+    "purgeNone": "Sin purgas en este Ante",
     "purged": "{name} fue purgada",
     "cannotAfford": "No te alcanza el dinero para purgar",
     "onlyBetweenBlinds": "Solo podés editar el mazo entre blinds",
@@ -1667,6 +1693,63 @@
         "synced": "Colonia actualizada",
         "conflict": "Encontramos progreso distinto: elegí cuál conservar"
       }
+    }
+  },
+  "tutorial": {
+    "start": "Tutorial guiado",
+    "startHint": "Aprendé jugando un Ante completo (2 desafíos + Jefe).",
+    "next": "Siguiente",
+    "skipStep": "Saltar paso",
+    "skipAll": "Salir del tutorial",
+    "finish": "¡Empezar a jugar!",
+    "stepOf": "Paso {n} de {total}",
+    "blindSelect": {
+      "title": "Elegí tu primer desafío",
+      "body": "Cada Ciego pide un puntaje (el objetivo). Tenés un número limitado de manos y descartes. Superalo y pasás al siguiente."
+    },
+    "handDealt": {
+      "title": "Tu mano",
+      "body": "Estas son las cartas que robaste. Cada una tiene un ELEMENTO, una FAMILIA y un valor de Sustrato y Esporas."
+    },
+    "selectCards": {
+      "title": "Seleccioná 3 a 5 cartas",
+      "body": "Tocá las cartas para elegirlas (aparece un borde verde y un número). Cuantas más pongas en la mesa, más Sustrato sumás."
+    },
+    "comboHint": {
+      "title": "¡Combo!",
+      "body": "Compartir Familia o Elemento activa un combo: las de Familia suman Sustrato fijo, las de Elemento multiplican Esporas. El combo se cierra en cada mano."
+    },
+    "playHand": {
+      "title": "Jugá la mano",
+      "body": "Pulsá JUGAR. El Sustrato de las cartas se multiplica por tus Esporas y ese es el puntaje de la mano."
+    },
+    "scoreBreakdown": {
+      "title": "Así se armó el puntaje",
+      "body": "El desglose muestra el Sustrato base, los bonus de combo y el multiplicador de Esporas. Con eso llegaste (o no) al objetivo."
+    },
+    "rewardDraft": {
+      "title": "Elegí una recompensa",
+      "body": "Ganaste el Ciego: elegí 1 carta de las que se ofrecen. Entra a tu mazo al instante y la vas a robar en los próximos Ciegos."
+    },
+    "shopIntro": {
+      "title": "La tienda",
+      "body": "Con los Fungis que ganaste comprás Simbiontes (dan efectos pasivos), cartas y mejoras. También podés vender lo que ya no uses."
+    },
+    "purgeIntro": {
+      "title": "Purgar el mazo",
+      "body": "Podés eliminar cartas para que el mazo sea más consistente. Ojo: podés purgar como máximo 2 cartas por Ante."
+    },
+    "upgradeIntro": {
+      "title": "Mejorar cartas",
+      "body": "Subir de nivel una carta multiplica su Sustrato o sus Esporas. No hay techo de mejora: una carta chica puede volverse tu mejor carta."
+    },
+    "bossIntro": {
+      "title": "El Jefe del Ante",
+      "body": "El tercer Ciego es el Jefe y tiene reglas propias (menos manos, objetivos más altos o efectos raros). Leelas en su panel antes de entrar."
+    },
+    "anteComplete": {
+      "title": "¡Ante completo!",
+      "body": "Ya jugaste un Ante entero: así se juega FungiFlush. Ahora seguí solo — el Ante siguiente pide más puntaje. ¡Suerte!"
     }
   }
 }

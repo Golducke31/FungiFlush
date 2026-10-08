@@ -42,6 +42,10 @@ export interface DeckBuilderState {
   cards: CardInstance[];
   money: number;
   purgeCost: number;
+  /** Purgas que quedan en el ante actual (tope `ECONOMY.purgesPerAnte`). */
+  purgesLeft: number;
+  /** Tope por ante, para mostrar "2/2". */
+  purgesPerAnte: number;
   canEdit: boolean;
   /** uid -> info de mejora/evolucion. */
   info: Record<string, DeckCardInfo>;
@@ -246,10 +250,19 @@ export function buildDeckCarouselFrame(
 
     const purge = document.createElement('button');
     purge.className = 'btn is-ghost is-small';
-    purge.textContent = t('deck.purge', { cost: state.purgeCost });
+    // "Purgar (2)" = purgas que quedan en el ante; el coste va en el tooltip.
+    purge.textContent = t('deck.purgeLeft', {
+      cost: state.purgeCost,
+      left: state.purgesLeft,
+      total: state.purgesPerAnte,
+    });
+    purge.title = t('deck.purgeHint', { cost: state.purgeCost, left: state.purgesLeft });
     purge.dataset['act'] = 'purge';
     purge.dataset['uid'] = card.uid;
-    purge.disabled = !state.canEdit || state.money < state.purgeCost;
+    purge.dataset['purgesLeft'] = String(state.purgesLeft);
+    // Deshabilitado por coste, por estado (no editable) O por cupo agotado.
+    purge.disabled = !state.canEdit || state.money < state.purgeCost || state.purgesLeft <= 0;
+    if (state.purgesLeft <= 0) purge.classList.add('is-capped');
     purge.addEventListener('click', () => callbacks.onPurge(card.uid));
     detailActions.appendChild(purge);
   };
@@ -456,10 +469,17 @@ export function buildDeckBuilderPanel(
 
       const purge = document.createElement('button');
       purge.className = 'btn is-ghost is-small';
-      purge.textContent = t('deck.purge', { cost: state.purgeCost });
+      purge.textContent = t('deck.purgeLeft', {
+        cost: state.purgeCost,
+        left: state.purgesLeft,
+        total: state.purgesPerAnte,
+      });
+      purge.title = t('deck.purgeHint', { cost: state.purgeCost, left: state.purgesLeft });
       purge.dataset['act'] = 'purge';
       purge.dataset['uid'] = card.uid;
-      purge.disabled = !state.canEdit || state.money < state.purgeCost;
+      purge.dataset['purgesLeft'] = String(state.purgesLeft);
+      purge.disabled = !state.canEdit || state.money < state.purgeCost || state.purgesLeft <= 0;
+      if (state.purgesLeft <= 0) purge.classList.add('is-capped');
       purge.addEventListener('click', () => callbacks.onPurge(card.uid));
       actions.appendChild(purge);
 
