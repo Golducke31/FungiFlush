@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auditoría de cartas — FungiFlush</title>
+<style>
+  :root {
+    --ink: #16202b; --dim: #5c6b7a; --line: #dfe6ec; --bg: #f6f8fa; --card: #ffffff;
+    --alta: #b3261e; --alta-bg: #fdecea;
+    --media: #9a6700; --media-bg: #fff8e5;
+    --ok: #1f6f4a; --ok-bg: #e8f6ee;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 28px 64px; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  .wrap { max-width: 1220px; margin: 0 auto; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); font-size: 14px; margin-bottom: 26px; }
+  h2 { font-size: 18px; margin: 38px 0 6px; padding-bottom: 7px; border-bottom: 2px solid var(--line); }
+  h2 .count { color: var(--dim); font-weight: 500; font-size: 14px; }
+  .lead { color: var(--dim); font-size: 14px; margin: 8px 0 16px; }
+  .lead code, td code, .box code, li code {
+    background: #eef2f6; padding: 1px 5px; border-radius: 4px;
+    font: 12.5px/1.4 ui-monospace, "Cascadia Code", Consolas, monospace; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  th { background: #eef2f6; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td.card { min-width: 165px; }
+  .name { font-weight: 700; display: block; }
+  .id { font: 11.5px/1.4 ui-monospace, Consolas, monospace; color: var(--dim); }
+  .kind { display: inline-block; margin-top: 3px; font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+  .sev { display: inline-block; font-weight: 700; font-size: 11.5px; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .sev.alta  { color: var(--alta);  background: var(--alta-bg);  border: 1px solid #f3c3bf; }
+  .sev.media { color: var(--media); background: var(--media-bg); border: 1px solid #f0dfae; }
+  .sev.ok    { color: var(--ok);    background: var(--ok-bg);    border: 1px solid #bfe3cd; }
+  .txt::before { content: "\201C"; } .txt::after { content: "\201D"; }
+  .box { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--dim); border-radius: 8px; padding: 14px 18px; margin: 16px 0; }
+  .box.cool { border-left-color: var(--ok); }
+  .box h3 { margin: 0 0 8px; font-size: 15px; }
+  .box p { margin: 6px 0; font-size: 14px; }
+  ul { margin: 8px 0; padding-left: 22px; } li { margin: 4px 0; font-size: 14px; }
+  .tally { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; }
+  .pill { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; }
+  .pill b { display: block; font-size: 22px; line-height: 1.1; }
+  .pill span { color: var(--dim); font-size: 12.5px; }
+  footer { margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Auditoría de activación y puntuación — FungiFlush</h1>
+  <div class="sub">
+    77 cartas y 30 simbiontes · 8 escenarios por carta · <b>22 hallazgos, todos arreglados</b> ·
+    verificado con <code>npm run audit:behavior</code>
+  </div>
+
+  <div class="box cool">
+    <h3>Resultado final</h3>
+    <p>
+      La herramienta de auditoría reporta ahora <b>0 efectos que no disparen nunca</b> y
+      <b>0 hallazgos estructurales</b>. Antes reportaba 9 efectos muertos y 14 piezas con la condición
+      mal apuntada. Gates: <code>typecheck</code> · <b>470/470</b> tests · <code>validate</code> ·
+      <code>audit:desc</code> · <code>sim:balance</code> · <code>sim:board</code> · <code>smoke</code> (0/0/0) ·
+      4 probes del HUD en 0 fallos.
+    </p>
+  </div>
+
+  <div class="box">
+    <h3>Cómo se verificó</h3>
+    <p>
+      Dos capas. <b>Estática</b>: combinaciones que el motor resuelve mal por construcción.
+      <b>Empírica</b>: cada carta se juega de verdad en 8 escenarios —reparto, jugada (primera y última),
+      jugada corta, jugada con estados, carta retenida en mano, descarte y cierre de ciego— y se registra
+      <code>trigger:fired</code>, que trae la definición del efecto. La mano se arma <i>en el reparto</i>
+      (mazo de exactamente 6 cartas = la mano entera) para que los efectos de <code>ON_ROUND_START</code> y
+      <code>ON_BLIND_SELECTED</code> también vean la carta; y los rellenos se derivan de las condiciones de
+      cada carta para que las condiciones de conteo sean satisfacibles. El sobre-disparo se mide aparte:
+      5 cartas jugadas, 4 de <i>otro</i> elemento y <i>otra</i> familia.
+    </p>
+  </div>
+
+  <div class="tally">
+    <div class="pill"><b>9</b><span>activación (efecto muerto)</span></div>
+    <div class="pill"><b>5</b><span>puntuación (sobre-disparo)</span></div>
+    <div class="pill"><b>5</b><span>texto ≠ condición</span></div>
+    <div class="pill"><b>2</b><span>alcance del disparador</span></div>
+    <div class="pill"><b>1</b><span>decisión de contenido</span></div>
+    <div class="pill"><b>22</b><span>arreglados</span></div>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>Las dos causas raíz <span class="count">(arregladas en el motor)</span></h2>
+
+  <div class="box cool">
+    <h3>1 · Las condiciones miraban al <i>dueño</i> del efecto, no a la carta que disparó el evento</h3>
+    <p>
+      <code>element_is</code> / <code>family_is</code> / <code>rarity_is</code> se evaluaban contra el
+      <b>sujeto</b> (<code>source.card</code>, la carta que <i>lleva</i> el efecto). De ahí los dos síntomas
+      opuestos: si el valor pedido coincidía con la propia carta, la condición era <b>siempre verdadera</b>
+      (el efecto se disparaba con cualquier carta jugada); si no coincidía, <b>siempre falsa</b> (el efecto
+      no disparaba jamás). En los <b>simbiontes</b> era peor: <code>sourceFromJoker</code> no expone
+      <code>card</code>, así que el sujeto es <code>undefined</code> y toda condición de elemento/familia
+      era falsa sin excepción — <b>5 simbiontes muertos</b>.
+    </p>
+    <p>
+      <b>Arreglo:</b> condiciones nuevas <code>trigger_element_is</code> / <code>trigger_family_is</code> /
+      <code>trigger_rarity_is</code>, que evalúan la <b>carta disparadora</b> (se expone
+      <code>triggerCard</code> en <code>ConditionWorld</code>). <code>element_is</code> y sus hermanas
+      <b>no cambian de significado</b>: siguen siendo la condición del dueño, y hay un test que lo protege.
+      11 piezas migradas.
+    </p>
+  </div>
+
+  <div class="box cool">
+    <h3>2 · Un estado aplicado no era visible en la misma mano</h3>
+    <p>
+      <code>APPLY_STATUS</code> no muta la carta: acumula el pedido en <code>statusRequests</code> y
+      <code>applyDeltas</code> lo aplica al cerrar la mano (así el preview del HUD no ensucia el mazo). El
+      efecto colateral: una carta que se aplica un estado y lo consulta en la <b>misma</b> mano no lo veía.
+      <i>Esporocarpo Latente</i> ("al puntuar revienta el Sobrecrecimiento que se puso al jugarse") revivía
+      una mano <b>tarde</b>.
+    </p>
+    <p>
+      <b>Arreglo:</b> las condiciones de estado (<code>has_status</code>, <code>status_in_hand</code>) y
+      <code>CONSUME_STATUS</code> miran también los <b>pedidos pendientes</b>
+      (<code>ConditionWorld.pendingStatuses</code>). Y consumir <b>recorta o elimina el pedido</b>, para que
+      <code>applyDeltas</code> no vuelva a aplicar lo que se acaba de cosechar — si no, sería doble
+      contabilidad. Hay un test que verifica que la carta termina <b>sin</b> el estado.
+    </p>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>1 · Activación — el efecto no disparaba nunca <span class="count">(9 → 0)</span></h2>
+  <table>
+    <thead>
+      <tr><th>Carta</th><th>Comportamiento esperado (su texto)</th><th>Qué pasaba</th><th>Tipo</th><th>Sev.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="card"><span class="name">Conducto de Esporas</span><span class="id">deep_spore_conduit</span><span class="kind">carta · neutral</span></td>
+        <td><span class="txt">Cada micelio jugado: +1 Espora.</span></td>
+        <td>0 disparos: <code>element_is: mycelium</code> miraba al Conducto, que es <code>neutral</code> → siempre falsa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Floración Venenosa</span><span class="id">joker_poison_bloom</span><span class="kind">simbionte</span></td>
+        <td><span class="txt">Cada carta de Veneno jugada: x1.5 Esporas.</span></td>
+        <td>0 disparos: simbionte sin <code>card</code> → sujeto <code>undefined</code>.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Lente de Cristal</span><span class="id">joker_crystal_lens</span><span class="kind">simbionte</span></td>
+        <td><span class="txt">Cada carta de Cristal jugada: +4 Esporas.</span></td>
+        <td>0 disparos, misma causa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Red Micelial</span><span class="id">joker_mycelial_network</span><span class="kind">simbionte</span></td>
+        <td><span class="txt">Cada carta Tricolomatácea jugada: +10 de Sustrato.</span></td>
+        <td>0 disparos, misma causa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Pacto Simbiótico</span><span class="id">joker_symbiotic_pact</span><span class="kind">simbionte</span></td>
+        <td><span class="txt">Cada carta de Simbiosis jugada: +1 de dinero.</span></td>
+        <td>0 disparos, misma causa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Impulso Parásito</span><span class="id">joker_parasitic_drive</span><span class="kind">simbionte</span></td>
+        <td><span class="txt">Cada carta de Parásito jugada se dispara una vez más.</span></td>
+        <td>0 disparos, misma causa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Rizomorfo en Cadena</span><span class="id">deep_chain_rhizomorph</span><span class="kind">carta · exp.</span></td>
+        <td><span class="txt">Si es la última carta de la mano, vuelve a disparar su propio efecto.</span></td>
+        <td>0 disparos: <code>is_last_card_of_hand</code> necesita la carta disparadora, y <code>ON_HAND_SCORED</code> se despacha global sin carta → siempre falsa.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Esporocarpo Latente</span><span class="id">deep_latent_sporocarp</span><span class="kind">carta · exp.</span></td>
+        <td><span class="txt">Al jugarse se cubre de Sobrecrecimiento; al puntuar lo revienta y lo cobra como Esporas.</span></td>
+        <td>Disparaba <b>una mano tarde</b>: el Sobrecrecimiento se aplica al cerrar la resolución, así que la condición de la misma mano no lo veía.</td>
+        <td>Activación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Enrejado de Carroña</span><span class="id">deep_carrion_lattice</span><span class="kind">carta · exp.</span></td>
+        <td><span class="txt">Pudre una carta de la mano por 3 ciegos; al puntuar con Putrefacción: +12 Sustrato.</span></td>
+        <td>No veía la podredumbre que él mismo acababa de aplicar → el +12 llegaba una mano tarde si era la única fuente.</td>
+        <td>Activación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ================================================================ -->
+  <h2>2 · Puntuación — sobre-disparo <span class="count">(5 → 0)</span></h2>
+  <p class="lead">
+    Medido: 5 cartas jugadas donde <b>4 son de otro elemento y otra familia</b>. Antes disparaban 5 veces;
+    ahora 1 (la propia carta, que sí es de ese elemento).
+  </p>
+  <table>
+    <thead>
+      <tr><th>Carta</th><th>Comportamiento esperado (su texto)</th><th>Qué pasaba</th><th>Tipo</th><th>Sev.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="card"><span class="name">Mycena Lucifer</span><span class="id">mycena_lucifer</span><span class="kind">carta · legendaria</span></td>
+        <td><span class="txt">Cada carta de Cristal jugada: x1.5 Esporas.</span></td>
+        <td>Disparaba <b>5 veces</b> con 4 cartas que no eran Cristal → <b>×7.6 en una mano de 5</b>.</td>
+        <td>Puntuación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Amanita Pantera</span><span class="id">amanita_pantherina</span><span class="kind">carta · uncommon</span></td>
+        <td><span class="txt">Cada carta de Veneno jugada: +3 Esporas.</span></td>
+        <td>5 disparos con 4 cartas que no eran Veneno → +15 en vez de +3.</td>
+        <td>Puntuación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Racimo de Ostra</span><span class="id">oyster_cluster</span><span class="kind">carta · uncommon</span></td>
+        <td><span class="txt">Cada carta Tricolomatácea jugada: +3 de Sustrato.</span></td>
+        <td>5 disparos con 4 cartas de otra familia → +15 en vez de +3.</td>
+        <td>Puntuación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Nodo de Red</span><span class="id">colony_network_node</span><span class="kind">carta · uncommon</span></td>
+        <td><span class="txt">Cada carta de Micelio que juegues suma +3 de Sustrato mientras está en la mano.</span></td>
+        <td>5 disparos con 4 cartas que no eran Micelio → +15 en vez de +3. La parte «mientras está en la mano» sí era correcta.</td>
+        <td>Puntuación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Hilo Agaricáceo</span><span class="id">colony_agaric_thread</span><span class="kind">carta · common</span></td>
+        <td><span class="txt">Cada vez que juegues una carta de Micelio, suma +2 de Sustrato. Micelio de familia Agaricácea.</span></td>
+        <td>5 disparos con 4 cartas que no eran Micelio → +10 en vez de +2.</td>
+        <td>Puntuación</td><td><span class="sev alta">ALTA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ================================================================ -->
+  <h2>3 · Puntuación — el texto decía «en la mano» y la condición contaba cartas puntuadas <span class="count">(5 → 0)</span></h2>
+  <p class="lead">
+    El efecto funcionaba, pero no en el caso que el texto describe: las cartas que se quedaban en la mano
+    <b>no</b> contaban. La condición era la correcta (sus hermanas con la misma condición dicen
+    «puntuadas»), así que se corrigió el texto.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Carta</th><th>Texto (antes → después)</th><th>Qué pasaba</th><th>Tipo</th><th>Sev.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="card"><span class="name">Rizomorfo</span><span class="id">colony_rhizomorph</span></td>
+        <td>«Con 3 o más Tricolomatáceas <b>en la mano</b>…» → «…<b>puntuadas</b>…»</td>
+        <td>Cuenta <code>scored_family_count_gte</code>: solo las jugadas.</td>
+        <td>Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Flor de Esquirla</span><span class="id">crystal_shard_bloom</span></td>
+        <td>«Con 5 cartas o más <b>en la mano jugada</b>…» → «Con 5 o más cartas <b>puntuadas</b>…»</td>
+        <td>Cuenta <code>scored_count_gte</code>; el texto se contradecía a sí mismo.</td>
+        <td>Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Polvo de Psilocibe</span><span class="id">spore_psilocybe_dust</span></td>
+        <td>«Con 2 o más Esporas <b>en la mano</b>…» → «…<b>puntuadas</b>…»</td>
+        <td>Cuenta <code>scored_element_count_gte</code>.</td>
+        <td>Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Red de Amanita</span><span class="id">colony_amanita_web</span></td>
+        <td>«Con 2 o más Tricolomatáceas <b>en la mano</b>…» → «…<b>puntuadas</b>…»</td>
+        <td>Cuenta <code>scored_family_count_gte</code>.</td>
+        <td>Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Filamento de Clavaria</span><span class="id">colony_clavaria_filament</span></td>
+        <td>«Con 3 o más Tricolomatáceas <b>en la mano</b>…» → «…<b>puntuadas</b>…»</td>
+        <td>Cuenta <code>scored_family_count_gte</code>.</td>
+        <td>Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ================================================================ -->
+  <h2>4 · Alcance del disparador <span class="count">(2 → 0)</span></h2>
+  <table>
+    <thead>
+      <tr><th>Carta</th><th>Comportamiento esperado (su texto)</th><th>Qué pasaba</th><th>Tipo</th><th>Sev.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="card"><span class="name">Anillo de Matamoscas</span><span class="id">fly_agaric_ring</span><span class="kind">carta · rare</span></td>
+        <td><span class="txt">Si puntúan 3+ cartas de Espora: x1.7 Esporas.</span></td>
+        <td>Con <code>ON_PLAY</code> solo funcionaba si se jugaba; retenida en la mano no hacía nada. Su hermana <i>Pastel de Hadas</i> usa la misma condición con <code>ON_HAND_SCORED</code>. <b>Al pasar a <code>ON_HAND_SCORED</code> se bajó el multiplicador de ×2 a ×1.7</b> para compensar que ahora también dispara desde la mano.</td>
+        <td>Activación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+      <tr>
+        <td class="card"><span class="name">Bejín Gigante</span><span class="id">spore_giant_puffball</span><span class="kind">carta · rare</span></td>
+        <td><span class="txt">…Con otro hongo de esporas en mano: +2 Esporas.</span></td>
+        <td>El <code>ON_PLAY</code> acá <b>sí</b> es correcto (jugado, la mano son «los otros»), pero el texto no lo decía. Se aclaró: «Al jugarse, con otro hongo de esporas en mano».</td>
+        <td>Activación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">ARREGLADO</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ================================================================ -->
+  <h2>5 · Decisión de contenido <span class="count">(1 → 0)</span></h2>
+  <table>
+    <thead>
+      <tr><th>Carta</th><th>Comportamiento esperado (su texto)</th><th>Qué pasaba</th><th>Tipo</th><th>Sev.</th><th>Estado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="card"><span class="name">Ceniza de Clavaria</span><span class="id">decay_clavaria_ash</span><span class="kind">carta · uncommon</span></td>
+        <td><span class="txt">Consume 3 puntos de Pudriéndose y los convierte en Esporas.</span></td>
+        <td>Consumía <b>1 pila de sí misma</b> (no 3) y pagaba 3 Esporas, y exigía estar podrida ella. Era la única del arquetipo que no cosechaba «tus cartas».</td>
+        <td>Activación + Puntuación</td><td><span class="sev media">MEDIA</span></td><td><span class="sev ok">RESUELTA</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box cool">
+    <h3>Qué se decidió para la Ceniza de Clavaria</h3>
+    <p><b>Consume 1 punto de Pudriéndose de CADA carta podrida: +3 Esporas cada una.</b></p>
+    <ul>
+      <li>Condición <code>has_status</code> → <code>status_in_hand</code>; target <code>all_cards</code>;
+        <code>CONSUME_STATUS</code> con <code>value: 3</code> y <code>stacks: 1</code>.</li>
+      <li>Criterio: versión <b>débil y predecible</b> de la rara <i>Flor de Carroña</i>, que toma
+        <b>todas</b> las pilas a <b>+4</b>. La Ceniza paga por <b>número de cartas podridas</b>; la rara,
+        por <b>profundidad</b>. Niche distinto, jerarquía de rareza respetada.</li>
+    </ul>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>Verificación</h2>
+  <ul>
+    <li><code>npm run audit:behavior</code>: <b>0</b> efectos que no disparen y <b>0</b> hallazgos
+      estructurales. El sobre-disparo medido bajó de 5 disparos a <b>1</b> en las 5 cartas.</li>
+    <li><b>470/470</b> tests. Nuevos: <code>tests/triggerConditions.test.ts</code> (7 casos: las dos
+      condiciones nuevas, el caso simbionte, la guarda de que <code>element_is</code> no cambió de
+      significado, y los estados pendientes con su cancelación) y 2 más en
+      <code>tests/decayHarvest.test.ts</code> para la Ceniza.</li>
+    <li><code>sim:balance</code> (500 partidas): ante promedio <b>2.25 → 2.32</b>, ciega superadas
+      <b>5.12 → 5.36</b>, mejor mano <b>2437 → 2882</b>. Es un <b>buff neto</b> (~+3% de ante), esperable:
+      se apagaron 5 sobre-disparos pero se encendieron 5 simbiontes, 1 carta de expansión y 4 efectos que
+      no hacían nada. <b>0 cortes por overflow</b>.</li>
+    <li><b>Recalibración del Anillo de Matamoscas:</b> como ahora también dispara desde la mano, el
+      multiplicador bajó de <b>×2 a ×1.7</b> — el valor de su par más cercano (<i>Bracket del Despertar</i>,
+      rara, <code>ON_HAND_SCORED</code>, «5+ cartas puntuadas», ×1.7) y por encima de los no-comunes de
+      Espora (×1.3 a 2+ Esporas, ×1.4 a 3+ en 2 familias). Medido en una mano representativa de 5 Esporas:
+      el Anillo aporta <b>+70%</b> al total con ×1.7 (antes +100% con ×2, es decir −15% sobre esas manos).</li>
+    <li><code>sim:board</code> estable · <code>smoke</code> 0/0/0 · los 4 probes del HUD en 0 fallos.</li>
+  </ul>
+
+  <div class="box">
+    <h3>Nota de implementación</h3>
+    <p>
+      Al pasar <i>Rizomorfo en Cadena</i> a <code>ON_PLAY</code>, su <code>RETRIGGER</code> volvía a
+      disparar su propio eco (que ahora también escucha <code>ON_PLAY</code>) y generaba un bucle: la
+      primera medición dio <b>2692 cortes por overflow</b>. Se cortó con <code>once: "per_round"</code> en
+      el eco, que es exactamente para lo que existe esa regla. Sin el gate de <code>sim:balance</code> el
+      bucle habría pasado inadvertido.
+    </p>
+  </div>
+
+  <footer>
+    Generado con <code>npx tsx tools/audit-card-behavior.ts</code> · 77 cartas + 30 simbiontes auditados ·
+    22 hallazgos, 22 arreglados.
+  </footer>
+
+</div>
+</body>
+</html>

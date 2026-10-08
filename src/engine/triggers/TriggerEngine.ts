@@ -197,6 +197,14 @@ export class TriggerEngine {
         !!triggerCard && first?.uid === triggerCard.uid && res.cardsPlayedThisRound === 0,
       isLastCardOfHand: !!triggerCard && last?.uid === triggerCard.uid,
       isFirstPlayOfRound: res.isFirstPlayOfRound,
+      // La carta disparadora viaja al mundo para las condiciones `trigger_*`.
+      // Los eventos globales no la tienen: ahi queda ausente y esas condiciones
+      // son falsas (que es lo correcto: "cada carta de X jugada" no aplica si no
+      // se jugo ninguna carta).
+      ...(triggerCard ? { triggerCard } : {}),
+      // Estados pedidos y todavia no asentados: sin esto, una carta que se
+      // aplica un estado y lo consulta en la misma mano no lo ve.
+      pendingStatuses: res.statusRequests.map((r) => ({ uid: r.uid, status: r.status })),
     };
   }
 
@@ -226,6 +234,19 @@ export class TriggerEngine {
         return [pick(res.scoredCards)];
       case 'random_hand':
         return [pick(res.hand)];
+      // Barrido: las jugadas + las retenidas. Se dedupe por uid porque en los
+      // DESCARTES `scored` son las cartas descartadas y `hand` es la mano
+      // completa: sin dedupe, una carta descartada se contaria dos veces.
+      case 'all_cards': {
+        const seen = new Set<string>();
+        const all: CardInstance[] = [];
+        for (const c of [...res.scoredCards, ...res.hand]) {
+          if (seen.has(c.uid)) continue;
+          seen.add(c.uid);
+          all.push(c);
+        }
+        return all.length > 0 ? all : [undefined];
+      }
       case 'previous_scored':
       case 'next_scored': {
         // Devuelve [] si no hay vecino: el efecto simplemente no se aplica.

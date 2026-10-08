@@ -514,7 +514,7 @@
     },
     "fly_agaric_ring": {
       "name": "Anillo de Matamoscas",
-      "desc": "Si puntúan 3+ cartas de Espora: x2 Esporas."
+      "desc": "Si puntúan 3+ cartas de Espora: x1.7 Esporas."
     },
     "ghost_fungus": {
       "name": "Hongo Fantasma",
@@ -542,7 +542,7 @@
     },
     "spore_giant_puffball": {
       "name": "Bejín Gigante",
-      "desc": "Un bejín que se hinchó más allá de su propia piel. Con otro hongo de esporas en mano: +2 Esporas."
+      "desc": "Bejín hinchado más allá de su piel. Al jugarse, con otro hongo de esporas en mano: +2 Esporas."
     },
     "mycelium_elder_web": {
       "name": "Seta Anciana",
@@ -594,7 +594,7 @@
     },
     "colony_rhizomorph": {
       "name": "Rizomorfo",
-      "desc": "Con 3 o más Tricolomatáceas en la mano, suma +14 de Sustrato."
+      "desc": "Con 3 o más Tricolomatáceas puntuadas, suma +14 de Sustrato."
     },
     "decay_compost_heap": {
       "name": "Pila de Compost",
@@ -610,7 +610,7 @@
     },
     "crystal_shard_bloom": {
       "name": "Flor de Esquirla",
-      "desc": "Con 5 cartas o más en la mano jugada, multiplica las Esporas ×3."
+      "desc": "Con 5 o más cartas puntuadas, multiplica las Esporas ×3."
     },
     "wild_dung_beetle": {
       "name": "Escarabajo Pelotero",
@@ -626,7 +626,7 @@
     },
     "spore_psilocybe_dust": {
       "name": "Polvo de Psilocibe",
-      "desc": "Con 2 o más Esporas en la mano, multiplica las Esporas ×1.3. Espora parásita."
+      "desc": "Con 2 o más Esporas puntuadas, multiplica las Esporas ×1.3. Espora parásita."
     },
     "spore_clavaria_spray": {
       "name": "Rocío de Clavaria",
@@ -642,11 +642,11 @@
     },
     "colony_amanita_web": {
       "name": "Red de Amanita",
-      "desc": "Con 2 o más Tricolomatáceas en la mano, suma +4 de Sustrato. Micelio de familia Amanitácea."
+      "desc": "Con 2 o más Tricolomatáceas puntuadas, suma +4 de Sustrato. Micelio de familia Amanitácea."
     },
     "colony_clavaria_filament": {
       "name": "Filamento de Clavaria",
-      "desc": "Con 3 o más Tricolomatáceas en la mano, suma +10 de Sustrato. Micelio de familia coralina."
+      "desc": "Con 3 o más Tricolomatáceas puntuadas, suma +10 de Sustrato. Micelio de familia coralina."
     },
     "decay_agaric_mould": {
       "name": "Moho Agaricáceo",
@@ -658,7 +658,7 @@
     },
     "decay_clavaria_ash": {
       "name": "Ceniza de Clavaria",
-      "desc": "Consume 3 puntos de Pudriéndose y los convierte en Esporas. Putrefacción de familia coralina."
+      "desc": "Consume 1 punto de Pudriéndose de cada carta podrida: +3 Esporas cada una. Familia coralina."
     },
     "decay_amanita_blight": {
       "name": "Tizón de Amanita",

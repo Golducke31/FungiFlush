@@ -14,6 +14,7 @@
     "packs": "node tools/genPackIndex.mjs",
     "validate": "tsx tools/validate-content.ts",
     "audit:desc": "tsx tools/audit-card-desc.ts",
+    "audit:behavior": "tsx tools/audit-card-behavior.ts",
     "sim": "tsx tools/simulate.ts",
     "sim:balance": "tsx tools/simulate.ts --runs 500 --quiet",
     "sim:board": "tsx tools/boardSim.ts",

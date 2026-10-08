@@ -175,18 +175,33 @@ const HANDLERS: HandlerMap = {
    * Mira la carta OBJETIVO (o la fuente). `full` cosecha todas las pilas; si no,
    * baja `stacks` (o 1) y descarta el status cuando llega a 0.
    *
-   * La mutacion es DIRECTA, igual que APPLY_STATUS: `statusRequests` existe en
-   * `ResolutionContext` pero NUNCA llego a aplicarse (seria un bug latente), asi
-   * que escribir ahi dejaria el status vivo en la carta y el "consumo" seria
-   * solo cosmetico. Se respeta el `dryRun` para no consumir de verdad durante
-   * la previsualizacion de score que corre el HUD.
+   * Cobra DOS fuentes de pilas, y las dos hacen falta:
+   *   1. las ya ASENTADAS en `card.statuses`;
+   *   2. las PEDIDAS en esta misma resolucion (`res.statusRequests`).
+   * `APPLY_STATUS` no muta la carta: acumula el pedido y `applyDeltas` lo aplica
+   * al cerrar la mano. Si solo se mirara (1), una carta que se aplica un estado y
+   * lo cosecha en la MISMA mano no veria nada — el caso de `deep_latent_sporocarp`
+   * ("al puntuar revienta el Sobrecrecimiento que se puso al jugarse").
+   *
+   * Al consumir de (2) hay que RECORTAR o ELIMINAR el pedido: si no,
+   * `applyDeltas` volveria a aplicar lo que se acaba de cosechar. Se descuenta
+   * primero de lo asentado y despues de lo pedido.
+   *
+   * Se respeta el `dryRun` para no consumir de verdad durante la previsualizacion
+   * de score que corre el HUD.
    */
   CONSUME_STATUS: (a, env) => {
     const target = env.target ?? env.source.card;
     if (!target) return;
+
     const existing = target.statuses.find((s) => s.type === a.status);
-    if (!existing || existing.value <= 0) return;
-    const stacks = a.full ? existing.value : Math.min(existing.value, Math.max(1, a.stacks ?? 1));
+    const settled = existing && existing.value > 0 ? existing.value : 0;
+    const pending = env.res.statusRequests.filter((r) => r.uid === target.uid && r.status === a.status);
+    const pendingTotal = pending.reduce((acc, r) => acc + Math.max(0, r.value), 0);
+
+    const total = settled + pendingTotal;
+    if (total <= 0) return;
+    const stacks = a.full ? total : Math.min(total, Math.max(1, a.stacks ?? 1));
     const gain = (a.value ?? 1) * stacks;
     if (gain === 0) return;
 
@@ -205,9 +220,28 @@ const HANDLERS: HandlerMap = {
         gainKind: a.gain === 'substrate' ? 'substrate' : 'spores',
         sourceId: env.source.uid,
       });
-      const left = existing.value - stacks;
-      if (left <= 0) target.statuses = target.statuses.filter((s) => s !== existing);
-      else existing.value = left;
+
+      let left = stacks;
+      if (existing && settled > 0) {
+        const take = Math.min(settled, left);
+        left -= take;
+        const remaining = settled - take;
+        if (remaining <= 0) target.statuses = target.statuses.filter((s) => s !== existing);
+        else existing.value = remaining;
+      }
+      // Lo pedido se recorta para que `applyDeltas` no lo vuelva a poner.
+      for (const request of pending) {
+        if (left <= 0) break;
+        const take = Math.min(Math.max(0, request.value), left);
+        left -= take;
+        request.value -= take;
+      }
+      for (let i = env.res.statusRequests.length - 1; i >= 0; i -= 1) {
+        const request = env.res.statusRequests[i];
+        if (request && request.uid === target.uid && request.status === a.status && request.value <= 0) {
+          env.res.statusRequests.splice(i, 1);
+        }
+      }
     }
   },
 

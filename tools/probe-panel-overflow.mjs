@@ -190,9 +190,11 @@ if (await has('.panel.is-cleared')) {
   await visit('cleared', 'cleared');
 
   // --- F1.1: el desglose de FUNGIS no debe quedar cortado ---
-  // Se lleva el cuerpo al fondo y se mide la ULTIMA fila del bloque de Fungis
-  // y el pie. Si el cuerpo scrollea (`overflow-y: auto`) y despues de scrollear
-  // la ultima fila entra, el desglose es alcanzable; si no, sigue recortado.
+  // El cuerpo lleva los DOS desgloses. Desde la tanda de fixes del HUD se
+  // exige ademas que NO haya que scrollear: en el celular horizontal los
+  // desgloses van LADO A LADO y entran en el alto. `overflow-y: auto` sigue
+  // puesto como red de seguridad (un viewport muy bajo), pero con el contenido
+  // entero el scroll tiene que ser 0.
   const fungiFit = await page.evaluate(() => {
     const panel = document.querySelector('.panel.is-cleared');
     if (!panel) return { none: true };
@@ -222,13 +224,14 @@ if (await has('.panel.is-cleared')) {
     const ok =
       fungiFit.actionsVisible === true &&
       fungiFit.lastRowVisible === true &&
-      fungiFit.bodyOverflowY === 'auto';
+      fungiFit.bodyOverflowY === 'auto' &&
+      fungiFit.bodyScroll === 0;
     if (!ok) f11Fail = true;
     console.log(
       `  ${ok ? 'OK' : 'XX'} [F1.1] desglose Fungis: filas=${fungiFit.fungiRows} ` +
         `ultimaFilaBottom=${fungiFit.lastRowBottom}/${fungiFit.vh} visible=${fungiFit.lastRowVisible} | ` +
         `pieBottom=${fungiFit.actionsBottom} visible=${fungiFit.actionsVisible} | ` +
-        `bodyScroll=${fungiFit.bodyScroll} overflowY=${fungiFit.bodyOverflowY}`,
+        `bodyScroll=${fungiFit.bodyScroll} (0 = sin scroll) overflowY=${fungiFit.bodyOverflowY}`,
     );
   }
 

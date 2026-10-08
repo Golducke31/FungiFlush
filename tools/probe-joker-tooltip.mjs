@@ -9,7 +9,9 @@
  *      is-visible.is-joker`) con: nombre, rotulo "Simbiontes · <rareza>",
  *      descripcion de habilidad (lila) y la etiqueta de la habilidad concreta.
  *   3. Al salir el panel se oculta.
- *   4. En TACTIL el long-press (>420ms con el dedo quieto) tambien lo muestra.
+ *   4. En TACTIL el gesto lo tiene la CARTA de la mesa, no la ficha: mantener
+ *      pulsado el SIMBIONTE en su ranura abre el panel, y mantener pulsada la
+ *      ficha del HUD ya NO hace nada (antes era al reves).
  *   5. El panel de CARTA no queda con la clase `is-joker` (no se contaminan).
  *
  *   node tools/probe-joker-tooltip.mjs
@@ -236,6 +238,9 @@ const touchErrors = await (async () => {
     if (!withLabel) return null;
     const joker = ff.engine.registry.instantiateJoker(withLabel.id);
     ff.engine.run.jokers.push(joker);
+    // `syncJokers` es publico para los probes: sin esto no existe la Card3D del
+    // Simbionte y no hay nada que proyectar ni que raycastear.
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
     ff.hud.refreshPanel?.();
     return { uid: joker.uid };
   });
@@ -246,16 +251,68 @@ const touchErrors = await (async () => {
   }
   const chipSel = `.joker-chip[data-uid="${seeded.uid}"]`;
   await page.waitForFunction((s) => Boolean(document.querySelector(s)), chipSel, { timeout: 5000 });
+
+  // El Simbionte entra a su ranura con un TWEEN: se espera a que su posicion de
+  // mundo asiente antes de proyectarla, o el punto medido queda corrido.
+  await wait(600);
+  await page
+    .waitForFunction(
+      (uid) => {
+        const c = window.__fungiflush.scene.jokerCards.get(uid);
+        if (!c) return false;
+        const p = c.group.position;
+        const prev = window.__jokerSettle;
+        window.__jokerSettle = { x: p.x, z: p.z };
+        return Boolean(prev) && Math.abs(prev.x - p.x) < 1e-5 && Math.abs(prev.z - p.z) < 1e-5;
+      },
+      seeded.uid,
+      { timeout: 8000 },
+    )
+    .catch(() => {});
+
+  // --- 4a. La FICHA del HUD ya NO abre el panel (el gesto se movio a la carta) ---
   const box = await page.locator(chipSel).boundingBox();
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  // pointerdown + esperar (el long-press dispara a los 420ms)
-  await page.mouse.move(cx, cy);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await wait(650);
-  const visible = await page.evaluate(() => Boolean(document.querySelector('.hud-tooltip.is-visible.is-joker')));
+  await wait(700);
+  const fromChip = await page.evaluate(() =>
+    Boolean(document.querySelector('.hud-tooltip.is-visible.is-joker')),
+  );
   await page.mouse.up();
-  check(visible, 'en tactil el LONG-PRESS muestra el panel del Simbionte');
+  check(
+    fromChip === false,
+    'en tactil el long-press sobre la FICHA del HUD ya NO muestra el panel',
+    `visible=${fromChip}`,
+  );
+
+  // --- 4b. La CARTA de la mesa SI lo abre ---
+  await page.evaluate(() => window.__fungiflush.hud.hideTooltip?.());
+  await wait(250);
+  const pos = await page.evaluate((uid) => {
+    const ff = window.__fungiflush;
+    const c = ff.scene.jokerCards.get(uid);
+    const canvas = document.querySelector('canvas');
+    if (!c || !canvas) return null;
+    const v = c.group.position.clone();
+    v.project(ff.scene.rig.camera);
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: Math.round((v.x * 0.5 + 0.5) * r.width + r.left),
+      y: Math.round((-v.y * 0.5 + 0.5) * r.height + r.top),
+    };
+  }, seeded.uid);
+  if (!pos) {
+    check(false, 'se pudo proyectar el Simbionte a coordenadas de pantalla');
+  } else {
+    await page.mouse.move(pos.x, pos.y);
+    await page.mouse.down();
+    await wait(700);
+    const fromCard = await page.evaluate(() =>
+      Boolean(document.querySelector('.hud-tooltip.is-visible.is-joker')),
+    );
+    await page.mouse.up();
+    check(fromCard, 'en tactil el LONG-PRESS sobre la CARTA muestra el panel del Simbionte');
+  }
 
   await context.close();
   return errors;

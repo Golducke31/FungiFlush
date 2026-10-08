@@ -1294,13 +1294,10 @@ body {
     0 0 16px rgba(167, 139, 250, 0.28);
 }
 
-/* Long-press en tactil: la ficha se "hunde" mientras se mantiene el dedo, asi
-   el jugador sabe que la etiqueta esta por aparecer (mismo idioma que la
-   seleccion de cartas, que tambien da feedback antes de actuar). */
-.joker-chip.is-pressing {
-  transform: scale(0.96);
-  border-color: rgba(196, 168, 255, 0.7);
-}
+/* `.joker-chip.is-pressing` se ELIMINO junto con el long-press de la ficha: la
+   etiqueta rica del Simbionte ahora la abre la CARTA de la mesa (mantener
+   pulsado el simbionte en su ranura), asi que la ficha no tiene gesto que
+   anticipar. El hover de raton sigue abriendo el panel (via escritorio). */
 
 .joker-chip-name {
   flex: 1;
@@ -8052,28 +8049,34 @@ body {
           `100dvh - 260px` que ya no existe) que habia que recalcular a mano
           cada vez que una barra cambiaba de alto. */
   /* P0.3 (HUD movil) — El panel de misiones se vuelve lateral y se desliza
-     desde la izquierda. Cuando esta plegado (`is-open` ausente) queda fuera de
-     pantalla por transform, asi que NO tapa el tablero ni come toques. El chip
-     plegable (`hud-missions-toggle`) es el que lo abre. */
+     desde la IZQUIERDA, que es el lado donde vive el chip que lo abre. Cuando
+     esta plegado (`is-open` ausente) queda fuera de pantalla por transform, asi
+     que NO tapa el tablero ni come toques.
+
+     ⚠️ El chip se movio a la izquierda en F4/A, pero el cajon se quedo anclado a
+     la derecha: el boton estaba a la izquierda y el desplegable salia por el
+     lado OPUESTO, al otro extremo de la pantalla. El cajon se espeja entero
+     (`left: 0` + `translateX(-110%)` + radios/borde/sombra del lado derecho)
+     para que salga pegado a su boton. */
   .hud-missions-panel {
     /* Cuelga de la barra superior: `--hud-top-h` menos 10px, para que el borde
        del panel quede apenas por debajo del borde de la barra (sin hueco). */
     top: calc(var(--hud-top-h) - 10px + var(--safe-t));
     bottom: calc(var(--hud-bottom-h) + 8px + var(--safe-b));
-    /* Cajon DERECHO: el chip que lo abre vive arriba a la derecha. */
-    right: 0;
-    left: auto;
+    /* Cajon IZQUIERDO: el chip que lo abre vive arriba a la izquierda. */
+    left: 0;
+    right: auto;
     max-width: 70vw;
     width: min(280px, 70vw);
     max-height: none;
-    transform: translateX(110%);
+    transform: translateX(-110%);
     transition: transform 0.22s var(--ease-out, ease);
     pointer-events: none;
     background: linear-gradient(180deg, rgba(14, 21, 30, 0.94), rgba(10, 15, 22, 0.9));
-    border-left: 1px solid var(--frame-edge);
-    border-top-left-radius: 12px;
-    border-bottom-left-radius: 12px;
-    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.5);
+    border-right: 1px solid var(--frame-edge);
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5);
     gap: 4px;
   }
 
@@ -9185,11 +9188,43 @@ body {
   }
 
   /* El cuerpo es quien scrollea: se lleva todo el alto que sobra entre el total
-     y el pie. */
+     y el pie.
+
+     APROVECHA EL LANDSCAPE: los dos desgloses (puntaje y Fungis) van LADO A
+     LADO en vez de apilados. Apilados miden ~100px cada uno y, sumados al
+     titulo, el total y el pie, no entraban en los 390-412px de alto del movil:
+     habia que scrollear para llegar al desglose de Fungis y a la linea del
+     mazo, que es justo lo que el jugador quiere leer al cerrar el ciego. En
+     horizontal sobran ~900px de ancho y falta alto, asi que se cambia el eje.
+
+     `flex-wrap` + `flex: 1 1 0` hace que con UN solo bloque ocupe el ancho
+     entero (no queda media pantalla vacia) y que con dos se repartan mitad y
+     mitad. La linea del mazo, que es una frase larga, cruza abajo a todo lo
+     ancho. `overflow-y` se deja puesto como red: si algun dia un viewport muy
+     bajo no alcanza, el jugador puede scrollear en vez de perder contenido. */
   .panel.is-cleared > .cleared-body {
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    align-content: flex-start;
+    gap: 8px;
+  }
+
+  /* Cada desglose se lleva la mitad del ancho. `max-width` y `margin` base se
+     anulan: son del layout apilado (donde el bloque se centraba con `auto`). */
+  .panel.is-cleared > .cleared-body > .score-breakdown {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+  }
+
+  .panel.is-cleared > .cleared-body > .deck-state-line {
+    flex: 1 1 100%;
+    margin-top: 0;
   }
 
   /* El pie va pegado al fondo del panel, siempre visible: el desglose scrollea

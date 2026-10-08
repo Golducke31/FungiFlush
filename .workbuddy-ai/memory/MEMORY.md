@@ -57,8 +57,14 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo: Goldu
 ## Combos / Estados / Jokers
 - COMBOS: solo `element:*`(mult), `family:*`(flat), `diversity:5`. POKER eliminado. `closeCombo` sigue en todas las manos.
 - `jokerSlots` default 5. `decayStatuses` recorre `Deck.allCards`, **NO la mano**.
-- ⚠️ Bug latente: `APPLY_STATUS` muta sin respetar `dryRun` ⇒ seleccionar deja el estado puesto (el EVENTO sí está blindado).
-- Efectos: acciones en `src/engine/triggers/actions.ts`, triggers/condiciones en `src/engine/types.ts`. Agregar una acción al mapa obliga a implementarla (TS).
+- ⚠️ `APPLY_STATUS` **DIFIERE** la mutación (`res.statusRequests` → `GameEngine.applyDeltas` al cerrar la resolución, solo si `!dryRun`). Consecuencia: un estado que una carta se aplica **NO es visible dentro de la MISMA mano** (condiciones y `CONSUME_STATUS` no lo ven). Rompe `deep_latent_sporocarp` y desfasa `deep_carrion_lattice`.
+- ⚠️ **Las condiciones se evalúan contra el SUJETO (`source.card` = la carta que LLEVA el efecto), NO contra la carta que disparó el evento.** `element_is`/`family_is`/`rarity_is`/`has_status` miran al dueño. Para "cada carta de X jugada" usar **`trigger_element_is` / `trigger_family_is` / `trigger_rarity_is`** (existen desde 2026-10-08). En SIMBIONTES `sourceFromJoker` no expone `card` ⇒ `subject` es `undefined` ⇒ las condiciones de dueño son SIEMPRE falsas (por eso los simbiontes usan `trigger_*`).
+- ⚠️ `APPLY_STATUS` difiere la mutación (`statusRequests` → `applyDeltas`), pero las condiciones de estado y `CONSUME_STATUS` **sí ven los pedidos pendientes** (`ConditionWorld.pendingStatuses`), y consumir **recorta/elimina el pedido** para no re-aplicarlo. Un estado aplicado en la mano ya es visible en esa misma mano.
+- ⚠️ Condiciones que dependen de `triggerCard` (`is_first_card_of_round`, `is_last_card_of_hand`) son **siempre falsas en eventos GLOBALES** (`dispatchGlobal`: ON_HAND_SCORED, ON_ROUND_*, ON_SHOP_*, ON_BLIND_SELECTED). Igual los targets `previous_scored`/`next_scored`. Si necesitás "última carta jugada", el trigger tiene que ser `ON_PLAY`.
+- ⚠️ Un `RETRIGGER` re-emite `ON_PLAY`: si el efecto que lo lleva también escucha `ON_PLAY`, se re-dispara a sí mismo ⇒ bucle (lo corta el engine por profundidad/presupuesto y lo delata `sim:balance` como "cortes por overflow"). Se evita con `once: "per_round"`.
+- Efectos: acciones en `src/engine/triggers/actions.ts`, triggers/condiciones en `src/engine/types.ts`. Agregar una acción al mapa obliga a implementarla (TS). Condiciones extra ya existentes: `status_in_hand` (mira scored+held) y target `all_cards` (barre con dedupe).
+- `npm run audit:behavior` (`tools/audit-card-behavior.ts`): auditoría de activación/puntuación de TODO el contenido. No es gate, es informe. El gate de descripciones es `audit:desc` (normal); `--scale=1.15` ya trunca 5 cartas preexistentes.
+- ⚠️ `docs/auditoria-cartas.html`: informe de la auditoría de activación/puntuación (22 hallazgos, **todos arreglados** el 2026-10-08). Si tocás efectos, volvé a correr `npm run audit:behavior`: tiene que dar 0 estáticos y 0 efectos que no disparen.
 
 ## Traps
 - ⚠️ Panel del CIEGO JEFE ~366px FIJOS: a 360 el pie se sale y "Luchar" no es clickeable.

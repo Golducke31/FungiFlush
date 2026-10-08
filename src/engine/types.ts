@@ -225,6 +225,32 @@ export type Condition =
   | { type: 'is_last_card_of_hand' }
   | { type: 'is_first_play_of_round' }
   | { type: 'has_status'; status: StatusType }
+  /**
+   * Al menos UNA carta de esta mano tiene ese estado, sin importar cual.
+   *
+   * Hermana de `has_status`, que mira SOLO la carta que lleva el efecto. La
+   * diferencia importa: las cartas de putrefaccion que hablan de "tus cartas"
+   * (no de si mismas) escribian `has_status` y quedaban exigiendo estar
+   * podridas ELLAS para activarse, que no es lo que dice su texto. Con
+   * `status_in_hand` la cosechadora mira la mano entera, que es su promesa.
+   */
+  | { type: 'status_in_hand'; status: StatusType }
+  /**
+   * El elemento / familia / rareza de la carta que DISPARO el evento.
+   *
+   * Es lo que necesitan las cartas que dicen "cada carta de X jugada": en un
+   * `ON_CARD_PLAYED`, `element_is`/`family_is`/`rarity_is` miran al SUJETO
+   * (`source.card`, la carta que LLEVA el efecto), asi que la condicion era
+   * siempre verdadera si el valor coincidia con la propia carta (y el efecto se
+   * disparaba con CADA carta jugada) o siempre falsa si no coincidia.
+   *
+   * En los eventos GLOBALES no hay carta disparadora, asi que estas condiciones
+   * son falsas: solo tienen sentido en ON_CARD_PLAYED / ON_PLAY / ON_CARD_HELD /
+   * ON_CARD_DISCARDED.
+   */
+  | { type: 'trigger_element_is'; value: ElementType }
+  | { type: 'trigger_family_is'; value: FamilyType }
+  | { type: 'trigger_rarity_is'; value: Rarity }
   | { type: 'not'; cond: Condition }
   | { type: 'all'; conds: Condition[] }
   | { type: 'any'; conds: Condition[] };
@@ -247,7 +273,21 @@ export type EffectTarget =
    * NUNCA puede apuntarse a si mismo, lo que hace imposible el bucle directo.
    */
   | 'previous_scored'
-  | 'next_scored';
+  | 'next_scored'
+  /**
+   * TODAS las cartas de esta mano: las jugadas (`scored`) y las retenidas
+   * (`held`).
+   *
+   * Es el target que necesitan las acciones que BARREN un estado, como
+   * `CONSUME_STATUS` con `full: true`: la accion ya es no-op en las cartas sin
+   * ese estado, asi que apuntar a todas convierte "cosecha la podredumbre de
+   * tus cartas" en "una pila pudrida = un pago", que es literalmente lo que
+   * promete el texto de la carta.
+   *
+   * ⚠️ NO usar con acciones que no sean no-op por carta (ADD_SUBSTRATE,
+   * APPLY_STATUS...): disparan UNA VEZ POR CARTA y multiplican el efecto.
+   */
+  | 'all_cards';
 
 /** Cuando un efecto se consume. */
 export type ConsumptionRule = 'never' | 'per_round' | 'per_run';

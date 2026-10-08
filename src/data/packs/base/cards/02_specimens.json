@@ -34,7 +34,7 @@
       {
         "id": "pantherina_aura",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "poison" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "poison" }],
         "actions": [{ "type": "ADD_SPORES", "value": 3 }],
         "labelKey": "effect.poisonAura"
       }
@@ -262,7 +262,7 @@
       {
         "id": "oyster_colony",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "family_is", "value": "tricholomataceae" }],
+        "conditions": [{ "type": "trigger_family_is", "value": "tricholomataceae" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 3 }],
         "labelKey": "effect.colony"
       }
@@ -282,9 +282,9 @@
     "effects": [
       {
         "id": "agaric_ring",
-        "trigger": "ON_PLAY",
+        "trigger": "ON_HAND_SCORED",
         "conditions": [{ "type": "scored_element_count_gte", "element": "spore", "value": 3 }],
-        "actions": [{ "type": "MULTIPLY_SPORES", "value": 2 }],
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.7 }],
         "labelKey": "effect.ringBloom"
       }
     ]

@@ -45,7 +45,7 @@
       {
         "id": "bloom_poison",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "poison" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "poison" }],
         "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.5 }],
         "labelKey": "effect.bloom"
       }
@@ -63,7 +63,7 @@
       {
         "id": "lens_crystal",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "crystal" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "crystal" }],
         "actions": [{ "type": "ADD_SPORES", "value": 4 }],
         "labelKey": "effect.refract"
       }
@@ -81,7 +81,7 @@
       {
         "id": "network_threads",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "family_is", "value": "tricholomataceae" }],
+        "conditions": [{ "type": "trigger_family_is", "value": "tricholomataceae" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 10 }],
         "labelKey": "effect.thread"
       }
@@ -116,7 +116,7 @@
       {
         "id": "pact_trade",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "symbiosis" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "symbiosis" }],
         "actions": [{ "type": "GAIN_MONEY", "value": 1 }],
         "labelKey": "effect.trade"
       }
@@ -134,7 +134,7 @@
       {
         "id": "drive_hijack",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "parasite" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "parasite" }],
         "actions": [{ "type": "RETRIGGER", "value": 1 }],
         "labelKey": "effect.hijack"
       }

@@ -1714,14 +1714,19 @@ export class HUD {
       // El cuerpo de la ficha solo señala la carta: el joker late en la mesa.
       chip.addEventListener('click', () => this.callbacks.onFocusJoker(joker.uid));
 
-      // --- Etiqueta rica del Simbionte (Frente 4a) ---
-      // Las DOS vias que usan las cartas, para que la ficha no sea la unica
-      // pieza del juego sin etiqueta:
-      //   - raton: `pointerenter`/`pointerleave`.
-      //   - tactil: mantener el dedo quieto (long-press), porque el hover
-      //     necesita `pointermove` y con el dedo quieto no llega.
-      // El `title` nativo se QUITA: aparecia el rectangulito gris encima del
-      // panel rico en escritorio (dos etiquetas a la vez).
+      // --- Etiqueta rica del Simbionte: la abre la CARTA, no la ficha ---
+      // La via tactil (mantener pulsado) vive en el SIMBIONTE de la mesa
+      // (`onLongPressJoker` -> `showJokerTooltip`), no aca. El jugador busca la
+      // habilidad en la carta que ve en su ranura, y la ficha del HUD quedo
+      // deliberadamente compacta (nombre + disparos). Antes la ficha abria el
+      // panel al mantener el dedo quieto mientras la carta NO hacia nada (no
+      // estaba entre los targets del raycaster): dos gestos para lo mismo, y el
+      // que el jugador esperaba era el de la carta.
+      //
+      // Queda solo el HOVER de raton, que es la via de ESCRITORIO y no tiene
+      // equivalente tactil (el hover necesita `pointermove` y con el dedo quieto
+      // no llega). El `title` nativo se QUITA: aparecia el rectangulito gris
+      // encima del panel rico en escritorio (dos etiquetas a la vez).
       chip.removeAttribute('title');
       chip.addEventListener('pointerenter', (event) => {
         if (isCoarsePointer()) return;
@@ -1731,38 +1736,6 @@ export class HUD {
         if (isCoarsePointer()) return;
         this.hideTooltip();
       });
-      let longPress: number | null = null;
-      let pressOrigin: { x: number; y: number } | null = null;
-      const cancelLongPress = (): void => {
-        if (longPress !== null) {
-          window.clearTimeout(longPress);
-          longPress = null;
-        }
-        pressOrigin = null;
-        chip.classList.remove('is-pressing');
-      };
-      chip.addEventListener('pointerdown', (event) => {
-        if (!isCoarsePointer()) return; // el raton ya tiene el hover
-        pressOrigin = { x: event.clientX, y: event.clientY };
-        chip.classList.add('is-pressing');
-        longPress = window.setTimeout(() => {
-          longPress = null;
-          chip.classList.remove('is-pressing');
-          this.showJokerTooltip(joker, pressOrigin?.x ?? event.clientX, pressOrigin?.y ?? event.clientY);
-        }, 420);
-      });
-      // Solo se cancela si el dedo se MUEVE de verdad: un temblor de 2px no
-      // debe abortar el long-press. Mismo umbral que la seleccion de cartas
-      // (<=6px) para que la ficha y la carta se sientan igual.
-      chip.addEventListener('pointermove', (event) => {
-        if (!pressOrigin || longPress === null) return;
-        if (Math.hypot(event.clientX - pressOrigin.x, event.clientY - pressOrigin.y) > 6) {
-          cancelLongPress();
-        }
-      });
-      for (const evt of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-        chip.addEventListener(evt, cancelLongPress);
-      }
 
       const body = document.createElement('span');
       body.className = 'joker-chip-body';

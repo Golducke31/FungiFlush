@@ -48,8 +48,9 @@
       },
       {
         "id": "chain_rhizomorph_echo",
-        "trigger": "ON_HAND_SCORED",
+        "trigger": "ON_PLAY",
         "conditions": [{ "type": "is_last_card_of_hand" }],
+        "once": "per_round",
         "actions": [{ "type": "RETRIGGER", "value": 1 }],
         "labelKey": "effect.chain"
       }
@@ -238,7 +239,7 @@
       {
         "id": "spore_conduit_channel",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "mycelium" }],
         "actions": [{ "type": "ADD_SPORES", "value": 1 }],
         "labelKey": "effect.conduit"
       }
@@ -289,7 +290,7 @@
       {
         "id": "carrion_lattice_reap",
         "trigger": "ON_HAND_SCORED",
-        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "conditions": [{ "type": "status_in_hand", "status": "decay" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 12 }],
         "labelKey": "effect.carrion"
       }

@@ -7,7 +7,7 @@
  * exactamente lo que permite escalar a cientos de cartas sin bugs silenciosos.
  */
 
-import type { CardInstance, Condition } from '../types';
+import type { CardInstance, Condition, StatusType } from '../types';
 
 /** Proyeccion de solo lectura del estado que las condiciones pueden consultar. */
 export interface ConditionWorld {
@@ -22,6 +22,23 @@ export interface ConditionWorld {
   isFirstCardOfRound: boolean;
   isLastCardOfHand: boolean;
   isFirstPlayOfRound: boolean;
+  /**
+   * La carta que DISPARO el evento, cuando la hay.
+   *
+   * `undefined` en los eventos GLOBALES (`dispatchGlobal`): ON_RUN_START,
+   * ON_BLIND_SELECTED, ON_ROUND_START, ON_HAND_SCORED, ON_SHOP_*, ON_ROUND_WIN,
+   * ON_ROUND_LOSS. Las condiciones `trigger_*` son falsas ahi, por definicion.
+   */
+  triggerCard?: CardInstance;
+  /**
+   * Estados PEDIDOS en esta resolucion y todavia no asentados (`statusRequests`).
+   *
+   * `APPLY_STATUS` no muta la carta: acumula el pedido y `applyDeltas` lo aplica
+   * al cerrar la mano. Sin mirar aca, una carta que se aplica un estado y lo
+   * consulta en la MISMA mano no lo veia — el caso de `deep_latent_sporocarp`,
+   * que "al puntuar revienta" el Sobrecrecimiento que se puso al jugarse.
+   */
+  pendingStatuses?: readonly { uid: string; status: StatusType }[];
 }
 
 function countBy<T extends string>(
@@ -81,8 +98,33 @@ export function evaluateCondition(
       return world.isLastCardOfHand;
     case 'is_first_play_of_round':
       return world.isFirstPlayOfRound;
-    case 'has_status':
-      return (subject?.statuses ?? []).some((s) => s.type === cond.status);
+    // `has_status` mira la carta que lleva el efecto: lo asentado en ella y lo
+    // PEDIDO para ella en esta misma resolucion (ver `pendingStatuses`).
+    case 'has_status': {
+      if ((subject?.statuses ?? []).some((s) => s.type === cond.status)) return true;
+      return (
+        !!subject &&
+        (world.pendingStatuses ?? []).some((p) => p.uid === subject.uid && p.status === cond.status)
+      );
+    }
+    // La MANO entera: las cartas jugadas (`scoredCards`) y las retenidas
+    // (`hand`). Es la lectura que piden las cartas de putrefaccion que hablan de
+    // "tus cartas": con `has_status` solo se miraba la carta que lleva el
+    // efecto, asi que la cosechadora exigia estar podrida ELLA para activarse.
+    case 'status_in_hand': {
+      const everyCard = [...world.scoredCards, ...world.hand];
+      if (everyCard.some((c) => c.statuses.some((s) => s.type === cond.status))) return true;
+      const uids = new Set(everyCard.map((c) => c.uid));
+      return (world.pendingStatuses ?? []).some((p) => uids.has(p.uid) && p.status === cond.status);
+    }
+    // La carta DISPARADORA, no el dueño del efecto: es lo que piden las cartas
+    // "cada carta de X jugada". Ver el comentario de `ConditionWorld.triggerCard`.
+    case 'trigger_element_is':
+      return world.triggerCard?.def.element === cond.value;
+    case 'trigger_family_is':
+      return world.triggerCard?.def.family === cond.value;
+    case 'trigger_rarity_is':
+      return world.triggerCard?.def.rarity === cond.value;
     case 'not':
       return !evaluateCondition(cond.cond, world, subject);
     case 'all':

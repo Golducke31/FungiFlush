@@ -514,7 +514,7 @@
     },
     "fly_agaric_ring": {
       "name": "Fly Agaric Ring",
-      "desc": "If 3+ Spore cards scored: x2 Spores."
+      "desc": "If 3+ Spore cards scored: x1.7 Spores."
     },
     "ghost_fungus": {
       "name": "Ghost Fungus",
@@ -542,7 +542,7 @@
     },
     "spore_giant_puffball": {
       "name": "Giant Puffball",
-      "desc": "A puffball swollen past its own skin. With another spore in hand: +2 Spores."
+      "desc": "A puffball swollen past its own skin. When played, with another spore in hand: +2 Spores."
     },
     "mycelium_elder_web": {
       "name": "Elder Webcap",
@@ -594,7 +594,7 @@
     },
     "colony_rhizomorph": {
       "name": "Rhizomorph",
-      "desc": "With 3 or more Tricholomataceae in hand, it adds +14 Substrate."
+      "desc": "With 3 or more Tricholomataceae scored, it adds +14 Substrate."
     },
     "decay_compost_heap": {
       "name": "Compost Heap",
@@ -610,7 +610,7 @@
     },
     "crystal_shard_bloom": {
       "name": "Shard Bloom",
-      "desc": "With 5 or more cards in the played hand, it multiplies Spores ×3."
+      "desc": "With 5 or more cards scored, it multiplies Spores ×3."
     },
     "wild_dung_beetle": {
       "name": "Dung Beetle",
@@ -626,7 +626,7 @@
     },
     "spore_psilocybe_dust": {
       "name": "Psilocybe Dust",
-      "desc": "With 2 or more Spores in hand, multiplies Spores ×1.3. Parasitic spore."
+      "desc": "With 2 or more Spores scored, multiplies Spores ×1.3. Parasitic spore."
     },
     "spore_clavaria_spray": {
       "name": "Clavaria Spray",
@@ -642,11 +642,11 @@
     },
     "colony_amanita_web": {
       "name": "Amanita Web",
-      "desc": "With 2 or more Tricholomataceae in hand, it adds +4 Substrate. Mycelium of the Amanitaceae family."
+      "desc": "With 2 or more Tricholomataceae scored, it adds +4 Substrate. Mycelium of the Amanitaceae family."
     },
     "colony_clavaria_filament": {
       "name": "Clavaria Filament",
-      "desc": "With 3 or more Tricholomataceae in hand, it adds +10 Substrate. Mycelium of the coral family."
+      "desc": "With 3 or more Tricholomataceae scored, it adds +10 Substrate. Mycelium of the coral family."
     },
     "decay_agaric_mould": {
       "name": "Agaric Mould",
@@ -658,7 +658,7 @@
     },
     "decay_clavaria_ash": {
       "name": "Clavaria Ash",
-      "desc": "Consumes 3 Rotting points and turns them into Spores. Decay of the coral family."
+      "desc": "Consumes 1 Rotting point from each rotting card: +3 Spores each. Coral family."
     },
     "decay_amanita_blight": {
       "name": "Amanita Blight",

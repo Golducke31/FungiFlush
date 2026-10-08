@@ -3545,6 +3545,18 @@ export class SceneManager {
     // Cara y dorso: el raycaster respeta `material.side`, asi que solo acierta
     // el que se esta viendo. Ver `Card3D.pickTargets`.
     for (const card3d of this.handCards.values()) targets.push(...card3d.pickTargets);
+    // Los SIMBIONTES de la mesa tambien son pickables. Sin esto, el long-press
+    // tactil sobre un Simbionte no llegaba NUNCA: `handleLongPress` recibe el
+    // `Card3D` que devuelve el raycaster, y los jokers no estaban en la lista,
+    // asi que la unica via para leer su etiqueta era la ficha del HUD. Ahora la
+    // etiqueta rica sale de la CARTA en su ranura, que es donde el jugador la
+    // busca (la ficha del HUD quedo compacta a proposito).
+    //
+    // Solo en partida: en el carrusel se vacia la lista entera (arriba) y en el
+    // menu los jokers son cromo de la run, no de la pantalla de inicio.
+    if (this.mode === 'run') {
+      for (const card3d of this.jokerCards.values()) targets.push(...card3d.pickTargets);
+    }
     this.interaction.setTargets(targets);
   }
 

@@ -35,7 +35,7 @@
       {
         "id": "lucifer_refraction",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "crystal" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "crystal" }],
         "actions": [{ "type": "MULTIPLY_SPORES", "value": 1.5 }],
         "labelKey": "effect.refraction"
       }

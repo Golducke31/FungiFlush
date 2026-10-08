@@ -88,7 +88,7 @@
       {
         "id": "colony_node_grow",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "mycelium" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 3 }],
         "labelKey": "effect.network"
       }
@@ -155,7 +155,8 @@
       {
         "id": "carrion_harvest_all",
         "trigger": "ON_HAND_SCORED",
-        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "conditions": [{ "type": "status_in_hand", "status": "decay" }],
+        "target": "all_cards",
         "actions": [{ "type": "CONSUME_STATUS", "status": "decay", "gain": "spores", "value": 4, "full": true }],
         "labelKey": "effect.decayHarvest"
       }

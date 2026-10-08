@@ -102,7 +102,7 @@
       {
         "id": "agaric_thread_spread",
         "trigger": "ON_CARD_PLAYED",
-        "conditions": [{ "type": "element_is", "value": "mycelium" }],
+        "conditions": [{ "type": "trigger_element_is", "value": "mycelium" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 2 }],
         "labelKey": "effect.network"
       }
@@ -213,7 +213,7 @@
       {
         "id": "boletus_slime_seep",
         "trigger": "ON_HAND_SCORED",
-        "conditions": [{ "type": "has_status", "status": "decay" }],
+        "conditions": [{ "type": "status_in_hand", "status": "decay" }],
         "actions": [{ "type": "ADD_SUBSTRATE", "value": 6 }],
         "labelKey": "effect.decayHarvest"
       }
@@ -235,8 +235,9 @@
       {
         "id": "clavaria_ash_harvest",
         "trigger": "ON_HAND_SCORED",
-        "conditions": [{ "type": "has_status", "status": "decay" }],
-        "actions": [{ "type": "CONSUME_STATUS", "status": "decay", "gain": "spores", "value": 3, "full": false }],
+        "conditions": [{ "type": "status_in_hand", "status": "decay" }],
+        "target": "all_cards",
+        "actions": [{ "type": "CONSUME_STATUS", "status": "decay", "gain": "spores", "value": 3, "stacks": 1, "full": false }],
         "labelKey": "effect.decayHarvest"
       }
     ]
