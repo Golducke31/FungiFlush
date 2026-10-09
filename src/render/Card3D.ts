@@ -25,8 +25,10 @@ import {
   type CardTextureCache,
   type CardTextureSpec,
 } from './CardTexture';
-import type { LayerImages } from './ArtLayers';
+import type { LayerImages, LayerMotion, LayerName } from './ArtLayers';
+import { DEFAULT_MOTION } from './ArtLayers';
 import { createHaloMaterial, tickShader } from './Shaders';
+import { CardSporeField } from './Particles';
 import { ELEMENT_COLOR, RARITY_COLOR, SELECT_COLOR, hexToCss } from './palette';
 import * as anim from './anim';
 import type { TweenHandle, TweenManager } from './Tween';
@@ -125,6 +127,81 @@ const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + CARD_RELIEF + 0.02;
 const CARD_LAYER_GAP = 0.014;
 
 /**
+ * Escala de la respiracion idle de las capas (`motion.amp` = fraccion del ALTO).
+ *
+ * El idle mueve la malla LOCAL de la capa, no la carta: aun quieta, la carta
+ * "respira". Se limita a un ~2% del alto: mas que eso y el arte se lee flotando
+ * despegado del marco en vez de respirando.
+ */
+const LAYER_IDLE_CLAMP = 0.02;
+
+/**
+ * Esporas LOCALES por carta (entre el sujeto y el primer plano).
+ *
+ * Son pocas a proposito: un acento de profundidad, no una cortina. Y solo se
+ * dibujan en la carta hero / en hover / en seleccion, asi que en una mano de 6
+ * cartas lo normal es que haya 1 o 2 emitiendo: el presupuesto es 1 draw call
+ * por carta ACTIVA, no por carta en pantalla.
+ */
+const CARD_SPORE_COUNT = 12;
+/** Profundidad local de las esporas: entre la cara (0) y el `fg` (+GAP). */
+const CARD_SPORE_Z = CARD_LAYER_GAP * 0.55;
+
+/**
+ * Ruido GLSL (snoise 3D) para la DISTORSION de las UV de cada capa.
+ *
+ * Es el efecto "vivo": al desplazar las UV con ruido, el fondo ondula como humo
+ * o niebla de esporas y el sujeto se mece sin mover la geometria. Se inyecta en
+ * el `MeshStandardMaterial` via `onBeforeCompile` (ver `layerMaterial`): NO se
+ * reemplaza por un ShaderMaterial crudo, porque hay que conservar la LUZ.
+ *
+ * `MAP_FRAGMENT_PATCH` se sustituye en el chunk `map_fragment` y el `#ifdef
+ * USE_MAP` deja el parche y su `#else` balanceados (el `#endif` del chunk queda
+ * como cierre del `#else`). Sin esto GLSL no compila.
+ */
+const LAYER_NOISE_FUNCTIONS = `
+float ff_hash(vec3 p) {
+  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float ff_noise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = ff_hash(i + vec3(0.0, 0.0, 0.0));
+  float n100 = ff_hash(i + vec3(1.0, 0.0, 0.0));
+  float n010 = ff_hash(i + vec3(0.0, 1.0, 0.0));
+  float n110 = ff_hash(i + vec3(1.0, 1.0, 0.0));
+  float n001 = ff_hash(i + vec3(0.0, 0.0, 1.0));
+  float n101 = ff_hash(i + vec3(1.0, 0.0, 1.0));
+  float n011 = ff_hash(i + vec3(0.0, 1.0, 1.0));
+  float n111 = ff_hash(i + vec3(1.0, 1.0, 1.0));
+  return mix(
+    mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+    mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
+    f.z
+  );
+}
+float ff_fbm(vec3 p) {
+  return 0.6 * ff_noise(p) + 0.4 * ff_noise(p * 2.03);
+}
+`;
+
+const MAP_FRAGMENT_PATCH = `#ifdef USE_MAP
+	vec3 ffN = vec3(
+		ff_fbm(vec3(vMapUv * 3.0 + uTime * 0.2, uPhase)),
+		ff_fbm(vec3(vMapUv * 3.0 + 7.3, uPhase + 1.7)),
+		0.0
+	) - 0.5;
+	vec2 ffUv = vMapUv + ffN.xy * uAmp;
+	diffuseColor *= texture2D(map, ffUv);
+#else
+	diffuseColor *= vec4(1.0);
+#endif
+`;
+
+/**
  * Escala del quad del halo respecto de la carta.
  *
  * El quad tiene que contener el contorno MAS GRANDE de los tres (el anillo, que
@@ -190,6 +267,19 @@ function badgeTexture(index: number): THREE.CanvasTexture {
   texture.colorSpace = THREE.SRGBColorSpace;
   BADGE_TEXTURES.set(index, texture);
   return texture;
+}
+
+/**
+ * Hash determinista de un `uid` a entero. Sembra la distribucion de las esporas
+ * de cada carta: misma carta, mismas esporas; cartas distintas, campos distintos.
+ */
+function hashUid(uid: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < uid.length; i++) {
+    h ^= uid.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 /** Posicion/rotacion "en reposo": es lo unico que animan los tweens. */
@@ -291,6 +381,19 @@ export class Card3D {
   private readonly bgLayerMaterial: THREE.MeshStandardMaterial;
   private readonly fgLayer: THREE.Mesh;
   private readonly fgLayerMaterial: THREE.MeshStandardMaterial;
+  /** Movimiento idle por capa (leido de `index.json`; defaults si falta). */
+  private layerMotion: Record<LayerName, LayerMotion> = DEFAULT_MOTION;
+  /** Fase inicial determinista de la respiracion (rad). Evita el unisono. */
+  private layerPhase = 0;
+  /** Posiciones Z base de las capas, para oscilar alrededor de ellas. */
+  private readonly bgLayerBaseZ = CARD_THICKNESS / 2 - CARD_LAYER_GAP;
+  private readonly fgLayerBaseZ = CARD_THICKNESS / 2 + CARD_LAYER_GAP;
+  /**
+   * Esporas locales: solo existen (y solo se dibujan) cuando la carta trae
+   * capas segmentadas. En una carta sin capas quedan `undefined` y no cuestan
+   * nada — el respaldo duro sigue intacto.
+   */
+  private spores: CardSporeField | null = null;
   private readonly halo: THREE.Mesh;
   private readonly haloMaterial: THREE.ShaderMaterial;
   /** Badge con el numero de orden de la seleccion (1-5). */
@@ -408,8 +511,13 @@ export class Card3D {
     // Dos quads gemelos con el MISMO material que la cara pero transparentes. Nacen
     // invisibles: `applyTexture` los enciende solo si la carta trae capas. Asi el
     // coste (2 draw calls por carta) no se paga hasta que hay arte segmentado.
-    const layerMaterial = () =>
-      new THREE.MeshStandardMaterial({
+    //
+    // El material lleva la DISTORSION UV por ruido (efecto "vivo") inyectada con
+    // `onBeforeCompile`: se conserva `MeshStandardMaterial` (la LUZ de la escena
+    // sigue aplicando) y se parchea SOLO el chunk que muestrea el mapa. `uAmp`
+    // arranca en 0 => sin distorsion hasta que `applyTexture` le ponga el noise.
+    const layerMaterial = (): THREE.MeshStandardMaterial => {
+      const mat = new THREE.MeshStandardMaterial({
         transparent: true,
         depthWrite: false,
         roughness: 0.58,
@@ -417,17 +525,55 @@ export class Card3D {
         emissive: new THREE.Color(0xffffff),
         emissiveIntensity: 0.32,
       });
+      mat.userData['layerUniforms'] = {
+        uTime: { value: 0 },
+        uAmp: { value: 0 },
+        uPhase: { value: 0 },
+      };
+      mat.onBeforeCompile = (shader) => {
+        try {
+          const u = mat.userData['layerUniforms'] as Record<string, { value: number }>;
+          shader.uniforms['uTime'] = u['uTime']!;
+          shader.uniforms['uAmp'] = u['uAmp']!;
+          shader.uniforms['uPhase'] = u['uPhase']!;
+          shader.fragmentShader = shader.fragmentShader
+            .replace(
+              'void main() {',
+              `uniform float uTime;\nuniform float uAmp;\nuniform float uPhase;\n${LAYER_NOISE_FUNCTIONS}\nvoid main() {`,
+            )
+            // El `#include <map_fragment>` se reemplaza por un muestreo con UV
+            // desplazadas. El parche cierra con `#else` y el `#endif` del propio
+            // chunk lo cierra: por eso el `#ifdef USE_MAP` queda balanceado.
+            .replace('#include <map_fragment>', MAP_FRAGMENT_PATCH);
+        } catch {
+          // Si el chunk cambia de nombre en una version de three, el material
+          // queda EXACTAMENTE como antes (sin distorsion) en vez de romper.
+        }
+      };
+      return mat;
+    };
     this.bgLayerMaterial = layerMaterial();
     this.bgLayer = new THREE.Mesh(CARD_GEO, this.bgLayerMaterial);
-    this.bgLayer.position.z = CARD_THICKNESS / 2 - CARD_LAYER_GAP;
+    this.bgLayer.position.z = this.bgLayerBaseZ;
     this.bgLayer.visible = false;
     this.fgLayerMaterial = layerMaterial();
     this.fgLayer = new THREE.Mesh(CARD_GEO, this.fgLayerMaterial);
-    this.fgLayer.position.z = CARD_THICKNESS / 2 + CARD_LAYER_GAP;
+    this.fgLayer.position.z = this.fgLayerBaseZ;
     this.fgLayer.visible = false;
+
+    // Esporas locales: se crean YA (siempre), pero nacen invisibles. Solo se
+    // encienden en `applyTexture` si la carta trae capas segmentadas, e incluso
+    // entonces solo en la carta hero/hover/selected. La semilla sale del `uid`
+    // para que cada carta tenga SUS esporas, estables entre sesiones.
+    this.spores = new CardSporeField({
+      count: CARD_SPORE_COUNT,
+      z: CARD_SPORE_Z,
+      seed: hashUid(uid),
+    });
 
     this.group.add(this.halo);
     this.group.add(this.badge);
+    this.group.add(this.spores.points);
     this.group.add(this.fgLayer);
     this.group.add(this.top);
     this.group.add(this.edge);
@@ -601,6 +747,25 @@ export class Card3D {
     };
     applyLayer(this.bgLayer, this.bgLayerMaterial, layers?.bg);
     applyLayer(this.fgLayer, this.fgLayerMaterial, layers?.fg);
+
+    // --- Movimiento idle + distorsion (leidos de index.json) ---
+    // `layers` puede venir SIN depth/motion (indice viejo): ArtLayers ya rellena
+    // los defaults, y si no hay `layers` en absoluto se usan los defaults de
+    // modulo. En cualquiera de los dos casos el idle sigue siendo el mismo.
+    this.layerMotion = layers?.motion ?? DEFAULT_MOTION;
+    this.layerPhase = layers?.phase ?? 0;
+    // La distorsion se aplica SOLO si hay capas: sin ellas los materiales ni se
+    // ven, asi que el coste es nulo. La fase entra por uniform para que cada
+    // carta ondula distinto.
+    for (const mat of [this.bgLayerMaterial, this.fgLayerMaterial]) {
+      const u = mat.userData['layerUniforms'] as Record<string, { value: number }> | undefined;
+      if (u) u['uPhase']!.value = this.layerPhase;
+    }
+
+    // Las esporas SOLO tienen sentido con arte segmentado (son la referencia de
+    // profundidad entre el sujeto y el `fg`). Sin capas quedan apagadas: es el
+    // respaldo duro otra vez.
+    if (this.spores) this.spores.points.visible = Boolean(layers?.bg || layers?.fg);
 
     // Capa de TEXTO: transparente salvo el texto y el marco. Va por delante del
     // arte, asi que al inclinar la carta se corre respecto a el: el parallax.
@@ -863,6 +1028,12 @@ export class Card3D {
 
     tickShader(this.haloMaterial, time);
 
+    // --- Idle de las capas: la carta "respira" aun quieta ---
+    // Se mueve la malla LOCAL de cada capa (nunca `home.*`, que es de los tweens).
+    // Como el grupo esta rotado -PI/2 en X, el eje X/Y local corre SOBRE el plano
+    // de la carta: el offset se lee como deriva, no como hundimiento.
+    this.updateLayerIdle(time);
+
     // Intensidad del halo: base + hover/seleccion + compatible + foil.
     //
     // La SELECCION aporta poco al halo (0.5 en vez de 1.5): su señal es el
@@ -893,6 +1064,69 @@ export class Card3D {
       this.home.flip < 0.5 ? this.foilAmount : 0;
 
     this.applyTransform();
+  }
+
+  /**
+   * Respiracion idle de las capas de arte + avance del reloj de distorsion.
+   *
+   * Por que existe: una carta quieta con capas separadas en Z parece una foto
+   * recortada en trozos. Con un vaiven MINIMO por capa (fase y amplitud distintas)
+   * el cerebro la lee como algo vivo. Es barato: solo escribe transforms locales.
+   *
+   * Reglas:
+   *  - El SUJETO (la cara) respira; el `bg` deriva lento y el `fg` va en contra.
+   *  - `amp` esta en fraccion del ALTO de la carta y se acota a `LAYER_IDLE_CLAMP`.
+   *  - El `z` base NO se toca (es el que da el parallax): el idle es en X/Y.
+   *  - Si no hay capas visibles, no hace nada (el caso comun sin arte segmentado).
+   */
+  private updateLayerIdle(time: number): void {
+    if (!this.bgLayer.visible && !this.fgLayer.visible) return;
+
+    const amp = (m: LayerMotion): number => Math.min(LAYER_IDLE_CLAMP, Math.abs(m.amp));
+    const subject = this.layerMotion.subject;
+    const bg = this.layerMotion.bg;
+    const fg = this.layerMotion.fg;
+
+    // Sujeto (la cara): bob vertical en Y local + un pelin de respiracion.
+    const sA = amp(subject);
+    const sWave = Math.sin(time * subject.speed + this.layerPhase);
+    this.face.position.y = sWave * sA * CARD_HEIGHT;
+    const sScale = 1 + sWave * sA * 0.5;
+    this.face.scale.set(sScale, sScale, 1);
+
+    if (this.bgLayer.visible) {
+      const bA = amp(bg);
+      const bWave = Math.sin(time * bg.speed + this.layerPhase + 1.7);
+      this.bgLayer.position.y = -bWave * bA * CARD_HEIGHT;
+      const bScale = 1 + bWave * bA * 0.3;
+      this.bgLayer.scale.set(bScale, bScale, 1);
+      this.setLayerDistortion(this.bgLayerMaterial, time, bg.noise);
+    }
+    if (this.fgLayer.visible) {
+      const fA = amp(fg);
+      const fWave = Math.sin(time * fg.speed + this.layerPhase + 3.1);
+      this.fgLayer.position.y = fWave * fA * CARD_HEIGHT;
+      const fScale = 1 + fWave * fA * 0.3;
+      this.fgLayer.scale.set(fScale, fScale, 1);
+      this.setLayerDistortion(this.fgLayerMaterial, time, fg.noise);
+    }
+
+    // Esporas: viven a media profundidad y se desplazan con el TILT de la carta
+    // (la suma de rx/ry de `home`), que es lo que las ancla al volumen. Se
+    // actualizan solo si estan visibles (la mayoria de las cartas no las lleva).
+    if (this.spores?.points.visible) {
+      const tilt = this.home.rx + this.home.ry;
+      this.spores.update(time, tilt);
+    }
+  }
+
+  /** Avanza el reloj y la amplitud de la distorsion UV de un material de capa. */
+  private setLayerDistortion(mat: THREE.MeshStandardMaterial, time: number, noise: number): void {
+    const u = mat.userData['layerUniforms'] as Record<string, { value: number }> | undefined;
+    if (!u) return;
+    u['uTime']!.value = time;
+    // La amplitud UV es chica a proposito: mas y el arte se lee emborronado.
+    u['uAmp']!.value = Math.min(0.02, Math.abs(noise));
   }
 
   private applyTransform(): void {
@@ -977,6 +1211,12 @@ export class Card3D {
     this.topMaterial.dispose();
     this.haloMaterial.dispose();
     this.badgeMaterial.dispose();
+    // Los materiales de capa y las esporas tambien se liberan: antes los dos
+    // materiales de capa quedaban colgados (bug de fuga preexistente).
+    this.bgLayerMaterial.dispose();
+    this.fgLayerMaterial.dispose();
+    this.spores?.dispose();
+    this.spores = null;
     this.group.clear();
   }
 }

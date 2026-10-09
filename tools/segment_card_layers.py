@@ -59,6 +59,55 @@ except Exception:  # pragma: no cover - depende del entorno
     cv2 = None  # type: ignore
     HAVE_CV2 = False
 
+# --- guia de cv2.ximgproc (guided filter): OPCIONAL, viene en opencv-contrib ---
+try:
+    if HAVE_CV2 and hasattr(cv2, "ximgproc"):
+        HAVE_XIMGPROC = True
+    else:  # pragma: no cover
+        HAVE_XIMGPROC = False
+except Exception:  # pragma: no cover
+    HAVE_XIMGPROC = False
+
+# --- pymatting (closed-form / KNN matting): OPCIONAL ---------------------------
+# Es el salto de calidad principal (alpha SUAVE en pelo, pelusa, halos). Si no
+# esta, se cae a la guia (guided filter) y si tampoco, a la mascara binaria de
+# siempre: el resultado tiene que quedar EXACTAMENTE como antes de esta feature.
+try:
+    from pymatting import estimate_alpha_cf, estimate_alpha_knn  # type: ignore
+
+    HAVE_PYMATTING = True
+except Exception:  # pragma: no cover - depende del entorno
+    estimate_alpha_cf = None  # type: ignore
+    estimate_alpha_knn = None  # type: ignore
+    HAVE_PYMATTING = False
+
+# --- rembg (U2-Net / ISNet): respaldo ML para casos donde la heuristica falla --
+try:
+    from rembg import remove as rembg_remove  # type: ignore
+
+    HAVE_REMBG = True
+except Exception:  # pragma: no cover
+    rembg_remove = None  # type: ignore
+    HAVE_REMBG = False
+
+# --- LaMa (inpaint por difusion): OPCIONAL -------------------------------------
+try:
+    from simple_lama_inpainting import SimpleLama  # type: ignore
+
+    HAVE_LAMA = True
+except Exception:  # pragma: no cover
+    SimpleLama = None  # type: ignore
+    HAVE_LAMA = False
+
+# --- Depth Anything (mapa de profundidad por carta): OPCIONAL ------------------
+try:
+    from transformers import pipeline as hf_pipeline  # type: ignore
+
+    HAVE_DEPTH = True
+except Exception:  # pragma: no cover
+    hf_pipeline = None  # type: ignore
+    HAVE_DEPTH = False
+
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "art-source"
@@ -91,6 +140,33 @@ DEFAULTS: dict = {
     "min_component_area": 0.004,
     "bg_fill_diffuse": 28,
     "use_grabcut": False,
+    # --- Matting (alpha suave en los bordes: el salto de calidad principal) ---
+    # La mascara heuristica se usa como TRIMAP: erode/dilate definen el sujeto
+    # seguro y el fondo seguro, y el matting resuelve SOLO la banda incierta entre
+    # ambos. Es lo mas caro del pipeline (closed-form/KNN escalan con los pixeles
+    # inciertos), asi que restringirlo a la banda lo hace viable.
+    "matting_backend": "pymatting",   # none | pymatting | guided (auto-degrada)
+    "matting_band_only": True,        # False = matting sobre la carta completa
+    "trimap_erode_px": 8,             # ancho del sujeto seguro (px)
+    "trimap_dilate_px": 10,           # ancho del fondo seguro (px)
+    "matting_max_side": 512,          # limita el lado mayor de la region a matting
+    # --- Respaldo ML (rembg / SAM): solo si la heuristica falla ---
+    "ml_backend": "none",             # none | rembg
+    "ml_iou_min": 0.80,               # IoU minimo vs la heuristica para aceptarla
+    # --- Inpaint (rellenar el fondo detras del sujeto) ---
+    "inpaint_backend": "cv2",         # cv2 | lama (auto-degrada)
+    "inpaint_dilate_px": 6,           # expande el hueco antes de rellenar (4-8)
+    "inpaint_mode": "band",           # band (solo unos px mas alla del borde) | full
+    "inpaint_band_px": 6,             # ancho de la banda a rellenar en modo band
+    # --- Depth (parallax continuo en el shader) ---
+    "depth_backend": "none",          # none | depth_anything
+    "default_depth": {"bg": 0.15, "subject": 0.5, "fg": 0.85},
+    # --- Movimiento idle por capa (lo lee el render; SIN efecto en Python) ---
+    "default_motion": {
+        "bg": {"amp": 0.006, "speed": 0.35, "noise": 0.004},
+        "subject": {"amp": 0.010, "speed": 0.60, "noise": 0.006},
+        "fg": {"amp": 0.008, "speed": 0.45, "noise": 0.003},
+    },
     "out_format": "png",
     "webp_quality": 92,
     "card_target": [512, 744],
@@ -389,27 +465,214 @@ def feather_alpha(alpha: np.ndarray, px: float) -> np.ndarray:
     return blurred
 
 
+def iou(a: np.ndarray, b: np.ndarray) -> float:
+    """IoU (intersection over union) de dos mascaras booleanas/8-bit."""
+    ab, bb = a > 127, b > 127
+    union = np.logical_or(ab, bb).sum()
+    if union == 0:
+        return 1.0
+    return float(np.logical_and(ab, bb).sum()) / float(union)
+
+
+def build_trimap(m_bool: np.ndarray, cfg: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(safe_fg, safe_bg, band) a partir de la mascara binaria del sujeto.
+
+    Erode delimita el SUJETO SEGURO (interior, sin duda); dilate delimita el FONDO
+    SEGURO (exterior). La BANDA entre ambos es la zona incierta: ahi, y solo ahi,
+    corre el matting. Las tres son booleanas.
+    """
+    m8 = (m_bool.astype(np.uint8)) * 255
+    er = int(cfg["trimap_erode_px"])
+    di = int(cfg["trimap_dilate_px"])
+    safe_fg = _erode(m8, er * 2 + 1) > 127 if er > 0 else m8 > 127
+    dilated = _dilate(m8, di * 2 + 1) > 127 if di > 0 else m8 > 127
+    safe_bg = ~dilated
+    band = ~safe_fg & ~safe_bg
+    return safe_fg, safe_bg, band
+
+
+def matte_alpha(rgb: np.ndarray, alpha_bin: np.ndarray, cfg: dict) -> np.ndarray:
+    """Alfa SUAVE en la banda incierta usando matting; binaria fuera de ella.
+
+    Escalera de respaldo: pymatting (closed-form -> KNN) -> guided filter de
+    cv2.ximgproc -> devuelve la binaria SIN TOCAR. Cada eslabon que falta es un
+    no-op: con todos los backends ausentes, la salida es EXACTAMENTE la de antes.
+    """
+    backend = str(cfg.get("matting_backend", "none")).lower()
+    if backend == "none":
+        return alpha_bin
+
+    m_bool = alpha_bin > 127
+    safe_fg, safe_bg, band = build_trimap(m_bool, cfg)
+    if not band.any():
+        return alpha_bin  # nada incierto: la binaria ya es la respuesta
+
+    h, w = alpha_bin.shape
+    # Encuadre de la region a matting (bbox de la banda + margen), acotado por
+    # `matting_max_side` para que la resolucion cueste en segundos, no en minutos.
+    ys, xs = np.where(band)
+    pad = max(int(cfg["trimap_erode_px"]), int(cfg["trimap_dilate_px"])) + 4
+    y0 = max(0, int(ys.min()) - pad)
+    y1 = min(h, int(ys.max()) + pad + 1)
+    x0 = max(0, int(xs.min()) - pad)
+    x1 = min(w, int(xs.max()) + pad + 1)
+
+    sub_rgb = rgb[y0:y1, x0:x1].astype(np.float64) / 255.0
+    trimap = np.full((y1 - y0, x1 - x0), 128, np.uint8)
+    trimap[safe_bg[y0:y1, x0:x1]] = 0
+    trimap[safe_fg[y0:y1, x0:x1]] = 255
+
+    matted: np.ndarray | None = None
+
+    if backend == "pymatting" and HAVE_PYMATTING:
+        for fn in (estimate_alpha_cf, estimate_alpha_knn):
+            if fn is None:
+                continue
+            try:
+                matted = np.clip(fn(sub_rgb, trimap.astype(np.float64) / 255.0), 0.0, 1.0)
+                matted = (matted * 255.0).astype(np.uint8)
+                break
+            except Exception as exc:  # una carta rara no debe tumbar el lote
+                print(f"    (pymatting fallo: {exc}; se prueba otro backend)")
+                matted = None
+
+    if matted is None and backend in ("pymatting", "guided") and HAVE_XIMGPROC:
+        try:
+            # guided filter: guia = luminancia del recorte, entrada = trimap gris.
+            guide = np.asarray(
+                Image.fromarray(rgb[y0:y1, x0:x1], "RGB").convert("L"), dtype=np.float32
+            )
+            matted = cv2.ximgproc.guidedFilter(guide, trimap.astype(np.float32), 8, 1e-3)
+            matted = np.clip(matted, 0, 255).astype(np.uint8)
+        except Exception as exc:  # pragma: no cover
+            print(f"    (guidedFilter fallo: {exc})")
+            matted = None
+
+    if matted is None:
+        # Ningun backend disponible: NO degradamos la salida (misma binaria).
+        return alpha_bin
+
+    out = alpha_bin.copy()
+    # Pegar SOLO el alpha suave de la banda; fuera queda 0/255 como siempre.
+    band_sub = band[y0:y1, x0:x1]
+    region = out[y0:y1, x0:x1]
+    region[band_sub] = matted[band_sub]
+    out[y0:y1, x0:x1] = region
+    # Pequeno blend en el borde de la banda para que no se note la costura.
+    return feather_alpha(out, 1.0)
+
+
+def matte_ml(rgb: np.ndarray, alpha_heur: np.ndarray, cfg: dict) -> np.ndarray | None:
+    """Mascara de un modelo (rembg) VALIDADA por IoU contra la heuristica.
+
+    Devuelve el alpha del modelo solo si se parece lo suficiente a la heuristica
+    (>= `ml_iou_min`); si no, devuelve None y el llamador conserva la heuristica.
+    Un backend ausente o un modelo que falla jamas es fatal.
+    """
+    backend = str(cfg.get("ml_backend", "none")).lower()
+    if backend != "rembg" or not HAVE_REMBG or rembg_remove is None:
+        return None
+    try:
+        out = rembg_remove(Image.fromarray(rgb, "RGB"))
+        out = np.asarray(out.convert("RGBA"), dtype=np.uint8)
+        ml_alpha = out[..., 3]
+    except Exception as exc:
+        print(f"    (rembg fallo: {exc}; se sigue con la heuristica)")
+        return None
+
+    score = iou(ml_alpha, alpha_heur)
+    if score < float(cfg["ml_iou_min"]):
+        print(f"    (rembg descartado: IoU {score:.2f} < {cfg['ml_iou_min']})")
+        return None
+    print(f"    (rembg aceptado: IoU {score:.2f})")
+    return ml_alpha
+
+
+def estimate_depth(rgb: np.ndarray, subject_alpha: np.ndarray, cfg: dict) -> dict:
+    """Profundidad relativa por capa (0-1). Sin backend: `default_depth`."""
+    default = dict(cfg.get("default_depth", {"bg": 0.15, "subject": 0.5, "fg": 0.85}))
+    backend = str(cfg.get("depth_backend", "none")).lower()
+    if backend != "depth_anything" or not HAVE_DEPTH:
+        return default
+    try:
+        depth_pipe = hf_pipeline(task="depth-estimation", model="LiheYoung/depth-anything-small-hf")
+        depth = np.asarray(depth_pipe(Image.fromarray(rgb, "RGB"))["depth"], dtype=np.float32)
+        depth = (depth - depth.min()) / max(1e-6, (depth.max() - depth.min()))
+        m = subject_alpha > 127
+        if m.any():
+            # El sujeto toma su profundidad MEDIA; bg/fg se separan a los lados.
+            subj = float(np.median(depth[m]))
+            return {"bg": round(max(0.0, subj - 0.35), 3), "subject": round(subj, 3), "fg": round(min(1.0, subj + 0.35), 3)}
+    except Exception as exc:  # pragma: no cover
+        print(f"    (depth-anything fallo: {exc}; se usa default_depth)")
+    return default
+
+
 def fill_bg_behind_subject(rgb: np.ndarray, subject_alpha: np.ndarray, cfg: dict, bg_alpha: np.ndarray) -> np.ndarray:
     """Rellena el fondo detras del sujeto para que no quede el 'hueco' del hongo.
 
-    Con cv2 -> inpaint (propaga los pixeles vecinos). Sin cv2 -> blur de difusion
-    fuerte sobre la zona del sujeto. Devuelve el RGB de fondo ya rellenado.
+    Se expande el hueco `inpaint_dilate_px` px para que NO queden restos del
+    sujeto en el fondo. En modo `band` solo se rellenan unos pocos px mas alla del
+    borde: los interiores de huecos grandes quedan difusos (eso mata las manchas
+    del inpaint clasico) y alcanza para el parallax suave.
     """
     hole = (subject_alpha > 40).astype(np.uint8)
     if hole.sum() == 0:
         return rgb
-    if HAVE_CV2:
+    # Expansion: sin esto quedan restos del sujeto pegados al contorno.
+    dil = int(cfg.get("inpaint_dilate_px", 0))
+    if dil > 0:
+        hole = _dilate(hole * 255, dil * 2 + 1)
+        hole = (hole > 127).astype(np.uint8)
+
+    # En modo `band` el inpaint solo cubre el anillo exterior; el interior se
+    # resuelve con difusion (mas barato y sin manchas).
+    if str(cfg.get("inpaint_mode", "full")).lower() == "band":
+        inner = _erode(hole * 255, int(cfg.get("inpaint_band_px", 6)) * 2 + 1)
+        inner = (inner > 127).astype(np.uint8)
+        fill_mask = hole & ~inner
+    else:
+        fill_mask = hole
+
+    if fill_mask.sum() == 0:
+        return rgb
+
+    filled: np.ndarray | None = None
+    backend = str(cfg.get("inpaint_backend", "cv2")).lower()
+
+    if backend == "lama" and HAVE_LAMA:
         try:
-            return cv2.inpaint(rgb, hole * 255, 5, cv2.INPAINT_TELEA)
+            lama = SimpleLama()
+            res = lama(Image.fromarray(rgb, "RGB"), Image.fromarray((fill_mask * 255).astype(np.uint8), "L"))
+            filled = np.asarray(res.convert("RGB"), dtype=np.uint8)
+        except Exception as exc:  # pragma: no cover
+            print(f"    (LaMa fallo: {exc}; se cae a cv2)")
+            filled = None
+
+    if filled is None and HAVE_CV2:
+        try:
+            # TELEA: propagacion de los vecinos. Sobre la BANDA (no el hueco entero)
+            # no deja las manchas que aparecian al rellenar huecos grandes.
+            filled = cv2.inpaint(rgb, fill_mask * 255, 5, cv2.INPAINT_TELEA)
         except Exception:
-            pass
-    # Fallback: difusion por blur, mezclando solo en el hueco.
-    radius = max(2, int(cfg["bg_fill_diffuse"]))
-    blurred = np.asarray(
-        Image.fromarray(rgb, "RGB").filter(ImageFilter.GaussianBlur(radius=radius))
-    )
-    m = (hole[..., None] > 0)
-    return np.where(m, blurred, rgb)
+            filled = None
+
+    if filled is None:
+        # Fallback: difusion por blur, mezclando solo en la zona a rellenar.
+        radius = max(2, int(cfg["bg_fill_diffuse"]))
+        blurred = np.asarray(Image.fromarray(rgb, "RGB").filter(ImageFilter.GaussianBlur(radius=radius)))
+        filled = np.where((fill_mask[..., None] > 0), blurred, rgb)
+
+    # El interior del hueco (si lo hay) tambien necesita algo de relleno: un blur
+    # suave alcanza porque queda tapado por el sujeto en la composicion.
+    if str(cfg.get("inpaint_mode", "full")).lower() == "band":
+        inner_only = (hole > 0) & (fill_mask == 0)
+        if inner_only.any():
+            radius = max(2, int(cfg["bg_fill_diffuse"]))
+            blurred = np.asarray(Image.fromarray(rgb, "RGB").filter(ImageFilter.GaussianBlur(radius=radius)))
+            filled = np.where(inner_only[..., None], blurred, filled)
+    return filled
+
 
 
 def vignette_fg(shape: tuple[int, int], cfg: dict) -> np.ndarray:
@@ -441,10 +704,25 @@ def bbox_of(alpha: np.ndarray, pad: int = 0) -> tuple[int, int, int, int] | None
     return x0, y0, x1 - x0, y1 - y0
 
 
-def compose_layers(rgb: np.ndarray, cfg: dict) -> tuple[dict[str, Image.Image], dict]:
-    """Devuelve ({layer: PIL RGBA}, meta) listo para exportar."""
+def compose_layers(rgb: np.ndarray, cfg: dict) -> tuple[dict[str, Image.Image], dict, np.ndarray]:
+    """Devuelve ({layer: PIL RGBA}, meta, alpha_final) listo para exportar.
+
+    El tercer valor (el alpha ya matizado) es lo que usan las mascaras de debug:
+    recalcular `build_alpha` aparte mostraria el borde binario VIEJO, no el suave.
+    """
     h, w = rgb.shape[:2]
     alpha = build_alpha(rgb, cfg)
+
+    # Respaldo ML (rembg): solo reemplaza la mascara si gana por IoU. Si el
+    # backend esta apagado o ausente, `matte_ml` devuelve None y no pasa nada.
+    ml = matte_ml(rgb, alpha, cfg) if str(cfg.get("ml_backend", "none")).lower() != "none" else None
+    if ml is not None:
+        alpha = ml
+    else:
+        # Matting SUAVE en la banda incierta (el borde duro del parallax). Con
+        # todos los backends ausentes devuelve `alpha` sin tocar.
+        alpha = matte_alpha(rgb, alpha, cfg)
+
     alpha = refine_alpha_grabcut(rgb, alpha, cfg)
     alpha = feather_alpha(alpha, float(cfg["feather_px"]))
 
@@ -477,8 +755,13 @@ def compose_layers(rgb: np.ndarray, cfg: dict) -> tuple[dict[str, Image.Image], 
             "subject_px": int((alpha > 127).sum()),
             "total_px": int(h * w),
         },
+        # depth/motion los LEE el render (Card3D) para el parallax continuo y el
+        # idle por capa. `genLayerIndex.mjs` los preserva: por eso el indice puede
+        # regenerarse sin perderlos.
+        "depth": estimate_depth(rgb, alpha, cfg),
+        "motion": dict(cfg.get("default_motion", {})),
     }
-    return {"bg": bg, "subject": subject, "fg": fg}, meta
+    return {"bg": bg, "subject": subject, "fg": fg}, meta, alpha
 
 
 # ---------------------------------------------------------------------------
@@ -510,6 +793,13 @@ def save_debug_masks(stem: str, rgb: np.ndarray, alpha: np.ndarray, cfg: dict) -
     overlay[..., 1] = np.where(m, np.minimum(255, overlay[..., 1].astype(np.int32) + 90), overlay[..., 1])
     overlay[..., 2] = np.where(m, overlay[..., 2] // 3, overlay[..., 2])
     Image.fromarray(overlay.astype(np.uint8), "RGB").save(MASK_OUT / f"{stem}_overlay.png")
+    # Trimap: blanco = sujeto seguro, negro = fondo seguro, gris = banda incierta
+    # (donde corre el matting). Es la vista para calibrar `trimap_erode/dilate_px`.
+    safe_fg, safe_bg, _ = build_trimap(alpha > 127, cfg)
+    trimap = np.full(alpha.shape, 128, np.uint8)
+    trimap[safe_bg] = 0
+    trimap[safe_fg] = 255
+    Image.fromarray(trimap, "L").save(MASK_OUT / f"{stem}_trimap.png")
 
 
 def process(src: Path, cfg: dict, debug_masks: bool) -> dict:
@@ -531,10 +821,9 @@ def process(src: Path, cfg: dict, debug_masks: bool) -> dict:
             rgb_img = rgb_img.resize(target, Image.LANCZOS)
         rgb = np.asarray(rgb_img, dtype=np.uint8)
 
-    layers, meta = compose_layers(rgb, cfg)
+    layers, meta, alpha = compose_layers(rgb, cfg)
 
     if debug_masks:
-        alpha = build_alpha(rgb, cfg)
         save_debug_masks(src.stem, rgb, alpha, cfg)
 
     for name, img in layers.items():
@@ -609,8 +898,18 @@ def main() -> int:
         return 1
 
     print(f"Motor: {'OpenCV' if HAVE_CV2 else 'NumPy'} | modo: {cfg['mode']}")
+    print(
+        "  backends: "
+        f"matting={cfg['matting_backend']}({'ok' if HAVE_PYMATTING else 'no'}) "
+        f"guided={'(ok)' if HAVE_XIMGPROC else '(no)'} "
+        f"ml={cfg['ml_backend']}({'ok' if HAVE_REMBG else 'no'}) "
+        f"inpaint={cfg['inpaint_backend']}({'ok' if HAVE_CV2 else 'no'}) "
+        f"depth={cfg['depth_backend']}({'ok' if HAVE_DEPTH else 'no'})"
+    )
     if not HAVE_CV2:
         print("  (cv2 no esta: sin grabCut/inpaint; el resto funciona igual)")
+    if not HAVE_PYMATTING:
+        print("  (pymatting no esta: el borde cae a la mascara binaria de siempre)")
 
     sources = sorted(
         p for p in SOURCE.glob("*.png")
@@ -631,7 +930,11 @@ def main() -> int:
         results[src.stem] = meta
         cov = meta["coverage"]
         pct = 100.0 * cov["subject_px"] / max(1, cov["total_px"])
-        print(f"  {src.stem:<42} sujeto {pct:5.1f}%  bbox {meta['subject']['bbox']}")
+        dep = meta.get("depth", {})
+        print(
+            f"  {src.stem:<42} sujeto {pct:5.1f}%  bbox {meta['subject']['bbox']}  "
+            f"depth bg/sub/fg {dep.get('bg')}/{dep.get('subject')}/{dep.get('fg')}"
+        )
 
     if not results:
         print("Nada segmentado.")

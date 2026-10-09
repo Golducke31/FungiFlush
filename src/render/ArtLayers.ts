@@ -38,6 +38,29 @@ const BASE = 'art/layers/';
 export type LayerName = 'bg' | 'subject' | 'fg';
 
 /**
+ * Movimiento IDLE de una capa, leido de `index.json`.
+ *
+ * Los numeros vienen del segmentador (`tools/segment_card_layers.py`) y son por
+ * carta: asi cada ilustracion controla su propio vaiven sin tocar codigo. El
+ * cargador solo los lee y rellena lo que falte con `DEFAULT_MOTION`.
+ */
+export interface LayerMotion {
+  /** Amplitud del vaiven, en fraccion del ALTO de la carta. */
+  amp: number;
+  /** Velocidad del ciclo (rad/s aprox). */
+  speed: number;
+  /** Amplitud de la distorsion UV por ruido (0 = sin distorsion). */
+  noise: number;
+}
+
+/** Profundidad relativa por capa (0 = fondo lejano, 1 = primer plano). */
+export type LayerDepth = Partial<Record<LayerName, number>>;
+
+/** Movimiento por capa. Falta una capa = se usa `DEFAULT_MOTION`. */
+export type LayerMotions = Partial<Record<LayerName, LayerMotion>>;
+
+
+/**
  * Marca del objeto imagen de una capa.
  *
  * No guarda la imagen en si sino la CLAVE del cache de texturas: el render cachea
@@ -58,14 +81,46 @@ export interface LayerImages {
   bbox: [number, number, number, number];
   /** Tamano del canvas de la carta (`[512, 744]`) al que estan referidas las capas. */
   size: [number, number];
+  /** Profundidad relativa por capa (0-1). Defaults si el indice no la trae. */
+  depth: Record<LayerName, number>;
+  /** Movimiento idle por capa. Defaults si el indice no lo trae. */
+  motion: Record<LayerName, LayerMotion>;
+  /**
+   * Fase inicial determinista (0-2pi) derivada del STEM.
+   *
+   * Sin ella todas las cartas respirarian AL UNISONO, que se lee como un latido
+   * de pantalla en vez de vida. Determinista y no aleatoria: la misma carta se
+   * mueve igual entre sesiones.
+   */
+  phase: number;
 }
 
 /** Entrada cruda del manifiesto, tal como la escribe el segmentador. */
 interface RawLayerEntry {
   size?: number[];
   subject?: { bbox?: number[] };
+  /** Campos opcionales que agrega el segmentador (matting/movimiento). */
+  depth?: LayerDepth;
+  motion?: LayerMotions;
   files?: Partial<Record<LayerName, string>>;
 }
+
+/**
+ * Defaults de profundidad y movimiento.
+ *
+ * SON EL RESPALDO DURO: una entrada sin `depth`/`motion` (indice viejo, o una
+ * carta segmentada antes de esta feature) se resuelve con estos numeros y el
+ * juego se ve igual que siempre. El `subject` respira mas que el fondo y el `fg`
+ * va en contra: eso es lo que da la sensacion de capas independientes.
+ */
+export const DEFAULT_DEPTH: Record<LayerName, number> = { bg: 0.15, subject: 0.5, fg: 0.85 };
+export const DEFAULT_MOTION: Record<LayerName, LayerMotion> = {
+  bg: { amp: 0.006, speed: 0.35, noise: 0.004 },
+  subject: { amp: 0.01, speed: 0.6, noise: 0.006 },
+  fg: { amp: 0.008, speed: 0.45, noise: 0.003 },
+};
+
+const LAYER_NAMES: readonly LayerName[] = ['bg', 'subject', 'fg'];
 
 interface RawLayerIndex {
   version?: number;
@@ -102,6 +157,23 @@ export function layerKeysFor(element: ElementType, rarity: Rarity, cardId?: stri
   keys.push(pairLayerStem(element, rarity));
   if (rarity !== 'common') keys.push(pairLayerStem(element, 'common'));
   return [...new Set(keys)];
+}
+
+/**
+ * Fase de idle determinista (0-2pi) a partir del stem de la carta.
+ *
+ * Hash simple y estable (FNV-1a sobre los code units). NO usa el RNG del engine
+ * ni `Math.random`: dos corridas del mismo build mueven cada carta IGUAL, y dos
+ * cartas con distinto arte no respiran al unisono.
+ */
+export function phaseForStem(stem: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < stem.length; i++) {
+    h ^= stem.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  // `>>> 0` para tratarlo sin signo y normalizar a [0, 1) -> [0, 2pi).
+  return ((h >>> 0) / 0xffffffff) * Math.PI * 2;
 }
 
 export class ArtLayers {
@@ -202,7 +274,27 @@ export class ArtLayers {
         return file ? this.images.get(file) : undefined;
       };
 
-      return { bg: pick('bg'), subject, fg: pick('fg'), bbox, size };
+      // --- Movimiento / profundidad por capa (guardados campo a campo) ---
+      // El indice lo escribe un tool de Python: tratarlo como DATO NO CONFIABLE.
+      // Cada campo pasa por `Number.isFinite`; lo que falte cae al default. Si la
+      // entrada no trae NADA de esto (indice viejo) igual se resuelve con defaults
+      // y el render se comporta como antes de esta feature.
+      const depth = {} as Record<LayerName, number>;
+      const motion = {} as Record<LayerName, LayerMotion>;
+      for (const layer of LAYER_NAMES) {
+        const depthRaw = entry.depth?.[layer];
+        depth[layer] = Number.isFinite(depthRaw) ? (depthRaw as number) : DEFAULT_DEPTH[layer];
+
+        const mRaw = entry.motion?.[layer];
+        const fallback = DEFAULT_MOTION[layer];
+        motion[layer] = {
+          amp: Number.isFinite(mRaw?.amp) ? (mRaw!.amp as number) : fallback.amp,
+          speed: Number.isFinite(mRaw?.speed) ? (mRaw!.speed as number) : fallback.speed,
+          noise: Number.isFinite(mRaw?.noise) ? (mRaw!.noise as number) : fallback.noise,
+        };
+      }
+
+      return { bg: pick('bg'), subject, fg: pick('fg'), bbox, size, depth, motion, phase: phaseForStem(stem) };
     }
     return undefined;
   }

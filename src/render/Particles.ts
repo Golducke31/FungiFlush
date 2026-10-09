@@ -19,7 +19,13 @@
  */
 
 import * as THREE from 'three';
-import { createAmbientSporeMaterial, createSporeMaterial } from './Shaders';
+import {
+  CARD_SPORE_SPREAD_X,
+  CARD_SPORE_SPREAD_Y,
+  createAmbientSporeMaterial,
+  createCardSporeMaterial,
+  createSporeMaterial,
+} from './Shaders';
 
 // ---------------------------------------------------------------------------
 // Ambiente: todo en la GPU
@@ -393,5 +399,109 @@ export class SporeField {
     this.geometry.dispose();
     this.material.dispose();
     this.ambient.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Esporas LOCALES de una carta (entre el sujeto y el primer plano)
+// ---------------------------------------------------------------------------
+
+/**
+ * CardSporeField — pocas esporas flotando DENTRO de una carta, entre la cara
+ * (sujeto) y el `fg`.
+ *
+ * POR QUE ES LO QUE MAS CAMBIA LA SENSACION DE PROFUNDIDAD
+ * -------------------------------------------------------
+ * Las capas a distinta Z solo se separan al inclinar la carta; quieta, la
+ * sensacion es debil. Unas esporas que viven a media profundidad y se desplazan
+ * con el tilt anclan la lectura de volumen: el ojo las usa como referencia de
+ * paralaje.
+ *
+ * COSTO
+ * -----
+ * 100% GPU, como `AmbientSporeField`: los buffers se escriben UNA vez al
+ * construir y luego solo se actualizan uniforms (`uTime`, `uTilt`). 1 sola draw
+ * call por carta, y la carta decide si se muestra (`.visible`) — las esporas
+ * solo van en la carta hero / en hover / en seleccion, no en toda la mano.
+ *
+ * El `Points` se parenta al `group` de la Card3D, asi que HEREDA la inclinacion
+ * y el paralaje de la carta sin cuentas extra.
+ */
+export class CardSporeField {
+  readonly points: THREE.Points;
+  private readonly material: THREE.ShaderMaterial;
+  private readonly geometry: THREE.BufferGeometry;
+  /** Cuantas se dibujan. El tier puede bajarlo sin reasignar memoria. */
+  private count: number;
+  private readonly capacity: number;
+
+  constructor(options: { count: number; z?: number; seed?: number }) {
+    this.capacity = Math.max(1, options.count);
+    this.count = this.capacity;
+
+    const seeds = new Float32Array(this.capacity * 3);
+    const colors = new Float32Array(this.capacity * 3);
+    const sizes = new Float32Array(this.capacity);
+    const color = new THREE.Color();
+    const green = new THREE.Color(0x6fe0b0);
+    const violet = new THREE.Color(0xa78bfa);
+    // Semilla determinista por carta: las esporas de una carta son iguales entre
+    // sesiones, pero cada carta tiene las suyas.
+    let s = (options.seed ?? 1) >>> 0;
+    const rand = (): number => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    for (let i = 0; i < this.capacity; i++) {
+      seeds[i * 3] = rand() - 0.5;
+      seeds[i * 3 + 1] = rand();
+      seeds[i * 3 + 2] = rand();
+      const t = rand();
+      color.copy(green).lerp(violet, t);
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+      sizes[i] = 0.05 + t * 0.05;
+    }
+
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 3));
+    this.geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    this.geometry.setDrawRange(0, this.count);
+    this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 6);
+
+    this.material = createCardSporeMaterial();
+    (this.material.uniforms['uSpreadX'] as { value: number }).value = CARD_SPORE_SPREAD_X;
+    (this.material.uniforms['uSpreadY'] as { value: number }).value = CARD_SPORE_SPREAD_Y;
+    (this.material.uniforms['uZ'] as { value: number }).value = options.z ?? 0;
+
+    this.points = new THREE.Points(this.geometry, this.material);
+    this.points.frustumCulled = false;
+    // Por DETRAS del texto (renderOrder del badge = 20), pero como particula
+    // aditiva se dibuja despues del arte: es lo que la hace "flotar".
+    this.points.renderOrder = 12;
+    this.points.visible = false;
+  }
+
+  setCount(value: number): void {
+    this.count = Math.max(0, Math.min(this.capacity, Math.floor(value)));
+    this.geometry.setDrawRange(0, this.count);
+  }
+
+  /** Unico trabajo por frame: avanzar el reloj y el desplazamiento por tilt. */
+  update(time: number, tilt: number): void {
+    if (!this.points.visible) return;
+    (this.material.uniforms['uTime'] as { value: number }).value = time;
+    (this.material.uniforms['uTilt'] as { value: number }).value = tilt;
+  }
+
+  dispose(): void {
+    this.geometry.dispose();
+    this.material.dispose();
   }
 }

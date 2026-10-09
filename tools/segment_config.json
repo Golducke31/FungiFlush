@@ -36,6 +36,34 @@
   "bg_fill_diffuse": 28,
   "use_grabcut": false,
 
+  "_matting_doc": "MATTING: la mascara heuristica se usa como TRIMAP (erode = sujeto seguro, dilate = fondo seguro) y el matting resuelve SOLO la banda incierta. Es el salto de calidad del borde (pelo/pelusa/halos) y evita el corte duro del parallax. Escalera: pymatting (closed-form -> KNN) -> guided filter (cv2.ximgproc) -> la binaria de siempre. Con todos los backends ausentes la salida es IDENTICA a antes.",
+  "matting_backend": "pymatting",
+  "matting_band_only": true,
+  "trimap_erode_px": 8,
+  "trimap_dilate_px": 10,
+  "matting_max_side": 512,
+
+  "_ml_doc": "RESPALDO ML: rembg (U2-Net/ISNet) corre SOLO si se enciende y solo reemplaza la heuristica si su IoU >= ml_iou_min. SAM se puede enchufar detras del mismo seam (usar la heuristica como prompt).",
+  "ml_backend": "none",
+  "ml_iou_min": 0.8,
+
+  "_inpaint_doc": "INPAINT: se expande el hueco inpaint_dilate_px px para no dejar restos del sujeto en el fondo. En modo band solo se rellenan unos px mas alla del borde (los huecos grandes quedan difusos): eso mata las manchas del inpaint clasico. Escalera: LaMa -> cv2 TELEA -> blur.",
+  "inpaint_backend": "cv2",
+  "inpaint_dilate_px": 6,
+  "inpaint_mode": "band",
+  "inpaint_band_px": 6,
+
+  "_depth_doc": "DEPTH: profundidad relativa por capa (0-1) para el parallax continuo en el shader uv += tilt*depth*k. Sin backend se usa default_depth. Lo lee el render; Python solo lo escribe.",
+  "depth_backend": "none",
+  "default_depth": { "bg": 0.15, "subject": 0.5, "fg": 0.85 },
+
+  "_motion_doc": "MOVIMIENTO idle por capa (amp en fraccion del alto, speed en rad/s, noise = distorsion UV). Lo lee Card3D; genLayerIndex.mjs lo PRESERVA al regenerar el indice.",
+  "default_motion": {
+    "bg": { "amp": 0.006, "speed": 0.35, "noise": 0.004 },
+    "subject": { "amp": 0.010, "speed": 0.60, "noise": 0.006 },
+    "fg": { "amp": 0.008, "speed": 0.45, "noise": 0.003 }
+  },
+
   "_out_doc": "PNG RGBA LOSSLESS por defecto: prioridad maxima a la calidad visual, sin perder detalle en los bordes con alfa. Si alguna vez hace falta aligerar el bundle, out_format=webp baja el peso a cambio de compresion con perdida.",
   "out_format": "png",
   "webp_quality": 92,

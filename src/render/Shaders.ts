@@ -384,6 +384,96 @@ export function createSkyMaterial(): THREE.ShaderMaterial {
   });
 }
 
+/**
+ * Esporas LOCALES a una carta: viven en el plano de la carta y se desplazan con
+ * el `tilt` (uniform), que es lo que las clava a la profundidad entre el sujeto
+ * y el primer plano. Todo el movimiento se calcula en el vertex shader: la CPU
+ * escribe `aSeed` UNA vez al construir y despues solo actualiza uniforms.
+ *
+ * `uSpread` es el ancho/alto del area de emision (en unidades locales de carta),
+ * `uTilt` el desplazamiento parallax actual, `uZ` la profundidad local (entre la
+ * cara y el `fg`).
+ */
+export const CARD_SPORE_VERT = /* glsl */ `
+  attribute vec3  aSeed;
+  attribute float aSize;
+  attribute vec3  aColor;
+
+  uniform float uTime;
+  uniform float uSpreadX;
+  uniform float uSpreadY;
+  uniform float uZ;
+  uniform float uTilt;
+  uniform float uRise;
+
+  varying float vAlpha;
+  varying vec3  vColor;
+
+  void main() {
+    float v = fract(sin(aSeed.z * 17.13) * 43758.5453);
+    vColor = aColor * (0.7 + 0.5 * v);
+
+    // Deriva ascendente ciclica + vaiven lateral: la espora sube lento y se
+    // mece. El mod da el wrap; el desvanecido de los extremos evita el salto.
+    float life = fract(uTime * (0.06 + 0.10 * v) + aSeed.y);
+    float y = (life - 0.5) * uSpreadY + uRise * uTilt;
+    float x = aSeed.x * uSpreadX + sin(uTime * 0.5 + aSeed.x * 6.0) * uSpreadX * 0.06;
+    float z = uZ + aSeed.z * 0.02;
+
+    vAlpha = smoothstep(0.0, 0.18, life) * (1.0 - smoothstep(0.72, 1.0, life));
+
+    vec4 mv = modelViewMatrix * vec4(x, y, z, 1.0);
+    gl_PointSize = aSize * (0.8 + 0.4 * v) * (240.0 / max(0.001, -mv.z)) * vAlpha;
+    gl_Position  = projectionMatrix * mv;
+  }
+`;
+
+export const CARD_SPORE_FRAG = /* glsl */ `
+  varying float vAlpha;
+  varying vec3  vColor;
+
+  void main() {
+    vec2  c = gl_PointCoord - 0.5;
+    float d = length(c);
+    float core = smoothstep(0.5, 0.0, d);
+    float halo = smoothstep(0.5, 0.15, d) * 0.45;
+    float a = (core + halo) * vAlpha;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(vColor * (0.6 + 0.4 * core), a);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+/**
+ * Geometria del campo de esporas de una carta. Los valores son en unidades
+ * locales de carta (CARD_WIDTH=2.2 x CARD_HEIGHT=3.2) y se mantienen chicos:
+ * las esporas son un acento, no una cortina.
+ */
+export const CARD_SPORE_SPREAD_X = 1.05;
+export const CARD_SPORE_SPREAD_Y = 1.7;
+export const CARD_SPORE_RISE = 0.12;
+
+export function createCardSporeMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: CARD_SPORE_VERT,
+    fragmentShader: CARD_SPORE_FRAG,
+    uniforms: {
+      uTime: { value: 0 },
+      uSpreadX: { value: CARD_SPORE_SPREAD_X },
+      uSpreadY: { value: CARD_SPORE_SPREAD_Y },
+      uZ: { value: 0 },
+      uTilt: { value: 0 },
+      uRise: { value: CARD_SPORE_RISE },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: true,
+  });
+}
+
 /** Actualiza `uTime` en todos los materiales que lo usen. */
 export function tickShader(material: THREE.Material, time: number): void {
   const uniforms = (material as THREE.ShaderMaterial).uniforms;

@@ -8,15 +8,37 @@
       ],
       "subject": {
         "bbox": [
-          161,
-          110,
-          196,
-          362
+          160,
+          105,
+          194,
+          368
         ]
       },
       "coverage": {
-        "subject_px": 22279,
+        "subject_px": 22518,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_crystal_common__bg.png",
@@ -31,15 +53,37 @@
       ],
       "subject": {
         "bbox": [
-          146,
-          110,
-          212,
-          354
+          143,
+          104,
+          219,
+          363
         ]
       },
       "coverage": {
-        "subject_px": 43499,
+        "subject_px": 45688,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_crystal_legendary__bg.png",
@@ -54,15 +98,37 @@
       ],
       "subject": {
         "bbox": [
-          55,
-          110,
-          401,
-          390
+          62,
+          104,
+          398,
+          401
         ]
       },
       "coverage": {
-        "subject_px": 70200,
+        "subject_px": 79790,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_crystal_mythic__bg.png",
@@ -77,15 +143,37 @@
       ],
       "subject": {
         "bbox": [
-          98,
-          110,
-          290,
-          351
+          94,
+          103,
+          299,
+          362
         ]
       },
       "coverage": {
-        "subject_px": 46709,
+        "subject_px": 48273,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_crystal_rare__bg.png",
@@ -100,15 +188,37 @@
       ],
       "subject": {
         "bbox": [
-          134,
-          110,
-          240,
-          360
+          128,
+          104,
+          248,
+          370
         ]
       },
       "coverage": {
-        "subject_px": 35449,
+        "subject_px": 39766,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_crystal_uncommon__bg.png",
@@ -123,15 +233,37 @@
       ],
       "subject": {
         "bbox": [
+          172,
           105,
-          110,
-          252,
-          341
+          191,
+          338
         ]
       },
       "coverage": {
-        "subject_px": 25757,
+        "subject_px": 25591,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_decay_common__bg.png",
@@ -146,15 +278,37 @@
       ],
       "subject": {
         "bbox": [
-          120,
-          110,
-          265,
-          342
+          126,
+          104,
+          264,
+          350
         ]
       },
       "coverage": {
-        "subject_px": 35296,
+        "subject_px": 36856,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_decay_legendary__bg.png",
@@ -169,15 +323,37 @@
       ],
       "subject": {
         "bbox": [
-          29,
-          110,
-          480,
-          358
+          33,
+          105,
+          443,
+          368
         ]
       },
       "coverage": {
-        "subject_px": 44480,
+        "subject_px": 48226,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_decay_mythic__bg.png",
@@ -192,15 +368,37 @@
       ],
       "subject": {
         "bbox": [
-          173,
-          110,
-          184,
-          331
+          169,
+          105,
+          191,
+          340
         ]
       },
       "coverage": {
-        "subject_px": 27054,
+        "subject_px": 29553,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_decay_rare__bg.png",
@@ -215,15 +413,37 @@
       ],
       "subject": {
         "bbox": [
-          136,
-          110,
-          244,
-          334
+          131,
+          104,
+          256,
+          339
         ]
       },
       "coverage": {
-        "subject_px": 33086,
+        "subject_px": 33483,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_decay_uncommon__bg.png",
@@ -238,15 +458,37 @@
       ],
       "subject": {
         "bbox": [
-          158,
-          110,
-          209,
-          358
+          153,
+          104,
+          219,
+          366
         ]
       },
       "coverage": {
-        "subject_px": 30394,
+        "subject_px": 30683,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_mycelium_common__bg.png",
@@ -261,15 +503,37 @@
       ],
       "subject": {
         "bbox": [
-          76,
-          110,
-          333,
-          341
+          74,
+          103,
+          337,
+          352
         ]
       },
       "coverage": {
-        "subject_px": 50900,
+        "subject_px": 52639,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_mycelium_legendary__bg.png",
@@ -284,15 +548,37 @@
       ],
       "subject": {
         "bbox": [
-          10,
-          110,
-          496,
-          390
+          6,
+          104,
+          499,
+          401
         ]
       },
       "coverage": {
-        "subject_px": 72744,
+        "subject_px": 77480,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_mycelium_mythic__bg.png",
@@ -307,15 +593,37 @@
       ],
       "subject": {
         "bbox": [
-          132,
-          110,
-          241,
-          345
+          130,
+          104,
+          245,
+          355
         ]
       },
       "coverage": {
-        "subject_px": 43901,
+        "subject_px": 46425,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_mycelium_rare__bg.png",
@@ -330,15 +638,37 @@
       ],
       "subject": {
         "bbox": [
-          122,
-          110,
-          306,
-          368
+          121,
+          104,
+          311,
+          379
         ]
       },
       "coverage": {
-        "subject_px": 59611,
+        "subject_px": 62668,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_mycelium_uncommon__bg.png",
@@ -353,15 +683,37 @@
       ],
       "subject": {
         "bbox": [
-          159,
-          110,
-          183,
-          362
+          157,
+          104,
+          188,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 24762,
+        "subject_px": 25510,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_neutral_common__bg.png",
@@ -376,15 +728,37 @@
       ],
       "subject": {
         "bbox": [
-          68,
-          110,
-          367,
-          362
+          64,
+          104,
+          374,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 61466,
+        "subject_px": 65044,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_neutral_legendary__bg.png",
@@ -399,15 +773,37 @@
       ],
       "subject": {
         "bbox": [
-          55,
-          110,
-          395,
-          359
+          53,
+          103,
+          398,
+          370
         ]
       },
       "coverage": {
-        "subject_px": 46049,
+        "subject_px": 49236,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_neutral_mythic__bg.png",
@@ -422,15 +818,37 @@
       ],
       "subject": {
         "bbox": [
-          33,
-          110,
-          449,
-          359
+          27,
+          104,
+          443,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 38039,
+        "subject_px": 42370,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_neutral_rare__bg.png",
@@ -445,15 +863,37 @@
       ],
       "subject": {
         "bbox": [
-          128,
-          110,
-          242,
-          359
+          126,
+          104,
+          246,
+          367
         ]
       },
       "coverage": {
-        "subject_px": 31619,
+        "subject_px": 33345,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_neutral_uncommon__bg.png",
@@ -468,15 +908,37 @@
       ],
       "subject": {
         "bbox": [
-          78,
-          110,
-          361,
-          390
+          81,
+          101,
+          344,
+          406
         ]
       },
       "coverage": {
-        "subject_px": 63246,
+        "subject_px": 61088,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_amanita_apex_toxica__bg.png",
@@ -491,15 +953,37 @@
       ],
       "subject": {
         "bbox": [
-          124,
-          110,
-          260,
-          334
+          122,
+          104,
+          264,
+          345
         ]
       },
       "coverage": {
-        "subject_px": 44276,
+        "subject_px": 48076,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_bridge_saprophyte__bg.png",
@@ -514,15 +998,37 @@
       ],
       "subject": {
         "bbox": [
-          78,
-          110,
-          294,
-          384
+          114,
+          103,
+          244,
+          381
         ]
       },
       "coverage": {
-        "subject_px": 23622,
+        "subject_px": 19179,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_agaric_thread__bg.png",
@@ -537,15 +1043,37 @@
       ],
       "subject": {
         "bbox": [
-          125,
-          110,
-          260,
-          339
+          126,
+          104,
+          264,
+          349
         ]
       },
       "coverage": {
-        "subject_px": 19089,
+        "subject_px": 19909,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_amanita_web__bg.png",
@@ -560,15 +1088,37 @@
       ],
       "subject": {
         "bbox": [
-          92,
-          110,
-          317,
-          389
+          87,
+          103,
+          325,
+          397
         ]
       },
       "coverage": {
-        "subject_px": 27213,
+        "subject_px": 26156,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_boletus_root__bg.png",
@@ -583,15 +1133,37 @@
       ],
       "subject": {
         "bbox": [
-          171,
-          110,
-          158,
-          365
+          170,
+          104,
+          160,
+          376
         ]
       },
       "coverage": {
-        "subject_px": 16560,
+        "subject_px": 19273,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_clavaria_filament__bg.png",
@@ -606,15 +1178,37 @@
       ],
       "subject": {
         "bbox": [
-          156,
-          110,
-          193,
-          375
+          152,
+          103,
+          201,
+          377
         ]
       },
       "coverage": {
-        "subject_px": 43643,
+        "subject_px": 44320,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_network_node__bg.png",
@@ -629,15 +1223,37 @@
       ],
       "subject": {
         "bbox": [
+          105,
           103,
-          110,
-          352,
-          390
+          354,
+          402
         ]
       },
       "coverage": {
-        "subject_px": 45334,
+        "subject_px": 42573,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_colony_rhizomorph__bg.png",
@@ -652,15 +1268,37 @@
       ],
       "subject": {
         "bbox": [
-          166,
-          110,
-          175,
-          325
+          162,
+          103,
+          179,
+          336
         ]
       },
       "coverage": {
-        "subject_px": 22831,
+        "subject_px": 21562,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_cordyceps_mind__bg.png",
@@ -675,15 +1313,37 @@
       ],
       "subject": {
         "bbox": [
-          121,
-          110,
-          261,
-          361
+          122,
+          103,
+          259,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 26468,
+        "subject_px": 27998,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_agaric_facet__bg.png",
@@ -698,15 +1358,37 @@
       ],
       "subject": {
         "bbox": [
-          113,
           110,
-          270,
-          374
+          102,
+          276,
+          387
         ]
       },
       "coverage": {
-        "subject_px": 45819,
+        "subject_px": 49351,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_amanita_shard__bg.png",
@@ -721,15 +1403,37 @@
       ],
       "subject": {
         "bbox": [
-          99,
-          110,
-          256,
-          381
+          145,
+          103,
+          210,
+          375
         ]
       },
       "coverage": {
-        "subject_px": 26014,
+        "subject_px": 26561,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_boletus_prism__bg.png",
@@ -744,15 +1448,37 @@
       ],
       "subject": {
         "bbox": [
-          153,
-          110,
-          202,
-          361
+          148,
+          104,
+          211,
+          368
         ]
       },
       "coverage": {
-        "subject_px": 25056,
+        "subject_px": 26823,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_glasscap__bg.png",
@@ -767,15 +1493,37 @@
       ],
       "subject": {
         "bbox": [
-          94,
-          110,
-          318,
-          358
+          89,
+          103,
+          330,
+          371
         ]
       },
       "coverage": {
-        "subject_px": 49508,
+        "subject_px": 55064,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_grand_coral__bg.png",
@@ -790,15 +1538,37 @@
       ],
       "subject": {
         "bbox": [
-          117,
-          110,
-          272,
-          361
+          116,
+          104,
+          275,
+          367
         ]
       },
       "coverage": {
-        "subject_px": 30284,
+        "subject_px": 30185,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_prism_gill__bg.png",
@@ -813,15 +1583,37 @@
       ],
       "subject": {
         "bbox": [
-          161,
-          110,
-          190,
-          347
+          158,
+          104,
+          197,
+          360
         ]
       },
       "coverage": {
-        "subject_px": 29212,
+        "subject_px": 31649,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_shard_bloom__bg.png",
@@ -836,15 +1628,37 @@
       ],
       "subject": {
         "bbox": [
-          159,
-          110,
-          190,
-          350
+          154,
+          104,
+          197,
+          358
         ]
       },
       "coverage": {
-        "subject_px": 30458,
+        "subject_px": 31526,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_crystal_tricholoma_lens__bg.png",
@@ -859,15 +1673,37 @@
       ],
       "subject": {
         "bbox": [
-          171,
-          110,
-          156,
-          379
+          166,
+          103,
+          164,
+          391
         ]
       },
       "coverage": {
-        "subject_px": 17151,
+        "subject_px": 16760,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_agaric_mould__bg.png",
@@ -883,14 +1719,36 @@
       "subject": {
         "bbox": [
           70,
-          110,
-          369,
-          390
+          102,
+          367,
+          403
         ]
       },
       "coverage": {
-        "subject_px": 49832,
+        "subject_px": 51799,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_amanita_blight__bg.png",
@@ -905,15 +1763,37 @@
       ],
       "subject": {
         "bbox": [
-          96,
-          110,
-          324,
-          339
+          134,
+          104,
+          275,
+          335
         ]
       },
       "coverage": {
-        "subject_px": 28762,
+        "subject_px": 25529,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_ancient_stump__bg.png",
@@ -928,15 +1808,37 @@
       ],
       "subject": {
         "bbox": [
-          148,
-          110,
-          210,
-          337
+          141,
+          102,
+          224,
+          351
         ]
       },
       "coverage": {
-        "subject_px": 30438,
+        "subject_px": 34675,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_boletus_slime__bg.png",
@@ -951,15 +1853,37 @@
       ],
       "subject": {
         "bbox": [
-          148,
-          110,
-          222,
-          390
+          145,
+          103,
+          230,
+          403
         ]
       },
       "coverage": {
-        "subject_px": 34151,
+        "subject_px": 35181,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_carrion_bloom__bg.png",
@@ -975,14 +1899,36 @@
       "subject": {
         "bbox": [
           183,
-          110,
-          134,
-          59
+          102,
+          137,
+          72
         ]
       },
       "coverage": {
-        "subject_px": 3608,
+        "subject_px": 4313,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_clavaria_ash__bg.png",
@@ -997,15 +1943,37 @@
       ],
       "subject": {
         "bbox": [
-          96,
-          110,
-          351,
-          389
+          95,
+          103,
+          340,
+          400
         ]
       },
       "coverage": {
-        "subject_px": 33697,
+        "subject_px": 35545,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_compost_heap__bg.png",
@@ -1020,15 +1988,37 @@
       ],
       "subject": {
         "bbox": [
-          159,
-          110,
-          214,
-          390
+          160,
+          103,
+          200,
+          403
         ]
       },
       "coverage": {
-        "subject_px": 25871,
+        "subject_px": 24540,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_inkcap__bg.png",
@@ -1043,15 +2033,37 @@
       ],
       "subject": {
         "bbox": [
-          172,
-          110,
-          198,
-          309
+          167,
+          104,
+          209,
+          317
         ]
       },
       "coverage": {
-        "subject_px": 24036,
+        "subject_px": 23241,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_decay_rotwood__bg.png",
@@ -1066,15 +2078,37 @@
       ],
       "subject": {
         "bbox": [
-          77,
-          110,
-          357,
-          333
+          76,
+          104,
+          362,
+          348
         ]
       },
       "coverage": {
-        "subject_px": 30218,
+        "subject_px": 34289,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_awakening_bracket__bg.png",
@@ -1089,15 +2123,37 @@
       ],
       "subject": {
         "bbox": [
-          178,
-          110,
-          176,
-          307
+          173,
+          104,
+          183,
+          311
         ]
       },
       "coverage": {
-        "subject_px": 13291,
+        "subject_px": 11261,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_carrion_lattice__bg.png",
@@ -1112,15 +2168,37 @@
       ],
       "subject": {
         "bbox": [
-          87,
-          110,
-          318,
-          308
+          95,
+          104,
+          314,
+          319
         ]
       },
       "coverage": {
-        "subject_px": 28033,
+        "subject_px": 26150,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_chain_rhizomorph__bg.png",
@@ -1135,15 +2213,37 @@
       ],
       "subject": {
         "bbox": [
-          133,
-          110,
-          233,
-          349
+          132,
+          102,
+          238,
+          360
         ]
       },
       "coverage": {
-        "subject_px": 21930,
+        "subject_px": 23755,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_cross_mycorrhiza__bg.png",
@@ -1158,15 +2258,37 @@
       ],
       "subject": {
         "bbox": [
-          173,
-          110,
-          174,
-          366
+          169,
+          102,
+          168,
+          378
         ]
       },
       "coverage": {
-        "subject_px": 20357,
+        "subject_px": 19186,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_herald_cap__bg.png",
@@ -1181,15 +2303,37 @@
       ],
       "subject": {
         "bbox": [
-          170,
-          110,
-          166,
-          351
+          165,
+          104,
+          177,
+          359
         ]
       },
       "coverage": {
-        "subject_px": 33456,
+        "subject_px": 34631,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_hybrid_lattice__bg.png",
@@ -1204,15 +2348,37 @@
       ],
       "subject": {
         "bbox": [
-          161,
-          110,
-          180,
-          320
+          160,
+          104,
+          186,
+          326
         ]
       },
       "coverage": {
-        "subject_px": 27014,
+        "subject_px": 27797,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_latent_sporocarp__bg.png",
@@ -1227,15 +2393,37 @@
       ],
       "subject": {
         "bbox": [
-          47,
-          110,
-          424,
-          353
+          44,
+          104,
+          429,
+          365
         ]
       },
       "coverage": {
-        "subject_px": 55340,
+        "subject_px": 50991,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_network_core__bg.png",
@@ -1250,15 +2438,37 @@
       ],
       "subject": {
         "bbox": [
-          172,
-          110,
-          215,
-          336
+          169,
+          104,
+          222,
+          342
         ]
       },
       "coverage": {
-        "subject_px": 23213,
+        "subject_px": 24747,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_parasite_lash__bg.png",
@@ -1273,15 +2483,37 @@
       ],
       "subject": {
         "bbox": [
-          111,
           110,
-          279,
-          341
+          104,
+          281,
+          351
         ]
       },
       "coverage": {
-        "subject_px": 45147,
+        "subject_px": 47935,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_slumber_amanita__bg.png",
@@ -1296,15 +2528,37 @@
       ],
       "subject": {
         "bbox": [
-          167,
-          110,
-          174,
-          360
+          163,
+          104,
+          182,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 22654,
+        "subject_px": 22127,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_spore_conduit__bg.png",
@@ -1319,15 +2573,37 @@
       ],
       "subject": {
         "bbox": [
-          145,
-          110,
-          194,
-          351
+          143,
+          102,
+          202,
+          360
         ]
       },
       "coverage": {
-        "subject_px": 31949,
+        "subject_px": 33901,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_deep_symbiont_veil__bg.png",
@@ -1342,15 +2618,37 @@
       ],
       "subject": {
         "bbox": [
-          162,
-          110,
-          235,
-          338
+          157,
+          104,
+          245,
+          346
         ]
       },
       "coverage": {
-        "subject_px": 30211,
+        "subject_px": 33149,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_ergot_rye__bg.png",
@@ -1365,15 +2663,37 @@
       ],
       "subject": {
         "bbox": [
-          147,
-          110,
-          220,
-          351
+          144,
+          103,
+          225,
+          364
         ]
       },
       "coverage": {
-        "subject_px": 37030,
+        "subject_px": 39717,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_ghost_fungus__bg.png",
@@ -1388,15 +2708,37 @@
       ],
       "subject": {
         "bbox": [
-          137,
-          110,
+          136,
+          103,
           217,
-          390
+          403
         ]
       },
       "coverage": {
-        "subject_px": 30284,
+        "subject_px": 26198,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_mycelium_truffle__bg.png",
@@ -1411,15 +2753,37 @@
       ],
       "subject": {
         "bbox": [
-          151,
-          110,
-          213,
-          341
+          146,
+          104,
+          214,
+          352
         ]
       },
       "coverage": {
-        "subject_px": 44282,
+        "subject_px": 45912,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_mycelium_webcap__bg.png",
@@ -1434,15 +2798,37 @@
       ],
       "subject": {
         "bbox": [
-          146,
-          110,
-          225,
-          357
+          143,
+          102,
+          233,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 52766,
+        "subject_px": 53635,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_poison_goldcap__bg.png",
@@ -1457,15 +2843,37 @@
       ],
       "subject": {
         "bbox": [
-          147,
-          110,
-          228,
-          342
+          142,
+          104,
+          235,
+          352
         ]
       },
       "coverage": {
-        "subject_px": 39678,
+        "subject_px": 40766,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_shiitake_hearty__bg.png",
@@ -1480,15 +2888,37 @@
       ],
       "subject": {
         "bbox": [
-          149,
-          115,
-          202,
-          341
+          148,
+          114,
+          205,
+          343
         ]
       },
       "coverage": {
-        "subject_px": 21755,
+        "subject_px": 22027,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_amanita_veil__bg.png",
@@ -1503,15 +2933,37 @@
       ],
       "subject": {
         "bbox": [
-          129,
-          116,
-          234,
-          340
+          128,
+          115,
+          236,
+          341
         ]
       },
       "coverage": {
-        "subject_px": 27916,
+        "subject_px": 28338,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_archetype_burst_cap__bg.png",
@@ -1527,14 +2979,36 @@
       "subject": {
         "bbox": [
           163,
-          116,
-          257,
-          340
+          115,
+          260,
+          341
         ]
       },
       "coverage": {
-        "subject_px": 14701,
+        "subject_px": 14077,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_archetype_signal__bg.png",
@@ -1550,14 +3024,36 @@
       "subject": {
         "bbox": [
           126,
-          110,
-          229,
-          367
+          109,
+          223,
+          374
         ]
       },
       "coverage": {
-        "subject_px": 25875,
+        "subject_px": 24036,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_boletus_puff__bg.png",
@@ -1572,15 +3068,37 @@
       ],
       "subject": {
         "bbox": [
-          150,
-          110,
-          202,
-          361
+          145,
+          103,
+          212,
+          369
         ]
       },
       "coverage": {
-        "subject_px": 24436,
+        "subject_px": 29014,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_clavaria_spray__bg.png",
@@ -1595,15 +3113,37 @@
       ],
       "subject": {
         "bbox": [
-          94,
-          110,
-          319,
-          371
+          95,
+          109,
+          321,
+          377
         ]
       },
       "coverage": {
-        "subject_px": 37372,
+        "subject_px": 38555,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_fairycake__bg.png",
@@ -1618,15 +3158,37 @@
       ],
       "subject": {
         "bbox": [
-          149,
-          116,
-          205,
-          326
+          154,
+          115,
+          198,
+          332
         ]
       },
       "coverage": {
-        "subject_px": 14834,
+        "subject_px": 15344,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_psilocybe_dust__bg.png",
@@ -1641,15 +3203,37 @@
       ],
       "subject": {
         "bbox": [
-          162,
-          115,
-          182,
-          341
+          165,
+          116,
+          177,
+          340
         ]
       },
       "coverage": {
-        "subject_px": 23662,
+        "subject_px": 24593,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_spore_veilcap__bg.png",
@@ -1665,14 +3249,36 @@
       "subject": {
         "bbox": [
           145,
-          110,
-          197,
-          358
+          104,
+          201,
+          267
         ]
       },
       "coverage": {
-        "subject_px": 28582,
+        "subject_px": 25221,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_symbiosis_mycorrhiza__bg.png",
@@ -1687,15 +3293,37 @@
       ],
       "subject": {
         "bbox": [
-          151,
-          110,
-          199,
-          205
+          146,
+          104,
+          208,
+          213
         ]
       },
       "coverage": {
-        "subject_px": 28646,
+        "subject_px": 29079,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_own_wild_dung_beetle__bg.png",
@@ -1710,15 +3338,37 @@
       ],
       "subject": {
         "bbox": [
-          169,
-          110,
-          162,
-          332
+          165,
+          104,
+          172,
+          343
         ]
       },
       "coverage": {
-        "subject_px": 24115,
+        "subject_px": 26340,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_parasite_common__bg.png",
@@ -1733,15 +3383,37 @@
       ],
       "subject": {
         "bbox": [
-          38,
-          110,
-          427,
-          339
+          35,
+          104,
+          426,
+          342
         ]
       },
       "coverage": {
-        "subject_px": 55376,
+        "subject_px": 60444,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_parasite_legendary__bg.png",
@@ -1757,14 +3429,36 @@
       "subject": {
         "bbox": [
           138,
-          110,
+          104,
           238,
-          354
+          364
         ]
       },
       "coverage": {
-        "subject_px": 31603,
+        "subject_px": 32884,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_parasite_mythic__bg.png",
@@ -1779,15 +3473,37 @@
       ],
       "subject": {
         "bbox": [
-          163,
-          110,
-          174,
-          352
+          168,
+          104,
+          173,
+          361
         ]
       },
       "coverage": {
-        "subject_px": 19754,
+        "subject_px": 19495,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_parasite_rare__bg.png",
@@ -1802,15 +3518,37 @@
       ],
       "subject": {
         "bbox": [
-          168,
-          110,
-          182,
-          328
+          163,
+          104,
+          181,
+          339
         ]
       },
       "coverage": {
-        "subject_px": 25494,
+        "subject_px": 27161,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_parasite_uncommon__bg.png",
@@ -1825,15 +3563,37 @@
       ],
       "subject": {
         "bbox": [
-          146,
-          110,
-          220,
-          364
+          141,
+          107,
+          230,
+          370
         ]
       },
       "coverage": {
-        "subject_px": 49373,
+        "subject_px": 50710,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_poison_common__bg.png",
@@ -1848,15 +3608,37 @@
       ],
       "subject": {
         "bbox": [
-          92,
-          110,
-          327,
-          390
+          87,
+          106,
+          337,
+          403
         ]
       },
       "coverage": {
-        "subject_px": 58753,
+        "subject_px": 58217,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_poison_legendary__bg.png",
@@ -1871,15 +3653,37 @@
       ],
       "subject": {
         "bbox": [
-          91,
-          110,
-          330,
-          390
+          87,
+          107,
+          338,
+          402
         ]
       },
       "coverage": {
-        "subject_px": 80734,
+        "subject_px": 85619,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_poison_mythic__bg.png",
@@ -1894,15 +3698,37 @@
       ],
       "subject": {
         "bbox": [
-          98,
-          133,
-          317,
-          367
+          96,
+          127,
+          318,
+          380
         ]
       },
       "coverage": {
-        "subject_px": 51821,
+        "subject_px": 56897,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_poison_rare__bg.png",
@@ -1917,15 +3743,37 @@
       ],
       "subject": {
         "bbox": [
-          108,
-          110,
-          332,
-          390
+          106,
+          101,
+          310,
+          406
         ]
       },
       "coverage": {
-        "subject_px": 37136,
+        "subject_px": 39206,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_poison_uncommon__bg.png",
@@ -1942,13 +3790,35 @@
         "bbox": [
           165,
           118,
-          182,
+          184,
           337
         ]
       },
       "coverage": {
-        "subject_px": 19162,
+        "subject_px": 19385,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_spore_common__bg.png",
@@ -1964,14 +3834,36 @@
       "subject": {
         "bbox": [
           65,
-          117,
-          373,
-          352
+          116,
+          376,
+          354
         ]
       },
       "coverage": {
-        "subject_px": 69728,
+        "subject_px": 71957,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_spore_legendary__bg.png",
@@ -1986,15 +3878,37 @@
       ],
       "subject": {
         "bbox": [
-          39,
-          117,
-          464,
-          343
+          50,
+          116,
+          453,
+          350
         ]
       },
       "coverage": {
-        "subject_px": 55373,
+        "subject_px": 64880,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_spore_mythic__bg.png",
@@ -2009,15 +3923,37 @@
       ],
       "subject": {
         "bbox": [
-          110,
-          110,
-          292,
-          372
+          108,
+          100,
+          296,
+          383
         ]
       },
       "coverage": {
-        "subject_px": 49383,
+        "subject_px": 54278,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_spore_rare__bg.png",
@@ -2033,14 +3969,36 @@
       "subject": {
         "bbox": [
           108,
-          110,
+          101,
           324,
-          324
+          338
         ]
       },
       "coverage": {
-        "subject_px": 55928,
+        "subject_px": 59228,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_spore_uncommon__bg.png",
@@ -2055,15 +4013,37 @@
       ],
       "subject": {
         "bbox": [
-          151,
-          110,
-          191,
-          351
+          147,
+          105,
+          200,
+          358
         ]
       },
       "coverage": {
-        "subject_px": 39770,
+        "subject_px": 41430,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_symbiosis_common__bg.png",
@@ -2078,15 +4058,37 @@
       ],
       "subject": {
         "bbox": [
-          91,
-          110,
-          333,
-          350
+          86,
+          104,
+          292,
+          361
         ]
       },
       "coverage": {
-        "subject_px": 54977,
+        "subject_px": 56414,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_symbiosis_legendary__bg.png",
@@ -2102,14 +4104,36 @@
       "subject": {
         "bbox": [
           101,
-          110,
-          350,
-          348
+          104,
+          357,
+          353
         ]
       },
       "coverage": {
-        "subject_px": 36328,
+        "subject_px": 37194,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_symbiosis_mythic__bg.png",
@@ -2124,15 +4148,37 @@
       ],
       "subject": {
         "bbox": [
-          113,
           110,
-          272,
-          337
+          104,
+          278,
+          346
         ]
       },
       "coverage": {
-        "subject_px": 49332,
+        "subject_px": 51359,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_symbiosis_rare__bg.png",
@@ -2147,15 +4193,37 @@
       ],
       "subject": {
         "bbox": [
-          164,
-          110,
-          262,
-          357
+          158,
+          105,
+          269,
+          365
         ]
       },
       "coverage": {
-        "subject_px": 37421,
+        "subject_px": 36051,
         "total_px": 380928
+      },
+      "depth": {
+        "bg": 0.15,
+        "subject": 0.5,
+        "fg": 0.85
+      },
+      "motion": {
+        "bg": {
+          "amp": 0.006,
+          "speed": 0.35,
+          "noise": 0.004
+        },
+        "subject": {
+          "amp": 0.01,
+          "speed": 0.6,
+          "noise": 0.006
+        },
+        "fg": {
+          "amp": 0.008,
+          "speed": 0.45,
+          "noise": 0.003
+        }
       },
       "files": {
         "bg": "art_card_symbiosis_uncommon__bg.png",

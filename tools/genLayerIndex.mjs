@@ -54,10 +54,16 @@ for (const name of files) {
   const prevEntry = prev[stem];
   if (!prevEntry) orphans.push(name);
 
+  // Este script RE-CONSTRUYE cada entrada: cualquier campo que no se copie aca se
+  // PIERDE en la siguiente corrida de `art:layers`. Por eso `depth` y `motion`
+  // (los escribe el segmentador) tienen que pasarse EXPLICITAMENTE: sin esto, el
+  // matting/movimiento por carta desaparece en silencio al regenerar el indice.
   const entry = (layers[stem] ??= {
     size: prevEntry?.size ?? [512, 744],
     subject: prevEntry?.subject ?? { bbox: [0, 0, 0, 0] },
     ...(prevEntry?.coverage ? { coverage: prevEntry.coverage } : {}),
+    ...(prevEntry?.depth ? { depth: prevEntry.depth } : {}),
+    ...(prevEntry?.motion ? { motion: prevEntry.motion } : {}),
     files: {},
   });
   entry.files[layer] = name;
