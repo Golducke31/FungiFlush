@@ -1294,7 +1294,6 @@ async function boot(): Promise<void> {
         if (!engine.rerollShop()) hud?.toast(t('action.cantAfford'), 'warn');
       },
       onSellJoker: (uid) => engine.sellJoker(uid),
-      onFocusJoker: (uid) => scene.flashJoker(uid),
       /**
        * Un panel tapa la arena. El dado se esconde: durante la tirada esta al
        * DOBLE de tamano en el centro, asi que en el mazo o en la coleccion

@@ -302,7 +302,6 @@ body {
  * arrastrar. Ni el smoke test lo veia, porque clickeaba por JS.
  */
 #ui-root > .hud-top,
-#ui-root > .hud-jokers,
 #ui-root > .hud-bottom,
 #ui-root > .overlay,
 #ui-root > .pack-overlay {
@@ -1089,30 +1088,8 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Columna de jokers (izquierda)
-   -------------------------------------------------------------------------- */
-
-.hud-jokers {
-  position: fixed;
-  top: 50%;
-  left: calc(10px + var(--safe-l));
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 62vh;
-  overflow-y: auto;
-  pointer-events: auto;
-  scrollbar-width: none;
-}
-
-.hud-jokers::-webkit-scrollbar {
-  display: none;
-}
-
-/* --------------------------------------------------------------------------
    P2.6 — Misiones de run
-   Franja bajo los jokers: objetivos cortos de la run. Apagada por defecto
+   Franja bajo la barra superior: objetivos cortos de la run. Apagada por defecto
    (no ocupa lugar si no hay misiones) y pointer-events:none, como el resto del
    cromo del HUD.
    -------------------------------------------------------------------------- */
@@ -1228,139 +1205,6 @@ body {
 
 .mission-chip.is-done .mission-chip-reward {
   color: var(--tag-buff);
-}
-
-.joker-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* Misma losa que el resto del HUD, pero conserva la barra violeta de la
-     izquierda: es lo que distingue "esto es un joker" de "esto es un contador"
-     de un vistazo, y es informacion, no decoracion. */
-  background:
-    linear-gradient(180deg, rgba(46, 178, 164, 0.34) 0%, rgba(46, 178, 164, 0) 40%),
-    linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body) 50%, var(--frame-body-lo) 100%);
-  border: 1px solid var(--frame-edge);
-  border-left: 3px solid var(--violet);
-  border-radius: 9px;
-  padding: 6px 9px;
-  font-size: 12.5px;
-  max-width: 178px;
-  color: #e2fbf4;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 var(--frame-rim),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-    0 3px 10px rgba(0, 0, 0, 0.45);
-  transition:
-    border-color var(--dur-base) var(--ease-out),
-    transform var(--dur-fast) var(--ease-back),
-    box-shadow var(--dur-base) var(--ease-out);
-}
-
-/* La barra izquierda y el halo toman el color de RAREZA del Simbionte (via
-   `--joker-rarity`, que fija el HUD). Es la señal principal para que una
-   legendaria salte a la vista sin leer el nombre. */
-.joker-chip {
-  border-left-color: var(--joker-rarity, var(--violet));
-}
-
-.joker-chip-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.joker-chip-ability {
-  font-size: 11px;
-  line-height: 1.2;
-  letter-spacing: 0.02em;
-  color: var(--joker-rarity, #c9b6ff);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.joker-chip:hover {
-  border-color: rgba(46, 178, 164, 0.6);
-  border-left-color: var(--joker-rarity, var(--violet));
-  transform: translateX(3px);
-  box-shadow:
-    inset 0 1px 0 var(--frame-rim),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-    0 6px 18px rgba(0, 0, 0, 0.55),
-    0 0 16px rgba(167, 139, 250, 0.28);
-}
-
-/* `.joker-chip.is-pressing` se ELIMINO junto con el long-press de la ficha: la
-   etiqueta rica del Simbionte ahora la abre la CARTA de la mesa (mantener
-   pulsado el simbionte en su ranura), asi que la ficha no tiene gesto que
-   anticipar. El hover de raton sigue abriendo el panel (via escritorio). */
-
-.joker-chip-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.joker-chip-fires {
-  color: var(--frame-dim);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-}
-
-/* El joker acaba de disparar: un latido violeta corto. Es la unica señal de
-   que la ficha "hizo algo" durante la mano; sin esto, un joker que dispara tres
-   veces se ve igual que uno que no disparo nunca. */
-.joker-chip.is-firing {
-  animation: joker-fire 0.42s var(--ease-out);
-}
-
-.joker-chip.is-firing .joker-chip-fires {
-  color: #d9c8ff;
-  text-shadow: 0 0 8px rgba(167, 139, 250, 0.9);
-}
-
-/* Cuando el Simbionte dispara, su habilidad se enciende: el texto sube de
-   contraste y brilla, asi se lee QUE hizo y no solo QUE disparo. */
-.joker-chip.is-firing .joker-chip-ability {
-  color: #fff;
-  text-shadow: 0 0 10px var(--joker-rarity, #a78bfa);
-}
-
-@keyframes joker-fire {
-  0% {
-    transform: translateX(0) scale(1);
-    border-color: var(--violet);
-    box-shadow:
-      inset 0 1px 0 var(--frame-rim),
-      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-      0 0 0 rgba(167, 139, 250, 0);
-  }
-  35% {
-    transform: translateX(4px) scale(1.045);
-    border-color: #c4b0ff;
-    box-shadow:
-      inset 0 1px 0 var(--frame-rim),
-      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-      0 0 22px rgba(167, 139, 250, 0.75);
-  }
-  100% {
-    transform: translateX(0) scale(1);
-    border-color: var(--frame-edge);
-    box-shadow:
-      inset 0 1px 0 var(--frame-rim),
-      inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-      0 3px 10px rgba(0, 0, 0, 0.45);
-  }
-}
-
-/* Con movimiento reducido no hay latido: el tinte del contador alcanza. */
-.reduce-motion .joker-chip.is-firing {
-  animation: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -3638,8 +3482,7 @@ body {
 
 /* En el menu se apaga el cromo del HUD: no hay ante, dinero ni contadores. */
 #ui-root.in-menu > .hud-top,
-#ui-root.in-menu > .hud-bottom,
-#ui-root.in-menu > .hud-jokers {
+#ui-root.in-menu > .hud-bottom {
   display: none;
 }
 
@@ -5972,14 +5815,6 @@ body {
     height: 3px;
     min-width: 2px;
   }
-  .hud-jokers {
-    max-height: 48vh;
-  }
-  .joker-chip {
-    font-size: 10.5px;
-    padding: 5px 8px;
-    max-width: 132px;
-  }
   .panel {
     padding: 16px 18px;
   }
@@ -6944,53 +6779,6 @@ body {
 .reduce-motion .die-hint,
 .reduce-motion .die-row-info.is-tumbling {
   animation: none;
-}
-
-/* ==========================================================================
-   FICHA DE JOKER: SEÑALAR NO ES VENDER
-   ==========================================================================
-   El cuerpo de la ficha solo hace latir el joker en la mesa. Vender es un boton
-   propio, con el valor a la vista, y pide una confirmacion de un toque mas
-   (`.is-confirming`). Antes la ficha entera vendia: un toque al pasar borraba un
-   joker sin aviso. */
-
-.joker-chip-sell {
-  flex: none;
-  min-width: 20px;
-  border: 1px solid var(--frame-edge);
-  border-radius: 6px;
-  padding: 2px 5px;
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--frame-dim);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.3;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-
-.joker-chip-sell:hover {
-  border-color: rgba(224, 92, 138, 0.7);
-  color: #ffd9e4;
-  background: rgba(224, 92, 138, 0.22);
-}
-
-/* Confirmando: el boton pasa a decir "Vender por N" y se pinta de alarma. Es la
-   unica forma de que el segundo toque sea deliberado y no un rebote. */
-.joker-chip.is-confirming {
-  border-color: rgba(224, 92, 138, 0.75);
-  box-shadow: 0 0 16px rgba(224, 92, 138, 0.32);
-}
-
-.joker-chip.is-confirming .joker-chip-sell {
-  border-color: #e05c8a;
-  background: rgba(224, 92, 138, 0.32);
-  color: #fff;
 }
 
 /* Oferta VENDIDA: no alcanza con bajarle la opacidad, tiene que leerse como
@@ -8033,21 +7821,18 @@ body {
     font-size: 11.5px;
   }
 
-  /* --- Misiones: franja propia entre los jokers y la barra inferior --- */
-  /* `.hud-missions` vive en el MISMO borde izquierdo que `.hud-jokers` (columna
-     centrada). Dos trampas en un celular landscape (844x390, el viewport del
-     smoke):
-       1. Con `pointer-events: auto` la franja se comia los toques de las fichas
-          de joker: el boton VENDER nunca recibia el click (la ficha no entraba
-          en confirmacion). Se deja `pointer-events: none`, como el resto del
+  /* --- Misiones: franja propia entre la barra superior y la inferior --- */
+  /* `.hud-missions` vive en el borde izquierdo. Dos trampas en un celular
+     landscape (844x390, el viewport del smoke):
+       1. Con `pointer-events: auto` la franja se comia los toques de las cartas
+          que quedaban debajo. Se deja `pointer-events: none`, como el resto del
           cromo informativo.
-       2. Anclada abajo del todo se solapaba con la barra inferior y, segun el
-          alto, trepaba sobre los jokers. Ahora cuelga de las DOS barras: el
-          `top` sale de `--hud-top-h` y el `bottom` de `--hud-bottom-h`, asi que
-          el panel vive siempre en la franja libre entre la barra superior y la
-          inferior. Antes eran dos px sueltos (58px / un tope de
-          `100dvh - 260px` que ya no existe) que habia que recalcular a mano
-          cada vez que una barra cambiaba de alto. */
+       2. Anclada abajo del todo se solapaba con la barra inferior. Ahora cuelga
+          de las DOS barras: el `top` sale de `--hud-top-h` y el `bottom` de
+          `--hud-bottom-h`, asi que el panel vive siempre en la franja libre
+          entre la barra superior y la inferior. Antes eran dos px sueltos (58px
+          / un tope de `100dvh - 260px` que ya no existe) que habia que
+          recalcular a mano cada vez que una barra cambiaba de alto. */
   /* P0.3 (HUD movil) — El panel de misiones se vuelve lateral y se desliza
      desde la IZQUIERDA, que es el lado donde vive el chip que lo abre. Cuando
      esta plegado (`is-open` ausente) queda fuera de pantalla por transform, asi
@@ -8334,7 +8119,6 @@ body {
   }
 
   #ui-root.is-panel-open > .hud-top,
-  #ui-root.is-panel-open > .hud-jokers,
   #ui-root.is-panel-open > .hud-missions-panel,
   #ui-root.is-panel-open > .hud-missions-toggle,
   #ui-root.is-panel-open > .pile-label,
@@ -8818,7 +8602,6 @@ body {
    -------------------------------------------------------------------------- */
 #ui-root.is-transition-out > .hud-top,
 #ui-root.is-transition-out > .hud-bottom,
-#ui-root.is-transition-out > .hud-jokers,
 #ui-root.is-transition-out > .hud-missions-toggle {
   opacity: 0;
   transform: translateY(16px);
@@ -8829,7 +8612,6 @@ body {
 
 #ui-root.is-transition-in > .hud-top,
 #ui-root.is-transition-in > .hud-bottom,
-#ui-root.is-transition-in > .hud-jokers,
 #ui-root.is-transition-in > .hud-missions-toggle {
   opacity: 1;
   transform: translateY(0);

@@ -110,7 +110,7 @@ const measure = await page.evaluate(() => {
     };
   };
   const sels = [
-    '.hud-top', '.hud-ante', '.hud-score', '.hud-money', '.hud-jokers',
+    '.hud-top', '.hud-ante', '.hud-score', '.hud-money',
     '.hud-missions', '.hud-bottom', '.hud-counters', '.hud-actions',
     '.panel.is-deck', '.panel.is-deck .carousel-detail', '.deck-level', '.nivel-chip',
   ];

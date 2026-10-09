@@ -110,8 +110,6 @@ export interface HudCallbacks {
   onBuy: (offerId: string) => void;
   onReroll: () => void;
   onSellJoker: (uid: string) => void;
-  /** El jugador toco la ficha de un joker: la carta late en la mesa. */
-  onFocusJoker: (uid: string) => void;
   onLeaveShop: () => void;
   /**
    * Arranca el ciego en curso del ante. Los 3 ciegos se juegan EN ORDEN, asi
@@ -301,7 +299,6 @@ export class HUD {
    * no puede comerse el arrastre de una carta justo encima suyo.
    */
   private elDecay = document.createElement('div');
-  private elJokers = document.createElement('div');
   private elActions = document.createElement('div');
   private elOverlay = document.createElement('div');
   /** Overlay de apertura de Sobres, vivo mientras el jugador lo tenga abierto. */
@@ -680,9 +677,6 @@ export class HUD {
     rightGroup.append(moneyBlock, menuButton);
     top.append(anteBlock, scoreBlock, rightGroup);
 
-    // --- Jokers (izquierda) ---
-    this.elJokers.className = 'hud-jokers';
-
     // --- Barra inferior ---
     // (F4/D) Una sola franja de accion: los contadores FLANQUEAN el boton JUGAR
     // MANO (izquierda/derecha) y el boton queda centrado encima de ellos. Para
@@ -744,7 +738,6 @@ export class HUD {
     this.root.append(
       this.playIconDefs(),
       top,
-      this.elJokers,
       this.elMissionsToggle,
       this.elMissions,
       this.elPileDeck,
@@ -939,24 +932,6 @@ export class HUD {
         this.toast(t('result.blindFailed'), 'error');
       }),
 
-      // La ficha del joker late cuando su joker dispara. NO se re-renderiza la
-      // lista: eso reconstruiria el DOM y mataria la animacion recien arrancada.
-      // Se busca la ficha por `data-uid` y se le pone el estado un instante.
-      bus.on('joker:triggered', ({ joker }) => {
-        const chip = this.elJokers.querySelector<HTMLElement>(
-          `.joker-chip[data-uid="${joker.uid}"]`,
-        );
-        if (!chip) return;
-        chip.classList.remove('is-firing');
-        // Forzar un reflow hace que la animacion se reinicie aunque la ficha ya
-        // estuviera latiendo (un joker que dispara dos veces seguidas).
-        void chip.offsetWidth;
-        chip.classList.add('is-firing');
-        window.setTimeout(() => chip.classList.remove('is-firing'), 420);
-        const fires = chip.querySelector('.joker-chip-fires');
-        if (fires) fires.textContent = `x${joker.firedCount}`;
-      }),
-
       bus.on('log', ({ level, key, params }) => {
         this.toast(t(key, params), level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info');
       }),
@@ -1032,7 +1007,6 @@ export class HUD {
     this.renderCounters();
     this.renderDecay();
     this.renderPileLabels();
-    this.renderJokers();
     this.renderMissions();
     this.renderActions();
     this.renderPreview();
@@ -1637,112 +1611,6 @@ export class HUD {
       void el.offsetWidth;
       el.classList.add('is-flash');
       window.setTimeout(() => el.classList.remove('is-flash'), 700);
-    }
-  }
-
-  /**
-   * Fichas de los jokers.
-   *
-   * La ficha TOCA el joker de la mesa (lo hace latir) y NO lo vende. Antes el
-   * cuerpo entero de la ficha vendia: un toque al pasar borraba un joker sin
-   * aviso y sin vuelta atras. Vender ahora es un boton propio, con su valor a la
-   * vista y una confirmacion de un toque mas.
-   */
-  private renderJokers(): void {
-    const run = this.engine.run;
-    this.elJokers.innerHTML = '';
-    if (!run) return;
-
-    for (const joker of run.jokers) {
-      const chip = document.createElement('div');
-      const rarity = joker.def.rarity;
-      chip.className = `joker-chip is-rarity-${rarity}`;
-      // El color de rareza viaja como variable CSS: la barra izquierda Y el
-      // brillo de la ficha se tiñen con el MISMO valor, y el CSS decide como
-      // usarlo. Asi una legendaria se distingue de una comun de un vistazo.
-      chip.style.setProperty('--joker-rarity', hexToCss(RARITY_COLOR[rarity]));
-      chip.title = `${t(joker.def.nameKey)} — ${t(joker.def.descKey)}`;
-      // Hook para que la ficha se pueda encontrar por uid cuando el joker
-      // dispara (ver la suscripcion a `joker:triggered`).
-      chip.dataset['uid'] = joker.uid;
-
-      const name = document.createElement('span');
-      name.className = 'joker-chip-name';
-      name.textContent = t(joker.def.nameKey);
-
-      // La linea de HABILIDAD ya NO va en la ficha. El equipo la pidio en la
-      // CARTA: mantener pulsado el Simbionte en la mesa abre la etiqueta rica
-      // (`showJokerTooltip`, con habilidad/rareza/descripcion), que es donde se
-      // consulta de verdad. Aca la ficha queda compacta: nombre + disparos, y
-      // el ancho libre lo aprovecha el nombre (antes se cortaba).
-      const fires = document.createElement('span');
-      fires.className = 'joker-chip-fires';
-      fires.textContent = `x${joker.firedCount}`;
-
-      const value = jokerSellValue(joker);
-      const sell = document.createElement('button');
-      sell.className = 'joker-chip-sell';
-      sell.type = 'button';
-      sell.dataset['act'] = 'sell-joker';
-      // Una "x" y no la palabra: la ficha es angosta y el nombre del joker tiene
-      // que entrar. Es seguro porque vender pide SIEMPRE un segundo toque, y en
-      // ese momento el boton se rotula con el precio.
-      sell.textContent = '✕';
-      sell.title = t('action.sellValue', { value });
-      sell.setAttribute('aria-label', t('action.sellValue', { value }));
-
-      /** Confirmacion en dos toques, con vencimiento: un toque no vende nada. */
-      let timer: number | null = null;
-      const reset = (): void => {
-        if (timer !== null) window.clearTimeout(timer);
-        timer = null;
-        chip.classList.remove('is-confirming');
-        sell.textContent = '✕';
-      };
-      sell.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (chip.classList.contains('is-confirming')) {
-          reset();
-          this.callbacks.onSellJoker(joker.uid);
-          return;
-        }
-        chip.classList.add('is-confirming');
-        sell.textContent = t('action.sellValue', { value });
-        timer = window.setTimeout(reset, 3200);
-      });
-
-      // El cuerpo de la ficha solo señala la carta: el joker late en la mesa.
-      chip.addEventListener('click', () => this.callbacks.onFocusJoker(joker.uid));
-
-      // --- Etiqueta rica del Simbionte: la abre la CARTA, no la ficha ---
-      // La via tactil (mantener pulsado) vive en el SIMBIONTE de la mesa
-      // (`onLongPressJoker` -> `showJokerTooltip`), no aca. El jugador busca la
-      // habilidad en la carta que ve en su ranura, y la ficha del HUD quedo
-      // deliberadamente compacta (nombre + disparos). Antes la ficha abria el
-      // panel al mantener el dedo quieto mientras la carta NO hacia nada (no
-      // estaba entre los targets del raycaster): dos gestos para lo mismo, y el
-      // que el jugador esperaba era el de la carta.
-      //
-      // Queda solo el HOVER de raton, que es la via de ESCRITORIO y no tiene
-      // equivalente tactil (el hover necesita `pointermove` y con el dedo quieto
-      // no llega). El `title` nativo se QUITA: aparecia el rectangulito gris
-      // encima del panel rico en escritorio (dos etiquetas a la vez).
-      chip.removeAttribute('title');
-      chip.addEventListener('pointerenter', (event) => {
-        if (isCoarsePointer()) return;
-        this.showJokerTooltip(joker, event.clientX, event.clientY);
-      });
-      chip.addEventListener('pointerleave', () => {
-        if (isCoarsePointer()) return;
-        this.hideTooltip();
-      });
-
-      const body = document.createElement('span');
-      body.className = 'joker-chip-body';
-      body.append(name);
-
-      chip.append(body, fires, sell);
-      this.elJokers.appendChild(chip);
     }
   }
 
@@ -4682,14 +4550,16 @@ export class HUD {
   /**
    * Tooltip de un SIMBIONTE (Frente 4a).
    *
-   * Antes la ficha del Simbionte solo llevaba el `title` nativo del navegador
-   * (el rectangulito gris, que en movil no aparece nunca). Ahora recibe el MISMO
-   * panel rico que las cartas: nombre, rareza, habilidad marcada con la ✦ y el
-   * valor de venta, con la taxonomia del efecto. Es lo que Emanuel pedia con
-   * "que los simbiontes tengan la misma etiqueta que las demas cartas".
+   * Es el UNICO lugar donde se leen la habilidad y las ACUMULACIONES de la run
+   * de un Simbionte: la columna de fichas del HUD se retiro porque peleaba
+   * lugar con la pila de descarte (ambas a la izquierda) y se superponia con
+   * ella. La etiqueta la abre mantener pulsada la carta del Simbionte en su
+   * ranura (`onLongPressJoker`) o, en escritorio, el hover del puntero.
    *
-   * Reusa el mismo `elTooltip`, asi que el posicionamiento (arriba en tactil,
-   * junto al puntero en escritorio) sale gratis y no hay dos paneles compitiendo.
+   * Reusa el mismo `elTooltip` de las cartas: nombre, rareza, habilidad marcada
+   * con la ✦, descripcion y el pie con disparos acumulados + valor de venta.
+   * El posicionamiento (arriba en tactil, junto al puntero en escritorio) sale
+   * gratis y no hay dos paneles compitiendo.
    */
   showJokerTooltip(joker: JokerInstance, x: number, y: number): void {
     const def = joker.def;
@@ -4733,8 +4603,11 @@ export class HUD {
       this.elTooltip.append(name, kind, desc);
     }
 
-    // Pie: disparos acumulados + valor de venta. Son los dos numeros que el
-    // jugador consulta antes de decidir si vende.
+    // Pie: las ACUMULACIONES de la run. Antes vivian en la ficha del HUD
+    // (`x{firedCount}` + valor de venta); al quitar esa columna, la etiqueta de
+    // long-press de la carta es el unico lugar donde el jugador las consulta.
+    // El disparo se rotula "Disparos" pero cuenta la run entera: es el mismo
+    // numero que subia el chip, y por eso el valor lleva la "x".
     const stats = document.createElement('div');
     stats.className = 'tooltip-stats';
     const fires = document.createElement('div');

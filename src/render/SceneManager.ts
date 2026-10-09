@@ -258,9 +258,10 @@ export interface SceneCallbacks {
    * El dedo se mantuvo quieto sobre un SIMBIONTE (joker) de la mesa.
    *
    * Es la contracara de `onLongPressChange` para la fila de simbiontes: la
-   * etiqueta rica (habilidad/rareza/descripcion) se consulta MANTENIENDO pulsado
-   * el Simbionte en la mesa, no leyendola en la caja del HUD (que por eso dejo
-   * de mostrarla). Sin esto, mantener pulsado un simbionte no hacian nada.
+   * etiqueta rica (habilidad/rareza/descripcion + acumulaciones de la run) se
+   * consulta MANTENIENDO pulsado el Simbionte en la mesa. Sin esto, mantener
+   * pulsado un simbionte no hacia nada. Es el UNICO camino: la columna de
+   * fichas del HUD se retiro porque peleaba lugar con la pila de descarte.
    */
   onLongPressJoker?: (joker: JokerInstance) => void;
   /** Texto flotante de puntos. El render sabe DONDE; la UI sabe COMO dibujarlo. */
@@ -3094,15 +3095,6 @@ export class SceneManager {
     this.rig.addShake(Math.min(0.16, 0.03 + depth * 0.012));
   }
 
-  /**
-   * Hace latir un joker. Lo usa el HUD cuando el jugador toca su ficha: la
-   * ficha y la carta en la mesa son lo mismo, y el latido es lo que lo dice.
-   */
-  flashJoker(uid: string): void {
-    const joker = this.jokerCards.get(uid);
-    if (joker) this.pulseJoker(joker, 1);
-  }
-
   private pulseJoker(card3d: Card3D, depth: number): void {
     // Antes tweeneaba `group.scale`, que `applyTransform()` pisa cada frame:
     // el pulso era INVISIBLE. Ahora anima `home.s*`, que si se compone.
@@ -3410,9 +3402,10 @@ export class SceneManager {
    * no la selecciona: solo pide el tooltip. La UI decide DONDE ponerlo.
    */
   private handleLongPress(card: Card3D): void {
-    // Una carta de la MANO abre su etiqueta (ya estaba). Un SIMBIONTE de la mesa
-    // abre la SUYA: es la via que pidio el equipo para consultar la habilidad,
-    // ahora que la caja del HUD dejo de mostrarla.
+    // Una carta de la MANO abre su etiqueta. Un SIMBIONTE de la mesa abre la
+    // SUYA: es la via para consultar habilidad + acumulaciones de la run, ahora
+    // que la columna de fichas del HUD se retiro (peleaba lugar con la pila de
+    // descarte y se superponia con ella).
     if (card.card) {
       this.callbacks.onLongPressChange?.(card.card);
       return;
@@ -3546,11 +3539,11 @@ export class SceneManager {
     // el que se esta viendo. Ver `Card3D.pickTargets`.
     for (const card3d of this.handCards.values()) targets.push(...card3d.pickTargets);
     // Los SIMBIONTES de la mesa tambien son pickables. Sin esto, el long-press
-    // tactil sobre un Simbionte no llegaba NUNCA: `handleLongPress` recibe el
-    // `Card3D` que devuelve el raycaster, y los jokers no estaban en la lista,
-    // asi que la unica via para leer su etiqueta era la ficha del HUD. Ahora la
-    // etiqueta rica sale de la CARTA en su ranura, que es donde el jugador la
-    // busca (la ficha del HUD quedo compacta a proposito).
+    // sobre un Simbionte no llegaba NUNCA: `handleLongPress` recibe el `Card3D`
+    // que devuelve el raycaster, y los jokers no estaban en la lista. Ahora la
+    // etiqueta rica sale de la CARTA en su ranura, que es el UNICO lugar donde
+    // se leen la habilidad y las acumulaciones de la run (la columna de fichas
+    // del HUD se retiro: peleaba lugar con la pila de descarte).
     //
     // Solo en partida: en el carrusel se vacia la lista entera (arriba) y en el
     // menu los jokers son cromo de la run, no de la pantalla de inicio.

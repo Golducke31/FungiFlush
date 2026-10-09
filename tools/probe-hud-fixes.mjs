@@ -105,7 +105,10 @@ check(!hint1.visible, '1: con 1 carta elegida la guia NO se muestra');
 check(!hint1.hasCount, '1: el contador "N seleccionadas" ya no existe en el DOM');
 check(!/seleccionad/i.test(hint1.text), '1: ningun texto dice "seleccionada"', hint1.text.slice(0, 40));
 
-// --- 4. Caja de simbiontes SIN linea de habilidad ------------------------
+// --- 4. Etiqueta del simbionte: los datos viven en el panel, no en una ficha ---
+// La columna de fichas del HUD se retiro (peleaba lugar con la pila de descarte
+// y se superponia con ella). Acumulaciones + habilidad se consultan ahora en la
+// etiqueta rica que abre el long-press de la carta.
 await page.evaluate(() => {
   const ff = window.__fungiflush;
   if (ff.engine.run.jokers.length === 0) {
@@ -115,24 +118,21 @@ await page.evaluate(() => {
   ff.hud.refreshPanel?.();
 });
 await page.waitForTimeout(900);
-const jokerBox = await page.evaluate(() => {
-  const chips = [...document.querySelectorAll('.hud-jokers .joker-chip')];
-  return {
-    chips: chips.length,
-    abilityLines: document.querySelectorAll('.hud-jokers .joker-chip-ability').length,
-    names: chips.map((c) => c.querySelector('.joker-chip-name')?.textContent ?? ''),
-  };
-});
-console.log('\n=== CAJA DE SIMBIONTES ===');
+const jokerBox = await page.evaluate(() => ({
+  column: document.querySelectorAll('.hud-jokers').length,
+  chips: document.querySelectorAll('.joker-chip').length,
+}));
+console.log('\n=== COLUMNA DE SIMBIONTES (retirada) ===');
 console.log(JSON.stringify(jokerBox, null, 2));
-check(jokerBox.chips > 0, '4: hay fichas de simbionte en la caja');
-check(jokerBox.abilityLines === 0, '4: la caja YA NO muestra la linea de habilidad', `${jokerBox.abilityLines}`);
+check(jokerBox.column === 0, '4: la columna de fichas del HUD ya NO existe');
+check(jokerBox.chips === 0, '4: las fichas `.joker-chip` ya NO existen');
 
-// La etiqueta rica la abre el long-press: mismos datos que `showJokerTooltip`.
+// La etiqueta rica sigue dando los mismos datos que `showJokerTooltip`.
 const tip = await page.evaluate(() => {
   const ff = window.__fungiflush;
   const joker = ff.engine.run.jokers[0];
   if (!joker) return null;
+  joker.firedCount = 4;
   ff.hud.showJokerTooltip(joker, 300, 200);
   const el = document.querySelector('.hud-tooltip');
   return {
@@ -140,12 +140,16 @@ const tip = await page.evaluate(() => {
     isJoker: !!el && el.classList.contains('is-joker'),
     text: el ? (el.textContent || '').trim() : '',
     hasAbility: !!el?.querySelector('.tooltip-joker-ability'),
+    fires: el?.querySelector('[data-tooltip-stat="joker-fires"] .tooltip-stat-value')?.textContent ?? null,
+    sell: el?.querySelector('[data-tooltip-stat="joker-sell"] .tooltip-stat-value')?.textContent ?? null,
   };
 });
 console.log('\n=== ETIQUETA RICA (long-press) ===');
 console.log(JSON.stringify(tip, null, 2));
 check(!!tip && tip.visible && tip.isJoker, '4: la etiqueta del simbionte abre con is-joker');
 check(!!tip && tip.hasAbility, '4: la etiqueta trae la linea de habilidad');
+check(!!tip && tip.fires === 'x4', '4: la etiqueta trae las acumulaciones de la run (disparos)', `${tip?.fires}`);
+check(!!tip && tip.sell != null, '4: la etiqueta trae el valor de venta', `${tip?.sell}`);
 
 // --- 3. Consecuencia: color + se apaga sola ------------------------------
 await page.evaluate(() => {

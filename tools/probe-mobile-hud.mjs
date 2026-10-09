@@ -92,7 +92,6 @@ const playM = await page.evaluate((boxSrc) => {
     chips,
     score: box(document.querySelector('.hud-score')),
     top: box(document.querySelector('.hud-top')),
-    jokers: box(document.querySelector('.hud-jokers')),
     bottom: box(document.querySelector('.hud-bottom')),
     vh: window.innerHeight,
   };

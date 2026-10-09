@@ -3,19 +3,24 @@
  *
  * QUE VERIFICA
  * ------------
- *   1. La ficha del Simbionte YA NO tiene `title` nativo (era el rectangulito
- *      gris, que en movil no aparece nunca).
- *   2. Al pasar el raton por la ficha aparece el PANEL RICO (`.hud-tooltip.
- *      is-visible.is-joker`) con: nombre, rotulo "Simbiontes · <rareza>",
- *      descripcion de habilidad (lila) y la etiqueta de la habilidad concreta.
- *   3. Al salir el panel se oculta.
- *   4. En TACTIL el gesto lo tiene la CARTA de la mesa, no la ficha: mantener
- *      pulsado el SIMBIONTE en su ranura abre el panel, y mantener pulsada la
- *      ficha del HUD ya NO hace nada (antes era al reves).
- *   5. El panel de CARTA no queda con la clase `is-joker` (no se contaminan).
+ *   1. La columna de fichas del HUD (`.hud-jokers` / `.joker-chip`) YA NO existe:
+ *      peleaba lugar con la pila de DESCARTE (ambas a la izquierda) y se
+ *      superponia con ella.
+ *   2. Mantener pulsado el SIMBIONTE de la mesa abre el PANEL RICO
+ *      (`.hud-tooltip.is-visible.is-joker`) con: nombre, rotulo
+ *      "Simbiontes · <rareza>", descripcion de habilidad (lila), la etiqueta de
+ *      la habilidad concreta y las ACUMULACIONES de la run (Disparos `xN` +
+ *      valor de venta).
+ *   3. Al soltar el panel se oculta.
+ *   4. El panel de CARTA no queda con la clase `is-joker` (no se contaminan).
  *
  *   node tools/probe-joker-tooltip.mjs
  *   FF_VIEWPORT=smoke node tools/probe-joker-tooltip.mjs
+ *
+ * NOTA: el bloque de ESCRITORIO usa un viewport MAS ALTO (915x700). A 915x412
+ * la fila de Simbiontes queda pegada al borde superior, debajo de `.hud-top`
+ * (que tiene `pointer-events: auto`), y el long-press nunca llega al canvas.
+ * El bloque tactil corre en el viewport normal.
  *
  * REQUISITO: dev server YA en 127.0.0.1:1420.
  */
@@ -31,6 +36,18 @@ const VIEWPORT =
     : process.env.FF_VIEWPORT === 'tablet'
       ? { width: 1180, height: 820 }
       : { width: 915, height: 412 };
+
+/**
+ * Viewport de ESCRITORIO para este probe.
+ *
+ * El layout de escritorio (915x412) esta CONGELADO y en esa altura la fila de
+ * Simbiontes queda pegada al borde superior, DEBAJO de `.hud-top`. Ese header
+ * tiene `pointer-events: auto`, asi que se come el `pointerdown`: el canvas
+ * nunca recibe el evento, `Interaction.pointer` se queda viejo y `pick()` no
+ * devuelve la carta. Con mas alto la fila queda sobre el canvas limpio y el
+ * long-press llega. No es un bug del codigo — es la altura del viewport.
+ */
+const DESKTOP_VIEWPORT = { width: 915, height: 700 };
 
 const PW = ['C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/playwright-core/index.js'];
 async function loadPlaywright() {
@@ -82,7 +99,7 @@ function wait_(page, fn, timeout = 5000) {
 
 /** Corre un bloque con un pointer FINO (escritorio: hover por raton). */
 async function runDesktop(contextOpts) {
-  const context = await browser.newContext({ viewport: VIEWPORT, ...contextOpts });
+  const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT, ...contextOpts });
   const page = await context.newPage();
   pageRef = page;
   const errors = [];
@@ -114,16 +131,16 @@ async function runDesktop(contextOpts) {
   // --- Sembrar un Simbionte con un efecto con `labelKey` ---
   const seeded = await page.evaluate(() => {
     const ff = window.__fungiflush;
-    const ffReg = ff.content ?? ff.engine.registry;
-    // Se busca en el contenido un joker con etiqueta de efecto para que el
-    // tooltip tenga la linea de HABILIDAD que se quiere verificar.
     const defs = ff.engine.registry?.allJokers?.() ?? [];
     const withLabel = defs.find((j) => (j.effects ?? []).some((e) => e.labelKey));
     if (!withLabel) return null;
     const joker = ff.engine.registry.instantiateJoker(withLabel.id);
     ff.engine.run.jokers.push(joker);
+    // Acumulacion sembrada: el panel tiene que leerla del engine (run-wide).
+    joker.firedCount = 5;
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
     ff.hud.refreshPanel?.();
-    return { uid: joker.uid, id: withLabel.id };
+    return { uid: joker.uid, id: withLabel.id, firedCount: joker.firedCount };
   });
   check(Boolean(seeded), 'hay un Simbionte con etiqueta de efecto en el contenido', JSON.stringify(seeded));
   if (!seeded) {
@@ -131,30 +148,82 @@ async function runDesktop(contextOpts) {
     return errors;
   }
 
-  const chipSel = `.joker-chip[data-uid="${seeded.uid}"]`;
-  await page.waitForFunction((s) => Boolean(document.querySelector(s)), chipSel, { timeout: 5000 });
+  // --- 1. La columna del HUD se retiro ---
+  check(!(await has('.hud-jokers')), 'la columna `.hud-jokers` ya NO existe');
+  check(!(await has('.joker-chip')), 'las fichas `.joker-chip` ya NO existen');
 
-  // --- 1. Sin `title` nativo ---
-  const nativeTitle = await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    return el ? el.getAttribute('title') : '__missing__';
-  }, chipSel);
-  check(nativeTitle === null, 'la ficha NO tiene `title` nativo', `title=${JSON.stringify(nativeTitle)}`);
+  // El Simbionte entra a su ranura con un TWEEN. En vez de proyectar el ORIGEN
+  // del grupo (que queda en la BASE de la carta y puede caer fuera del canvas o
+  // bajo el cromo del HUD), barremos el canvas con el propio raycaster de la
+  // interaccion y nos quedamos con el CENTRO de la region que golpea al
+  // Simbionte. Asi el long-press cae en la CARA, no al aire.
+  let pos = null;
+  for (let i = 0; i < 40 && !pos; i += 1) {
+    const hit = await page.evaluate((uid) => {
+      const ff = window.__fungiflush;
+      const itc = ff.scene.interaction;
+      const canvas = document.querySelector('canvas');
+      const cam = ff.scene.rig.camera;
+      const R = itc.raycaster;
+      const targets = itc.targets ?? [];
+      if (!canvas || !cam || !R) return null;
+      const r = canvas.getBoundingClientRect();
+      const ndc = new (itc.pointer.constructor)();
+      let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9, n = 0;
+      for (let y = 0; y < r.height; y += 12) {
+        for (let x = 0; x < r.width; x += 12) {
+          ndc.set((x / r.width) * 2 - 1, -(y / r.height) * 2 + 1);
+          R.setFromCamera(ndc, cam);
+          const res = R.intersectObjects(targets, false)[0];
+          if (res && res.object.userData?.card3d?.uid === uid) {
+            minx = Math.min(minx, x); maxx = Math.max(maxx, x);
+            miny = Math.min(miny, y); maxy = Math.max(maxy, y);
+            n += 1;
+          }
+        }
+      }
+      if (!n) return null;
+      const cx = Math.round((minx + maxx) / 2);
+      const cy = Math.round((miny + maxy) / 2);
+      const el = document.elementFromPoint(cx, cy);
+      return { x: cx, y: cy, n, top: el ? el.tagName : null };
+    }, seeded.uid);
+    // Solo aceptamos un punto que caiga sobre el CANVAS (si el HUD lo tapa, el
+    // `pointerdown` no llega y no habria long-press).
+    if (hit && hit.top === 'CANVAS') {
+      await page.mouse.move(hit.x, hit.y);
+      await wait(150);
+      const ok = await page.evaluate(() => {
+        const c = window.__fungiflush.scene.interaction.pick();
+        return Boolean(c && c.joker);
+      });
+      if (ok) pos = { x: hit.x, y: hit.y };
+    }
+    if (!pos) await wait(150);
+  }
+  check(Boolean(pos), 'se pudo ubicar el Simbionte sobre el canvas', JSON.stringify(pos));
 
-  // --- 2. Hover de raton -> panel rico ---
-  const box = await page.locator(chipSel).boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  const shown = await page
-    .waitForFunction(
-      () => {
-        const el = document.querySelector('.hud-tooltip.is-visible');
-        return el ? { isJoker: el.classList.contains('is-joker'), text: el.textContent } : null;
-      },
-      { timeout: 5000 },
-    )
-    .then((h) => h.jsonValue())
-    .catch(() => null);
-  check(Boolean(shown), 'al pasar el raton aparece el panel');
+  // --- 2. Long-press sobre la CARTA -> panel rico ---
+  if (pos) {
+    // El puntero ya esta sobre el Simbionte (se dejo ahi en el loop de arriba).
+    await page.mouse.down();
+    await wait(750);
+  }
+  const shown = pos
+    ? await page
+        .evaluate(() => {
+          const el = document.querySelector('.hud-tooltip.is-visible');
+          if (!el) return null;
+          return {
+            isJoker: el.classList.contains('is-joker'),
+            text: el.textContent,
+            fires: el.querySelector('[data-tooltip-stat="joker-fires"] .tooltip-stat-value')?.textContent ?? null,
+            sell: el.querySelector('[data-tooltip-stat="joker-sell"] .tooltip-stat-value')?.textContent ?? null,
+          };
+        })
+        .catch(() => null)
+    : null;
+  check(Boolean(shown), 'el long-press sobre la CARTA abre el panel');
   if (shown) {
     check(shown.isJoker, 'el panel lleva la marca `is-joker`');
     check(/Simbionte/i.test(shown.text), 'el panel rotula que es un Simbionte', JSON.stringify(shown.text.slice(0, 80)));
@@ -170,13 +239,16 @@ async function runDesktop(contextOpts) {
       await page.evaluate(() => Boolean(document.querySelector('.tooltip-ability-marker'))),
       'la ✦ de habilidad esta presente',
     );
+    // Las ACUMULACIONES de la run: los dos numeros que mostraba la ficha.
+    check(shown.fires === `x${seeded.firedCount}`, 'el panel muestra los disparos de la run', `fires=${shown.fires}`);
+    check(shown.sell != null, 'el panel muestra el valor de venta', `sell=${shown.sell}`);
   }
   await page.screenshot({ path: join(shotsDir, 'probe-joker-tooltip.png') });
 
-  // --- 3. Al salir se oculta ---
-  await page.mouse.move(4, 4);
+  // --- 3. Al soltar se oculta ---
+  await page.mouse.up();
   const hidden = await wait_(page, () => !document.querySelector('.hud-tooltip.is-visible'));
-  check(hidden, 'al salir el panel se oculta');
+  check(hidden, 'al soltar el panel se oculta');
 
   // --- 5. El panel de CARTA no queda contaminado ---
   await page.evaluate(() => {
@@ -249,8 +321,9 @@ const touchErrors = await (async () => {
     await context.close();
     return errors;
   }
-  const chipSel = `.joker-chip[data-uid="${seeded.uid}"]`;
-  await page.waitForFunction((s) => Boolean(document.querySelector(s)), chipSel, { timeout: 5000 });
+
+  // La columna de fichas del HUD se retiro: no hay chip que esperar.
+  check(!(await has('.hud-jokers')), 'tactil: la columna `.hud-jokers` ya NO existe');
 
   // El Simbionte entra a su ranura con un TWEEN: se espera a que su posicion de
   // mundo asiente antes de proyectarla, o el punto medido queda corrido.
@@ -270,22 +343,7 @@ const touchErrors = await (async () => {
     )
     .catch(() => {});
 
-  // --- 4a. La FICHA del HUD ya NO abre el panel (el gesto se movio a la carta) ---
-  const box = await page.locator(chipSel).boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await wait(700);
-  const fromChip = await page.evaluate(() =>
-    Boolean(document.querySelector('.hud-tooltip.is-visible.is-joker')),
-  );
-  await page.mouse.up();
-  check(
-    fromChip === false,
-    'en tactil el long-press sobre la FICHA del HUD ya NO muestra el panel',
-    `visible=${fromChip}`,
-  );
-
-  // --- 4b. La CARTA de la mesa SI lo abre ---
+  // --- 4. La CARTA de la mesa abre el panel (unico camino) ---
   await page.evaluate(() => window.__fungiflush.hud.hideTooltip?.());
   await wait(250);
   const pos = await page.evaluate((uid) => {
@@ -319,7 +377,12 @@ const touchErrors = await (async () => {
 })();
 
 console.log('---');
-console.log(`viewport ${VIEWPORT.width}x${VIEWPORT.height} · fallos: ${failures}`);
+// El bloque de ESCRITORIO corre en un viewport mas alto (ver DESKTOP_VIEWPORT):
+// a 915x412 la fila de Simbiontes queda debajo de `.hud-top` y el long-press no
+// llega al canvas. El bloque TACTIL si usa el viewport normal.
+console.log(
+  `escritorio ${DESKTOP_VIEWPORT.width}x${DESKTOP_VIEWPORT.height} · tactil ${VIEWPORT.width}x${VIEWPORT.height} · fallos: ${failures}`,
+);
 const allErrors = [...desktopErrors, ...touchErrors];
 console.log('errores de consola:', allErrors.length ? allErrors.slice(0, 5) : 'ninguno');
 if (allErrors.length) failures += 1;

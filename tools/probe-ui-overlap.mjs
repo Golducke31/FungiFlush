@@ -116,7 +116,7 @@ const deck = await page.evaluate(() => {
   const bottom = document.querySelector('.carousel-bottom');
   const detail = document.querySelector('.carousel-detail');
   const toolbar = document.querySelector('.deck-toolbar');
-  const hud = ['.hud-top', '.hud-bottom', '.hud-jokers', '.hud-missions-toggle', '.pile-label']
+  const hud = ['.hud-top', '.hud-bottom', '.hud-missions-toggle', '.pile-label']
     .map((s) => ({ sel: s, rect: rect(document.querySelector(s)), display: document.querySelector(s) ? getComputedStyle(document.querySelector(s)).display : null }));
   const cards = window.__fungiflush?.scene?.carouselState?.() ?? null;
   return { vh: window.innerHeight, vw: window.innerWidth, panel: rect(panel), top: rect(top), bottom: rect(bottom), detail: rect(detail), toolbar: rect(toolbar), hud, cards };

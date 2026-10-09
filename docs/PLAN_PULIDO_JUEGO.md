@@ -348,6 +348,14 @@ hasta M". Preguntar a Emanuel cuál quiere; el plan deja el gancho listo.
 
 ## FRENTE 4 — Simbiontes (jokers)
 
+> **ESTADO ACTUAL (posterior a este plan):** la columna de fichas del HUD
+> (`.hud-jokers` / `.joker-chip`) se **RETIRO** — peleaba lugar con la pila de
+> DESCARTE (ambas a la izquierda) y se superponia. Vender Simbiontes quedo SOLO
+> en la pestana Vender de la Tienda, y las **acumulaciones de la run** (Disparos
+> `xN` + valor de venta) viven ahora en la **etiqueta de long-press de la CARTA**
+> (`HUD.showJokerTooltip`). Los puntos 1-4 de abajo describen el estado PREVIO;
+> el probe `tools/probe-joker-tooltip.mjs` ya verifica el comportamiento nuevo.
+
 ### 4.a — Ingame: etiqueta rica al mantener/posar
 **Confirmado:** "Simbionte" es un **alias i18n de joker** (`hud.jokers` = "Simbiontes",
 `es.json:32`). No son un tipo aparte. Hoy la ficha del Simbionte en el HUD

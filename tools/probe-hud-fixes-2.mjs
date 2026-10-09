@@ -4,9 +4,10 @@
  * QUE VERIFICA
  * ------------
  *   F2. La etiqueta rica del Simbionte la abre la CARTA de la mesa (mantener
- *       pulsado el simbionte en su ranura), NO la ficha del HUD. Se comprueba
- *       lo uno y lo otro: el long-press sobre la carta 3D abre el panel, y el
- *       long-press sobre el chip `.joker-chip` ya NO hace nada.
+ *       pulsado el simbionte en su ranura), que es el UNICO camino: la columna
+ *       de fichas `.joker-chip` del HUD se retiro (peleaba lugar con la pila de
+ *       descarte). Se comprueba que el panel se abra desde la carta y que la
+ *       columna ya no exista.
  *   F3. El desplegable de Misiones sale por el MISMO lado que su boton. El chip
  *       vive a la IZQUIERDA, asi que el cajon tiene que entrar desde la
  *       izquierda (plegado queda fuera de pantalla por ese lado).
@@ -300,28 +301,13 @@ if (seeded) {
     check(Boolean(fromCard), 'F2 el LONG-PRESS sobre la CARTA abre el panel del Simbionte', JSON.stringify(fromCard));
     check(Boolean(fromCard?.isJoker), 'F2 el panel lleva la marca `is-joker`');
 
-    // Se cierra antes de probar la ficha.
+    // La columna de fichas del HUD se RETIRO: peleaba lugar con la pila de
+    // descarte (ambas a la izquierda) y se superponia con ella. La etiqueta de
+    // la carta es ahora el unico camino.
+    check(!(await has('.hud-jokers')), 'la columna de fichas del HUD ya NO existe');
+    check(!(await has('.joker-chip')), 'las fichas `.joker-chip` ya NO existen');
     await page.evaluate(() => window.__fungiflush.hud.hideTooltip?.());
     await wait(250);
-
-    // Long-press sobre la FICHA del HUD -> NO debe abrir nada.
-    const chipSel = `.joker-chip[data-uid="${seeded.uid}"]`;
-    const chipBox = await page.locator(chipSel).boundingBox().catch(() => null);
-    check(Boolean(chipBox), 'la ficha del Simbionte esta en el HUD');
-    if (chipBox) {
-      await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
-      await page.mouse.down();
-      await wait(700);
-      const fromChip = await page.evaluate(() =>
-        Boolean(document.querySelector('.hud-tooltip.is-visible.is-joker')),
-      );
-      await page.mouse.up();
-      check(
-        fromChip === false,
-        'F2 el LONG-PRESS sobre la FICHA del HUD ya NO abre el panel',
-        `visible=${fromChip}`,
-      );
-    }
   }
 }
 

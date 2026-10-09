@@ -778,7 +778,7 @@ console.log(
 // slide-in arranca CERRADO, asi que el centro de cada carta debe quedar libre.
 // Si un nodo del HUD intercepta, lo reportamos y fallamos el smoke.
 const hudCover = await page.evaluate(() => {
-  const blocked = ['.hud-top', '.hud-bottom', '.hud-jokers', '.hud-missions-panel',
+  const blocked = ['.hud-top', '.hud-bottom', '.hud-missions-panel',
     '.hud-missions-toggle', '.hud-status', '.overlay', '.panel'];
   const covered = [];
   for (const c of window.__fungiflush.scene.handState()) {
@@ -959,100 +959,70 @@ const tapDiscard = await (async () => {
 console.log('\n--- Fase 2: tap sobre el descarte ---');
 console.log(JSON.stringify(tapDiscard, null, 2));
 
-// --- Ficha de joker: señalar NO vende ---
-// Se le da un joker al run a mano para no depender de que la tienda ofrezca uno.
-const jokerChip = await (async () => {
-  await page.evaluate(() => {
+// --- Etiqueta del Simbionte: la columna del HUD se retiro ---
+// La columna de fichas (`.hud-jokers`) peleaba lugar con la pila de DESCARTE
+// (ambas a la izquierda) y se superponia con ella. Ahora la habilidad y las
+// acumulaciones de la run se leen en la etiqueta rica que abre el LONG-PRESS
+// sobre la carta del Simbionte en su ranura. Este bloque verifica:
+//   1. que la columna ya NO exista en el DOM;
+//   2. que el long-press sobre la CARTA abra el panel con las acumulaciones
+//      (Disparos `xN` + valor de venta) — los dos numeros que mostraba la ficha.
+const jokerTooltip = await (async () => {
+  const seeded = await page.evaluate(() => {
     const ff = window.__fungiflush;
     const ids = ff.engine.registry.allJokers().map((j) => j.id);
-    if (ids[0] && ff.engine.run.jokers.length === 0) {
-      ff.engine.run.jokers.push(ff.engine.registry.instantiateJoker(ids[0]));
-      ff.hud.refreshPanel();
-    }
+    if (!ids[0]) return null;
+    const joker = ff.engine.run.jokers[0] ?? ff.engine.registry.instantiateJoker(ids[0]);
+    if (ff.engine.run.jokers.length === 0) ff.engine.run.jokers.push(joker);
+    // Acumulacion sembrada a mano: el disparo cuenta la RUN entera, asi que un
+    // numero > 0 confirma que el panel lo lee del engine y no de un default.
+    joker.firedCount = 7;
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
+    ff.hud.refreshPanel?.();
+    return { uid: joker.uid, firedCount: joker.firedCount };
   });
-  await page.waitForTimeout(700);
+  if (!seeded) return { skipped: 'sin simbiontes en el contenido' };
 
-  const chip = await page.locator('.joker-chip').first().boundingBox();
-  const sell = await page.locator('.joker-chip .joker-chip-sell').first().boundingBox();
-  if (!chip) return { skipped: 'sin ficha de joker' };
+  const columnGone = await page.evaluate(() => !document.querySelector('.hud-jokers'));
+  const chipGone = await page.evaluate(() => !document.querySelector('.joker-chip'));
 
-  // El boton VENDER tiene que ser ALCANZABLE: `elementFromPoint` en su centro
-  // debe devolver el propio boton. Si algo del HUD se le monta encima (p. ej.
-  // la franja de misiones con `pointer-events: auto`) el toque se pierde y la
-  // ficha nunca entra en confirmacion. Esto convierte ese caso en un fallo
-  // explicito en vez de un "confirmando: false" opaco.
-  const sellHittable = await page.evaluate(() => {
-    const btn = document.querySelector('.joker-chip .joker-chip-sell');
-    if (!btn) return { found: false };
-    const b = btn.getBoundingClientRect();
-    const el = document.elementFromPoint(
-      Math.round(b.x + b.width / 2),
-      Math.round(b.y + b.height / 2),
-    );
+  // El Simbionte entra a su ranura con un TWEEN: se espera a que asiente antes
+  // de proyectarlo, o el punto medido queda corrido y el long-press cae al aire.
+  await page.waitForTimeout(800);
+  const pos = await page.evaluate((uid) => {
+    const ff = window.__fungiflush;
+    const c = ff.scene.jokerCards.get(uid);
+    const canvas = document.querySelector('canvas');
+    if (!c || !canvas) return null;
+    const v = c.group.position.clone();
+    v.project(ff.scene.rig.camera);
+    const r = canvas.getBoundingClientRect();
     return {
-      found: true,
-      isSell: Boolean(el && el.classList.contains('joker-chip-sell')),
-      blockedBy: el && !el.classList.contains('joker-chip-sell') ? `${el.tagName}.${el.className}` : null,
+      x: Math.round((v.x * 0.5 + 0.5) * r.width + r.left),
+      y: Math.round((-v.y * 0.5 + 0.5) * r.height + r.top),
+    };
+  }, seeded.uid);
+
+  if (!pos) return { columnGone, chipGone, projected: false };
+
+  await page.mouse.move(pos.x, pos.y);
+  await page.mouse.down();
+  await page.waitForTimeout(750);
+  const shown = await page.evaluate(() => {
+    const el = document.querySelector('.hud-tooltip.is-visible.is-joker');
+    if (!el) return null;
+    return {
+      fires: el.querySelector('[data-tooltip-stat="joker-fires"] .tooltip-stat-value')?.textContent ?? null,
+      sell: el.querySelector('[data-tooltip-stat="joker-sell"] .tooltip-stat-value')?.textContent ?? null,
     };
   });
+  await page.mouse.up();
+  await page.evaluate(() => window.__fungiflush.hud.hideTooltip?.());
 
-  const antes = await page.evaluate(() => window.__fungiflush.engine.run.jokers.length);
-  // Toque en el CUERPO de la ficha: 20 px desde el borde izquierdo, bien lejos
-  // del boton de vender (que vive pegado al derecho). OJO: `chip`/`sell` se
-  // midieron antes; si el HUD se re-renderiza (auto-orden, state:changed), las
-  // coords quedan viejas y el click cae al vacio -> se re-mide justo antes.
-  const chipNow = await page.evaluate(() => {
-    const el = document.querySelector('.joker-chip');
-    if (!el) return null;
-    const b = el.getBoundingClientRect();
-    return { x: b.x, y: b.y, width: b.width, height: b.height };
-  });
-  await page.mouse.click(chipNow.x + 20, chipNow.y + chipNow.height / 2);
-  await page.waitForTimeout(500);
-
-  const despues = await page.evaluate(() => ({
-    jokers: window.__fungiflush.engine.run.jokers.length,
-    confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
-  }));
-
-  // Primer toque en VENDER: tiene que pedir confirmacion, no vender.
-  let primerToque = null;
-  if (sell) {
-    const sellNow = await page.evaluate(() => {
-      const el = document.querySelector('.joker-chip .joker-chip-sell');
-      if (!el) return null;
-      const b = el.getBoundingClientRect();
-      return { x: b.x, y: b.y, width: b.width, height: b.height };
-    });
-    if (sellNow) {
-      await page.mouse.click(sellNow.x + sellNow.width / 2, sellNow.y + sellNow.height / 2);
-      // Poll: la clase `is-confirming` la pinta el HUD tras el toque; un
-      // `waitForTimeout` fijo puede leer ANTES de que el handler corra.
-      await page
-        .waitForFunction(
-          () => document.querySelector('.joker-chip')?.classList.contains('is-confirming') === true,
-          { timeout: 2000 },
-        )
-        .catch(() => {});
-      primerToque = await page.evaluate(() => ({
-        jokers: window.__fungiflush.engine.run.jokers.length,
-        confirmando: document.querySelector('.joker-chip')?.classList.contains('is-confirming') ?? null,
-        etiqueta: document.querySelector('.joker-chip-sell')?.textContent ?? null,
-      }));
-    }
-  }
-
-  return {
-    tieneBotonVender: Boolean(sell),
-    sellHittable,
-    antes,
-    trasTocarElCuerpo: despues.jokers,
-    confirmandoTrasElCuerpo: despues.confirmando,
-    primerToqueEnVender: primerToque,
-  };
+  return { columnGone, chipGone, projected: true, seeded, shown };
 })();
-console.log('\n--- Ficha de joker (señalar no vende) ---');
-console.log(JSON.stringify(jokerChip, null, 2));
+console.log('\n--- Etiqueta del Simbionte (long-press sobre la carta) ---');
+console.log(JSON.stringify(jokerTooltip, null, 2));
 
 // --- P6: ranuras fijas de Simbionte ---
 // Comprueba que existan tantas ranuras 3D como `run.jokerSlots` y que su
@@ -1651,7 +1621,7 @@ const deckBuilder = await page.evaluate(async () => {
   // (era el bug de Reordenar.PNG: score tapando "Mazo" y misiones cortadas).
   // Se comprueba por `display`, que es lo que decide el CSS.
   const hudVisible = {};
-  for (const sel of ['.hud-top', '.hud-jokers', '.hud-missions-toggle', '.hud-bottom']) {
+  for (const sel of ['.hud-top', '.hud-missions-toggle', '.hud-bottom']) {
     const el = document.querySelector(sel);
     hudVisible[sel] = el ? getComputedStyle(el).display !== 'none' : null;
   }
@@ -2100,7 +2070,6 @@ const ok =
   // score se dibuja ENCIMA del titulo "Mazo" y las misiones se cortan contra la
   // barra inferior (bug de Reordenar.PNG).
   chk('deckBuilder?.hudHidden.hudTop === false', deckBuilder?.hudVisible?.['.hud-top'] === false) &&
-  chk('deckBuilder?.hudHidden.hudJokers === fal', deckBuilder?.hudVisible?.['.hud-jokers'] === false) &&
   chk('deckBuilder?.hudHidden.hudMiss === false', deckBuilder?.hudVisible?.['.hud-missions-toggle'] === false) &&
   chk('deckBuilder?.hudHidden.hudBottom === fa', deckBuilder?.hudVisible?.['.hud-bottom'] === false) &&
   chk('upgradeStep?.uid !== null', upgradeStep?.uid !== null) &&
@@ -2243,16 +2212,14 @@ const ok =
   chk('ascensionPanel?.lockedHelp === true', ascensionPanel?.lockedHelp === true) &&
   // Elegir A2 lo persiste en el perfil.
   chk('ascensionPanel?.selected === 2', ascensionPanel?.selected === 2) &&
-  // --- Ficha de joker: señalar NO vende, vender pide confirmacion ---
-  chk('jokerChip?.tieneBotonVender === true', jokerChip?.tieneBotonVender === true) &&
-  // El boton VENDER no puede quedar TAPADO por cromo del HUD: si algo se le
-  // monta encima, el toque se pierde (bug real de la franja de misiones con
-  // `pointer-events: auto`). Se verifica con hit-test, no con geometria.
-  chk('jokerChip?.sellHittable?.isSell === true', jokerChip?.sellHittable?.isSell === true) &&
-  chk('jokerChip?.trasTocarElCuerpo === jokerChip?.an', jokerChip?.trasTocarElCuerpo === jokerChip?.antes) &&
-  chk('jokerChip?.confirmandoTrasElCuerpo === false', jokerChip?.confirmandoTrasElCuerpo === false) &&
-  chk('jokerChip?.primerToqueEnVender?.jokers === jok', jokerChip?.primerToqueEnVender?.jokers === jokerChip?.antes) &&
-  chk('jokerChip?.primerToqueEnVender?.confirmando ==', jokerChip?.primerToqueEnVender?.confirmando === true) &&
+  // --- Etiqueta del Simbionte: la columna del HUD se retiro ---
+  // La columna de fichas peleaba lugar con la pila de descarte; ahora la
+  // habilidad y las acumulaciones de la run viven en el long-press de la carta.
+  chk('jokerTooltip?.columnGone === true', jokerTooltip?.columnGone === true) &&
+  chk('jokerTooltip?.chipGone === true', jokerTooltip?.chipGone === true) &&
+  chk('jokerTooltip?.projected === true', jokerTooltip?.projected === true) &&
+  chk('jokerTooltip?.shown?.fires == x7 (disparos de la run)', jokerTooltip?.shown?.fires === `x${jokerTooltip?.seeded?.firedCount}`) &&
+  chk('jokerTooltip?.shown?.sell != null (valor de venta)', jokerTooltip?.shown?.sell != null) &&
   // P6: ranuras fijas de Simbionte, del tamano de una carta normal.
   chk('jokerSlotsGuard?.matchesEngine === true', jokerSlotsGuard?.matchesEngine === true) &&
   chk('jokerSlotsGuard?.sizesOk === true', jokerSlotsGuard?.sizesOk === true) &&
