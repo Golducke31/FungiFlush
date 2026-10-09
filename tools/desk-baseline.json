@@ -1,0 +1,132 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 810
+  },
+  "checks": [
+    {
+      "name": "pantalla: menu",
+      "ok": true
+    },
+    {
+      "name": "pantalla: settings",
+      "ok": true
+    },
+    {
+      "name": "pantalla: collection",
+      "ok": true
+    },
+    {
+      "name": "pantalla: challenges",
+      "ok": true
+    },
+    {
+      "name": "pantalla: profile",
+      "ok": true
+    },
+    {
+      "name": "pantalla: history",
+      "ok": true
+    },
+    {
+      "name": "pantalla: achievements",
+      "ok": true
+    },
+    {
+      "name": "pantalla: guide",
+      "ok": true
+    },
+    {
+      "name": "pantalla: about",
+      "ok": true
+    },
+    {
+      "name": "pantalla: cosmetics",
+      "ok": true
+    },
+    {
+      "name": "pantalla: daily",
+      "ok": true
+    },
+    {
+      "name": "pantalla: archetypes",
+      "ok": true
+    },
+    {
+      "name": "pantalla: ascension",
+      "ok": true
+    },
+    {
+      "name": "pantalla: board",
+      "ok": true
+    },
+    {
+      "name": "pantalla: board-jugando",
+      "ok": true
+    },
+    {
+      "name": "pantalla: store",
+      "ok": true
+    },
+    {
+      "name": "pantalla: leaderboard",
+      "ok": true
+    },
+    {
+      "name": "pantalla: colony-rewards",
+      "ok": true
+    },
+    {
+      "name": "pantalla: archetypes-run",
+      "ok": true
+    },
+    {
+      "name": "pantalla: blind-select",
+      "ok": true
+    },
+    {
+      "name": "pantalla: blind-select-JEFE",
+      "ok": true
+    },
+    {
+      "name": "pantalla: blind-details",
+      "ok": true
+    },
+    {
+      "name": "pantalla: playing-JEFE",
+      "ok": true
+    },
+    {
+      "name": "pantalla: playing-sin-sel",
+      "ok": true
+    },
+    {
+      "name": "pantalla: playing-con-sel",
+      "ok": true
+    },
+    {
+      "name": "pantalla: menu-ingame",
+      "ok": true
+    },
+    {
+      "name": "pantalla: cleared",
+      "ok": true
+    },
+    {
+      "name": "pantalla: reward",
+      "ok": true
+    },
+    {
+      "name": "pantalla: shop",
+      "ok": true
+    },
+    {
+      "name": "pantalla: deck-carrusel",
+      "ok": true
+    },
+    {
+      "name": "pantalla: gameover",
+      "ok": true
+    }
+  ]
+}

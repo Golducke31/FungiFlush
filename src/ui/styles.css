@@ -10362,3 +10362,391 @@ body {
     gap: 10px;
   }
 }
+
+/* ==========================================================================
+   ESCRITORIO — HUD de partida (rediseno; ver docs/DESIGN_ESCRITORIO.md)
+   --------------------------------------------------------------------------
+   Contexto. La base de este archivo ES el escritorio congelado: todo el pulido
+   reciente vive en bloques `@media (pointer: coarse)`. Este bloque es la "fase
+   aparte" de escritorio que anticipa docs/CONVENCION_MOVIL_PRIMERO.md §6.
+   Regla: NADA de aca toca al movil (`pointer: fine` es mutuamente excluyente
+   con `pointer: coarse`) y se apoya en los MISMOS tokens para conservar la
+   identidad (material, tipografia, colores, señales).
+
+   Principio rector: mismo juego, distinta distribucion. La paridad es de
+   informacion / textos / señales / ritmo, NO de pixeles. Aca se APROVECHA el
+   ancho: mas aire, tipografia que se lee a distancia de monitor, y los
+   contadores de ESTADO que el movil oculta por falta de espacio.
+   ========================================================================== */
+@media (pointer: fine) {
+  /* --- B1. Escala tipografica de escritorio --------------------------------
+     `--text-*` se subio ~12-18% pensando en 844x390 (ver `:root`). A 1440x810 y
+     a distancia de monitor, esa misma escala queda CHICA. Se redefine solo en
+     escritorio: los tokens siguen siendo la fuente unica y el movil no cambia. */
+  :root {
+    --text-xs:   12px;
+    --text-sm:   14px;
+    --text-base: 16px;
+    --text-md:   18px;
+    --text-lg:   22px;
+    --text-xl:   27px;
+    --text-xxl:  42px;
+  }
+
+  /* --- B2. Barra superior: respiros y jerarquia -----------------------------
+     El bloque de score estaba acotado a 460px y todo se apiñaba en el centro.
+     Con 1440px disponibles, el marcador puede respirar y las tres zonas
+     (ante | marcador | recursos) se reparten el ancho con aire. */
+  .hud-top {
+    align-items: center;
+    padding: calc(14px + var(--safe-t)) calc(22px + var(--safe-r)) 14px calc(22px + var(--safe-l));
+    gap: 20px;
+  }
+
+  .hud-block {
+    padding: 12px 18px;
+  }
+
+  .hud-ante {
+    min-width: 108px;
+    gap: 5px;
+  }
+
+  .hud-label {
+    font-size: 12.5px;
+    letter-spacing: 0.16em;
+  }
+
+  .hud-value {
+    font-size: 26px;
+  }
+
+  /* El hueco que dejo la caja de Fungis ya no se nota: el bloque de dinero
+     mantiene su fila y el de al lado no queda descompensado. */
+  .hud-money-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hud-score {
+    /* De 460px a 620px: el marcador gana presencia sin monopolizar la barra. */
+    max-width: 620px;
+    flex: 0 1 auto;
+  }
+
+  .hud-score-current {
+    /* El dato mas importante de la partida, a distancia de monitor. */
+    font-size: 46px;
+  }
+
+  .hud-score-target {
+    font-size: 20px;
+  }
+
+  .hud-blind-name {
+    font-size: 15px;
+  }
+
+  .hud-preview {
+    font-size: 17px;
+  }
+
+  .hud-preview strong {
+    font-size: 22px;
+  }
+
+  /* --- B3. Barra inferior: los CUATRO contadores ----------------------------
+     En movil solo se muestran los de RECURSOS (manos/descartes) porque el ancho
+     no da; los de ESTADO (Robables, Descarte, Jokers) viven en las etiquetas de
+     las pilas. En escritorio SOBRA ancho: mostrar los cuatro da la MISMA
+     informacion que el movil (que la reparte entre barra y pilas) concentrada y
+     con jerarquia clara. Es aprovechar el espacio, no agregar datos nuevos. */
+  .hud-bottom {
+    align-items: center;
+    padding: 14px calc(22px + var(--safe-r)) calc(16px + var(--safe-b)) calc(22px + var(--safe-l));
+    gap: 16px;
+  }
+
+  .hud-counters {
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .counter {
+    padding: 8px 14px;
+    min-width: 74px;
+    gap: 8px;
+  }
+
+  .counter-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .counter-value {
+    font-size: 21px;
+  }
+
+  .counter .hud-label {
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+  }
+
+  /* El chip de ESTADO se apaga un paso (ya lo hace la base con opacity .86):
+     aca se refuerza que es contexto, no recurso, bajando el color del numero. */
+  .counter[data-kind='state'] {
+    opacity: 0.8;
+  }
+
+  /* Las acciones ganan cuerpo: la franja inferior respira. */
+  .hud-actions {
+    gap: 12px;
+  }
+
+  .hud-actions .btn {
+    min-height: 52px;
+    padding: 14px 26px;
+    font-size: 16.5px;
+  }
+
+  /* --- B5. Jugar Mano deshabilitado ----------------------------------------
+     Ya se subio su contraste en la base (opacity .78 / saturate .8). En
+     escritorio se unifica el alto con los demas botones y se le da un cuerpo
+     protagonista. */
+  .hud-actions .btn.is-play:disabled {
+    opacity: 0.5;
+  }
+
+  /* --- B4. Guia de seleccion y feedback ------------------------------------
+     A distancia de monitor, la guia de seleccion y el aviso de consecuencia
+     necesitan un punto mas de cuerpo y quedar por encima de la banda. */
+  .hud-select-hint {
+    font-size: 15px;
+    padding: 7px 16px;
+  }
+
+  .hud-decay {
+    font-size: 13.5px;
+    padding: 6px 18px;
+  }
+
+  /* --- C1. Paneles: el modelo de tres zonas, tambien en escritorio ----------
+     El movil arreglo los paneles con el modelo P8 (ver `@media (pointer:coarse)`):
+     el overlay deja de scrollear y el panel pasa a ser una COLUMNA flex acotada
+     al viewport (cabecera fija / cuerpo flexible / pie fijo). En el escritorio la
+     base seguia con `overflow-y: auto` y el panel creciendo con el contenido: en
+     Ascension y Recompensas de Colonia el panel se pasaba del alto y el overlay
+     SCROLLeaba (+45px / +24px, medido por `tools/shot-desktop.mjs`). Se aplica el
+     MISMO modelo aca, gateado a `pointer: fine`, para no tocar al movil.
+
+     Diferencia deliberada con movil: en escritorio sobra ALTO, asi que el panel
+     no necesita ser full-bleed; se acota con `max-height: 100%` y el cuerpo
+     scrollea por dentro solo si hace falta. Nada de scroll de pagina. */
+  .overlay:not(.is-carousel-frame) {
+    overflow: hidden;
+  }
+
+  .panel:not(.is-menu):not(.is-carousel-frame) {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Zonas de alto FIJO: encabezado, barras de herramientas y pie. */
+  .panel-title,
+  .panel-subtitle,
+  .shop-tabs,
+  .deck-toolbar,
+  .panel-actions {
+    flex: 0 0 auto;
+  }
+
+  /* Zona flexible: el cuerpo de cada panel ocupa el resto. */
+  .panel > .settings-grid,
+  .panel > .shop-body,
+  .panel > .offer-grid,
+  .panel > .deck-grid,
+  .panel > .collection-grid,
+  .panel > .achievement-grid,
+  .panel > .stat-grid,
+  .panel > .cosmetics-grid,
+  .panel > .daily-ladder,
+  .panel > .blind-grid,
+  .panel > .blind-body,
+  .panel > .board-grid,
+  .panel > .profile-body,
+  .panel > .challenges-body,
+  .panel > .cleared-body,
+  .panel > .tutorial-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-bottom: 0;
+  }
+
+  /* Paneles con "shell" propio: el shell crece y sus listas scrollean. */
+  .panel > .archetypes-shell,
+  .panel > .ascension-shell,
+  .panel > .history-shell,
+  .panel > .cosmetics-shell,
+  .panel > .colony-rewards-shell,
+  .panel > .leaderboard-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* El shell de ascension ya trae su cabecera/pie; su LISTA es la que scrollea.
+     El de colonia es una columna con head + list: la list scrollea por dentro. */
+  .ascension-list,
+  .history-list,
+  .archetypes-list,
+  .colony-rewards-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* --- C1. Menu principal: mas presencia en el ancho ------------------------
+     El CTA (logotipo de hongos = "Nueva partida") usa
+     `min(clamp(22px, 4vw, 38px), 7.4vh)`: a 1440px el `4vw` se topa con el tope
+     de 38px y el boton queda CHICO frente a un canvas tan grande. En escritorio
+     se sube el tope para que el punto de entrada tenga la presencia que el ancho
+     permite, sin cambiar la identidad (misma tipografia, mismo gel, mismo glow).
+     Los iconos de esquina (Perfil / hamburguesa) acompanan. */
+  .menu-cta-wrap {
+    font-size: min(clamp(30px, 3.4vw, 54px), 9vh);
+  }
+
+  .menu-cta-wrap.is-continue {
+    font-size: min(clamp(24px, 2.8vw, 42px), 7vh);
+  }
+
+  .menu-gel--icon {
+    font-size: clamp(24px, 2.2vw, 34px);
+  }
+
+  .menu-hero {
+    /* Un poco mas de aire contra el pie en pantallas altas. */
+    padding-bottom: 3vh;
+  }
+
+  /* El titulo horneado en el arte es el logo: el heroe solo reserva su franja.
+     Con el ancho sobrante, el velo se ensancha para que el CTA no flote solo. */
+  .menu-hero::before {
+    background: radial-gradient(
+      ellipse 46% 62% at 50% 58%,
+      rgba(2, 5, 9, 0.6),
+      rgba(2, 5, 9, 0.26) 52%,
+      transparent 82%
+    );
+  }
+
+  .menu-drop {
+    /* El desplegable de secundarias gana un punto de cuerpo a distancia. */
+    font-size: 15px;
+  }
+
+  /* --- C2. Tienda y Recompensa: la CARA es la tarjeta -----------------------
+     En movil, la tarjeta de la tienda/recompensa es LA CARA de la carta (sin
+     caja, sin descripcion en prosa, con el pie centrado): el chip de tipo y el
+     parrafo repetian datos que la propia cara ya trae impresos. El escritorio
+     se quedo con el modelo viejo (`.offer` con fondo, borde, `.offer-kind`,
+     `.offer-desc` y pie `space-between`). Para que el jugador que alterna
+     plataformas vea el MISMO juego, se porta ese modelo aca —mismo lenguaje,
+     mismo ritmo— aprovechando que en escritorio sobra ALTO para caras grandes. */
+  .panel.is-shop .shop-body {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel.is-shop .offer-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 16px;
+    margin-bottom: 0;
+    grid-template-columns: repeat(var(--offer-cols, 4), minmax(0, 1fr));
+    grid-auto-rows: minmax(220px, 1fr);
+    align-items: stretch;
+  }
+
+  .panel.is-reward .offer-grid {
+    grid-template-columns: repeat(var(--offer-cols, 3), minmax(0, 1fr));
+    grid-auto-rows: minmax(220px, 1fr);
+    gap: 16px;
+    margin-bottom: 0;
+  }
+
+  /* Sin caja: la tarjeta ES la carta. */
+  .panel.is-shop .offer,
+  .panel.is-shop .offer:hover:not(.is-sold),
+  .panel.is-reward .offer,
+  .panel.is-reward .offer:hover:not(.is-sold) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    padding: 0;
+  }
+
+  /* La cara ABSORBE el alto que sobra: ilustracion grande, entera (`contain`). */
+  .panel.is-shop .offer-art,
+  .panel.is-reward .offer-art {
+    width: 100%;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    object-fit: contain;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.34);
+    border-radius: 10px;
+    display: block;
+  }
+
+  /* Pie CENTRADO: el precio y el boton se leen como parte de la carta. */
+  .panel.is-shop .offer-footer,
+  .panel.is-reward .offer-footer {
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .panel.is-shop .offer-price-was {
+    margin-right: 0;
+  }
+
+  .panel.is-shop .offer-price,
+  .panel.is-reward .offer-price {
+    font-size: 17px;
+  }
+
+  /* El chip de tipo y la descripcion en prosa ya no se muestran: la cara los
+     trae impresos (paridad con movil). El dato sigue en `data-kind-label` y en
+     el `aria-label` para accesibilidad. */
+  .panel.is-shop .offer-kind,
+  .panel.is-shop .offer-desc,
+  .panel.is-reward .offer-kind,
+  .panel.is-reward .offer-desc {
+    display: none;
+  }
+
+  /* --- C2. Coleccion / Mazo: grillas con mas columnas por el ancho ---------- */
+  .panel.is-collection .collection-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+
+  .panel.is-deck .deck-grid {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 12px;
+  }
+}

@@ -119,18 +119,23 @@ const JOKER_SLOT_DY = 0.02;
  * indistinguibles en tamaño.
  */
 const JOKER_SCALE = 0.86;
-// Piles moved outward in X (±10.5, antes ±7.8) and back in Z (1.0, antes 2.4)
-// para dejar de tapar las cartas de los extremos de la mano: con la mano en
-// X hasta ±8.25 y los piles en ±7.8, los montones compartian pantalla con la
-// primera y ultima carta del abanico y el depth buffer los ganaba por 0.03u
-// (la pila estaba un poco MAS cerca de la camara que la carta). Al sacarlos
+// Piles moved outward in X (antes ±7.8) and back in Z (1.0, antes 2.4)
+// para dejar de tapar las cartas de los extremos de la mano. Al sacarlos
 // del abanico y empujarlos a Z=1.0 (claramente detras del plano de la mano,
 // que vive en Z=3+), los piles quedan por detras de la mano en profundidad
 // Y por fuera de la mano en pantalla.
-const DECK_X = 10.5;
+//
+// La X REAL la decide el perfil (ver `deckX`/`discardX`): escritorio amplio usa
+// `DESKTOP_WIDE_PILE_X`, tactil usa `TACTILE_PILE_X`.
 const DECK_Z = 1.0;
-const DISCARD_X = -10.5;
 const DISCARD_Z = 1.0;
+/**
+ * X de las pilas en ESCRITORIO AMPLIO. En un monitor 16:9 sobra ANCHO: separar
+ * un poco mas los montones del abanico deja respirar las cartas de las puntas y
+ * le da a la mesa una lectura "de tablero", no de celular estirado. El encuadre
+ * sigue el ancho real (ver `resize`), asi que la camara se reajusta sola.
+ */
+const DESKTOP_WIDE_PILE_X = 12.0;
 /**
  * X de las pilas en TACTIL. Mas adentro que en escritorio (ver `deckX`).
  *
@@ -3908,9 +3913,17 @@ export class SceneManager {
     return Math.max(8, (inner - cardHalf - 0.25) * 2);
   }
 
-  /** Rama ESCRITORIO del spread (congelada hasta la fase de escritorio). */
+  /** Rama ESCRITORIO del spread.
+   *
+   * Antes era la mas ANGOSTA (16.5/14/12): se penso para un monitor 16:9 donde
+   * el ancho "no hacia falta". Pero el ancho SI sobra en escritorio y la mesa
+   * quedaba chica y centrada, con una franja muerta abajo. Ahora el abanico se
+   * abre hasta el tope que permiten las pilas (`handSpreadClearOfPiles`): la mano
+   * llena el ancho, la camara se apoya en el alto y las cartas se leen grandes
+   * —que es el pulido del movil, trasladado al escritorio—. */
   private spreadDesktop(aspect: number): number {
-    return aspect > 1.75 ? 16.5 : aspect > 1.45 ? 14 : 12;
+    const base = aspect > 1.75 ? 22 : aspect > 1.45 ? 19 : 16;
+    return Math.min(base, this.handSpreadClearOfPiles());
   }
 
   /**
@@ -3934,9 +3947,15 @@ export class SceneManager {
     return 0.72;
   }
 
-  /** Rama ESCRITORIO del bias (congelada hasta la fase de escritorio). */
+  /** Rama ESCRITORIO del bias.
+   *
+   * El bias corre la vista hacia la MANO para que el HUD inferior no la tape. En
+   * un celular apaisado (2.2:1) el HUD se come ~19% del alto, asi que el corrimiento
+   * es fuerte (0.72). En un monitor 16:9 sobra ALTO: con el mismo 0.72 la mesa
+   * quedaba pegada arriba y dejaba una franja muerta abajo. Se baja a 0.52 para
+   * centrar la mesa en el alto disponible (aprovechar el espacio, no diluirlo). */
   private biasDesktop(): number {
-    return 0.72;
+    return 0.52;
   }
 
   /**
@@ -3954,13 +3973,21 @@ export class SceneManager {
    * X de la pila de MAZO: a la DERECHA del area central (y el descarte a la
    * izquierda). Es el orden historico, que el usuario pidio conservar.
    */
+  /** X de la pila de MAZO: a la DERECHA del area central (y el descarte a la
+   * izquierda). Es el orden historico, que el usuario pidio conservar.
+   *
+   * En escritorio se separa un poco mas (`DESKTOP_WIDE_PILE_X`) para aprovechar
+   * el ancho del monitor; en tactil, en cambio, van MAS ADENTRO (ver
+   * `TACTILE_PILE_X`) para que el encuadre lo fije el ALTO. */
   private get deckX(): number {
-    return this.layoutProfile === 'desktop' ? DECK_X : TACTILE_PILE_X;
+    if (this.layoutProfile === 'mobile' || this.layoutProfile === 'tablet') return TACTILE_PILE_X;
+    return DESKTOP_WIDE_PILE_X;
   }
 
   /** X de la pila de DESCARTE: a la IZQUIERDA. Ver `deckX`. */
   private get discardX(): number {
-    return this.layoutProfile === 'desktop' ? DISCARD_X : -TACTILE_PILE_X;
+    if (this.layoutProfile === 'mobile' || this.layoutProfile === 'tablet') return -TACTILE_PILE_X;
+    return -DESKTOP_WIDE_PILE_X;
   }
 
   /** Z de la fila de Simbiontes. En celular va mas adelante: ver `JOKER_Z_MOBILE`. */

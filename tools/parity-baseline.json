@@ -1,0 +1,263 @@
+{
+  "tol": 0.12,
+  "screens": {
+    "menu": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 1
+      },
+      "panelActions": null
+    },
+    "settings": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0.19,
+        "y": 0.231,
+        "w": 0.62,
+        "h": 0.558
+      },
+      "panelActions": {
+        "x": 0.207,
+        "y": 0.706,
+        "w": 0.586,
+        "h": 0.055
+      }
+    },
+    "collection": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0.19,
+        "y": 0.114,
+        "w": 0.62,
+        "h": 0.79
+      },
+      "panelActions": {
+        "x": 0.203,
+        "y": 0.853,
+        "w": 0.594,
+        "h": 0.036
+      }
+    },
+    "challenges": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0.19,
+        "y": 0.358,
+        "w": 0.62,
+        "h": 0.303
+      },
+      "panelActions": {
+        "x": 0.207,
+        "y": 0.578,
+        "w": 0.586,
+        "h": 0.055
+      }
+    },
+    "profile": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0.181,
+        "y": 0.2,
+        "w": 0.639,
+        "h": 0.6
+      },
+      "panelActions": {
+        "x": 0.198,
+        "y": 0.715,
+        "w": 0.604,
+        "h": 0.057
+      }
+    },
+    "archetypes": {
+      "hudTop": null,
+      "hudBottom": null,
+      "hudActions": null,
+      "hudScore": null,
+      "panel": {
+        "x": 0.19,
+        "y": 0.102,
+        "w": 0.62,
+        "h": 0.814
+      },
+      "panelActions": null
+    },
+    "blind-select": {
+      "hudTop": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.175
+      },
+      "hudBottom": {
+        "x": 0,
+        "y": 0.963,
+        "w": 1,
+        "h": 0.037
+      },
+      "hudActions": null,
+      "hudScore": {
+        "x": 0.461,
+        "y": 0.017,
+        "w": 0.073,
+        "h": 0.141
+      },
+      "panel": {
+        "x": 0.19,
+        "y": 0.249,
+        "w": 0.62,
+        "h": 0.521
+      },
+      "panelActions": {
+        "x": 0.207,
+        "y": 0.687,
+        "w": 0.586,
+        "h": 0.055
+      }
+    },
+    "playing": {
+      "hudTop": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.23
+      },
+      "hudBottom": {
+        "x": 0,
+        "y": 0.891,
+        "w": 1,
+        "h": 0.109
+      },
+      "hudActions": {
+        "x": 0.783,
+        "y": 0.909,
+        "w": 0.202,
+        "h": 0.072
+      },
+      "hudScore": {
+        "x": 0.449,
+        "y": 0.017,
+        "w": 0.096,
+        "h": 0.196
+      },
+      "panel": null,
+      "panelActions": null
+    },
+    "cleared": {
+      "hudTop": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.262
+      },
+      "hudBottom": {
+        "x": 0,
+        "y": 0.912,
+        "w": 1,
+        "h": 0.088
+      },
+      "hudActions": null,
+      "hudScore": {
+        "x": 0.446,
+        "y": 0.017,
+        "w": 0.096,
+        "h": 0.228
+      },
+      "panel": {
+        "x": 0.18,
+        "y": 0.095,
+        "w": 0.639,
+        "h": 0.81
+      },
+      "panelActions": {
+        "x": 0.458,
+        "y": 0.821,
+        "w": 0.083,
+        "h": 0.057
+      }
+    },
+    "reward": {
+      "hudTop": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.262
+      },
+      "hudBottom": {
+        "x": 0,
+        "y": 0.912,
+        "w": 1,
+        "h": 0.088
+      },
+      "hudActions": null,
+      "hudScore": {
+        "x": 0.446,
+        "y": 0.017,
+        "w": 0.096,
+        "h": 0.228
+      },
+      "panel": {
+        "x": 0.181,
+        "y": 0.115,
+        "w": 0.639,
+        "h": 0.77
+      },
+      "panelActions": {
+        "x": 0.198,
+        "y": 0.8,
+        "w": 0.604,
+        "h": 0.057
+      }
+    },
+    "shop": {
+      "hudTop": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.262
+      },
+      "hudBottom": {
+        "x": 0,
+        "y": 0.912,
+        "w": 1,
+        "h": 0.088
+      },
+      "hudActions": null,
+      "hudScore": {
+        "x": 0.446,
+        "y": 0.017,
+        "w": 0.096,
+        "h": 0.228
+      },
+      "panel": {
+        "x": 0.181,
+        "y": 0.15,
+        "w": 0.639,
+        "h": 0.701
+      },
+      "panelActions": {
+        "x": 0.198,
+        "y": 0.765,
+        "w": 0.604,
+        "h": 0.057
+      }
+    }
+  }
+}

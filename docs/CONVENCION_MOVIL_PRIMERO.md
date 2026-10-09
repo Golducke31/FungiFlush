@@ -170,7 +170,23 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
 > Esta lista se alimenta durante la fase móvil. **Todo lo que se deje "roto o sin pulir"
 > en escritorio va acá**, con archivo y selector, para que la fase final no adivine.
 
-- _(se completa a medida que avanza la fase móvil)_
+**✅ FASE DE ESCRITORIO EJECUTADA (2026-10-09).** Todo lo de esta sección quedó **cerrado**
+por el rediseño de escritorio: la propuesta completa, la justificación de las decisiones de
+adaptación y la **lista de comprobación de paridad con móvil** están en
+**[`docs/DESIGN_ESCRITORIO.md`](DESIGN_ESCRITORIO.md)**.
+
+- **Cómo se hizo:** un **único** bloque nuevo `@media (pointer: fine)` al final de
+  `src/ui/styles.css` (nada toca al móvil: `pointer: fine` y `pointer: coarse` son
+  mutuamente excluyentes) + reencuadre de la mesa 3D en `src/render/SceneManager.ts`.
+- **Gates nuevos** (obligatorios desde ahora):
+  - `npm run gate:desktop` — 31 pantallas a 1440×810: cromo solo-móvil oculto, sin
+    overflow, acciones en viewport, contadores en una fila. **Exit 1 al fallar.**
+  - `npm run gate:parity` — dual-contexto (escritorio + móvil en un run): I1/I2 fugas de
+    cromo, I3 paridad de textos, I4 acciones alcanzables, I5 sin scroll de página,
+    I6 baseline de geometría. **Exit 1 al fallar.**
+- **Hallazgos que cerró la red de seguridad:** 2 bugs de layout que ningún gate medía —
+  `ascension` (overlay scrolleaba +45 px) y `colony-rewards` (+24 px), ambos por la base
+  `.overlay{overflow-y:auto}`; se aplicó el modelo P8 de tres zonas en `(pointer: fine)`.
 
 **Cerrado en la Fase 0 (2026-10-04):**
 - `.hud-status` y `.hud-missions-toggle` se dibujaban **también en escritorio**, duplicando los
@@ -179,8 +195,10 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
   Gate: `tools/shot-desktop.mjs` (falla con exit 1 si vuelve a pasar).
 - Los 8 bloques `max-height` de la base ya están gateados por puntero (§3).
 
-**Pendiente para la fase de escritorio:**
-- **Rediseño del MENÚ PRINCIPAL (2026-10-06)** — cambio GLOBAL (lo pidió el usuario):
+**Resuelto por la fase de escritorio (2026-10-09)** — se conserva el registro de lo que
+había que mirar; cada punto quedó cubierto por `docs/DESIGN_ESCRITORIO.md` y los gates:
+
+- **MENÚ PRINCIPAL (2026-10-06)** — cambio GLOBAL (lo pidió el usuario):
   - El menú ya **no se alinea al arte**: la UI es un layout flex anclado al viewport
     (`.menu-layout` → `.menu-top` + `.menu-hero`). Ver `src/ui/MenuScreen.ts`.
   - `public/menu-bg.jpg` se regeneró **sin los 4 marcos**, pero **CONSERVA el título cian**:
@@ -227,8 +245,10 @@ el escritorio pierde, el cambio se hace igual — pero se anota en §6 **el mism
   escritorio necesita otro valor, es su rama de `deckX`/`discardX`.
 - **Cartas de la mano**: en táctil llevan un `boost` de escala de **1.3** (a 412px de alto, una
   carta nominal deja el texto de la cara en ~2px). El escritorio queda en 1.
-- **`tools/shot-desktop.mjs`** cubre solo `desk-blind` y `desk-playing`. Falta extenderlo a los
-  demás paneles (tienda, mazo, colección, historial, ascensión, cosméticos).
+- **`tools/shot-desktop.mjs`** cubría solo `desk-blind` y `desk-playing`. **RESUELTO**: se
+  reescribió a **31 pantallas** (menú, ajustes, colección, desafíos, perfil, historial,
+  logros, guía, acerca de, cosméticos, diaria, arquetipos, ascensión, tablero, tienda,
+  ranking, colonia, ciego, recompensa, mazo, game over, …). Es `npm run gate:desktop`.
 - **Mejoras de UI/UX (2026-10-06)** — cambios GLOBALES (los pidió el usuario) que conviene
   mirar en escritorio. El gate `shot-desktop.mjs` da 6/6, pero eso solo cubre las 6
   invariantes de la barra; el aspecto fino no está revisado:

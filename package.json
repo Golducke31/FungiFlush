@@ -20,6 +20,8 @@
     "sim:board": "tsx tools/boardSim.ts",
     "sim:hands": "tsx tools/handStats.ts",
     "smoke": "node tools/smoke.mjs",
+    "gate:desktop": "node tools/shot-desktop.mjs",
+    "gate:parity": "node tools/parity-layout.mjs",
     "art": "python tools/optimize_art.py && node tools/genArtIndex.mjs",
     "art:index": "node tools/genArtIndex.mjs",
     "fonts": "python tools/build_fonts.py",
