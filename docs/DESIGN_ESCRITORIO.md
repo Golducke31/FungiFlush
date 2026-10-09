@@ -132,12 +132,49 @@ escritorio (`src/render/SceneManager.ts`):
 
 - `spreadDesktop()`: base por aspecto (22 en ultra-ancho, 19, 16) **acotada** por
   `handSpreadClearOfPiles()` para que la mano nunca pise las pilas.
-- `biasDesktop()`: `0.72 → 0.52` (la mesa se centra, no se empuja hacia abajo).
-- `DESKTOP_WIDE_PILE_X = 12.0`: en escritorio ancho las pilas van a ±12.0 (móvil/táctil
-  conserva `±TACTILE_PILE_X`). Se retiraron las constantes `DECK_X`/`DISCARD_X` que
-  quedaron sin uso.
+- `biasDesktop()`: `0.72 → 0.62`.
+- `DESKTOP_WIDE_PILE_X = 8.8` (ver la corrección de abajo). Se retiraron las
+  constantes `DECK_X`/`DISCARD_X` que quedaron sin uso.
 
 Esto **llena la mesa** en 1440×810 sin tocar la lógica de juego ni la rama móvil/tablet.
+
+### 4.1 Corrección: la "franja negra" de arriba era el encuadre, no el CSS
+
+El usuario reportó una franja negra sobre todo el HUD. Medida con muestreo de
+píxeles reales (HUD oculto, perfil de brillo por fila), la causa no era CSS:
+
+| |antes|después|
+|---|---|---|
+|fondo plano arriba (y 0 → contenido)|**190 px**|**~90 px**|
+|distancia de cámara|21.54|16.43|
+|ancho de pila en pantalla|158 px|**194 px**|
+
+`CameraRig.fit()` toma `max(distForWidth, distForHeight)`:
+
+- **Móvil** (aspect 2.22): cabe el ancho de lejos ⇒ manda el **alto** ⇒ la mesa llena
+  la pantalla y no queda franja muerta.
+- **Escritorio** (aspect 1.78): el cono horizontal es más cerrado, así que para el
+  mismo ancho de mundo la cámara tiene que **alejarse**. Con las pilas en `12.0`
+  mandaba el ancho (`21.54` vs `13.78`) y la mesa se quedaba en ~68 % del alto: el
+  resto era fondo plano + niebla ⇒ la franja negra.
+
+Bajando `DESKTOP_WIDE_PILE_X` a `8.8` el ancho deja de mandar (`16.39` vs `16.43`) y el
+encuadre pasa a fijarlo el **alto**, como en el móvil: la mesa llena la pantalla y las
+cartas salen ~1.3× más grandes. Las pilas siguen en el borde **en pantalla** (el
+encuadre sigue siendo fit-al-ancho mientras el ancho manda). El `bias` a `0.62` deja
+ambas cotas prácticamente iguales, que es el óptimo: es el punto donde la mesa es lo
+más grande posible sin que sobre alto por ningún lado.
+
+Efecto secundario deseable: el abanico de la mano se solapa levemente en escritorio
+(espaciado `1.78` vs `CARD_WIDTH 2.2` con 8 cartas), **igual que en móvil** — abanico
+tipo Balatro, no cartas sueltas.
+
+### 4.2 Velo de la barra superior
+
+Como `.hud-top` es transparente por diseño (el material lo ponen los bloques), en
+16:9 quedaban dos "orejas" de fondo plano entre el borde y el bloque de score. Se
+añade un degradado que las cubre y se disuelve antes del borde inferior, así la barra
+se lee como una superficie continua de HUD y no como un recorte.
 
 ---
 
@@ -247,6 +284,11 @@ contenido. Se corrigieron aplicando el modelo P8 en el bloque `(pointer: fine)`.
 - Capturas: `tools/parity-*.png` (se toman **durante** el recorrido, no al final).
 - Elementos totalmente off-canvas se ignoran a propósito (p. ej. `.hud-missions-panel`
   cerrado).
+- ⚠️ Las dos sesiones de `gate:parity` **no conviven**: con SwiftShader la escena 3D va a
+  ~2-3 FPS y dos contextos a la vez se pelean por la CPU — el arranque del segundo
+  pasaba de ~10 s a **~40 s** (medido) y vencía el `waitForFunction`. Cada sesión se
+  crea, se recorre y se **cierra** antes de abrir la siguiente. Además el arranque usa
+  `polling: 250` en vez del rAF por defecto (el rAF de la pestaña oculta se congela).
 
 ---
 

@@ -323,7 +323,10 @@ body {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end; /* el nombre queda abajo, la insignia arriba-der. */
+  /* Con la subetiqueta retirada solo queda el NOMBRE sobre el dorso: se centra
+     en la caja proyectada (antes se apoyaba abajo para dejar aire a la
+     subetiqueta). La insignia dorada del contador sigue anclada arriba-der. */
+  justify-content: center;
   gap: 2px;
   padding: 3px;
   box-sizing: border-box;
@@ -362,6 +365,11 @@ body {
   -webkit-text-stroke: 0.2em #04241c;
   paint-order: stroke fill;
   margin-top: 1px;
+  /* RETIRADA de la vista: "robables" / "cartas" repetian lo que el nombre de la
+     pila ("MAZO" / "DESCARTE") y el contador dorado ya dicen, y ensuciaban el
+     dorso. El dato sigue en el `aria-label` (accesibilidad) y la clase se
+     conserva por si se reusa. */
+  display: none;
 }
 
 /* Insignia dorada de contador (componente de pilas adjunto). */
@@ -10382,25 +10390,54 @@ body {
   /* --- B1. Escala tipografica de escritorio --------------------------------
      `--text-*` se subio ~12-18% pensando en 844x390 (ver `:root`). A 1440x810 y
      a distancia de monitor, esa misma escala queda CHICA. Se redefine solo en
-     escritorio: los tokens siguen siendo la fuente unica y el movil no cambia. */
+     escritorio: los tokens siguen siendo la fuente unica y el movil no cambia.
+
+     El pedido es que el escritorio tenga la MISMA presencia que el movil ya
+     pulido: el movil comprime porque no le queda otra, y el escritorio tiene
+     el ancho de sobra. Se sube la escala completa. */
   :root {
-    --text-xs:   12px;
-    --text-sm:   14px;
-    --text-base: 16px;
-    --text-md:   18px;
-    --text-lg:   22px;
-    --text-xl:   27px;
-    --text-xxl:  42px;
+    --text-xs:   14px;
+    --text-sm:   16px;
+    --text-base: 18px;
+    --text-md:   21px;
+    --text-lg:   26px;
+    --text-xl:   32px;
+    --text-xxl:  52px;
   }
 
-  /* --- B2. Barra superior: respiros y jerarquia -----------------------------
-     El bloque de score estaba acotado a 460px y todo se apiñaba en el centro.
-     Con 1440px disponibles, el marcador puede respirar y las tres zonas
-     (ante | marcador | recursos) se reparten el ancho con aire. */
+  /* La franja inferior de escritorio sube de 68px (base) a ~102px: gana la
+     fila de accion (60px) + la linea de consecuencia (~17px) + paddings. Todo
+     lo que se ancla ENCIMA de la barra (guia de seleccion, misiones) lee este
+     token, asi que con actualizarlo aca quedan sincronizados solos. */
+  :root {
+    --hud-bottom-h: 102px;
+  }
+
+  /* --- B2. Barra superior: UNA linea, tres zonas repartidas -----------------
+     El bloque de score es una COLUMNA (numero, barra, aviso, objetivo, ciego y
+     preview) que en la base apila ~6 renglones: a 810px de alto eso daba un
+     `.hud-top` de 142px, y como `align-items:center` centraba ANTE y FUNGIS en
+     esa altura, quedaba una BANDA VACIA arriba y abajo (la "franja negra").
+     Se apila MENOS: el objetivo y el ciego bajan a una linea, y la barra de
+     progreso se mantiene. El marcador ademas crece a lo ancho (`flex:1`). */
   .hud-top {
     align-items: center;
-    padding: calc(14px + var(--safe-t)) calc(22px + var(--safe-r)) 14px calc(22px + var(--safe-l));
-    gap: 20px;
+    padding: calc(12px + var(--safe-t)) calc(24px + var(--safe-r)) 12px calc(24px + var(--safe-l));
+    gap: 24px;
+    /* VELO (scrim) de la barra superior.
+       La barra es TRANSPARENTE por diseno (el material lo ponen los bloques),
+       pero en escritorio 16:9 eso dejaba ver el fondo plano del 3D entre el
+       borde de la pantalla y el bloque de score: dos "orejas" oscuras arriba y
+       una franja negra sobre el HUD (lo que reporto el usuario). El degradado
+       las cubre y se disuelve antes del borde inferior, asi que la barra se
+       lee como una superficie de HUD continua en vez de un recorte. */
+    background: linear-gradient(
+      180deg,
+      rgba(4, 10, 14, 0.94) 0%,
+      rgba(4, 10, 14, 0.82) 52%,
+      rgba(4, 10, 14, 0.45) 82%,
+      rgba(4, 10, 14, 0) 100%
+    );
   }
 
   .hud-block {
@@ -10428,15 +10465,69 @@ body {
     height: 24px;
   }
 
+  /* El marcador LLENA el ancho que le dan las zonas laterales. Con
+     `flex: 0 1 auto` solo medía su contenido y quedaba en ~105px: el numero y
+     el objetivo se partian en columnas estrechas. `flex: 1` lo estira. */
   .hud-score {
-    /* De 460px a 620px: el marcador gana presencia sin monopolizar la barra. */
-    max-width: 620px;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .hud-score-current {
     /* El dato mas importante de la partida, a distancia de monitor. */
-    font-size: 46px;
+    font-size: 44px;
+    line-height: 1;
+  }
+
+  /* Objetivo + nombre del ciego en la MISMA linea: ahorra un renglon y el
+     `.hud-top` baja de 142px. Es la unica fila de contexto que necesita el
+     jugador; el resto (barra, preview) ya vive en su franja. */
+  .hud-objective {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* El aviso permanente de la barra ("la barra solo avanza al jugar") comedía
+     un renglon entero en la barra superior y en escritorio el jugador ya tiene
+     el boton a la vista. Se oculta igual que en movil. */
+  .hud-bar-notice {
+    display: none !important;
+  }
+
+  /* Los renglones de contexto del marcador (objetivo, ciego, preview) vienen
+     VACIOS hasta que el motor los llena, pero seguian aportando su margen
+     (4+6+7 = 17px de aire muerto) y eso era la mitad de la "franja negra".
+     Se anula el margen y se lo repone solo cuando el renglon tiene contenido.
+     Los tres usan `:not(:empty)`, que en DOM con texto propio funciona; para
+     los que se llenan por JS con hijos se apoya ademas en `.is-visible`. */
+  .hud-objective,
+  .hud-blind-name,
+  .hud-preview {
+    margin-top: 0;
+  }
+
+  .hud-objective.is-visible,
+  .hud-preview.is-visible {
+    margin-top: 5px;
+  }
+
+  .hud-blind-name:not(:empty) {
+    margin-top: 5px;
+  }
+
+  /* El bloque del marcador respira menos por dentro: con el numero a 52px y la
+     barra, el padding de 12px sobraba y estiraba el `.hud-top` a 151px. */
+  .hud-block.hud-score {
+    padding: 6px 18px;
+    gap: 2px;
+  }
+
+  .hud-progress {
+    margin-top: 6px;
+    height: 10px;
   }
 
   .hud-score-target {
@@ -10462,13 +10553,31 @@ body {
      informacion que el movil (que la reparte entre barra y pilas) concentrada y
      con jerarquia clara. Es aprovechar el espacio, no agregar datos nuevos. */
   .hud-bottom {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px calc(24px + var(--safe-r)) calc(14px + var(--safe-b)) calc(24px + var(--safe-l));
+  }
+
+  /* Igual que en movil: los contadores FLANQUEAN el boton (Manos a la
+     izquierda, Descartes a la derecha) y el boton JUGAR MANO queda CENTRADO.
+     Antes en escritorio el `.hud-action-row` era `display:contents` y el
+     `.hud-bottom` un `space-between`: el boton caia pegado al borde DERECHO y
+     no habia franja de accion. Se porta el MISMO modelo del movil. */
+  .hud-action-row {
+    display: flex;
+    flex-direction: row;
     align-items: center;
-    padding: 14px calc(22px + var(--safe-r)) calc(16px + var(--safe-b)) calc(22px + var(--safe-l));
-    gap: 16px;
+    position: relative;
+    min-height: 60px;
+    gap: 10px;
   }
 
   .hud-counters {
-    gap: 10px;
+    display: flex;
+    justify-content: space-between;
+    flex: 1 1 auto;
+    gap: 12px;
     flex-wrap: nowrap;
   }
 
@@ -10492,21 +10601,58 @@ body {
     letter-spacing: 0.1em;
   }
 
-  /* El chip de ESTADO se apaga un paso (ya lo hace la base con opacity .86):
-     aca se refuerza que es contexto, no recurso, bajando el color del numero. */
+  /* El chip de ESTADO se OCULTA en escritorio (misma regla que mobile):
+     la info ya vive en las etiquetas 3D de las pilas (MAZO/DESCARTE con la
+     insignia dorada) y en la columna de Simbiontes. Dejarlos como un chip mas
+     en la barra inferior producia la DUPLICACION "Descarte" / "DESCARTE" y
+     "Robables" / "MAZO" que reporto el usuario. La barra en escritorio queda
+     SOLO con los dos RECURSOS (MANOS / DESCARTES) flanqueando el boton, como
+     en mobile. */
   .counter[data-kind='state'] {
-    opacity: 0.8;
+    display: none;
   }
 
-  /* Las acciones ganan cuerpo: la franja inferior respira. */
+  /* La accion se saca del flujo y se CENTRA sobre la franja: los contadores
+     ocupan los extremos. `pointer-events:none` deja pasar el clic por el hueco;
+     el boton lo recupera. Mismo mecanismo que el bloque `(pointer: coarse)`. */
   .hud-actions {
-    gap: 12px;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    pointer-events: none;
   }
 
   .hud-actions .btn {
-    min-height: 52px;
-    padding: 14px 26px;
-    font-size: 16.5px;
+    pointer-events: auto;
+    flex: 0 1 auto;
+  }
+
+  .hud-actions .btn {
+    min-height: 56px;
+    padding: 16px 32px;
+    font-size: 18px;
+  }
+
+  /* (F4/C) Consecuencia en UNA linea antes del boton, igual que en movil. */
+  .hud-consequence.is-visible {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    font-size: 15px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    min-height: 17px;
+    padding: 0 10px;
   }
 
   /* --- B5. Jugar Mano deshabilitado ----------------------------------------
@@ -10748,5 +10894,32 @@ body {
   .panel.is-deck .deck-grid {
     grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
     gap: 12px;
+  }
+
+  /* --- C3. Ficha del mazo: la caja de texto de abajo se lee ------------------
+     El nombre iba a 12.5px y el meta a 10.5px: pensados para una celda de
+     movil donde el alto es el recurso escaso. En escritorio la celda es mas
+     grande y esos mismos numeros quedan casi ilegibles a distancia de monitor
+     (es la unica pieza del mazo que NO se puede leer ni ampliando la carta,
+     porque el dato vive en el texto). Se suben al peso del resto del panel. */
+  .deck-card-name {
+    font-size: 16px;
+    line-height: 1.15;
+  }
+
+  .deck-card-meta {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .deck-card-stats {
+    font-size: 14px;
+    gap: 10px;
+  }
+
+  /* La celda acompaña: con el texto mas grande, el alto fijo de la ficha se
+     queda corto y el nombre se recorta por el `overflow` de la celda. */
+  .deck-card {
+    padding-bottom: 8px;
   }
 }

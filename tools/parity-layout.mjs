@@ -77,13 +77,19 @@ async function makeSession({ name, viewport, mobile }) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   await page.goto(URL_TO_TEST, { waitUntil: 'load', timeout: 45000 });
-  await page.waitForFunction(() => Boolean(window.__fungiflush?.engine?.run), { timeout: 30000 });
+  // `polling: 250` (intervalo) y NO el rAF por defecto: con SwiftShader la escena
+  // 3D va a ~2 FPS, y con DOS contextos renderizando a la vez el rAF de la pagina
+  // que no esta al frente se muere de hambre => el wait expiraba aunque la app
+  // estuviera perfecta (se verifico: `engine.run` ya era true). El intervalo no
+  // depende del frame. `bringToFront` evita el throttling de la pestana oculta.
+  await page.bringToFront();
+  await page.waitForFunction(() => Boolean(window.__fungiflush?.engine?.run), { timeout: 30000, polling: 250 });
   await page.waitForTimeout(2000);
 
   const click = (sel) => page.evaluate((s) => document.querySelector(s)?.click(), sel);
   const has = (sel) => page.evaluate((s) => Boolean(document.querySelector(s)), sel);
   const waitPanel = (sel, timeout = 12000) =>
-    page.waitForFunction((s) => Boolean(document.querySelector(s)), sel, { timeout }).catch(() => {});
+    page.waitForFunction((s) => Boolean(document.querySelector(s)), sel, { timeout, polling: 250 }).catch(() => {});
 
   /**
    * Snapshot de marcadores de la pantalla actual. Devuelve:
@@ -197,9 +203,6 @@ async function makeSession({ name, viewport, mobile }) {
   return { name, page, click, has, waitPanel, snapshot, errors, context };
 }
 
-const desktop = await makeSession({ name: 'desktop', viewport: { width: 1440, height: 810 }, mobile: false });
-const mobile = await makeSession({ name: 'mobile', viewport: { width: 915, height: 412 }, mobile: true });
-
 /**
  * Recorre una sesion por las pantallas clave y devuelve snapshots por nombre.
  * Se limita a las pantallas CON panel + el HUD de partida; es el conjunto donde
@@ -254,7 +257,7 @@ async function walk(s) {
   await snap('blind-select');
 
   await s.page.evaluate(() => { const ff = window.__fungiflush; ff.engine.chooseBlind(ff.engine.availableBlinds()[0]?.id); });
-  await s.page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, { timeout: 15000 });
+  await s.page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, { timeout: 15000, polling: 250 });
   await s.page.waitForTimeout(1200);
   await snap('playing');
 
@@ -283,8 +286,18 @@ async function walk(s) {
   return out;
 }
 
+// Las dos sesiones NO conviven: con SwiftShader la escena 3D va a ~2-3 FPS y dos
+// contextos renderizando a la vez se pelean por la CPU — el arranque del segundo
+// pasaba de ~10s a ~40s (medido) y vencia el timeout del gate. Cada una se crea,
+// se recorre y se CIERRA antes de abrir la siguiente: el gate compara snapshots
+// ya tomados, no necesita las dos paginas vivas al mismo tiempo.
+const desktop = await makeSession({ name: 'desktop', viewport: { width: 1440, height: 810 }, mobile: false });
 const D = await walk(desktop);
+await desktop.context.close();
+
+const mobile = await makeSession({ name: 'mobile', viewport: { width: 915, height: 412 }, mobile: true });
 const M = await walk(mobile);
+await mobile.context.close();
 
 await browser.close();
 

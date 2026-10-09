@@ -130,12 +130,25 @@ const JOKER_SCALE = 0.86;
 const DECK_Z = 1.0;
 const DISCARD_Z = 1.0;
 /**
- * X de las pilas en ESCRITORIO AMPLIO. En un monitor 16:9 sobra ANCHO: separar
- * un poco mas los montones del abanico deja respirar las cartas de las puntas y
- * le da a la mesa una lectura "de tablero", no de celular estirado. El encuadre
- * sigue el ancho real (ver `resize`), asi que la camara se reajusta sola.
+ * X de las pilas en ESCRITORIO AMPLIO.
+ *
+ * NO es "mas ancho que el celular": es mas ANGOSTO, y no por gusto sino por
+ * GEOMETRIA. `CameraRig.fit()` toma `max(distForWidth, distForHeight)`:
+ *   - CELULAR (aspect 2.22): el ancho cabe de lejos => manda el ALTO. La mesa
+ *     llena la pantalla y no queda franja muerta.
+ *   - ESCRITORIO (aspect 1.78): el cono horizontal es mas cerrado, asi que para
+ *     el mismo ancho de mundo la camara tiene que ALEJARSE. Con las pilas en
+ *     12.0 mandaba el ancho (dist 21.5 vs 13.8 de alto) y la mesa se quedaba en
+ *     ~68% del alto: el resto era fondo plano + niebla => la "franja negra
+ *     arriba" que reporto el usuario.
+ *
+ * Bajando a 8.8 el ancho deja de mandar (16.39 vs 16.43) y el encuadre pasa a
+ * fijarlo el ALTO, como en el celular: la mesa llena la pantalla y las cartas
+ * salen ~1.3x mas grandes (que es "aprovechar el espacio" de verdad: mas
+ * presencia, no mas mundo vacio). Las pilas siguen en el borde en PANTALLA
+ * porque el encuadre es fit-al-ancho mientras manda el ancho.
  */
-const DESKTOP_WIDE_PILE_X = 12.0;
+const DESKTOP_WIDE_PILE_X = 8.8;
 /**
  * X de las pilas en TACTIL. Mas adentro que en escritorio (ver `deckX`).
  *
@@ -3951,11 +3964,14 @@ export class SceneManager {
    *
    * El bias corre la vista hacia la MANO para que el HUD inferior no la tape. En
    * un celular apaisado (2.2:1) el HUD se come ~19% del alto, asi que el corrimiento
-   * es fuerte (0.72). En un monitor 16:9 sobra ALTO: con el mismo 0.72 la mesa
-   * quedaba pegada arriba y dejaba una franja muerta abajo. Se baja a 0.52 para
-   * centrar la mesa en el alto disponible (aprovechar el espacio, no diluirlo). */
+   * es fuerte (0.72). En un monitor 16:9 sobra ALTO, asi que no hace falta tanto:
+   * con 0.52 la mesa quedaba centrada pero ~55px por debajo del HUD superior, y
+   * ese hueco (fondo plano + niebla) se leia como una franja negra. Sube a 0.62
+   * para que la mesa arranque justo donde termina el HUD de arriba y la mano
+   * quede despejada del de abajo.
+   */
   private biasDesktop(): number {
-    return 0.52;
+    return 0.62;
   }
 
   /**

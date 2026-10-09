@@ -5,6 +5,14 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo: Goldu
 ## MÓVIL PRIMERO
 - UI/HUD = MÓVIL landscape. Doc `docs/CONVENCION_MOVIL_PRIMERO.md`. Ref 915×412; smoke 844×390. **Escritorio CONGELADO**.
 - `src/pointer.ts` ÚNICA fuente de puntero. NO `matchMedia` suelto. CSS: base=escritorio, móvil=`@media (pointer:coarse)`, tablet=`(pointer:coarse) and (min-height:600px)`.
+- Escritorio rediseñado (2026-10-09) en bloque `@media (pointer: fine)` al final de `styles.css`. Doc `docs/DESIGN_ESCRITORIO.md`. Gates `gate:desktop` (31 pantallas) y `gate:parity` (dual, baseline `tools/parity-baseline.json`, `--update` para re-basar).
+
+## Encuadre 3D (SceneManager / CameraRig)
+- ⚠️ `rig.fit()` = `max(distForWidth, distForHeight)`. **Celular (aspect 2.22) manda el ALTO** (llena la pantalla); **escritorio 16:9 (1.778) mandaba el ANCHO** ⇒ cámara lejos ⇒ mesa al ~68% y franja de fondo plano arriba (la "franja negra": es el clear color, no CSS).
+- Fix: `DESKTOP_WIDE_PILE_X=8.8` + `biasDesktop=0.62` ⇒ las dos cotas quedan ~iguales (16.39/16.43), que es el óptimo (mesa lo más grande posible). Más ancho de mundo = cámara más lejos = cartas MÁS CHICAS.
+- `.hud-top` es transparente por diseño (el material lo ponen los bloques) ⇒ en 16:9 necesita velo (`linear-gradient`) o se ve el fondo.
+- `.counter[data-kind='state']` oculto en ambas plataformas: la info vive en las etiquetas 3D de las pilas.
+- ⚠️ Dos contextos Playwright simultáneos NO funcionan (SwiftShader ~2-3 FPS): el 2do tarda ~40s en arrancar. `gate:parity` crea → recorre → cierra cada sesión; usar `polling: 250`, no rAF.
 
 ## Gates (prefijar `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
 - `typecheck` · `test` · `validate` · `smoke` · `audit:desc` · `sim:balance`(500) · `sim:board`.
