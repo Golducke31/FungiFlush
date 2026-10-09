@@ -567,3 +567,28 @@ test('sin sujeto cargado no hay capas (respaldo duro intacto)', () => {
   );
   assert.equal(layers.getLayers(['art_card_poison_common']), undefined);
 });
+
+test('una capa transparente de punta a punta no cuenta como capa', () => {
+  // Una capa puede salir VACIA (alfa todo 0): pasa cuando `fg_mode: "none"`, o
+  // cuando el arte no tiene un borde del que sacar el halo. Ese archivo NO es
+  // una capa: si se devolviera, el render montaria un quad invisible y
+  // encenderia el campo de esporas al pedo.
+  const layers = new ArtLayers();
+  const subject = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
+  const fg = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
+  layers.setEntry(
+    'art_card_crystal_common',
+    {
+      size: [512, 744],
+      subject: { bbox: [10, 10, 100, 100] },
+      files: { subject: 'c__subject.png', fg: 'c__fg.png' },
+    },
+    { 'c__subject.png': subject, 'c__fg.png': fg },
+  );
+  layers.markEmptyLayer('c__fg.png');
+
+  const got = layers.getLayers(['art_card_crystal_common']);
+  assert.ok(got, 'el sujeto sigue resolviendose');
+  assert.equal(got.fg, undefined, 'un fg vacio se omite (no hay quad invisible)');
+  assert.equal(got.subject, subject, 'el sujeto NO se toca');
+});

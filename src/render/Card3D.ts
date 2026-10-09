@@ -109,22 +109,60 @@ const CARD_FACE_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT, 24, 36);
 const CARD_RELIEF = 0.03;
 
 /**
- * Altura de la capa de TEXTO. Tiene que quedar por delante de los PICOS del
- * relieve, o el arte atravesaria el texto al levantarse.
- */
-const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + CARD_RELIEF + 0.02;
-
-/**
  * Separacion en Z entre las capas de arte segmentadas (fondo / sujeto / primer plano).
  *
- * El parallax real sale de aca: al inclinar la carta, una capa a `-GAP` y otra a `+GAP`
- * se desplazan en sentidos opuestos respecto del plano del sujeto (z=0). Es la MISMA
- * idea que ya hacia la capa de texto (`CARD_TOP_OFFSET`), pero aplicada al arte.
+ * El parallax real sale de aca: al inclinar la carta, una capa a `-GAP` y otra a
+ * `+GAP` se desplazan en sentidos opuestos respecto del plano del sujeto. Es la MISMA
+ * idea que ya hacia la capa de texto, pero aplicada al arte.
  *
- * Es chico a proposito: mas separacion da mas paralaje pero el arte empieza a leerse
- * como planos flotando en vez de una ilustracion.
+ * ⚠️ CUANTO VALE. El desplazamiento en pantalla es `separacion * sin(tilt)`; como
+ * fraccion del ancho de la carta (2.2) queda `separacion * sin(tilt) / 2.2`. Con el
+ * valor viejo (0.014) y el tilt tipico de una carta hero (0.35 rad) eso daba 0.22%:
+ * alrededor de UN pixel sobre una carta de 512 — INDISTINGUIBLE. Medido en el juego,
+ * el efecto simplemente no se veia.
+ *
+ * ⚠️ LA SEPARACION ES ASIMETRICA, Y A PROPOSITO. El `bg` va un poco por detras de la
+ * cara, pero NO puede pasar el DORSO (a `-espesor/2`): si lo pasara, al girar la carta
+ * el fondo asomaria por atras. El `fg` en cambio va mucho mas adelante, porque detras
+ * suyo no hay nada con lo que chocar. Asi el grueso de la separacion (y por lo tanto
+ * el parallax) sale del fg. `LAYER_BG_BACK` esta topado para quedar siempre delante
+ * del dorso.
  */
-const CARD_LAYER_GAP = 0.014;
+const LAYER_BG_BACK = Math.min(0.02, CARD_THICKNESS / 2 - 0.015);
+/** Cuanto se adelanta el `fg` respecto de la cara. Es el que da el parallax. */
+const LAYER_FG_FRONT = 0.3;
+/** Separacion total entre `bg` y `fg` (lo que define cuanto se corren al inclinar). */
+const CARD_LAYER_GAP = LAYER_BG_BACK + LAYER_FG_FRONT;
+
+/**
+ * Altura de la capa de TEXTO. Va por DELANTE de los PICOS del relieve y por delante
+ * del `fg` del arte (que esta a `+LAYER_FG_FRONT`), o el arte atravesaria el texto al
+ * levantarse. Se deriva del gap para que subir el parallax no deje el texto atras.
+ */
+const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + LAYER_FG_FRONT + 0.02;
+
+/**
+ * Compensacion de PERSPECTIVA de las capas.
+ *
+ * Por que existe: una capa adelantada en Z (`fg` a `+0.3`) esta mas cerca de la
+ * camara, asi que se proyecta MAS GRANDE que la cara. Con la correccion apagada
+ * el halo del `fg` "flota" y queda fuera de registro con el borde del sujeto, y
+ * el `bg` (por detras) se ve un pelo mas chico que la cara: la composicion en
+ * reposo NO coincide con el arte original.
+ *
+ * El factor es `(dist + z_face) / (dist + z_layer)`, con `dist` la distancia de
+ * camara (la maneja `CameraRig.fit`). Con la distancia tipica (~13 en escritorio,
+ * ~10.5 en movil) esto vale ~2% para el `fg` y <1% para el `bg`; chico, pero es
+ * la diferencia entre "capas registradas" y "capas apenas desalineadas". Se aplica
+ * como escala LOCAL del mesh, asi que el idle la conserva (multiplica).
+ *
+ * `PERSPECTIVE_DIST_REF` es una REFERENCIA: la distancia real cambia con el
+ * aspect ratio, pero usar una constante evita recalcular las escalas por frame
+ * (y el error entre plataformas es de decimas de porcentaje).
+ */
+const PERSPECTIVE_DIST_REF = 12.5;
+const LAYER_BG_SCALE = PERSPECTIVE_DIST_REF / (PERSPECTIVE_DIST_REF - LAYER_BG_BACK);
+const LAYER_FG_SCALE = PERSPECTIVE_DIST_REF / (PERSPECTIVE_DIST_REF + LAYER_FG_FRONT);
 
 /**
  * Escala de la respiracion idle de las capas (`motion.amp` = fraccion del ALTO).
@@ -385,9 +423,11 @@ export class Card3D {
   private layerMotion: Record<LayerName, LayerMotion> = DEFAULT_MOTION;
   /** Fase inicial determinista de la respiracion (rad). Evita el unisono. */
   private layerPhase = 0;
-  /** Posiciones Z base de las capas, para oscilar alrededor de ellas. */
-  private readonly bgLayerBaseZ = CARD_THICKNESS / 2 - CARD_LAYER_GAP;
-  private readonly fgLayerBaseZ = CARD_THICKNESS / 2 + CARD_LAYER_GAP;
+  /** Posiciones Z base de las capas, para oscilar alrededor de ellas.
+   *  ASIMETRICAS: el bg queda apenas por detras de la cara (sin pasar el dorso), el
+   *  fg bastante por delante. Ver `LAYER_BG_BACK` / `LAYER_FG_FRONT`. */
+  private readonly bgLayerBaseZ = CARD_THICKNESS / 2 - LAYER_BG_BACK;
+  private readonly fgLayerBaseZ = CARD_THICKNESS / 2 + LAYER_FG_FRONT;
   /**
    * Esporas locales: solo existen (y solo se dibujan) cuando la carta trae
    * capas segmentadas. En una carta sin capas quedan `undefined` y no cuestan
@@ -516,7 +556,7 @@ export class Card3D {
     // `onBeforeCompile`: se conserva `MeshStandardMaterial` (la LUZ de la escena
     // sigue aplicando) y se parchea SOLO el chunk que muestrea el mapa. `uAmp`
     // arranca en 0 => sin distorsion hasta que `applyTexture` le ponga el noise.
-    const layerMaterial = (): THREE.MeshStandardMaterial => {
+    const layerMaterial = (additive = false): THREE.MeshStandardMaterial => {
       const mat = new THREE.MeshStandardMaterial({
         transparent: true,
         depthWrite: false,
@@ -525,6 +565,17 @@ export class Card3D {
         emissive: new THREE.Color(0xffffff),
         emissiveIntensity: 0.32,
       });
+      // El `fg` es un HALO DE LUZ: con blending aditivo SUMA brillo en vez de
+      // tapar. Con alpha normal, un anillo claro y semitransparente se leeria
+      // como una calcomania opaca sobre la ilustracion; aditivo se lee como luz
+      // que se derrama del borde del hongo. El `bg` va con alpha normal (tiene
+      // que TAPAR el dorso, no sumarse a el).
+      if (additive) {
+        mat.blending = THREE.AdditiveBlending;
+        // Sin `toneMapped: false` el tonemapping del render le come justo la
+        // parte brillante, que es TODO el halo.
+        mat.toneMapped = false;
+      }
       mat.userData['layerUniforms'] = {
         uTime: { value: 0 },
         uAmp: { value: 0 },
@@ -555,10 +606,17 @@ export class Card3D {
     this.bgLayerMaterial = layerMaterial();
     this.bgLayer = new THREE.Mesh(CARD_GEO, this.bgLayerMaterial);
     this.bgLayer.position.z = this.bgLayerBaseZ;
+    // Compensacion de perspectiva: el `bg` va por DETRAS, asi que se ve un pelo
+    // mas chico; se agranda para que en reposo coincida con el arte original.
+    this.bgLayer.scale.setScalar(LAYER_BG_SCALE);
     this.bgLayer.visible = false;
-    this.fgLayerMaterial = layerMaterial();
+    // El `fg` es el halo luminoso: aditivo (ver `layerMaterial`).
+    this.fgLayerMaterial = layerMaterial(true);
     this.fgLayer = new THREE.Mesh(CARD_GEO, this.fgLayerMaterial);
     this.fgLayer.position.z = this.fgLayerBaseZ;
+    // Compensacion de perspectiva: el `fg` esta ADELANTE y se proyecta ~2% mas
+    // grande; se encoge para que el halo quede registrado con el borde sujeto.
+    this.fgLayer.scale.setScalar(LAYER_FG_SCALE);
     this.fgLayer.visible = false;
 
     // Esporas locales: se crean YA (siempre), pero nacen invisibles. Solo se
@@ -721,6 +779,20 @@ export class Card3D {
   ): void {
     this.faceMaterial.map = texture;
     this.faceMaterial.emissiveMap = texture;
+
+    // ⚠️ LA CARA TIENE QUE SER TRANSPARENTE CUANDO LLEVA CAPAS.
+    //
+    // Sin capas, la cara es el arte COMPLETO (opaca) y da igual. Con capas, la
+    // cara es SOLO el sujeto: un recorte con alfa fuera del bbox. Un material
+    // opaco IGNORA ese alfa y pinta los pixeles transparentes como NEGRO —
+    // tapando el `bg` que va justo detras. Ese era el bug de "el fondo de la
+    // carta se ve negro cuando antes tenia fondo".
+    //
+    // Se enciende y se apaga por carta (no se deja siempre en `true`) porque un
+    // material transparente cuesta ordenacion por profundidad y no aporta nada
+    // en las cartas sin segmentar.
+    this.faceMaterial.transparent = Boolean(layers?.subject);
+    this.faceMaterial.needsUpdate = true;
 
     // --- Capas de arte (parallax real) ---
     // La cara ya es el SUJETO cuando hay capas. El fondo y el primer plano van a sus
@@ -1098,7 +1170,10 @@ export class Card3D {
       const bA = amp(bg);
       const bWave = Math.sin(time * bg.speed + this.layerPhase + 1.7);
       this.bgLayer.position.y = -bWave * bA * CARD_HEIGHT;
-      const bScale = 1 + bWave * bA * 0.3;
+      // ⚠️ La escala PARTE de la compensacion de perspectiva (`LAYER_BG_SCALE`):
+      // un `set(bScale, bScale, 1)` pelado la borraria y el fondo volveria a
+      // quedar desalineado en cuanto la carta respira una vez.
+      const bScale = LAYER_BG_SCALE * (1 + bWave * bA * 0.3);
       this.bgLayer.scale.set(bScale, bScale, 1);
       this.setLayerDistortion(this.bgLayerMaterial, time, bg.noise);
     }
@@ -1106,7 +1181,8 @@ export class Card3D {
       const fA = amp(fg);
       const fWave = Math.sin(time * fg.speed + this.layerPhase + 3.1);
       this.fgLayer.position.y = fWave * fA * CARD_HEIGHT;
-      const fScale = 1 + fWave * fA * 0.3;
+      // Idem `bg`: la compensacion se conserva (ver `LAYER_FG_SCALE`).
+      const fScale = LAYER_FG_SCALE * (1 + fWave * fA * 0.3);
       this.fgLayer.scale.set(fScale, fScale, 1);
       this.setLayerDistortion(this.fgLayerMaterial, time, fg.noise);
     }

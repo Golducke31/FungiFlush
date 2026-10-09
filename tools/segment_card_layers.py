@@ -474,17 +474,53 @@ def iou(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.logical_and(ab, bb).sum()) / float(union)
 
 
+# Cuanto del sujeto puede "comerse" el erode antes de que la banda deje de ser un
+# borde y pase a ser el cuerpo entero. Con `max(0.25, ...)` el sujeto seguro nunca
+# baja del 25% de la mascara: por debajo de eso, el matting decide sobre el cuerpo
+# (que es exactamente lo que NO queremos) y el sujeto sale translucido.
+TRIMAP_MIN_SAFE_FRAC = 0.25
+
+
+def _shrink_until_safe(m_bool: np.ndarray, erode_px: int) -> tuple[np.ndarray, int]:
+    """Erosiona la mascara por `erode_px` REDUCIENDO el radio si el sujeto seguro
+    se encoge por debajo de `TRIMAP_MIN_SAFE_FRAC` de la mascara original.
+
+    Por que: en arte de carta los brazos del sujeto miden ~15-25 px. Un erode de
+    8 px sobre una estructura tan fina deja el "sujeto seguro" casi vacio y la
+    banda incierta se traga el cuerpo; entonces pymatting resuelve el INTERIOR (y
+    lo vuelve translucido). Con el clamp adaptativo la banda vuelve a ser lo que
+    tiene que ser: un contorno de pocos pixeles.
+    """
+    m8 = (m_bool.astype(np.uint8)) * 255
+    total = int(m_bool.sum())
+    if total == 0 or erode_px <= 0:
+        return m_bool, 0
+    budget = max(1, int(total * TRIMAP_MIN_SAFE_FRAC))
+    er = erode_px
+    safe = _erode(m8, er * 2 + 1) > 127
+    while er > 1 and int(safe.sum()) < budget:
+        er -= 1
+        safe = _erode(m8, er * 2 + 1) > 127
+    return safe, er
+
+
 def build_trimap(m_bool: np.ndarray, cfg: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(safe_fg, safe_bg, band) a partir de la mascara binaria del sujeto.
 
     Erode delimita el SUJETO SEGURO (interior, sin duda); dilate delimita el FONDO
     SEGURO (exterior). La BANDA entre ambos es la zona incierta: ahi, y solo ahi,
     corre el matting. Las tres son booleanas.
+
+    El erode es ADAPTATIVO (`_shrink_until_safe`): en un sujeto fino el radio baja
+    solo, para que la banda siga siendo un contorno y no el cuerpo entero. El
+    dilate tambien se acota a un valor razonable: extender el borde hacia afuera
+    solo sirve para capturar el halo/antialias del contorno.
     """
     m8 = (m_bool.astype(np.uint8)) * 255
-    er = int(cfg["trimap_erode_px"])
-    di = int(cfg["trimap_dilate_px"])
-    safe_fg = _erode(m8, er * 2 + 1) > 127 if er > 0 else m8 > 127
+    safe_fg, _ = _shrink_until_safe(m_bool, int(cfg["trimap_erode_px"]))
+    # El dilate no necesita adaptarse (hacia afuera no colapsa nada), pero se acota
+    # para que "banda incierta" no se vuelva una franja ancha que difumine el borde.
+    di = min(int(cfg["trimap_dilate_px"]), int(cfg.get("trimap_dilate_max_px", 4)))
     dilated = _dilate(m8, di * 2 + 1) > 127 if di > 0 else m8 > 127
     safe_bg = ~dilated
     band = ~safe_fg & ~safe_bg
@@ -558,8 +594,34 @@ def matte_alpha(rgb: np.ndarray, alpha_bin: np.ndarray, cfg: dict) -> np.ndarray
     region = out[y0:y1, x0:x1]
     region[band_sub] = matted[band_sub]
     out[y0:y1, x0:x1] = region
-    # Pequeno blend en el borde de la banda para que no se note la costura.
-    return feather_alpha(out, 1.0)
+    # Suavizado de la costura: SOLO dentro de la banda (ver `feather_band`).
+    out = feather_band(out, band, 1.0)
+    # INVARIANTE DURO (va ULTIMO, despues del feather): el SUJETO SEGURO (el
+    # interior erosionado) queda a 255 SIEMPRE. Sobre el cuerpo de la ilustracion
+    # el alfa no es una pregunta: es opaco. Si el solver se derrama hacia adentro
+    # (pasa en estructuras finas) o el feather lo baja, esto lo corrige. Sin este
+    # clamp el sujeto sale translucido y la carta se ve "lavada" — el bug real.
+    out[safe_fg] = 255
+    return out
+
+
+def feather_band(alpha: np.ndarray, band: np.ndarray, px: float) -> np.ndarray:
+    """Suaviza SOLO la banda incierta, dejando intacto el 0/255 de afuera.
+
+    Un `feather_alpha` global sobre el resultado del matting volveria a mezclar
+    el interior (ya forzado a 255) con el fondo, deshaciendo el invariante. Aca
+    el blur se calcula igual pero se escribe SOLO donde `band` es True: el
+    contorno queda suave y el cuerpo sigue opaco.
+    """
+    if px <= 0 or not band.any():
+        return alpha
+    blurred = np.asarray(
+        Image.fromarray(alpha, "L").filter(ImageFilter.GaussianBlur(radius=px)),
+        dtype=np.uint8,
+    )
+    out = alpha.copy()
+    out[band] = blurred[band]
+    return out
 
 
 def matte_ml(rgb: np.ndarray, alpha_heur: np.ndarray, cfg: dict) -> np.ndarray | None:
@@ -675,20 +737,106 @@ def fill_bg_behind_subject(rgb: np.ndarray, subject_alpha: np.ndarray, cfg: dict
 
 
 
-def vignette_fg(shape: tuple[int, int], cfg: dict) -> np.ndarray:
-    """Primer plano por defecto en modo teal: vignette/marco oscuro.
+def halo_fg(rgb: np.ndarray, subject_alpha: np.ndarray, cfg: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Primer plano = HALO LUMINOSO sacado del PROPIO ARTE del sujeto.
 
-    El dataset no trae elementos delante del hongo, asi que el `fg` se reconstruye:
-    un degradado radial oscuro en los bordes que, en parallax, se lee como un marco
-    que flota por delante. Devuelve alfa uint8.
+    QUE ES
+    ------
+    Un rim-light: el borde brillante del hongo, separado del cuerpo y desplazado
+    por delante en Z. Al inclinar la carta el halo se corre un par de px respecto
+    del sujeto y la carta "flota" como una ilustracion por capas.
+
+    POR QUE NO UN VIGNETTE OSCURO (el bug que esto reemplaza)
+    --------------------------------------------------------
+    La version anterior pintaba un degradado radial NEGRO sobre toda la carta:
+    medido, bajaba la luminancia media de 38.3 a 33.2 (~13%) en
+    `art_card_crystal_common`, y encima el 100% de las cartas compartian el MISMO
+    cuadrado negro. Dos problemas a la vez: oscurecia y no aportaba nada del arte.
+
+    POR QUE NO DEJA EL fg VACIO
+    ---------------------------
+    El parallax visible lo aporta CASI ENTERO el fg: el `bg` solo se separa 0.02
+    del plano (0.1 px a distancia de camara tipica) mientras que el fg se separa
+    0.3 (~4.5 px con tilt hero). Con el fg vacio el efecto desaparece.
+
+    COMO SE EXTRAE (sin backend, siempre disponible)
+    ------------------------------------------------
+    1. Se toma el alfa del sujeto y se BUSCA SU BORDE (alfa en la banda de
+       transicion): ahi esta el contorno del hongo.
+    2. Se DILATA hacia afuera unos px y se resta el cuerpo: queda un ANILLO
+       exterior al sujeto.
+    3. Se toma el COLOR del propio arte en ese anillo y se lo ilumina: un halo
+       claro que respeta la paleta de cada ilustracion.
+    4. El RGB se sube a blanco en proporcion a `fg_halo_whiten` (el borde de
+       cualquier objeto retroiluminado pierde saturacion).
+
+    ⚠️ ES UN ACENTO. `fg_halo_max` topa el alfa (nunca opaco) para que el halo se
+    lea como luz y no como una calcomania blanca. `fg_halo_gain` controla el
+    brillo del RGB. Con `fg_mode: "none"` la capa queda VACIA y el render la
+    oculta solo (respaldo duro).
     """
-    h, w = shape
-    yy, xx = np.mgrid[0:h, 0:w]
-    cx, cy = w / 2.0, h / 2.0
-    # Distancia normalizada: 0 en el centro de la banda, 1 en los bordes.
-    d = np.sqrt(((xx - cx) / cx) ** 2 + ((yy - cy * 0.9) / cy) ** 2)
-    alpha = np.clip((d - 0.75) / 0.45, 0.0, 1.0)
-    return (alpha * 255).astype(np.uint8)
+    h, w = rgb.shape[:2]
+    if str(cfg.get("fg_mode", "halo")).lower() == "none":
+        return np.zeros((h, w), np.uint8), rgb
+
+    body = subject_alpha > 96
+    if not body.any():
+        return np.zeros((h, w), np.uint8), rgb
+
+    # --- 1/2. ANILLO: dilatar el cuerpo y restarlo. El grosor lo fija
+    # `fg_halo_width_px`, que es lo que se corre el halo al inclinar. ---
+    width = max(1, int(cfg.get("fg_halo_width_px", 7)))
+    grown = _dilate((body.astype(np.uint8)) * 255, width * 2 + 1) > 127
+    # El interior del cuerpo tambien cuenta como "no anillo": sin esto el halo
+    # se pintaria DEBAJO del hongo y no se veria.
+    ring = grown & ~_dilate((body.astype(np.uint8)) * 255, max(1, width // 2) * 2 + 1).astype(bool)
+
+    # ⚠️ ANILLOS PARASITOS. El `subject_alpha` a veces incluye un trozo del cono
+    # de luz del fondo (un rectangulo suave arriba del hongo), y su anillo sale
+    # como un marco flotante sin relacion con el sujeto. El halo REAL siempre
+    # NACE del cuerpo: un anillo de un objeto lejano queda desconectado del
+    # cuerpo y cae entero con un simple "abrir" por reconstruccion: se etiquetan
+    # los componentes del anillo y se conservan solo los que TOCAN al cuerpo
+    # (`ring` es la banda entre dilate(inner) y dilate(width): todo anillo real
+    # toca la banda interior, que es la que pega con el cuerpo).
+    # ⚠️ NO usar `dilate(body, 3)` como "contacto": esa banda ES la interior del
+    # anillo, asi que la interseccion da VACIO y el halo desaparece por completo
+    # (bug real de esta iteracion).
+    ring_u8 = keep_largest_components((ring.astype(np.uint8)) * 255, float(cfg.get("fg_halo_min_area_frac", 0.0008)))
+    ring = ring_u8 > 127
+
+    # --- 3. Difuminar el anillo: una luz tiene caida, no un canto duro. ---
+    ring_a = ring.astype(np.float32)
+    blur_px = float(cfg.get("fg_halo_blur_px", 6.0))
+    if blur_px > 0:
+        ring_a = np.asarray(
+            Image.fromarray((ring_a * 255).astype(np.uint8), "L").filter(
+                ImageFilter.GaussianBlur(radius=blur_px)
+            ),
+            dtype=np.float32,
+        ) / 255.0
+    else:
+        ring_a = ring_a * 1.0
+
+    max_a = float(cfg.get("fg_halo_max", 0.55))
+    alpha = np.clip(ring_a * max_a, 0.0, 1.0)
+
+    # --- 4. COLOR del propio arte en el anillo, aclarado. Se difumina el RGB en
+    # un radio GRANDE para tomar el tono de la zona (no el pixel crudo, que trae
+    # ruido) y se mezcla hacia blanco. ---
+    tint_r = float(cfg.get("fg_halo_tint_radius", 18.0))
+    rgb_f = np.asarray(
+        Image.fromarray(rgb, "RGB").filter(ImageFilter.GaussianBlur(radius=tint_r)),
+        dtype=np.float32,
+    )
+    whiten = float(cfg.get("fg_halo_whiten", 0.45))
+    lit = rgb_f + (255.0 - rgb_f) * whiten
+    gain = float(cfg.get("fg_halo_gain", 1.35))
+    lit = np.clip(lit * gain, 0.0, 255.0).astype(np.uint8)
+
+    # `save_layer` va a usar `alpha` (L) como canal A y `lit` como RGB: la
+    # combinacion es el halo brillante con caida suave.
+    return (alpha * 255.0).astype(np.uint8), lit
 
 
 # ---------------------------------------------------------------------------
@@ -712,19 +860,37 @@ def compose_layers(rgb: np.ndarray, cfg: dict) -> tuple[dict[str, Image.Image], 
     """
     h, w = rgb.shape[:2]
     alpha = build_alpha(rgb, cfg)
+    # Mascara BINARIA de referencia: es el "cuerpo" del sujeto, y sirve para el
+    # invariante de opacidad del final (el interior no puede quedar translucido).
+    alpha_bin_ref = alpha.copy()
 
     # Respaldo ML (rembg): solo reemplaza la mascara si gana por IoU. Si el
     # backend esta apagado o ausente, `matte_ml` devuelve None y no pasa nada.
     ml = matte_ml(rgb, alpha, cfg) if str(cfg.get("ml_backend", "none")).lower() != "none" else None
+    matting_done = False
     if ml is not None:
         alpha = ml
     else:
         # Matting SUAVE en la banda incierta (el borde duro del parallax). Con
         # todos los backends ausentes devuelve `alpha` sin tocar.
+        before = alpha.copy()
         alpha = matte_alpha(rgb, alpha, cfg)
+        matting_done = not np.array_equal(alpha, before)
 
     alpha = refine_alpha_grabcut(rgb, alpha, cfg)
-    alpha = feather_alpha(alpha, float(cfg["feather_px"]))
+    # FEATHER GLOBAL: solo cuando el matting NO corrio. Corriendolo, el borde
+    # suave ya lo aporta el matting (band-restricted); sumarle un blur global NO
+    # agrega calidad — al contrario, mete el borde dentro del cuerpo y el sujeto
+    # sale translucido (la carta "lavada"). Es un fallback, no un paso fijo.
+    if not matting_done:
+        alpha = feather_alpha(alpha, float(cfg["feather_px"]))
+    else:
+        # INVARIANTE DURO: el interior del cuerpo queda 100% opaco. Se calcula
+        # erosionando la binaria de referencia; el matting y el feather solo
+        # pueden tocar la BANDA de contorno, nunca el interior.
+        er = max(1, int(cfg["trimap_erode_px"]))
+        interior = _erode((alpha_bin_ref > 127).astype(np.uint8) * 255, er * 2 + 1) > 127
+        alpha[interior] = 255
 
     # --- SUJETO: recortado a su bbox (capa chica y centrada = parallax barato) ---
     sbbox = bbox_of(alpha, pad=int(cfg["feather_px"]) + 2)
@@ -743,9 +909,20 @@ def compose_layers(rgb: np.ndarray, cfg: dict) -> tuple[dict[str, Image.Image], 
     else:
         bg = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
-    # --- PRIMER PLANO: en teal va un vignette; en chroma va vacio (lo trae el arte) ---
-    fg_alpha = vignette_fg((h, w), cfg) if cfg["mode"] == "teal" else np.zeros((h, w), np.uint8)
+    # --- PRIMER PLANO: HALO LUMINOSO sacado del propio arte del sujeto. ---
+    # ⚠️ Historial: antes esto era un vignette radial de RGB NEGRO que oscurecia
+    # la carta ~13% y era IDENTICO en las 94 cartas. Ahora el fg es un anillo
+    # brillante que toma el color real de cada ilustracion. Con `fg_mode: "none"`
+    # el alfa sale todo 0 y `save_layer` lo escribe igual, pero el render lo
+    # oculta (`ArtLayers.detectEmptyLayers`).
+    if cfg["mode"] == "teal":
+        fg_alpha, fg_rgb = halo_fg(rgb, alpha, cfg)
+    else:
+        # En chroma el arte YA trae su primer plano real: no se reconstruye nada.
+        fg_alpha = np.zeros((h, w), np.uint8)
+        fg_rgb = rgb
     fg = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    fg.paste(Image.fromarray(np.asarray(fg_rgb, dtype=np.uint8), "RGB"), (0, 0))
     fg.putalpha(Image.fromarray(fg_alpha, "L"))
 
     meta = {

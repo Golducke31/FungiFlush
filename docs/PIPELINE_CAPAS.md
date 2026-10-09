@@ -126,8 +126,51 @@ overlay, ajustar `segment_config.json`, repetir.
     blur de difusión.
 - **Sujeto (`subject`)** — original con alfa = máscara, **recortado a su bbox**. Es capa
   chica y centrada: eso es lo que hace barato el parallax. El bbox va al índice.
-- **Primer plano (`fg`)** — en modo `teal` se reconstruye un **vignette** (no hay elementos
-  reales delante del hongo); en modo `chroma` se keyea un color propio. Puede salir vacío.
+- **Primer plano (`fg`)** — en modo `teal` se reconstruye un **halo luminoso** (no hay
+  elementos reales delante del hongo); en modo `chroma` se keyea un color propio.
+  Ver *§4.1 El primer plano es un halo de luz*.
+
+---
+
+### 4.1 El primer plano es un halo de luz (no un vignette)
+
+El `fg` es el que da **casi todo el parallax visible** (el `bg` se separa solo 0.02 del
+plano; el `fg`, 0.3). Así que el `fg` **no puede quedar vacío**, pero tampoco puede ser un
+velo oscuro.
+
+⚠️ **Lo que estaba mal antes.** El `fg` era un vignette radial de **RGB negro**. Medido en
+`art_card_crystal_common`: bajaba la luminancia media de **38.3 a 33.2 (−13 %)**, y encima
+era **idéntico en las 94 cartas** (un cuadrado negro superpuesto, sin relación con el arte).
+
+**Cómo se hace ahora (`fg_mode: "halo"`).** Se extrae el **rim light del propio sujeto**, sin
+backend ni arte nuevo:
+
+1. `body` = alfa del sujeto > 96.
+2. `ring` = `dilate(body, width)` **menos** `dilate(body, width/2)`: un anillo exterior de
+   `fg_halo_width_px` (≈ lo que se corre el halo al inclinar).
+3. Se filtran **anillos parásitos** con `keep_largest_components` (`fg_halo_min_area_frac`):
+   si el `subject_alpha` se comió un trozo del cono de luz del fondo, su anillo salía como
+   un marco flotante.
+   - ⚠️ **NO** uses `dilate(body, 3)` como máscara de "contacto": esa banda *es* el borde
+     interior del anillo, la intersección da **vacío** y el halo desaparece por completo.
+4. Se difumina el anillo (`fg_halo_blur_px`) — una luz tiene caída, no un canto duro.
+5. Se colorea con el **RGB del propio arte** (blur grande, `fg_halo_tint_radius`), aclarado
+   hacia blanco (`fg_halo_whiten`) y con ganancia (`fg_halo_gain`).
+
+**Resultado medido**: luminancia **38.3 → 39.1 (`+3,5 %`)**, y el halo es *distinto en cada
+carta* porque sale de su propia paleta.
+
+**En el render** (`Card3D`): el material del `fg` va con **`AdditiveBlending`** (suma brillo
+en vez de tapar) y **`toneMapped: false`** (el tonemapping se come justo la parte brillante).
+En el canvas 2D (`CardTexture.drawLayers`) el mismo efecto se logra con
+`globalCompositeOperation = 'lighter'`.
+
+**Compensación de perspectiva.** Una capa adelantada en Z se proyecta **más grande**. Las
+mallas `bg`/`fg` llevan una escala local de `PERSPECTIVE_DIST_REF / (PERSPECTIVE_DIST_REF ∓ z)`
+(≈ ±2 %): en reposo las tres capas coinciden con el arte original.
+⚠️ El idle (`updateLayerIdle`) **multiplica** sobre esa escala; un `scale.set(s, s, 1)` pelado
+la borraría en el primer frame.
+
 
 
 ---
@@ -214,7 +257,7 @@ Tres niveles, todos leídos de `index.json` (números por carta, sin tocar códi
 | `use_grabcut` | false | Refinado de bordes con cv2 (lento) |
 | `matting_backend` | `pymatting` | `none` / `pymatting` / `guided` (auto-degrada) |
 | `matting_band_only` | true | Matting solo en la banda incierta del trimap |
-| `trimap_erode_px` / `trimap_dilate_px` | 8 / 10 | Ancho del sujeto seguro / fondo seguro |
+| `trimap_erode_px` / `trimap_dilate_px` | 3 / 3 | Ancho del sujeto seguro / fondo seguro (tope `trimap_dilate_max_px`) |
 | `matting_max_side` | 512 | Límite del lado mayor de la región a matting |
 | `ml_backend` | `none` | `none` / `rembg` (SAM detrás del mismo seam) |
 | `ml_iou_min` | 0.80 | IoU mínimo para aceptar la máscara del modelo |
@@ -222,6 +265,14 @@ Tres niveles, todos leídos de `index.json` (números por carta, sin tocar códi
 | `inpaint_dilate_px` | 6 | Expande el hueco antes de rellenar (4–8) |
 | `inpaint_mode` | `band` | `band` (pocos px más allá del borde) / `full` |
 | `inpaint_band_px` | 6 | Ancho de la banda a rellenar en modo `band` |
+| `fg_mode` | `halo` | `halo` (rim light del sujeto) / `none` (capa vacía) |
+| `fg_halo_width_px` | 7 | Grosor del anillo del halo (px) |
+| `fg_halo_blur_px` | 6.0 | Caída (blur) del anillo |
+| `fg_halo_max` | 0.55 | Alfa máximo del halo (acento, nunca opaco) |
+| `fg_halo_tint_radius` | 18.0 | Blur del RGB del arte del que sale el color |
+| `fg_halo_whiten` | 0.45 | Cuánto se aclara el color hacia blanco |
+| `fg_halo_gain` | 1.35 | Ganancia de brillo del RGB |
+| `fg_halo_min_area_frac` | 0.0008 | Área mínima de un anillo (tira los parásitos) |
 | `depth_backend` | `none` | `none` / `depth_anything` |
 | `default_depth` | `{bg,subject,fg}` | Fallback de profundidad por capa |
 | `default_motion` | `{bg,subject,fg}` | Fallback de movimiento idle por capa |
@@ -238,6 +289,8 @@ Tres niveles, todos leídos de `index.json` (números por carta, sin tocar códi
 | Esporas / partículas | Islas chicas | `min_component_area` |
 | Bordes dentados | Máscara discreta | `feather_px` |
 | Halo de fondo pegado al contorno | Píxel de borde mezcla sujeto+fondo | `shrink_px` antes del feather |
+| Cono de luz comido por el sujeto | Su anillo sale como marco flotante | `fg_halo_min_area_frac` tira el anillo parásito |
+| `fg` sin alpha (capa vacía) | `fg_mode: none`, o el anillo se filtró de más | ⚠️ no usar `dilate(body,3)` como contacto (ver §4.1) |
 | Jokers | No tienen arte propio | El tool los salta; el render usa la ruta procedural |
 | WebP con alfa en WebView viejo | Soporte irregular | Default PNG |
 
@@ -263,10 +316,16 @@ actual (teal, recorte medio).
   con la misma cadena que `artKeysFor` (arte propio → par elemento/rareza → common).
   Expone `depth`/`motion`/`phase` por carta, con **defaults de módulo** si el índice es
   viejo (parseo defensivo: `Number.isFinite` campo a campo).
-- **`src/render/Card3D.ts`** — 4 mallas: `bg` (z = −`CARD_LAYER_GAP`), cara/sujeto (z = 0),
-  `fg` (z = +`CARD_LAYER_GAP`) y `top` (texto). El parallax real nace de las capas a
-  distinta profundidad. Sobre eso: idle (`updateLayerIdle`), distorsión UV
-  (`onBeforeCompile`) y esporas locales (`CardSporeField`). Ver §6.
+- **`src/render/Card3D.ts`** — 4 mallas con separación **asimétrica**:
+  `bg` (z = `+CARD_THICKNESS/2 − LAYER_BG_BACK`), cara/sujeto (z = `+CARD_THICKNESS/2`),
+  `fg` (z = `+CARD_THICKNESS/2 + LAYER_FG_FRONT`) y `top` (texto). El `bg` va apenas por
+  detrás de la cara **sin pasar el dorso**; el `fg` va muy adelante (`LAYER_FG_FRONT = 0.3`)
+  y por eso aporta **casi todo el parallax**. Cada malla lleva una **escala de compensación
+  de perspectiva** (ver §4.1). El material del `fg` es **aditivo**. Sobre eso: idle
+  (`updateLayerIdle`), distorsión UV (`onBeforeCompile`) y esporas locales
+  (`CardSporeField`). Ver §6.
+  ⚠️ El gap viejo (`CARD_LAYER_GAP = 0.014`) daba **0.22 % del ancho de carta ≈ 1 px**:
+  indistinguible. No volver a bajarlo.
 - **`src/render/Particles.ts`** — `AmbientSporeField` (fondo de escena) y `CardSporeField`
   (esporas locales de una carta, parentadas a su `group`).
 - **`src/render/Shaders.ts`** — `CARD_SPORE_VERT/FRAG` + `createCardSporeMaterial()`.

@@ -178,6 +178,16 @@ export function phaseForStem(stem: string): number {
 
 export class ArtLayers {
   private readonly images = new Map<string, HTMLImageElement>();
+  /**
+   * Archivos de capa que son TRANSPARENTES de punta a punta.
+   *
+   * El segmentador escribe igual un PNG de `fg` aunque no haya primer plano (en
+   * modo teal el vignette puede venir apagado ⇒ alfa todo 0). Ese archivo NO es
+   * una capa: si se tratara como tal, `Card3D` montaria un quad invisible, pagaria
+   * un draw call y —peor— encenderia el campo de esporas por un "fg" que no existe.
+   * Se detecta UNA vez por archivo (ver `markEmptyLayers`) y `getLayers` lo omite.
+   */
+  private readonly emptyLayers = new Set<string>();
   private entries = new Map<string, RawLayerEntry>();
   private loaded = false;
 
@@ -230,7 +240,42 @@ export class ArtLayers {
       }
     }
     await Promise.all(jobs);
+    this.detectEmptyLayers();
     this.loaded = true;
+  }
+
+  /**
+   * Marca como vacias las capas cuyo PNG es transparente en TODO el lienzo.
+   *
+   * Se hace dibujando cada capa en un canvas chico (64x64) y mirando si algun
+   * pixel tiene alfa > 0: muestrea lo suficiente para detectar un vignette o un
+   * sujeto real, y es despreciable en tiempo (una decodificacion ya hecha, mas
+   * un drawImage de 64x64 por archivo). Una capa que no se puede dibujar (CORS,
+   * canvas sucio) NO se marca: ante la duda, se conserva.
+   */
+  private detectEmptyLayers(): void {
+    const probe = document.createElement('canvas');
+    probe.width = 64;
+    probe.height = 64;
+    const ctx = probe.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    for (const [file, img] of this.images) {
+      try {
+        ctx.clearRect(0, 0, 64, 64);
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        let anyAlpha = false;
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i]! > 0) {
+            anyAlpha = true;
+            break;
+          }
+        }
+        if (!anyAlpha) this.emptyLayers.add(file);
+      } catch {
+        // Sin permiso de lectura: se asume que la capa sirve.
+      }
+    }
   }
 
   private async readManifest(): Promise<RawLayerIndex | null> {
@@ -271,7 +316,11 @@ export class ArtLayers {
 
       const pick = (layer: LayerName): HTMLImageElement | undefined => {
         const file = entry.files?.[layer];
-        return file ? this.images.get(file) : undefined;
+        if (!file) return undefined;
+        // Una capa transparente de punta a punta NO es una capa (ver `emptyLayers`):
+        // devolverla montaria un quad invisible y encenderia las esporas al pedo.
+        if (this.emptyLayers.has(file)) return undefined;
+        return this.images.get(file);
       };
 
       // --- Movimiento / profundidad por capa (guardados campo a campo) ---
@@ -303,5 +352,13 @@ export class ArtLayers {
   setEntry(stem: string, entry: RawLayerEntry, images: Record<string, HTMLImageElement>): void {
     this.entries.set(stem, entry);
     for (const [file, img] of Object.entries(images)) this.images.set(file, img);
+  }
+
+  /**
+   * Solo para tests / integraciones sin canvas: marca un archivo de capa como
+   * transparente de punta a punta, con el mismo efecto que `detectEmptyLayers`.
+   */
+  markEmptyLayer(file: string): void {
+    this.emptyLayers.add(file);
   }
 }

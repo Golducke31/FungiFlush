@@ -658,9 +658,17 @@ function drawLayers(
     );
   }
 
-  // 3. Primer plano encima.
+  // 3. Primer plano encima. Es un HALO DE LUZ: se dibuja con `lighter`
+  // (aditivo), igual que el material del render 3D (`AdditiveBlending`). Con el
+  // `source-over` de antes, un anillo claro se leia como una calcomania opaca;
+  // aditivo SUMA brillo y se lee como luz que se derrama del borde del hongo.
+  // ⚠️ El orden importa: `globalCompositeOperation` tiene que apagarse ANTES de
+  // los fundidos de abajo, o el clerp de la vineta tambien se sumaria.
   if (layers.fg && layers.fg.naturalWidth > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     ctx.drawImage(layers.fg, x, y, w, h);
+    ctx.restore();
   }
 
   // Fundidos y vineta: los mismos que en la ruta de una sola textura, para que la
