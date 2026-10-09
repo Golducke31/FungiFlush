@@ -1,6 +1,8 @@
 {
   "files": [
     "art_arena.webp",
+    "art_avatar_avatar.webp",
+    "art_bgcard_bg_new.webp",
     "art_blind_blind_a1_big.webp",
     "art_blind_blind_a1_boss.webp",
     "art_blind_blind_a1_small.webp",
@@ -112,6 +114,8 @@
     "art_cardback_mycelial.webp",
     "art_crystal.webp",
     "art_decay.webp",
+    "art_frame_frame_common.webp",
+    "art_frame_frame_uncommon.webp",
     "art_legendary.webp",
     "art_mycelium.webp",
     "art_mythic.webp",

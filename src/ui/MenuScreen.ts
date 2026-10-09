@@ -28,6 +28,7 @@
  */
 
 import { t } from '@i18n/index';
+import type { ColonyRewardKind } from '../meta/ColonyRewards';
 import {
   DECK_MAX,
   DECK_MIN,
@@ -510,6 +511,14 @@ export interface ColonyRewardView {
   rewardId: string | null;
   rewardNameKey: string | null;
   unlocked: boolean;
+  /** Tipo de recompensa (para la etiqueta). `null` = nivel sin recompensa. */
+  kind: ColonyRewardKind | null;
+  /** Clave i18n de la descripcion (QUE hace la recompensa), o null. */
+  descKey: string | null;
+  /** Desbloqueada y sin reclamar: el jugador puede reclamarla. */
+  claimable: boolean;
+  /** Ya reclamada por el jugador. */
+  claimed: boolean;
 }
 
 /** Estado de la cuenta (Google Play Games / local). */
@@ -764,8 +773,8 @@ export function buildProfilePanel(
  * Escalera de niveles: que otorga cada uno y cuanto falta.
  *
  * No es una tienda: las recompensas se DESBLOQUEAN al alcanzar el nivel, no se
- * compran. El panel solo las muestra (y marca las ya desbloqueadas) porque el
- * jugador necesita saber "que gano si sigo jugando".
+ * compran. Una vez desbloqueadas hay que RECLAMARLAS (boton "Reclamar", o
+ * "Reclamar todo" en el pie): reclamar entrega la propiedad, no la equipa.
  */
 export function buildColonyRewardsPanel(
   state: {
@@ -777,7 +786,7 @@ export function buildColonyRewardsPanel(
     /** Tope duro diario, para mostrar "X / 100". */
     dailyCap?: number;
   },
-  callbacks: { onClose: () => void },
+  callbacks: { onClaim: (rewardId: string) => void; onClaimAll: () => void; onClose: () => void },
 ): HTMLElement {
   const panel = document.createElement('div');
   panel.className = 'panel is-colony-rewards';
@@ -824,8 +833,13 @@ export function buildColonyRewardsPanel(
 
   for (const reward of state.rewards) {
     const row = document.createElement('div');
-    row.className = `colony-reward-row${reward.unlocked ? ' is-unlocked' : ''}`;
+    const classes = ['colony-reward-row'];
+    if (reward.unlocked) classes.push('is-unlocked');
+    if (reward.claimed) classes.push('is-claimed');
+    if (reward.claimable) classes.push('is-claimable');
+    row.className = classes.join(' ');
     row.dataset['level'] = String(reward.level);
+    if (reward.rewardId) row.dataset['reward'] = reward.rewardId;
 
     const badge = document.createElement('span');
     badge.className = 'colony-reward-badge';
@@ -833,33 +847,87 @@ export function buildColonyRewardsPanel(
 
     const body = document.createElement('span');
     body.className = 'colony-reward-body';
+
+    // Linea 1: etiqueta de tipo + nombre. La etiqueta deja claro QUE se gana
+    // (marco / titulo / fondo / efecto / sobre) sin depender solo del nombre.
+    const nameLine = document.createElement('span');
+    nameLine.className = 'colony-reward-nameline';
+    if (reward.kind) {
+      const kind = document.createElement('span');
+      kind.className = 'colony-reward-kind';
+      kind.dataset['kind'] = reward.kind;
+      kind.textContent = t(`colony.rewardKind.${reward.kind}`);
+      nameLine.appendChild(kind);
+    }
     const name = document.createElement('span');
     name.className = 'colony-reward-name';
-    name.textContent = reward.rewardNameKey
-      ? t(reward.rewardNameKey)
-      : t('colony.reward.start');
-    const cost = document.createElement('span');
-    cost.className = 'colony-reward-cost';
-    cost.textContent = t('colony.rewardCost', { value: formatSpores(reward.spores) });
-    body.append(name, cost);
+    name.textContent = reward.rewardNameKey ? t(reward.rewardNameKey) : t('colony.reward.start');
+    nameLine.appendChild(name);
 
-    const tag = document.createElement('span');
-    tag.className = 'colony-reward-tag';
-    tag.textContent = reward.unlocked ? t('colony.reward.unlocked') : t('colony.reward.locked');
+    // Linea 2: QUE hace la recompensa. Es lo que el jugador necesita para
+    // decidir si le interesa seguir subiendo de nivel.
+    const desc = document.createElement('span');
+    desc.className = 'colony-reward-desc';
+    if (reward.descKey) {
+      desc.textContent = t(reward.descKey);
+    } else {
+      desc.classList.add('is-empty');
+      desc.textContent = t('colony.rewardCost', { value: formatSpores(reward.spores) });
+    }
 
-    row.append(badge, body, tag);
+    body.append(nameLine, desc);
+
+    const action = document.createElement('span');
+    action.className = 'colony-reward-action';
+    if (reward.claimable && reward.rewardId) {
+      const rewardId = reward.rewardId;
+      const claim = document.createElement('button');
+      claim.type = 'button';
+      claim.className = 'colony-reward-claim';
+      claim.dataset['act'] = 'colony-claim';
+      claim.dataset['id'] = rewardId;
+      claim.textContent = t('colony.claim');
+      claim.addEventListener('click', () => callbacks.onClaim(rewardId));
+      action.appendChild(claim);
+    } else {
+      const tag = document.createElement('span');
+      tag.className = 'colony-reward-tag';
+      if (reward.claimed) {
+        tag.classList.add('is-claimed');
+        tag.textContent = t('colony.reward.claimed');
+      } else if (reward.unlocked) {
+        tag.classList.add('is-unlocked');
+        tag.textContent = t('colony.reward.unlocked');
+      } else {
+        tag.textContent = t('colony.reward.locked');
+      }
+      action.appendChild(tag);
+    }
+
+    row.append(badge, body, action);
     list.appendChild(row);
   }
 
   const footer = document.createElement('div');
   footer.className = 'colony-rewards-footer';
+
+  const pendingCount = state.rewards.filter((r) => r.claimable).length;
+  const claimAll = document.createElement('button');
+  claimAll.type = 'button';
+  claimAll.className = 'colony-rewards-claim-all';
+  claimAll.dataset['act'] = 'colony-claim-all';
+  claimAll.textContent = t('colony.claimAll');
+  claimAll.disabled = pendingCount === 0;
+  if (pendingCount === 0) claimAll.classList.add('is-empty');
+  claimAll.addEventListener('click', callbacks.onClaimAll);
+
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'colony-rewards-close';
   close.dataset['act'] = 'colony-rewards-close';
   close.textContent = t('ui.close');
   close.addEventListener('click', callbacks.onClose);
-  footer.appendChild(close);
+  footer.append(claimAll, close);
 
   shell.append(head, list, footer);
   panel.appendChild(shell);

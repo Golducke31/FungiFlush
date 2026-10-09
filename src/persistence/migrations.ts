@@ -345,6 +345,23 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     if (!ownedCosmetics.includes(id)) ownedCosmetics.push(id);
   }
   cosmetics.owned = ownedCosmetics;
+  // Slots equipados: strings no vacios. Cubre los de la Tarjeta de Jugador
+  // (avatar/marco/titulo/fondo/efecto) y los clasicos. Un perfil editado a mano
+  // que traiga un numero o un string vacio cae a 'default' en vez de romper el
+  // resolvedor de arte.
+  const equipSlots = [
+    'equippedCardBack',
+    'equippedFelt',
+    'equippedAvatar',
+    'equippedFrame',
+    'equippedTitle',
+    'equippedBackground',
+    'equippedVictoryFx',
+  ] as const;
+  for (const slot of equipSlots) {
+    const value = cosmetics[slot];
+    if (typeof value !== 'string' || value.length === 0) cosmetics[slot] = 'default';
+  }
   const stats = { ...fallback.stats, ...((migrated['stats'] as object) ?? {}) };
   const board = { ...fallback.board, ...((migrated['board'] as object) ?? {}) };
   // Retencion (P0): campos ADITIVOS. El merge sobre el default alcanza y sobra,
@@ -400,6 +417,10 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   colony.level = Math.max(1, Math.floor(levelForSpores(colony.lifetimeSpores)));
   if (!Array.isArray(colony.firstClears)) colony.firstClears = [];
   if (!Array.isArray(colony.unlockedRewards)) colony.unlockedRewards = [];
+  // Recompensas de la Colonia (aditivo): los ids reclamados. Un perfil viejo no
+  // lo tiene y cae a `[]` por el spread, pero un valor no-array (edicion a mano)
+  // se corrige aca para que `claimableRewards` no explote con `.filter`.
+  if (!Array.isArray(colony.claimedRewards)) colony.claimedRewards = [];
 
   // Sobres (v5): OBJETO anidado ADITIVO. Un perfil v4 no lo tiene y cae al
   // default (cero sobres). Si llegara con la forma equivocada (numero suelto,

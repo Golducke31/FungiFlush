@@ -52,6 +52,8 @@ import {
   nextLevelInfo,
   type ColonyBonus,
 } from '@meta/Colony';
+import { COLONY_REWARDS, claimColonyRewards, rewardDef, type ColonyRewardKind } from '@meta/ColonyRewards';
+import { cosmeticArtUrl } from '@meta/Cosmetics';
 import { createGooglePlayProvider, linkAccount, makeRunResult, queueRunResult, unlinkAccount } from '@meta/Account';
 import type { AccountIdentity } from '@meta/Account';
 import { formatRank, milestoneViews, percentileOf, rankTierFor, type LeaderboardBoard } from '@meta/Leaderboard';
@@ -89,6 +91,7 @@ import unlockRulesData from '@data/unlock-rules.json';
 import seasonsData from '@data/seasons.json';
 import {
   ArtAssets,
+  ArtLayers,
   CARD_DISPLAY_FONT,
   CARD_TEXT_FONT,
   SceneManager,
@@ -97,6 +100,7 @@ import {
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
 import { HUD } from '@ui/HUD';
+import type { CosmeticsState } from '@ui/CosmeticsScreen';
 import { sortHand } from '@ui/handSort';
 import {
   buildCollectionCarousel,
@@ -239,6 +243,12 @@ async function boot(): Promise<void> {
   // --- Assets ---
   const assets = new ArtAssets();
   await assets.loadAll((ratio) => loader.setProgress(ratio * 0.85));
+
+  // Capas segmentadas para el parallax. Si el arte no esta segmentado (no hay
+  // `art/layers/index.json`), `loadAll` no falla: deja el cargador vacio y el
+  // render cae a la textura unica de siempre.
+  const layers = new ArtLayers();
+  await layers.loadAll();
 
   // --- Acceso por DLC ---
   const entitlements = EntitlementStore.from(profile.entitlements);
@@ -677,7 +687,7 @@ async function boot(): Promise<void> {
         // Coleccion era lo que la hacia lenta). Se pasa un proveedor perezoso
         // que la compone solo cuando la celda entra en viewport; la composicion
         // esta memoizada en `cardArt.ts`, asi que reabrir no la recalcula.
-        faceProvider: () => cardDefFaceUrl(card, t, scene.cardArt(card)),
+        faceProvider: () => cardDefFaceUrl(card, t, scene.cardArt(card), scene.cardLayers(card)),
         // Cuantas copias se obtuvieron de sobres: la Coleccion muestra "xN" en
         // vez de repetir la carta. Los jokers no llevan contador (los sobres
         // nunca dan jokers).
@@ -800,6 +810,7 @@ async function boot(): Promise<void> {
     canvas,
     engine,
     assets,
+    layers,
     callbacks: {
       onCardClick: (uid) => {
         engine.toggleSelect(uid);
@@ -1146,15 +1157,116 @@ async function boot(): Promise<void> {
 
   // --- R4b: cosméticos ---
   // Mismo patrón que la ascensión: el HUD no conoce el perfil. Empuja el estado
-  // y, al arrancar y al cambiar, dice al render qué dorso/tapete mostrar.
+  // y, al arrancar y al cambiar, dice al render qué dorso/tapete/efecto mostrar.
+  //
+  // `owned` es una lista PLANA (compatibilidad con los guardados viejos). Acá se
+  // agrupa por tipo: los ids de la Colonia se reparten por su `kind` (via
+  // `COLONY_REWARDS`) y el resto —dorso y tapete, que nunca supieron su tipo—
+  // se muestra en las dos secciones, como siempre.
+  const colonyCosmeticIds = new Set(
+    Object.values(COLONY_REWARDS)
+      .map((def) => def.cosmeticId)
+      .filter((id): id is string => typeof id === 'string'),
+  );
+  const ownedOfKind = (kind: ColonyRewardKind, owned: string[]): string[] => [
+    'default',
+    ...Object.values(COLONY_REWARDS)
+      .filter((def) => def.kind === kind && def.cosmeticId && owned.includes(def.cosmeticId))
+      .map((def) => def.cosmeticId as string),
+  ];
+
+  const buildCosmeticsState = (): CosmeticsState => {
+    const p = profileStore.current;
+    const c = p.cosmetics;
+    const legacy = c.owned.filter((id) => !colonyCosmeticIds.has(id));
+    return {
+      owned: {
+        avatar: ownedOfKind('avatar', c.owned),
+        frame: ownedOfKind('frame', c.owned),
+        title: ownedOfKind('title', c.owned),
+        background: ownedOfKind('background', c.owned),
+        victoryFx: ownedOfKind('victoryFx', c.owned),
+        cardback: legacy,
+        felt: legacy,
+      },
+      equipped: {
+        avatar: c.equippedAvatar,
+        frame: c.equippedFrame,
+        title: c.equippedTitle,
+        background: c.equippedBackground,
+        victoryFx: c.equippedVictoryFx,
+        cardback: c.equippedCardBack,
+        felt: c.equippedFelt,
+      },
+      player: {
+        name: p.account.displayName ?? t('cosmetics.defaultName'),
+        titleKey: c.equippedTitle === 'default' ? null : `cosmetics.name.title.${c.equippedTitle}`,
+        levelNameKey: colonyLevelNameKey(p.colony.level),
+        level: p.colony.level,
+        avatarUrl: cosmeticArtUrl('avatar', c.equippedAvatar),
+        frameUrl: cosmeticArtUrl('frame', c.equippedFrame),
+        backgroundUrl: cosmeticArtUrl('background', c.equippedBackground),
+      },
+    };
+  };
+
   const syncCosmetics = (): void => {
     const c = profileStore.current.cosmetics;
-    hud?.setCosmeticsState({
-      owned: [...c.owned],
-      equipped: { cardback: c.equippedCardBack, felt: c.equippedFelt },
-    });
+    hud?.setCosmeticsState(buildCosmeticsState());
     scene.setCardBack(c.equippedCardBack);
     scene.setFelt(c.equippedFelt);
+    scene.setVictoryFx(c.equippedVictoryFx);
+  };
+
+  // --- Colonia: reclamar recompensas desbloqueadas ---
+  //
+  // Subir de nivel DESBLOQUEA; reclamar ENTREGA la propiedad (o el sobre). No
+  // equipa nada: equipar es aparte, en Personalizar. Idempotente: reclamar dos
+  // veces no duplica. Sin `ids` reclama todas las pendientes.
+  const claimColony = (ids?: string[]): void => {
+    let claimed: string[] = [];
+    let basePacks = 0;
+    let expansionPacks = 0;
+    profileStore.patch((p) => {
+      const result = claimColonyRewards(p, ids);
+      claimed = result.claimed;
+      basePacks = result.basePacks;
+      expansionPacks = result.expansionPacks;
+    });
+    if (claimed.length === 0) {
+      hud?.toast(t('colony.nothingToClaim'), 'info');
+      return;
+    }
+    syncMenuMeta();
+    syncCosmetics();
+    // Refresca el panel abierto para que el estado "Reclamada" se vea al toque.
+    hud?.showColonyRewards();
+
+    const packs = basePacks + expansionPacks;
+    if (packs > 0) {
+      // El sobre es lo accionable: gana el banner sobre el nombre cosmetico.
+      const expansionOnly = expansionPacks > 0 && basePacks === 0;
+      bus.emit('banner:show', {
+        key: expansionOnly ? 'banner.pack.expansion' : 'banner.pack.earned',
+        params: { count: packs },
+        kind: 'success',
+      });
+      return;
+    }
+    if (claimed.length === 1) {
+      const def = rewardDef(claimed[0]!);
+      bus.emit('banner:show', {
+        key: 'colony.rewardClaimed',
+        params: { name: def ? t(def.nameKey) : claimed[0]! },
+        kind: 'success',
+      });
+    } else {
+      bus.emit('banner:show', {
+        key: 'colony.rewardsClaimed',
+        params: { count: claimed.length },
+        kind: 'success',
+      });
+    }
   };
 
   // --- R5: historial ---
@@ -1185,7 +1297,7 @@ async function boot(): Promise<void> {
         nameKey: def.nameKey,
         element: def.element,
         rarityColor: hexToCss(RARITY_COLOR[def.rarity] ?? ELEMENT_COLOR.neutral),
-        faceUrl: cardDefFaceUrl(def, t, scene.cardArt(def)),
+        faceUrl: cardDefFaceUrl(def, t, scene.cardArt(def), scene.cardLayers(def)),
       });
     }
     // Orden estable por elemento y luego id: el jugador encuentra la carta por
@@ -1261,6 +1373,9 @@ async function boot(): Promise<void> {
     // La UI no conoce los assets: se los presta el render. Asi la miniatura del
     // mazo es el MISMO WebP que la carta en la mano.
     cardArt: (def) => scene.cardArt(def),
+    // Capas segmentadas: la cara 2D de tienda/recompensa/coleccion se compone con
+    // las MISMAS capas que la mesa, o el jugador veria dos composiciones distintas.
+    cardLayers: (def) => scene.cardLayers(def),
     jokerArt: (def) => scene.jokerArt(def),
     blindArt: (art) => scene.blindArt(art),
     appInfo: {
@@ -1539,16 +1654,25 @@ async function boot(): Promise<void> {
         // El perfil es la fuente de verdad; el render solo refleja. Un id que
         // no se posee no llega aca (el panel solo lista lo que `owned` trae).
         profileStore.patch((p) => {
-          if (kind === 'cardback') p.cosmetics.equippedCardBack = id;
-          else if (kind === 'felt') p.cosmetics.equippedFelt = id;
+          const c = p.cosmetics;
+          if (kind === 'cardback') c.equippedCardBack = id;
+          else if (kind === 'felt') c.equippedFelt = id;
+          else if (kind === 'avatar') c.equippedAvatar = id;
+          else if (kind === 'frame') c.equippedFrame = id;
+          else if (kind === 'title') c.equippedTitle = id;
+          else if (kind === 'background') c.equippedBackground = id;
+          else if (kind === 'victoryFx') c.equippedVictoryFx = id;
         });
-        if (kind === 'cardback') scene.setCardBack(id);
-        else if (kind === 'felt') scene.setFelt(id);
+        // Reaplica dorso/tapete/efecto al render y re-empuja el estado: el panel
+        // reabre mostrando lo recien equipado.
+        syncCosmetics();
       },
       // --- R5: historial ---
       onOpenHistory: () => hud?.showHistory(),
       // --- Colonia Fungi (meta-progresion) ---
       onOpenColonyRewards: () => hud?.showColonyRewards(),
+      onClaimColonyReward: (rewardId) => claimColony([rewardId]),
+      onClaimAllColonyRewards: () => claimColony(),
       onRefreshLeaderboard: () => void syncLeaderboard(),
       onLinkAccount: () => void onLinkAccount(),
       onUnlinkAccount: () => onUnlinkAccount(),
@@ -1922,7 +2046,7 @@ async function boot(): Promise<void> {
         rarityLabel: t(`rarity.${contentRarity}`),
         color: hexToCss(RARITY_COLOR[contentRarity] ?? ELEMENT_COLOR.neutral),
         // Misma cara que la tienda y la coleccion: misma ilustracion real.
-        faceUrl: def ? cardDefFaceUrl(def, t, scene.cardArt(def)) : null,
+        faceUrl: def ? cardDefFaceUrl(def, t, scene.cardArt(def), scene.cardLayers(def)) : null,
       };
     });
 
@@ -2006,6 +2130,22 @@ async function boot(): Promise<void> {
     // Colonia Fungi: la meta-progresion REAL (Esporas de Colonia + nivel).
     const colony = p.colony;
     const next = nextLevelInfo(colony);
+    // Recompensas: `levelViews` da la escalera; aca se enriquece cada fila con
+    // QUE es (kind/desc) y su estado de reclamo. "Desbloqueada" sale de
+    // `unlockedRewards` (fuente autoritativa), no del nivel.
+    const unlockedRewards = new Set(colony.unlockedRewards);
+    const claimedRewards = new Set(colony.claimedRewards);
+    const rewardViews = levelViews(colony).map((view) => {
+      const id = view.rewardId;
+      const def = id ? rewardDef(id) : undefined;
+      return {
+        ...view,
+        kind: def?.kind ?? null,
+        descKey: def?.descKey ?? null,
+        claimable: !!id && unlockedRewards.has(id) && !claimedRewards.has(id),
+        claimed: !!id && claimedRewards.has(id),
+      };
+    });
     hud?.setMenuMeta({
       colonyLevel: colony.level,
       colony: {
@@ -2020,7 +2160,7 @@ async function boot(): Promise<void> {
         seasonSpores: colony.seasonSpores,
         dailyRemaining: dailyRemaining(colony, Date.now()),
         dailyCap: DAILY_HARD_CAP,
-        rewards: levelViews(colony),
+        rewards: rewardViews,
       },
       account: {
         linked: p.account.provider !== 'none',
@@ -2497,6 +2637,10 @@ async function boot(): Promise<void> {
         profileStore,
         runStore,
         achievements,
+        // Capas segmentadas: el probe comprueba que el arte segmentado se cargo y
+        // que una carta conocida resuelve a sus tres capas (o a `undefined`, si el
+        // arte todavia no esta segmentado: el render cae a la textura unica).
+        layers,
         // Bus de audio: permite verificar desde un probe que el contexto se
         // desbloqueo, que los buffers se decodificaron y que el volumen se aplica.
         audio,

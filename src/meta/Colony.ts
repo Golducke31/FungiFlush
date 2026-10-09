@@ -30,6 +30,14 @@ export interface ColonyProgress {
   level: number;
   /** Ids de recompensas ya desbloqueadas por nivel. */
   unlockedRewards: string[];
+  /**
+   * Ids de recompensas YA RECLAMADAS por el jugador.
+   *
+   * Subir de nivel DESBLOQUEA (`unlockedRewards`); reclamar es el paso siguiente
+   * y es lo que entrega la propiedad (o el sobre). Siempre subconjunto de
+   * `unlockedRewards`. Ver `src/meta/ColonyRewards.ts`.
+   */
+  claimedRewards: string[];
   /** Esporas ganadas en la temporada en curso (para el ranking futuro). */
   seasonSpores: number;
   /** Id de la temporada en curso. `''` = sin temporada. */
@@ -59,6 +67,7 @@ export function defaultColonyProgress(): ColonyProgress {
     lifetimeSpores: 0,
     level: 1,
     unlockedRewards: [],
+    claimedRewards: [],
     seasonSpores: 0,
     seasonId: '',
     lastSyncAt: null,

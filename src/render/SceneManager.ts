@@ -28,6 +28,8 @@ import {
 } from '@engine/index';
 
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor, type ArtKey } from './ArtAssets';
+import { ArtLayers, layerKeysFor, type LayerImages } from './ArtLayers';
+import { victoryFxPreset, type VictoryFxPreset } from './VictoryFx';
 import { isCoarsePointer, isTouchOnly } from '../pointer';
 import {
   ARENA_GLOW_BASE,
@@ -389,6 +391,11 @@ export interface SceneOptions {
   canvas: HTMLCanvasElement;
   engine: GameEngine;
   assets: ArtAssets;
+  /**
+   * Capas segmentadas para el parallax (opcional). Sin esto, o sin entradas para
+   * una carta, el render usa la ruta de una sola textura: el juego se ve igual.
+   */
+  layers?: ArtLayers;
   callbacks: SceneCallbacks;
 }
 
@@ -400,6 +407,8 @@ export class SceneManager {
 
   private readonly engine: GameEngine;
   private readonly assets: ArtAssets;
+  /** Capas para el parallax. `undefined` si el arte no esta segmentado. */
+  private readonly layers?: ArtLayers;
   private readonly callbacks: SceneCallbacks;
   private readonly textures = new CardTextureCache();
   private readonly particles: SporeField;
@@ -612,6 +621,7 @@ export class SceneManager {
   constructor(options: SceneOptions) {
     this.engine = options.engine;
     this.assets = options.assets;
+    this.layers = options.layers;
     this.callbacks = options.callbacks;
 
     this.isTouch = isTouchOnly();
@@ -1297,7 +1307,7 @@ export class SceneManager {
         if (entry.level !== undefined) inst.level = entry.level;
         if (entry.bonusSubstrate !== undefined) inst.bonusSubstrate = entry.bonusSubstrate;
         if (entry.bonusSpores !== undefined) inst.bonusSpores = entry.bonusSpores;
-        card3d.setCard(inst, this.textures, this.lang(), this.artForCard(inst));
+        card3d.setCard(inst, this.textures, this.lang(), this.artForCard(inst), this.layersForCard(inst));
       }
     }
     card3d.setFaceUp(true, { animated: false });
@@ -1913,7 +1923,7 @@ export class SceneManager {
     // pero la carta seguia mostrando la putrefaccion vieja — el jugador no
     // entendia por que su puntaje bajaba.
     if (card3d.card) {
-      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card), this.layersForCard(card3d.card));
     }
   }
 
@@ -1953,7 +1963,7 @@ export class SceneManager {
     // La cara se rehornea: al cosechar la putrefaccion el chip baja (o
     // desaparece), y la textura vieja seguiria mostrando el valor anterior.
     if (card3d.card) {
-      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card), this.layersForCard(card3d.card));
     }
   }
 
@@ -1963,7 +1973,7 @@ export class SceneManager {
     card3d.setRot(0);
     // El chip del estado se va de la cara: rehornear para que desaparezca.
     if (card3d.card) {
-      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+      card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card), this.layersForCard(card3d.card));
     }
   }
 
@@ -2045,7 +2055,7 @@ export class SceneManager {
       .add(() => {
         // La textura se regenera con la carta BOCA ABAJO: la cache indexa por
         // id + nivel, asi que la definicion nueva produce una textura nueva.
-        card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
+        card3d.setCard(card, this.textures, this.lang(), this.artForCard(card), this.layersForCard(card));
       })
       .to(card3d.home, { flip: 0, duration: anim.d(0.32), ease: anim.EASE.quadOut })
       // Rebote de "renacio".
@@ -2102,7 +2112,7 @@ export class SceneManager {
         // Llega BOCA ABAJO: el destape es lo que cierra el reparto.
         if (openingDeal) card3d.setFaceUp(false, { animated: false });
       } else {
-        card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
+        card3d.setCard(card, this.textures, this.lang(), this.artForCard(card), this.layersForCard(card));
       }
       // El ORDEN de `selectedUids` es el de la seleccion del jugador: la
       // primera carta elegida lleva el badge 1, la segunda el 2...
@@ -2349,7 +2359,7 @@ export class SceneManager {
       this.layoutProfile !== 'desktop',
     );
     if (this.backTexture) card3d.setBackTexture(this.backTexture);
-    if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
+    if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card), this.layersForCard(card));
     if (joker) card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
 
     if (isJoker) card3d.setBaseScale(JOKER_SCALE);
@@ -2377,6 +2387,26 @@ export class SceneManager {
 
   private artForCard(card: CardInstance): HTMLImageElement | undefined {
     return this.cardArt(card.def);
+  }
+
+  /**
+   * Capas segmentadas de una carta para el parallax, o `undefined` si no hay.
+   *
+   * La cadena de stems ESPEJA la de `artKeysFor` (arte propio -> par elemento/rareza
+   * -> common del elemento), asi que las capas que se devuelven corresponden a la
+   * MISMA ilustracion que `cardArt` eligio.
+   *
+   * Es PUBLICO por la misma razon que `cardArt`: la UI (tienda, recompensa,
+   * coleccion) compone su propia cara 2D y necesita las MISMAS capas que la mesa,
+   * o el jugador veria dos composiciones distintas de la misma carta.
+   */
+  cardLayers(def: { id: string; element: ElementType; rarity: Rarity }): LayerImages | undefined {
+    if (!this.layers) return undefined;
+    return this.layers.getLayers(layerKeysFor(def.element, def.rarity, def.id));
+  }
+
+  private layersForCard(card: CardInstance): LayerImages | undefined {
+    return this.cardLayers(card.def);
   }
 
   /**
@@ -2468,6 +2498,15 @@ export class SceneManager {
   setFelt(id: string): void {
     const art = id === 'default' ? undefined : this.assets.get(`felt_${id}` as ArtKey);
     this.arena?.setFelt(art);
+  }
+
+  /**
+   * Aplica el EFECTO DE VICTORIA `id` (recompensa `victory_fx`). Un id sin
+   * preset cae al `default`, asi que un perfil viejo o un id desconocido no
+   * cambian nada. Es puramente visual: no toca la puntuacion.
+   */
+  setVictoryFx(id: string): void {
+    this.victoryFx = victoryFxPreset(id);
   }
 
   private lang(): string {
@@ -3152,35 +3191,37 @@ export class SceneManager {
     this.celebrateCard(card3d, ABILITY_COLOR, 14);
   }
 
+  /** Preset del efecto de victoria (recompensa `victory_fx`). Default = el clasico. */
+  private victoryFx: VictoryFxPreset = victoryFxPreset('default');
+
   private celebrate(): void {
     const center = new THREE.Vector3(0, 0.6, PLAY_Z);
-    // Dos oleadas escalonadas: la segunda entra cuando la primera ya sube.
-    anim
-      .sequence()
-      .add(() => {
-        this.rig.addShake(0.32);
-        // Onda grande en el centro: la victoria "golpea" el agua.
-        this.water?.ripple(0, PLAY_Z, 1.6);
-      }, 0)
-      .add(() => {
-        this.particles.burst(center, this.isMobile ? 70 : 130, {
-          color: 0x4fd18b,
-          speed: 5.2,
-          upward: 3.4,
-          size: 0.11,
-          life: 1.5,
-        });
-      }, 0)
-      .add(() => {
-        this.particles.burst(center, this.isMobile ? 40 : 70, {
-          color: 0xffc857,
-          speed: 3.8,
-          upward: 4.2,
-          size: 0.09,
-          life: 1.7,
-        });
-      }, anim.d(0.14))
-      .add(() => this.flyScoredToDiscard(0.4), 0);
+    const preset = this.victoryFx;
+    const seq = anim.sequence();
+    // Oleada 0 en el centro: la victoria "golpea" el agua.
+    seq.add(() => {
+      this.rig.addShake(preset.shake);
+      this.water?.ripple(0, PLAY_Z, 1.6);
+    }, 0);
+    // Una oleada de particulas por color, escalonadas (la segunda entra cuando
+    // la primera ya sube).
+    preset.counts.forEach((counts, index) => {
+      const color = preset.colors[index % preset.colors.length] ?? 0xffffff;
+      const count = this.isMobile ? counts[0] : counts[1];
+      seq.add(
+        () => {
+          this.particles.burst(center, count, {
+            color,
+            speed: index === 0 ? 5.2 : 3.8,
+            upward: index === 0 ? 3.4 : 4.2,
+            size: index === 0 ? 0.11 : 0.09,
+            life: index === 0 ? 1.5 : 1.7,
+          });
+        },
+        index === 0 ? 0 : anim.d(0.14 * index),
+      );
+    });
+    seq.add(() => this.flyScoredToDiscard(0.4), 0);
   }
 
   private doom(): void {
@@ -3355,7 +3396,7 @@ export class SceneManager {
   private rebuildTextures(): void {
     this.textures.clear();
     for (const card3d of this.handCards.values()) {
-      if (card3d.card) card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card));
+      if (card3d.card) card3d.setCard(card3d.card, this.textures, this.lang(), this.artForCard(card3d.card), this.layersForCard(card3d.card));
     }
     for (const card3d of this.jokerCards.values()) {
       if (card3d.joker) {

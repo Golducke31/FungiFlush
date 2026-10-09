@@ -1,0 +1,48 @@
+{
+  "_doc": "Parametros de segment_card_layers.py. Todos los umbrales viven aca, no en el codigo. Calibrar con --debug-masks.",
+
+  "mode": "teal",
+  "_mode_doc": "teal = dataset actual (escena oscura teal, sin chroma real). chroma = fondo plano de un color (magenta/verde).",
+
+  "chroma_color": "#ff00ff",
+  "color_tolerance": 18,
+  "chroma_softness": 10,
+
+  "_teal_doc": "Medido en el dataset: fondo teal V 0.08-0.28 (mediana 0.09-0.13); el hongo ronda V 0.19-0.25 y en poison comparte matiz. Por eso la senal fuerte es el CONTRASTE local, no el umbral.",
+  "teal_h_range": [0.47, 0.60],
+  "s_bg_max": 0.45,
+  "v_bg_max": 0.24,
+  "v_moss_max": 0.30,
+  "moss_h_range": [0.18, 0.45],
+
+  "contrast_min": 0.055,
+  "edge_min": 0.08,
+  "v_off_hue_min": 0.35,
+  "s_off_hue_min": 0.15,
+
+  "v_subject_min": 0.55,
+  "s_subject_min": 0.62,
+
+  "moss_as": "bg",
+
+  "subject_band": [0.16, 0.66],
+
+  "feather_px": 2.5,
+  "grow_px": 1,
+  "shrink_px": 1,
+  "morph_kernel": 5,
+  "min_component_area": 0.004,
+
+  "bg_fill_diffuse": 28,
+  "use_grabcut": false,
+
+  "_out_doc": "PNG RGBA LOSSLESS por defecto: prioridad maxima a la calidad visual, sin perder detalle en los bordes con alfa. Si alguna vez hace falta aligerar el bundle, out_format=webp baja el peso a cambio de compresion con perdida.",
+  "out_format": "png",
+  "webp_quality": 92,
+
+  "_targets_doc": "Tamano de salida por prefijo, igual que optimize_art.py. Las capas se exportan al tamano de la CARTA para que alineen full-bleed.",
+  "card_target": [512, 744],
+
+  "_skip_doc": "Prefijos que NO se segmentan (jokers procedurales, tapete, arena, iconos).",
+  "skip_prefixes": ["art_arena", "art_table", "art_avatar_", "art_bgcard_", "art_cardback", "ui_"]
+}

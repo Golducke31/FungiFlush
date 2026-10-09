@@ -101,8 +101,48 @@ Ciegos.
   Cosméticos · Logros · Historial) y fila de cuenta.
 - **Insignia de nivel** en el icono de Perfil del menú.
 - **Resultados**: bloque "+N Esporas de Colonia" con desglose agrupado.
-- **Recompensas**: escalera de 10 niveles con su estado.
+- **Recompensas**: escalera de 10 niveles con su estado (Bloqueada / Para  
+  reclamar / Reclamada) y el botón **Reclamar** (+ "Reclamar todo").
+- **Personalizar**: la **Tarjeta de Jugador** (avatar + marco + título + fondo)  
+  como preview en vivo, más el efecto de victoria, el dorso y el tapete.
 - **Ranking**: dos tableros con pestañas + posición propia + 3 hitos personales.
+
+### 6.1 Recompensas nombradas (implementadas)
+
+La escalera **entrega** cosas reales. `src/meta/ColonyRewards.ts` es la única
+fuente de verdad del mapeo `rewardId -> efecto`:
+
+| Nivel | Recompensa        | Tipo    | Efecto                              |
+| ----- | ----------------- | ------- | ----------------------------------- |
+| 2     | `frame_common`    | marco   | Marco común del avatar              |
+| 3     | `pack_spores`     | sobre   | +1 sobre base (`grantPack`)         |
+| 4     | `bg_new`          | fondo   | Fondo de la Tarjeta de Jugador      |
+| 5     | `title_mycelium`  | título  | Título "Micelio Naciente"           |
+| 6     | `victory_fx`      | efecto  | Efecto de victoria "Eclosión Dorada" |
+| 7     | `pack_colony`     | sobre   | +1 sobre de expansión               |
+| 8     | `avatar`          | avatar  | Avatar de hongo                     |
+| 9     | `frame_uncommon`  | marco   | Marco poco común                    |
+| 10    | `title_established` | título | Título "Colonia Establecida"       |
+
+**Entrega = RECLAMAR.** Subir de nivel DESBLOQUEA (`colony.unlockedRewards`, ya
+existía); el jugador reclama con el botón del panel (o "Reclamar todo").
+Reclamar es **idempotente**, entrega la propiedad (o el sobre) y **no equipa**:
+equipar es aparte, en Personalizar.
+
+**Tarjeta de Jugador** (`src/ui/PlayerCard.ts`): fondo → avatar → marco → nombre
++ título + nivel. Los 6 cosméticos equipables viven en `ProfileSave.cosmetics`
+(`equippedAvatar` / `equippedFrame` / `equippedTitle` / `equippedBackground` /
+`equippedVictoryFx`); los ids reclamados entran a `cosmetics.owned`. El estado
+es **aditivo y anidado**, así que la migración lo cubre por *spread*: **no sube
+`PROFILE_SAVE_VERSION`**.
+
+El arte (`art_avatar_avatar`, `art_frame_frame_{common,uncommon}`,
+`art_bgcard_bg_new`) se generó por **img2img** anclado en
+`art_card_mycelium_common`. Los marcos conservan **alfa** (`optimize_art.py` lo
+preserva). Un cosmético sin arte **no rompe**: la imagen se oculta sola.
+
+**Invariante**: la Colonia no toca el combate. `victory_fx` es solo VFX (colores
+/ partículas / shake), no puntuación — lo confirma `sim:balance`.
 
 Nota de layout: en celular horizontal el panel tiene ~210 px útiles. La línea de  
 stats se **oculta** en `(pointer: coarse) and (max-height: 560px)` y los accesos  
@@ -285,6 +325,7 @@ aspecto fino de estos paneles en escritorio **no está revisado**.
 | **V1.1 — Misiones y temporadas locales** | Misiones diarias/semanales, Esporas de temporada         | ⏸️ **pausado a pedido** (`seasonSpores` ya se acumula) |
 | **V1.2 — Cuenta y sincronización**       | Cuenta, sync, validación, recuperación                   | capa ✅ / nativo ⏳ (falta Play Console)                 |
 | **V1.3 — Ranking global**                | Tablero de temporada e histórico, hitos, premios         | ✅ cliente + servidor de referencia                     |
+| **V1.4 — Recompensas nombradas**         | Reclamo, Tarjeta de Jugador, efecto de victoria, arte    | ✅ hecho (§6.1)                                          |
 
 El ranking **no** se publica al público antes de poder validar resultados en un  
 servidor de verdad (§8).

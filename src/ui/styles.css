@@ -7118,6 +7118,90 @@ body {
   padding-right: 4px;
 }
 
+/* --- Tarjeta de Jugador (identidad de la Colonia) ---
+   fondo -> avatar -> marco -> nombre + titulo + nivel. Una imagen que no carga
+   se elimina sola (onerror en PlayerCard.ts), asi que un cosmetico sin arte
+   todavia deja una tarjeta legible. */
+.cosmetics-player .player-card {
+  margin-top: 2px;
+}
+.player-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 96px;
+  border: 1px solid rgba(240, 196, 105, 0.4);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(240, 196, 105, 0.16), transparent 70%),
+    rgba(6, 12, 18, 0.55);
+}
+.player-card-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.55;
+}
+.player-card-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+.player-card-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+}
+.player-card-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+.player-card-frame {
+  position: absolute;
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+  object-fit: contain;
+  pointer-events: none;
+}
+.player-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.player-card-name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--text);
+}
+.player-card-title {
+  font-size: 12.5px;
+  color: #f0c469;
+}
+.player-card-title.is-empty {
+  color: rgba(207, 230, 242, 0.4);
+}
+.player-card-level {
+  font-size: 11.5px;
+  color: rgba(207, 230, 242, 0.6);
+}
+.cosmetics-thumb {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .cosmetics-section-title {
   margin: 0 0 10px;
   font-size: 15px;
@@ -9492,9 +9576,55 @@ body {
   font-weight: 700;
   color: var(--text);
 }
-.colony-reward-cost {
-  font-size: 11px;
-  color: rgba(207, 230, 242, 0.6);
+.colony-reward-nameline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.colony-reward-kind {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid rgba(95, 216, 232, 0.28);
+  border-radius: 999px;
+  background: rgba(95, 216, 232, 0.1);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8fe4f0;
+}
+.colony-reward-desc {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: rgba(207, 230, 242, 0.62);
+}
+.colony-reward-row.is-claimed .colony-reward-desc {
+  color: rgba(207, 230, 242, 0.42);
+}
+.colony-reward-action {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+.colony-reward-row.is-claimable {
+  border-color: rgba(255, 211, 107, 0.75);
+  background: rgba(240, 196, 105, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(255, 211, 107, 0.25),
+    0 6px 18px rgba(240, 176, 66, 0.18);
+}
+.colony-reward-claim {
+  min-height: 30px;
+  padding: 6px 14px;
+  border: 1px solid rgba(240, 196, 105, 0.6);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 211, 107, 0.95), rgba(240, 176, 66, 0.95));
+  color: #1a1205;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .colony-reward-tag {
   flex: 0 0 auto;
@@ -9503,13 +9633,36 @@ body {
   text-transform: uppercase;
   color: rgba(207, 230, 242, 0.5);
 }
+.colony-reward-tag.is-unlocked,
 .colony-reward-row.is-unlocked .colony-reward-tag {
   color: #f0c469;
 }
+.colony-reward-tag.is-claimed {
+  color: #6fd9a0;
+}
 .colony-rewards-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
+}
+.colony-rewards-claim-all {
+  min-height: 34px;
+  padding: 8px 18px;
+  border: 1px solid rgba(240, 196, 105, 0.6);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 211, 107, 0.95), rgba(240, 176, 66, 0.95));
+  color: #1a1205;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.colony-rewards-claim-all:disabled,
+.colony-rewards-claim-all.is-empty {
+  border-color: rgba(95, 216, 232, 0.2);
+  background: rgba(6, 12, 18, 0.4);
+  color: rgba(207, 230, 242, 0.4);
+  cursor: default;
 }
 .colony-rewards-close {
   min-height: 34px;

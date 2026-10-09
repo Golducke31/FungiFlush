@@ -1342,15 +1342,36 @@
   },
   "cosmetics": {
     "title": "Cosméticos",
-    "subtitle": "Dorso de carta y tapete de la mesa",
+    "subtitle": "Tu Tarjeta de Jugador, el dorso de carta y el tapete",
+    "playerCard": "Tarjeta de Jugador",
+    "defaultName": "Colonizador",
     "cardback": "Dorso de carta",
     "felt": "Tapete",
+    "avatar": "Avatar",
+    "frame": "Marco",
+    "titles": "Título",
+    "background": "Fondo",
+    "victoryFx": "Efecto de victoria",
     "equip": "Equipar",
     "equipped": "Equipado",
     "none": "Todavía no tenés cosméticos de este tipo.",
-    "cardback.default": "Clásico",
-    "cardback.mycelial": "Micelio Profundo",
-    "felt.default": "Losa rúnica"
+    "name": {
+      "cardback": { "default": "Clásico", "mycelial": "Micelio Profundo" },
+      "felt": { "default": "Losa rúnica" },
+      "avatar": { "default": "Sin avatar", "avatar": "Hongo de la Colonia" },
+      "frame": {
+        "default": "Sin marco",
+        "frame_common": "Marco común",
+        "frame_uncommon": "Marco poco común"
+      },
+      "title": {
+        "default": "Sin título",
+        "title_mycelium": "Micelio Naciente",
+        "title_established": "Colonia Establecida"
+      },
+      "background": { "default": "Estándar", "bg_new": "Micelio Profundo" },
+      "victoryFx": { "default": "Clásico", "victory_fx": "Eclosión Dorada" }
+    }
   },
   "history": {
     "title": "Historial",
@@ -1676,8 +1697,34 @@
       "frame_uncommon": "Marco poco común",
       "title_established": "Título: Colonia Establecida",
       "unlocked": "Desbloqueada",
-      "locked": "Bloqueada"
+      "locked": "Bloqueada",
+      "claimable": "Para reclamar",
+      "claimed": "Reclamada"
     },
+    "rewardKind": {
+      "avatar": "Avatar",
+      "frame": "Marco",
+      "title": "Título",
+      "background": "Fondo",
+      "victoryFx": "Efecto",
+      "pack": "Sobre"
+    },
+    "rewardInfo": {
+      "frame_common": "Un marco común para el avatar de tu Tarjeta de Jugador.",
+      "pack_spores": "Un sobre para abrir en la Colección: especímenes nuevos.",
+      "bg_new": "Un fondo nuevo para tu Tarjeta de Jugador.",
+      "title_mycelium": "El título «Micelio Naciente» para tu perfil.",
+      "victory_fx": "Un efecto de victoria distinto al superar un Ciego.",
+      "pack_colony": "Un sobre de la expansión Colonia Profunda.",
+      "avatar": "Un avatar de hongo para tu Tarjeta de Jugador.",
+      "frame_uncommon": "Un marco poco común para el avatar de tu Tarjeta de Jugador.",
+      "title_established": "El título «Colonia Establecida» para tu perfil."
+    },
+    "claim": "Reclamar",
+    "claimAll": "Reclamar todo",
+    "nothingToClaim": "No tenés recompensas para reclamar todavía.",
+    "rewardClaimed": "Recompensa reclamada: {name}",
+    "rewardsClaimed": "Recompensas reclamadas: {count}",
     "bonus": {
       "firstHand": "Ciego en la primera mano",
       "discards": "Terminaste con descartes",

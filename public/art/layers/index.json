@@ -1,0 +1,2167 @@
+{
+  "version": 1,
+  "layers": {
+    "art_card_crystal_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          161,
+          110,
+          196,
+          362
+        ]
+      },
+      "coverage": {
+        "subject_px": 22279,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_crystal_common__bg.png",
+        "fg": "art_card_crystal_common__fg.png",
+        "subject": "art_card_crystal_common__subject.png"
+      }
+    },
+    "art_card_crystal_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          146,
+          110,
+          212,
+          354
+        ]
+      },
+      "coverage": {
+        "subject_px": 43499,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_crystal_legendary__bg.png",
+        "fg": "art_card_crystal_legendary__fg.png",
+        "subject": "art_card_crystal_legendary__subject.png"
+      }
+    },
+    "art_card_crystal_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          55,
+          110,
+          401,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 70200,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_crystal_mythic__bg.png",
+        "fg": "art_card_crystal_mythic__fg.png",
+        "subject": "art_card_crystal_mythic__subject.png"
+      }
+    },
+    "art_card_crystal_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          98,
+          110,
+          290,
+          351
+        ]
+      },
+      "coverage": {
+        "subject_px": 46709,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_crystal_rare__bg.png",
+        "fg": "art_card_crystal_rare__fg.png",
+        "subject": "art_card_crystal_rare__subject.png"
+      }
+    },
+    "art_card_crystal_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          134,
+          110,
+          240,
+          360
+        ]
+      },
+      "coverage": {
+        "subject_px": 35449,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_crystal_uncommon__bg.png",
+        "fg": "art_card_crystal_uncommon__fg.png",
+        "subject": "art_card_crystal_uncommon__subject.png"
+      }
+    },
+    "art_card_decay_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          105,
+          110,
+          252,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 25757,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_decay_common__bg.png",
+        "fg": "art_card_decay_common__fg.png",
+        "subject": "art_card_decay_common__subject.png"
+      }
+    },
+    "art_card_decay_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          120,
+          110,
+          265,
+          342
+        ]
+      },
+      "coverage": {
+        "subject_px": 35296,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_decay_legendary__bg.png",
+        "fg": "art_card_decay_legendary__fg.png",
+        "subject": "art_card_decay_legendary__subject.png"
+      }
+    },
+    "art_card_decay_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          29,
+          110,
+          480,
+          358
+        ]
+      },
+      "coverage": {
+        "subject_px": 44480,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_decay_mythic__bg.png",
+        "fg": "art_card_decay_mythic__fg.png",
+        "subject": "art_card_decay_mythic__subject.png"
+      }
+    },
+    "art_card_decay_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          173,
+          110,
+          184,
+          331
+        ]
+      },
+      "coverage": {
+        "subject_px": 27054,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_decay_rare__bg.png",
+        "fg": "art_card_decay_rare__fg.png",
+        "subject": "art_card_decay_rare__subject.png"
+      }
+    },
+    "art_card_decay_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          136,
+          110,
+          244,
+          334
+        ]
+      },
+      "coverage": {
+        "subject_px": 33086,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_decay_uncommon__bg.png",
+        "fg": "art_card_decay_uncommon__fg.png",
+        "subject": "art_card_decay_uncommon__subject.png"
+      }
+    },
+    "art_card_mycelium_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          158,
+          110,
+          209,
+          358
+        ]
+      },
+      "coverage": {
+        "subject_px": 30394,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_mycelium_common__bg.png",
+        "fg": "art_card_mycelium_common__fg.png",
+        "subject": "art_card_mycelium_common__subject.png"
+      }
+    },
+    "art_card_mycelium_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          76,
+          110,
+          333,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 50900,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_mycelium_legendary__bg.png",
+        "fg": "art_card_mycelium_legendary__fg.png",
+        "subject": "art_card_mycelium_legendary__subject.png"
+      }
+    },
+    "art_card_mycelium_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          10,
+          110,
+          496,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 72744,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_mycelium_mythic__bg.png",
+        "fg": "art_card_mycelium_mythic__fg.png",
+        "subject": "art_card_mycelium_mythic__subject.png"
+      }
+    },
+    "art_card_mycelium_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          132,
+          110,
+          241,
+          345
+        ]
+      },
+      "coverage": {
+        "subject_px": 43901,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_mycelium_rare__bg.png",
+        "fg": "art_card_mycelium_rare__fg.png",
+        "subject": "art_card_mycelium_rare__subject.png"
+      }
+    },
+    "art_card_mycelium_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          122,
+          110,
+          306,
+          368
+        ]
+      },
+      "coverage": {
+        "subject_px": 59611,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_mycelium_uncommon__bg.png",
+        "fg": "art_card_mycelium_uncommon__fg.png",
+        "subject": "art_card_mycelium_uncommon__subject.png"
+      }
+    },
+    "art_card_neutral_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          159,
+          110,
+          183,
+          362
+        ]
+      },
+      "coverage": {
+        "subject_px": 24762,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_neutral_common__bg.png",
+        "fg": "art_card_neutral_common__fg.png",
+        "subject": "art_card_neutral_common__subject.png"
+      }
+    },
+    "art_card_neutral_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          68,
+          110,
+          367,
+          362
+        ]
+      },
+      "coverage": {
+        "subject_px": 61466,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_neutral_legendary__bg.png",
+        "fg": "art_card_neutral_legendary__fg.png",
+        "subject": "art_card_neutral_legendary__subject.png"
+      }
+    },
+    "art_card_neutral_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          55,
+          110,
+          395,
+          359
+        ]
+      },
+      "coverage": {
+        "subject_px": 46049,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_neutral_mythic__bg.png",
+        "fg": "art_card_neutral_mythic__fg.png",
+        "subject": "art_card_neutral_mythic__subject.png"
+      }
+    },
+    "art_card_neutral_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          33,
+          110,
+          449,
+          359
+        ]
+      },
+      "coverage": {
+        "subject_px": 38039,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_neutral_rare__bg.png",
+        "fg": "art_card_neutral_rare__fg.png",
+        "subject": "art_card_neutral_rare__subject.png"
+      }
+    },
+    "art_card_neutral_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          128,
+          110,
+          242,
+          359
+        ]
+      },
+      "coverage": {
+        "subject_px": 31619,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_neutral_uncommon__bg.png",
+        "fg": "art_card_neutral_uncommon__fg.png",
+        "subject": "art_card_neutral_uncommon__subject.png"
+      }
+    },
+    "art_card_own_amanita_apex_toxica": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          78,
+          110,
+          361,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 63246,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_amanita_apex_toxica__bg.png",
+        "fg": "art_card_own_amanita_apex_toxica__fg.png",
+        "subject": "art_card_own_amanita_apex_toxica__subject.png"
+      }
+    },
+    "art_card_own_bridge_saprophyte": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          124,
+          110,
+          260,
+          334
+        ]
+      },
+      "coverage": {
+        "subject_px": 44276,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_bridge_saprophyte__bg.png",
+        "fg": "art_card_own_bridge_saprophyte__fg.png",
+        "subject": "art_card_own_bridge_saprophyte__subject.png"
+      }
+    },
+    "art_card_own_colony_agaric_thread": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          78,
+          110,
+          294,
+          384
+        ]
+      },
+      "coverage": {
+        "subject_px": 23622,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_agaric_thread__bg.png",
+        "fg": "art_card_own_colony_agaric_thread__fg.png",
+        "subject": "art_card_own_colony_agaric_thread__subject.png"
+      }
+    },
+    "art_card_own_colony_amanita_web": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          125,
+          110,
+          260,
+          339
+        ]
+      },
+      "coverage": {
+        "subject_px": 19089,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_amanita_web__bg.png",
+        "fg": "art_card_own_colony_amanita_web__fg.png",
+        "subject": "art_card_own_colony_amanita_web__subject.png"
+      }
+    },
+    "art_card_own_colony_boletus_root": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          92,
+          110,
+          317,
+          389
+        ]
+      },
+      "coverage": {
+        "subject_px": 27213,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_boletus_root__bg.png",
+        "fg": "art_card_own_colony_boletus_root__fg.png",
+        "subject": "art_card_own_colony_boletus_root__subject.png"
+      }
+    },
+    "art_card_own_colony_clavaria_filament": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          171,
+          110,
+          158,
+          365
+        ]
+      },
+      "coverage": {
+        "subject_px": 16560,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_clavaria_filament__bg.png",
+        "fg": "art_card_own_colony_clavaria_filament__fg.png",
+        "subject": "art_card_own_colony_clavaria_filament__subject.png"
+      }
+    },
+    "art_card_own_colony_network_node": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          156,
+          110,
+          193,
+          375
+        ]
+      },
+      "coverage": {
+        "subject_px": 43643,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_network_node__bg.png",
+        "fg": "art_card_own_colony_network_node__fg.png",
+        "subject": "art_card_own_colony_network_node__subject.png"
+      }
+    },
+    "art_card_own_colony_rhizomorph": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          103,
+          110,
+          352,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 45334,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_colony_rhizomorph__bg.png",
+        "fg": "art_card_own_colony_rhizomorph__fg.png",
+        "subject": "art_card_own_colony_rhizomorph__subject.png"
+      }
+    },
+    "art_card_own_cordyceps_mind": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          166,
+          110,
+          175,
+          325
+        ]
+      },
+      "coverage": {
+        "subject_px": 22831,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_cordyceps_mind__bg.png",
+        "fg": "art_card_own_cordyceps_mind__fg.png",
+        "subject": "art_card_own_cordyceps_mind__subject.png"
+      }
+    },
+    "art_card_own_crystal_agaric_facet": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          121,
+          110,
+          261,
+          361
+        ]
+      },
+      "coverage": {
+        "subject_px": 26468,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_agaric_facet__bg.png",
+        "fg": "art_card_own_crystal_agaric_facet__fg.png",
+        "subject": "art_card_own_crystal_agaric_facet__subject.png"
+      }
+    },
+    "art_card_own_crystal_amanita_shard": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          113,
+          110,
+          270,
+          374
+        ]
+      },
+      "coverage": {
+        "subject_px": 45819,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_amanita_shard__bg.png",
+        "fg": "art_card_own_crystal_amanita_shard__fg.png",
+        "subject": "art_card_own_crystal_amanita_shard__subject.png"
+      }
+    },
+    "art_card_own_crystal_boletus_prism": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          99,
+          110,
+          256,
+          381
+        ]
+      },
+      "coverage": {
+        "subject_px": 26014,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_boletus_prism__bg.png",
+        "fg": "art_card_own_crystal_boletus_prism__fg.png",
+        "subject": "art_card_own_crystal_boletus_prism__subject.png"
+      }
+    },
+    "art_card_own_crystal_glasscap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          153,
+          110,
+          202,
+          361
+        ]
+      },
+      "coverage": {
+        "subject_px": 25056,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_glasscap__bg.png",
+        "fg": "art_card_own_crystal_glasscap__fg.png",
+        "subject": "art_card_own_crystal_glasscap__subject.png"
+      }
+    },
+    "art_card_own_crystal_grand_coral": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          94,
+          110,
+          318,
+          358
+        ]
+      },
+      "coverage": {
+        "subject_px": 49508,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_grand_coral__bg.png",
+        "fg": "art_card_own_crystal_grand_coral__fg.png",
+        "subject": "art_card_own_crystal_grand_coral__subject.png"
+      }
+    },
+    "art_card_own_crystal_prism_gill": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          117,
+          110,
+          272,
+          361
+        ]
+      },
+      "coverage": {
+        "subject_px": 30284,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_prism_gill__bg.png",
+        "fg": "art_card_own_crystal_prism_gill__fg.png",
+        "subject": "art_card_own_crystal_prism_gill__subject.png"
+      }
+    },
+    "art_card_own_crystal_shard_bloom": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          161,
+          110,
+          190,
+          347
+        ]
+      },
+      "coverage": {
+        "subject_px": 29212,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_shard_bloom__bg.png",
+        "fg": "art_card_own_crystal_shard_bloom__fg.png",
+        "subject": "art_card_own_crystal_shard_bloom__subject.png"
+      }
+    },
+    "art_card_own_crystal_tricholoma_lens": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          159,
+          110,
+          190,
+          350
+        ]
+      },
+      "coverage": {
+        "subject_px": 30458,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_crystal_tricholoma_lens__bg.png",
+        "fg": "art_card_own_crystal_tricholoma_lens__fg.png",
+        "subject": "art_card_own_crystal_tricholoma_lens__subject.png"
+      }
+    },
+    "art_card_own_decay_agaric_mould": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          171,
+          110,
+          156,
+          379
+        ]
+      },
+      "coverage": {
+        "subject_px": 17151,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_agaric_mould__bg.png",
+        "fg": "art_card_own_decay_agaric_mould__fg.png",
+        "subject": "art_card_own_decay_agaric_mould__subject.png"
+      }
+    },
+    "art_card_own_decay_amanita_blight": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          70,
+          110,
+          369,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 49832,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_amanita_blight__bg.png",
+        "fg": "art_card_own_decay_amanita_blight__fg.png",
+        "subject": "art_card_own_decay_amanita_blight__subject.png"
+      }
+    },
+    "art_card_own_decay_ancient_stump": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          96,
+          110,
+          324,
+          339
+        ]
+      },
+      "coverage": {
+        "subject_px": 28762,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_ancient_stump__bg.png",
+        "fg": "art_card_own_decay_ancient_stump__fg.png",
+        "subject": "art_card_own_decay_ancient_stump__subject.png"
+      }
+    },
+    "art_card_own_decay_boletus_slime": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          148,
+          110,
+          210,
+          337
+        ]
+      },
+      "coverage": {
+        "subject_px": 30438,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_boletus_slime__bg.png",
+        "fg": "art_card_own_decay_boletus_slime__fg.png",
+        "subject": "art_card_own_decay_boletus_slime__subject.png"
+      }
+    },
+    "art_card_own_decay_carrion_bloom": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          148,
+          110,
+          222,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 34151,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_carrion_bloom__bg.png",
+        "fg": "art_card_own_decay_carrion_bloom__fg.png",
+        "subject": "art_card_own_decay_carrion_bloom__subject.png"
+      }
+    },
+    "art_card_own_decay_clavaria_ash": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          183,
+          110,
+          134,
+          59
+        ]
+      },
+      "coverage": {
+        "subject_px": 3608,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_clavaria_ash__bg.png",
+        "fg": "art_card_own_decay_clavaria_ash__fg.png",
+        "subject": "art_card_own_decay_clavaria_ash__subject.png"
+      }
+    },
+    "art_card_own_decay_compost_heap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          96,
+          110,
+          351,
+          389
+        ]
+      },
+      "coverage": {
+        "subject_px": 33697,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_compost_heap__bg.png",
+        "fg": "art_card_own_decay_compost_heap__fg.png",
+        "subject": "art_card_own_decay_compost_heap__subject.png"
+      }
+    },
+    "art_card_own_decay_inkcap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          159,
+          110,
+          214,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 25871,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_inkcap__bg.png",
+        "fg": "art_card_own_decay_inkcap__fg.png",
+        "subject": "art_card_own_decay_inkcap__subject.png"
+      }
+    },
+    "art_card_own_decay_rotwood": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          172,
+          110,
+          198,
+          309
+        ]
+      },
+      "coverage": {
+        "subject_px": 24036,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_decay_rotwood__bg.png",
+        "fg": "art_card_own_decay_rotwood__fg.png",
+        "subject": "art_card_own_decay_rotwood__subject.png"
+      }
+    },
+    "art_card_own_deep_awakening_bracket": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          77,
+          110,
+          357,
+          333
+        ]
+      },
+      "coverage": {
+        "subject_px": 30218,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_awakening_bracket__bg.png",
+        "fg": "art_card_own_deep_awakening_bracket__fg.png",
+        "subject": "art_card_own_deep_awakening_bracket__subject.png"
+      }
+    },
+    "art_card_own_deep_carrion_lattice": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          178,
+          110,
+          176,
+          307
+        ]
+      },
+      "coverage": {
+        "subject_px": 13291,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_carrion_lattice__bg.png",
+        "fg": "art_card_own_deep_carrion_lattice__fg.png",
+        "subject": "art_card_own_deep_carrion_lattice__subject.png"
+      }
+    },
+    "art_card_own_deep_chain_rhizomorph": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          87,
+          110,
+          318,
+          308
+        ]
+      },
+      "coverage": {
+        "subject_px": 28033,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_chain_rhizomorph__bg.png",
+        "fg": "art_card_own_deep_chain_rhizomorph__fg.png",
+        "subject": "art_card_own_deep_chain_rhizomorph__subject.png"
+      }
+    },
+    "art_card_own_deep_cross_mycorrhiza": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          133,
+          110,
+          233,
+          349
+        ]
+      },
+      "coverage": {
+        "subject_px": 21930,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_cross_mycorrhiza__bg.png",
+        "fg": "art_card_own_deep_cross_mycorrhiza__fg.png",
+        "subject": "art_card_own_deep_cross_mycorrhiza__subject.png"
+      }
+    },
+    "art_card_own_deep_herald_cap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          173,
+          110,
+          174,
+          366
+        ]
+      },
+      "coverage": {
+        "subject_px": 20357,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_herald_cap__bg.png",
+        "fg": "art_card_own_deep_herald_cap__fg.png",
+        "subject": "art_card_own_deep_herald_cap__subject.png"
+      }
+    },
+    "art_card_own_deep_hybrid_lattice": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          170,
+          110,
+          166,
+          351
+        ]
+      },
+      "coverage": {
+        "subject_px": 33456,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_hybrid_lattice__bg.png",
+        "fg": "art_card_own_deep_hybrid_lattice__fg.png",
+        "subject": "art_card_own_deep_hybrid_lattice__subject.png"
+      }
+    },
+    "art_card_own_deep_latent_sporocarp": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          161,
+          110,
+          180,
+          320
+        ]
+      },
+      "coverage": {
+        "subject_px": 27014,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_latent_sporocarp__bg.png",
+        "fg": "art_card_own_deep_latent_sporocarp__fg.png",
+        "subject": "art_card_own_deep_latent_sporocarp__subject.png"
+      }
+    },
+    "art_card_own_deep_network_core": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          47,
+          110,
+          424,
+          353
+        ]
+      },
+      "coverage": {
+        "subject_px": 55340,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_network_core__bg.png",
+        "fg": "art_card_own_deep_network_core__fg.png",
+        "subject": "art_card_own_deep_network_core__subject.png"
+      }
+    },
+    "art_card_own_deep_parasite_lash": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          172,
+          110,
+          215,
+          336
+        ]
+      },
+      "coverage": {
+        "subject_px": 23213,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_parasite_lash__bg.png",
+        "fg": "art_card_own_deep_parasite_lash__fg.png",
+        "subject": "art_card_own_deep_parasite_lash__subject.png"
+      }
+    },
+    "art_card_own_deep_slumber_amanita": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          111,
+          110,
+          279,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 45147,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_slumber_amanita__bg.png",
+        "fg": "art_card_own_deep_slumber_amanita__fg.png",
+        "subject": "art_card_own_deep_slumber_amanita__subject.png"
+      }
+    },
+    "art_card_own_deep_spore_conduit": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          167,
+          110,
+          174,
+          360
+        ]
+      },
+      "coverage": {
+        "subject_px": 22654,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_spore_conduit__bg.png",
+        "fg": "art_card_own_deep_spore_conduit__fg.png",
+        "subject": "art_card_own_deep_spore_conduit__subject.png"
+      }
+    },
+    "art_card_own_deep_symbiont_veil": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          145,
+          110,
+          194,
+          351
+        ]
+      },
+      "coverage": {
+        "subject_px": 31949,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_deep_symbiont_veil__bg.png",
+        "fg": "art_card_own_deep_symbiont_veil__fg.png",
+        "subject": "art_card_own_deep_symbiont_veil__subject.png"
+      }
+    },
+    "art_card_own_ergot_rye": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          162,
+          110,
+          235,
+          338
+        ]
+      },
+      "coverage": {
+        "subject_px": 30211,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_ergot_rye__bg.png",
+        "fg": "art_card_own_ergot_rye__fg.png",
+        "subject": "art_card_own_ergot_rye__subject.png"
+      }
+    },
+    "art_card_own_ghost_fungus": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          147,
+          110,
+          220,
+          351
+        ]
+      },
+      "coverage": {
+        "subject_px": 37030,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_ghost_fungus__bg.png",
+        "fg": "art_card_own_ghost_fungus__fg.png",
+        "subject": "art_card_own_ghost_fungus__subject.png"
+      }
+    },
+    "art_card_own_mycelium_truffle": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          137,
+          110,
+          217,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 30284,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_mycelium_truffle__bg.png",
+        "fg": "art_card_own_mycelium_truffle__fg.png",
+        "subject": "art_card_own_mycelium_truffle__subject.png"
+      }
+    },
+    "art_card_own_mycelium_webcap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          151,
+          110,
+          213,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 44282,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_mycelium_webcap__bg.png",
+        "fg": "art_card_own_mycelium_webcap__fg.png",
+        "subject": "art_card_own_mycelium_webcap__subject.png"
+      }
+    },
+    "art_card_own_poison_goldcap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          146,
+          110,
+          225,
+          357
+        ]
+      },
+      "coverage": {
+        "subject_px": 52766,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_poison_goldcap__bg.png",
+        "fg": "art_card_own_poison_goldcap__fg.png",
+        "subject": "art_card_own_poison_goldcap__subject.png"
+      }
+    },
+    "art_card_own_shiitake_hearty": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          147,
+          110,
+          228,
+          342
+        ]
+      },
+      "coverage": {
+        "subject_px": 39678,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_shiitake_hearty__bg.png",
+        "fg": "art_card_own_shiitake_hearty__fg.png",
+        "subject": "art_card_own_shiitake_hearty__subject.png"
+      }
+    },
+    "art_card_own_spore_amanita_veil": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          149,
+          115,
+          202,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 21755,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_amanita_veil__bg.png",
+        "fg": "art_card_own_spore_amanita_veil__fg.png",
+        "subject": "art_card_own_spore_amanita_veil__subject.png"
+      }
+    },
+    "art_card_own_spore_archetype_burst_cap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          129,
+          116,
+          234,
+          340
+        ]
+      },
+      "coverage": {
+        "subject_px": 27916,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_archetype_burst_cap__bg.png",
+        "fg": "art_card_own_spore_archetype_burst_cap__fg.png",
+        "subject": "art_card_own_spore_archetype_burst_cap__subject.png"
+      }
+    },
+    "art_card_own_spore_archetype_signal": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          163,
+          116,
+          257,
+          340
+        ]
+      },
+      "coverage": {
+        "subject_px": 14701,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_archetype_signal__bg.png",
+        "fg": "art_card_own_spore_archetype_signal__fg.png",
+        "subject": "art_card_own_spore_archetype_signal__subject.png"
+      }
+    },
+    "art_card_own_spore_boletus_puff": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          126,
+          110,
+          229,
+          367
+        ]
+      },
+      "coverage": {
+        "subject_px": 25875,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_boletus_puff__bg.png",
+        "fg": "art_card_own_spore_boletus_puff__fg.png",
+        "subject": "art_card_own_spore_boletus_puff__subject.png"
+      }
+    },
+    "art_card_own_spore_clavaria_spray": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          150,
+          110,
+          202,
+          361
+        ]
+      },
+      "coverage": {
+        "subject_px": 24436,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_clavaria_spray__bg.png",
+        "fg": "art_card_own_spore_clavaria_spray__fg.png",
+        "subject": "art_card_own_spore_clavaria_spray__subject.png"
+      }
+    },
+    "art_card_own_spore_fairycake": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          94,
+          110,
+          319,
+          371
+        ]
+      },
+      "coverage": {
+        "subject_px": 37372,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_fairycake__bg.png",
+        "fg": "art_card_own_spore_fairycake__fg.png",
+        "subject": "art_card_own_spore_fairycake__subject.png"
+      }
+    },
+    "art_card_own_spore_psilocybe_dust": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          149,
+          116,
+          205,
+          326
+        ]
+      },
+      "coverage": {
+        "subject_px": 14834,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_psilocybe_dust__bg.png",
+        "fg": "art_card_own_spore_psilocybe_dust__fg.png",
+        "subject": "art_card_own_spore_psilocybe_dust__subject.png"
+      }
+    },
+    "art_card_own_spore_veilcap": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          162,
+          115,
+          182,
+          341
+        ]
+      },
+      "coverage": {
+        "subject_px": 23662,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_spore_veilcap__bg.png",
+        "fg": "art_card_own_spore_veilcap__fg.png",
+        "subject": "art_card_own_spore_veilcap__subject.png"
+      }
+    },
+    "art_card_own_symbiosis_mycorrhiza": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          145,
+          110,
+          197,
+          358
+        ]
+      },
+      "coverage": {
+        "subject_px": 28582,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_symbiosis_mycorrhiza__bg.png",
+        "fg": "art_card_own_symbiosis_mycorrhiza__fg.png",
+        "subject": "art_card_own_symbiosis_mycorrhiza__subject.png"
+      }
+    },
+    "art_card_own_wild_dung_beetle": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          151,
+          110,
+          199,
+          205
+        ]
+      },
+      "coverage": {
+        "subject_px": 28646,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_own_wild_dung_beetle__bg.png",
+        "fg": "art_card_own_wild_dung_beetle__fg.png",
+        "subject": "art_card_own_wild_dung_beetle__subject.png"
+      }
+    },
+    "art_card_parasite_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          169,
+          110,
+          162,
+          332
+        ]
+      },
+      "coverage": {
+        "subject_px": 24115,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_parasite_common__bg.png",
+        "fg": "art_card_parasite_common__fg.png",
+        "subject": "art_card_parasite_common__subject.png"
+      }
+    },
+    "art_card_parasite_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          38,
+          110,
+          427,
+          339
+        ]
+      },
+      "coverage": {
+        "subject_px": 55376,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_parasite_legendary__bg.png",
+        "fg": "art_card_parasite_legendary__fg.png",
+        "subject": "art_card_parasite_legendary__subject.png"
+      }
+    },
+    "art_card_parasite_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          138,
+          110,
+          238,
+          354
+        ]
+      },
+      "coverage": {
+        "subject_px": 31603,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_parasite_mythic__bg.png",
+        "fg": "art_card_parasite_mythic__fg.png",
+        "subject": "art_card_parasite_mythic__subject.png"
+      }
+    },
+    "art_card_parasite_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          163,
+          110,
+          174,
+          352
+        ]
+      },
+      "coverage": {
+        "subject_px": 19754,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_parasite_rare__bg.png",
+        "fg": "art_card_parasite_rare__fg.png",
+        "subject": "art_card_parasite_rare__subject.png"
+      }
+    },
+    "art_card_parasite_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          168,
+          110,
+          182,
+          328
+        ]
+      },
+      "coverage": {
+        "subject_px": 25494,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_parasite_uncommon__bg.png",
+        "fg": "art_card_parasite_uncommon__fg.png",
+        "subject": "art_card_parasite_uncommon__subject.png"
+      }
+    },
+    "art_card_poison_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          146,
+          110,
+          220,
+          364
+        ]
+      },
+      "coverage": {
+        "subject_px": 49373,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_poison_common__bg.png",
+        "fg": "art_card_poison_common__fg.png",
+        "subject": "art_card_poison_common__subject.png"
+      }
+    },
+    "art_card_poison_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          92,
+          110,
+          327,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 58753,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_poison_legendary__bg.png",
+        "fg": "art_card_poison_legendary__fg.png",
+        "subject": "art_card_poison_legendary__subject.png"
+      }
+    },
+    "art_card_poison_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          91,
+          110,
+          330,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 80734,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_poison_mythic__bg.png",
+        "fg": "art_card_poison_mythic__fg.png",
+        "subject": "art_card_poison_mythic__subject.png"
+      }
+    },
+    "art_card_poison_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          98,
+          133,
+          317,
+          367
+        ]
+      },
+      "coverage": {
+        "subject_px": 51821,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_poison_rare__bg.png",
+        "fg": "art_card_poison_rare__fg.png",
+        "subject": "art_card_poison_rare__subject.png"
+      }
+    },
+    "art_card_poison_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          108,
+          110,
+          332,
+          390
+        ]
+      },
+      "coverage": {
+        "subject_px": 37136,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_poison_uncommon__bg.png",
+        "fg": "art_card_poison_uncommon__fg.png",
+        "subject": "art_card_poison_uncommon__subject.png"
+      }
+    },
+    "art_card_spore_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          165,
+          118,
+          182,
+          337
+        ]
+      },
+      "coverage": {
+        "subject_px": 19162,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_spore_common__bg.png",
+        "fg": "art_card_spore_common__fg.png",
+        "subject": "art_card_spore_common__subject.png"
+      }
+    },
+    "art_card_spore_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          65,
+          117,
+          373,
+          352
+        ]
+      },
+      "coverage": {
+        "subject_px": 69728,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_spore_legendary__bg.png",
+        "fg": "art_card_spore_legendary__fg.png",
+        "subject": "art_card_spore_legendary__subject.png"
+      }
+    },
+    "art_card_spore_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          39,
+          117,
+          464,
+          343
+        ]
+      },
+      "coverage": {
+        "subject_px": 55373,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_spore_mythic__bg.png",
+        "fg": "art_card_spore_mythic__fg.png",
+        "subject": "art_card_spore_mythic__subject.png"
+      }
+    },
+    "art_card_spore_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          110,
+          110,
+          292,
+          372
+        ]
+      },
+      "coverage": {
+        "subject_px": 49383,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_spore_rare__bg.png",
+        "fg": "art_card_spore_rare__fg.png",
+        "subject": "art_card_spore_rare__subject.png"
+      }
+    },
+    "art_card_spore_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          108,
+          110,
+          324,
+          324
+        ]
+      },
+      "coverage": {
+        "subject_px": 55928,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_spore_uncommon__bg.png",
+        "fg": "art_card_spore_uncommon__fg.png",
+        "subject": "art_card_spore_uncommon__subject.png"
+      }
+    },
+    "art_card_symbiosis_common": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          151,
+          110,
+          191,
+          351
+        ]
+      },
+      "coverage": {
+        "subject_px": 39770,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_symbiosis_common__bg.png",
+        "fg": "art_card_symbiosis_common__fg.png",
+        "subject": "art_card_symbiosis_common__subject.png"
+      }
+    },
+    "art_card_symbiosis_legendary": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          91,
+          110,
+          333,
+          350
+        ]
+      },
+      "coverage": {
+        "subject_px": 54977,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_symbiosis_legendary__bg.png",
+        "fg": "art_card_symbiosis_legendary__fg.png",
+        "subject": "art_card_symbiosis_legendary__subject.png"
+      }
+    },
+    "art_card_symbiosis_mythic": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          101,
+          110,
+          350,
+          348
+        ]
+      },
+      "coverage": {
+        "subject_px": 36328,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_symbiosis_mythic__bg.png",
+        "fg": "art_card_symbiosis_mythic__fg.png",
+        "subject": "art_card_symbiosis_mythic__subject.png"
+      }
+    },
+    "art_card_symbiosis_rare": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          113,
+          110,
+          272,
+          337
+        ]
+      },
+      "coverage": {
+        "subject_px": 49332,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_symbiosis_rare__bg.png",
+        "fg": "art_card_symbiosis_rare__fg.png",
+        "subject": "art_card_symbiosis_rare__subject.png"
+      }
+    },
+    "art_card_symbiosis_uncommon": {
+      "size": [
+        512,
+        744
+      ],
+      "subject": {
+        "bbox": [
+          164,
+          110,
+          262,
+          357
+        ]
+      },
+      "coverage": {
+        "subject_px": 37421,
+        "total_px": 380928
+      },
+      "files": {
+        "bg": "art_card_symbiosis_uncommon__bg.png",
+        "fg": "art_card_symbiosis_uncommon__fg.png",
+        "subject": "art_card_symbiosis_uncommon__subject.png"
+      }
+    }
+  }
+}

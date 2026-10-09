@@ -3,6 +3,8 @@ export { SceneManager } from './SceneManager';
 export type { SceneCallbacks, SceneOptions, HandCardState } from './SceneManager';
 export { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker, blindKeysFor } from './ArtAssets';
 export type { ArtKey, CardArtKey, LegacyArtKey } from './ArtAssets';
+export { ArtLayers, layerKeysFor, ownLayerStem, pairLayerStem } from './ArtLayers';
+export type { LayerImages, LayerName } from './ArtLayers';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
 export type { CardHome, CardKind } from './Card3D';
 export {

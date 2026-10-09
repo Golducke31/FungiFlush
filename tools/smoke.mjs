@@ -1483,9 +1483,38 @@ const cosmeticsPanel = await (async () => {
     ff.profileStore.current.cosmetics.owned = ['default', 'testback', 'testfelt'];
     ff.profileStore.current.cosmetics.equippedCardBack = 'default';
     ff.profileStore.current.cosmetics.equippedFelt = 'default';
+    // El estado va AGRUPADO por tipo (ver `CosmeticsState`): la Tarjeta de
+    // Jugador tiene sus propios slots; dorso y tapete conservan los de prueba.
+    const none = ['default'];
+    const both = ['default', 'testback', 'testfelt'];
     ff.hud.setCosmeticsState({
-      owned: ['default', 'testback', 'testfelt'],
-      equipped: { cardback: 'default', felt: 'default' },
+      owned: {
+        avatar: none,
+        frame: none,
+        title: none,
+        background: none,
+        victoryFx: none,
+        cardback: both,
+        felt: both,
+      },
+      equipped: {
+        avatar: 'default',
+        frame: 'default',
+        title: 'default',
+        background: 'default',
+        victoryFx: 'default',
+        cardback: 'default',
+        felt: 'default',
+      },
+      player: {
+        name: 'Test',
+        titleKey: null,
+        levelNameKey: 'colony.band.dormant',
+        level: 1,
+        avatarUrl: null,
+        frameUrl: null,
+        backgroundUrl: null,
+      },
     });
     ff.hud.showMenu();
     return { owned: 3 };

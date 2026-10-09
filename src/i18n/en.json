@@ -1342,15 +1342,36 @@
   },
   "cosmetics": {
     "title": "Cosmetics",
-    "subtitle": "Card back and table felt",
+    "subtitle": "Your Player Card, card back and table felt",
+    "playerCard": "Player Card",
+    "defaultName": "Colonist",
     "cardback": "Card back",
     "felt": "Felt",
+    "avatar": "Avatar",
+    "frame": "Frame",
+    "titles": "Title",
+    "background": "Background",
+    "victoryFx": "Victory effect",
     "equip": "Equip",
     "equipped": "Equipped",
     "none": "You don't have cosmetics of this type yet.",
-    "cardback.default": "Classic",
-    "cardback.mycelial": "Deep Mycelium",
-    "felt.default": "Runic slab"
+    "name": {
+      "cardback": { "default": "Classic", "mycelial": "Deep Mycelium" },
+      "felt": { "default": "Runic slab" },
+      "avatar": { "default": "No avatar", "avatar": "Colony Mushroom" },
+      "frame": {
+        "default": "No frame",
+        "frame_common": "Common frame",
+        "frame_uncommon": "Uncommon frame"
+      },
+      "title": {
+        "default": "No title",
+        "title_mycelium": "Rising Mycelium",
+        "title_established": "Established Colony"
+      },
+      "background": { "default": "Standard", "bg_new": "Deep Mycelium" },
+      "victoryFx": { "default": "Classic", "victory_fx": "Golden Bloom" }
+    }
   },
   "history": {
     "title": "History",
@@ -1676,8 +1697,34 @@
       "frame_uncommon": "Uncommon frame",
       "title_established": "Title: Established Colony",
       "unlocked": "Unlocked",
-      "locked": "Locked"
+      "locked": "Locked",
+      "claimable": "Ready to claim",
+      "claimed": "Claimed"
     },
+    "rewardKind": {
+      "avatar": "Avatar",
+      "frame": "Frame",
+      "title": "Title",
+      "background": "Background",
+      "victoryFx": "Effect",
+      "pack": "Pack"
+    },
+    "rewardInfo": {
+      "frame_common": "A common frame for your Player Card avatar.",
+      "pack_spores": "A pack to open in the Collection: new specimens.",
+      "bg_new": "A new background for your Player Card.",
+      "title_mycelium": "The \u201cRising Mycelium\u201d title for your profile.",
+      "victory_fx": "A different victory effect when you clear a Blind.",
+      "pack_colony": "A pack from the Deep Mycelium expansion.",
+      "avatar": "A mushroom avatar for your Player Card.",
+      "frame_uncommon": "An uncommon frame for your Player Card avatar.",
+      "title_established": "The \u201cEstablished Colony\u201d title for your profile."
+    },
+    "claim": "Claim",
+    "claimAll": "Claim all",
+    "nothingToClaim": "You have no rewards to claim yet.",
+    "rewardClaimed": "Reward claimed: {name}",
+    "rewardsClaimed": "Rewards claimed: {count}",
     "bonus": {
       "firstHand": "Blind on the first hand",
       "discards": "Finished with discards left",

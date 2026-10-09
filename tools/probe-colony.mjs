@@ -6,7 +6,8 @@
  *   2. los CUATRO accesos (Recompensas / Personalizar / Logros / Historial)
  *      esten DENTRO de la ventana (no alcanza con que existan en el DOM: el
  *      smoke clickea con el mouse en el centro real del boton);
- *   3. el panel de Recompensas liste la escalera de niveles;
+ *   3. el panel de Recompensas liste la escalera, marque las desbloqueadas como
+ *      reclamables y RECLAME de verdad ("Reclamar todo" -> sobres + cosmeticos);
  *   4. el panel de resultados muestre "+N Esporas de Colonia" con su desglose.
  *
  *   node tools/probe-colony.mjs
@@ -94,10 +95,14 @@ await wait(300);
 // `menuMeta`, que solo se empuja al entrar al menu.
 await page.evaluate(() => {
   const profile = window.__fungiflush.profileStore.current;
-  profile.colony.lifetimeSpores = 1175;
+  // 588 Esporas -> nivel 6 (umbral 500) con 88/200 dentro del nivel = 44%.
+  // Los umbrales viven en `COLONY_LEVELS` (src/meta/Colony.ts): si se recalibran,
+  // esta semilla y las aserciones de abajo se mueven juntas.
+  profile.colony.lifetimeSpores = 588;
   profile.colony.level = 6;
   profile.colony.seasonSpores = 400;
   profile.colony.firstClears = ['1:0', '1:1', '2:0'];
+  // Nivel 6 -> desbloqueadas las recompensas de los niveles 2..6 (5 ids).
   profile.colony.unlockedRewards = [
     'frame_common',
     'pack_spores',
@@ -105,6 +110,13 @@ await page.evaluate(() => {
     'title_mycelium',
     'victory_fx',
   ];
+  profile.colony.claimedRewards = [];
+  // Limpia sobres y cosmeticos para que el reclamo sea OBSERVABLE.
+  profile.packs.pending = 0;
+  profile.packs.expansionPending = 0;
+  // El avatar (nivel 8) y el marco poco comun (nivel 9) se siembran como ya
+  // poseidos para poder probar que su ARTE carga; el resto entra al reclamar.
+  profile.cosmetics.owned = ['default', 'mycelial', 'avatar', 'frame_uncommon'];
   profile.account.provider = 'google-play';
   profile.account.accountId = 'gpg_probe';
   profile.account.displayName = 'Nova';
@@ -170,7 +182,7 @@ console.log('--- PERFIL ---');
 console.log(JSON.stringify(profile, null, 2));
 check(Boolean(profile.spores && profile.spores.includes('/')), 'muestra las Esporas de Colonia', profile.spores ?? 'null');
 check(Boolean(profile.level && /Nivel/i.test(profile.level)), 'muestra el nivel', profile.level ?? 'null');
-check(profile.fill === '44%', 'la barra refleja el progreso (175/400)', profile.fill ?? 'null');
+check(profile.fill === '44%', 'la barra refleja el progreso (88/200)', profile.fill ?? 'null');
 check(profile.icon, 'el icono de Esporas de Colonia esta presente');
 for (const c of profile.cards) {
   check(Boolean(c && c.inside), `acceso "${c?.act ?? '?'}" dentro de la ventana`, c ? `top ${c.top} bottom ${c.bottom} / vh ${profile.vh}` : 'no existe');
@@ -187,12 +199,24 @@ const rewards = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('.panel.is-colony-rewards .colony-reward-row')];
   const close = document.querySelector('.panel.is-colony-rewards [data-act="colony-rewards-close"]');
   const r = close?.getBoundingClientRect();
+  const claimAll = document.querySelector('.panel.is-colony-rewards [data-act="colony-claim-all"]');
   return {
     total: rows.length,
     unlocked: rows.filter((x) => x.classList.contains('is-unlocked')).length,
+    claimable: rows.filter((x) => x.classList.contains('is-claimable')).length,
+    claimed: rows.filter((x) => x.classList.contains('is-claimed')).length,
+    // Etiqueta de tipo (marco / titulo / fondo / efecto / sobre) por fila.
+    kinds: rows.filter((x) => x.querySelector('.colony-reward-kind')).length,
+    // Descripcion real (no la clave cruda, no el texto de costo de respaldo).
+    descs: rows.filter((x) => {
+      const d = x.querySelector('.colony-reward-desc:not(.is-empty)');
+      const text = (d?.textContent ?? '').trim();
+      return text.length > 4 && !text.startsWith('[');
+    }).length,
     firstLevel: rows[0]?.dataset['level'] ?? null,
     lastLevel: rows[rows.length - 1]?.dataset['level'] ?? null,
     rawKeys: rows.filter((x) => /t\(['"]/.test(x.textContent ?? '')).length,
+    claimAllDisabled: claimAll ? claimAll.disabled : null,
     closeInside: r ? r.top >= -1 && r.bottom <= window.innerHeight + 1 : false,
   };
 });
@@ -200,11 +224,114 @@ console.log('--- RECOMPENSAS ---');
 console.log(JSON.stringify(rewards, null, 2));
 check(rewards.total === 10, 'la escalera lista 10 niveles', String(rewards.total));
 check(rewards.unlocked === 6, 'marca los 6 niveles alcanzados', String(rewards.unlocked));
+check(rewards.claimable === 5, 'las 5 recompensas desbloqueadas son reclamables', String(rewards.claimable));
+check(rewards.claimed === 0, 'ninguna reclamada todavia', String(rewards.claimed));
+check(rewards.kinds === 9, 'cada recompensa lleva su etiqueta de tipo', String(rewards.kinds));
+check(rewards.descs === 9, 'cada recompensa explica que hace', String(rewards.descs));
 check(rewards.rawKeys === 0, 'ninguna clave i18n sin resolver');
+check(rewards.claimAllDisabled === false, '"Reclamar todo" esta habilitado');
 check(rewards.closeInside, 'el boton Cerrar entra en la ventana');
 await page.screenshot({ path: join(shotsDir, 'colony-rewards.png') });
 
-// --- 2b. Ranking (V1.3) ---
+// --- 2a. Reclamar todo ---
+await click('.panel.is-colony-rewards [data-act="colony-claim-all"]');
+await wait(600);
+const claimed = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('.panel.is-colony-rewards .colony-reward-row')];
+  const p = window.__fungiflush.profileStore.current;
+  const owned = ['frame_common', 'bg_new', 'title_mycelium', 'victory_fx'].filter((id) =>
+    p.cosmetics.owned.includes(id),
+  );
+  return {
+    claimed: rows.filter((x) => x.classList.contains('is-claimed')).length,
+    claimable: rows.filter((x) => x.classList.contains('is-claimable')).length,
+    basePending: p.packs.pending,
+    expansionPending: p.packs.expansionPending,
+    claimedIds: p.colony.claimedRewards.length,
+    owned,
+    // Reclamar NO equipa: el avatar sigue en 'default'.
+    equippedAvatar: p.cosmetics.equippedAvatar,
+  };
+});
+console.log('--- RECLAMAR TODO ---');
+console.log(JSON.stringify(claimed, null, 2));
+check(claimed.claimed === 5, 'las 5 recompensas pasan a "Reclamada"', String(claimed.claimed));
+check(claimed.claimable === 0, 'ya no queda ninguna reclamable', String(claimed.claimable));
+check(claimed.claimedIds === 5, 'el perfil registra los 5 ids reclamados', String(claimed.claimedIds));
+check(claimed.basePending === 1, 'pack_spores -> 1 sobre base pendiente', String(claimed.basePending));
+check(claimed.expansionPending === 0, 'pack_colony (nivel 7) todavia no se desbloqueo', String(claimed.expansionPending));
+check(claimed.owned.length === 4, 'los 4 cosmeticos entran a `owned`', claimed.owned.join(', '));
+check(claimed.equippedAvatar === 'default', 'reclamar NO equipa', claimed.equippedAvatar);
+await page.screenshot({ path: join(shotsDir, 'colony-claimed.png') });
+
+// --- 2b. Personalizar (Tarjeta de Jugador) ---
+await page.evaluate(() => window.__fungiflush.hud.showProfile());
+await page.waitForSelector('.panel.is-profile', { timeout: 8000 });
+await wait(300);
+await click('.panel.is-profile [data-act="cosmetics"]');
+await page.waitForSelector('.panel.is-cosmetics', { timeout: 8000 });
+await wait(400);
+const cosmetics = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-cosmetics');
+  const close = panel?.querySelector('[data-act="cosmetics-close"]');
+  const r = close?.getBoundingClientRect();
+  return {
+    present: Boolean(panel),
+    playerCard: Boolean(panel?.querySelector('.player-card')),
+    sections: panel?.querySelectorAll('.cosmetics-section').length ?? 0,
+    cards: panel?.querySelectorAll('.cosmetics-card').length ?? 0,
+    // Los 4 cosmeticos reclamados tienen que aparecer como equipables.
+    equipButtons: panel?.querySelectorAll('[data-act="cosmetic-equip"]').length ?? 0,
+    rawKeys: /t\(['"]/.test(panel?.textContent ?? '') ? 1 : 0,
+    closeInside: r ? r.bottom <= window.innerHeight + 1 : false,
+  };
+});
+console.log('--- PERSONALIZAR ---');
+console.log(JSON.stringify(cosmetics, null, 2));
+check(cosmetics.present, 'el panel de Personalizar abre desde el Perfil');
+check(cosmetics.playerCard, 'muestra la Tarjeta de Jugador');
+check(cosmetics.sections === 7, 'una seccion por tipo de cosmetico', String(cosmetics.sections));
+check(cosmetics.rawKeys === 0, 'ninguna clave i18n sin resolver');
+check(cosmetics.closeInside, 'el boton Cerrar entra en la ventana');
+await page.screenshot({ path: join(shotsDir, 'colony-cosmetics.png') });
+
+// --- 2b-bis. Equipar la Tarjeta de Jugador (arte real) ---
+// Se equipa clickeando los botones del panel (camino real, no se muta el perfil
+// a mano). Cada click re-renderiza el panel, asi que se vuelve a consultar.
+const equipCosmetic = async (kind, id) => {
+  await click(`.panel.is-cosmetics [data-act="cosmetic-equip"][data-kind="${kind}"][data-id="${id}"]`);
+  await wait(350);
+};
+await equipCosmetic('avatar', 'avatar');
+await equipCosmetic('frame', 'frame_uncommon');
+await equipCosmetic('background', 'bg_new');
+await equipCosmetic('title', 'title_mycelium');
+
+const equipped = await page.evaluate(() => {
+  const loaded = (sel) => {
+    const img = document.querySelector(`.panel.is-cosmetics ${sel}`);
+    return img ? img.complete && img.naturalWidth > 0 : false;
+  };
+  return {
+    avatarLoaded: loaded('.player-card-avatar-img'),
+    frameLoaded: loaded('.player-card-frame'),
+    bgLoaded: loaded('.player-card-bg'),
+    title: document.querySelector('.panel.is-cosmetics .player-card-title')?.textContent?.trim() ?? null,
+    profileAvatar: window.__fungiflush.profileStore.current.cosmetics.equippedAvatar,
+    profileFrame: window.__fungiflush.profileStore.current.cosmetics.equippedFrame,
+  };
+});
+console.log('--- TARJETA EQUIPADA ---');
+console.log(JSON.stringify(equipped, null, 2));
+check(equipped.profileAvatar === 'avatar', 'el avatar equipado se persiste', equipped.profileAvatar);
+check(equipped.profileFrame === 'frame_uncommon', 'el marco equipado se persiste', equipped.profileFrame);
+check(equipped.avatarLoaded, 'el arte del avatar CARGA en la tarjeta');
+check(equipped.frameLoaded, 'el arte del marco CARGA en la tarjeta');
+check(equipped.bgLoaded, 'el arte del fondo CARGA en la tarjeta');
+check(equipped.title === 'Micelio Naciente', 'el titulo equipado se muestra', equipped.title ?? 'null');
+await page.screenshot({ path: join(shotsDir, 'colony-playercard.png') });
+
+// --- 2c. Ranking (V1.3) ---
 await page.evaluate(() => {
   const ff = window.__fungiflush;
   ff.hud.showProfile();

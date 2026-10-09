@@ -25,6 +25,7 @@ import {
   type CardTextureCache,
   type CardTextureSpec,
 } from './CardTexture';
+import type { LayerImages } from './ArtLayers';
 import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR, SELECT_COLOR, hexToCss } from './palette';
 import * as anim from './anim';
@@ -110,6 +111,18 @@ const CARD_RELIEF = 0.03;
  * relieve, o el arte atravesaria el texto al levantarse.
  */
 const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + CARD_RELIEF + 0.02;
+
+/**
+ * Separacion en Z entre las capas de arte segmentadas (fondo / sujeto / primer plano).
+ *
+ * El parallax real sale de aca: al inclinar la carta, una capa a `-GAP` y otra a `+GAP`
+ * se desplazan en sentidos opuestos respecto del plano del sujeto (z=0). Es la MISMA
+ * idea que ya hacia la capa de texto (`CARD_TOP_OFFSET`), pero aplicada al arte.
+ *
+ * Es chico a proposito: mas separacion da mas paralaje pero el arte empieza a leerse
+ * como planos flotando en vez de una ilustracion.
+ */
+const CARD_LAYER_GAP = 0.014;
 
 /**
  * Escala del quad del halo respecto de la carta.
@@ -266,6 +279,18 @@ export class Card3D {
   /** Capa de TEXTO que flota sobre el arte: es la que produce el parallax. */
   private readonly top: THREE.Mesh;
   private readonly topMaterial: THREE.MeshStandardMaterial;
+  /**
+   * Capas de ARTE segmentadas (parallax). Solo se ven cuando la carta trae capas;
+   * si no, quedan invisibles y el parallax es el de siempre (arte + texto).
+   *
+   * `bg` va por DETRAS del sujeto (la cara) y `fg` por DELANTE, separadas por
+   * `CARD_LAYER_GAP`. Al inclinar la carta, las tres se corren a distinta
+   * velocidad: eso es el parallax real.
+   */
+  private readonly bgLayer: THREE.Mesh;
+  private readonly bgLayerMaterial: THREE.MeshStandardMaterial;
+  private readonly fgLayer: THREE.Mesh;
+  private readonly fgLayerMaterial: THREE.MeshStandardMaterial;
   private readonly halo: THREE.Mesh;
   private readonly haloMaterial: THREE.ShaderMaterial;
   /** Badge con el numero de orden de la seleccion (1-5). */
@@ -379,11 +404,35 @@ export class Card3D {
     this.top = new THREE.Mesh(CARD_GEO, this.topMaterial);
     this.top.position.z = CARD_TOP_OFFSET;
 
+    // --- Capas de ARTE segmentadas (parallax real) ---
+    // Dos quads gemelos con el MISMO material que la cara pero transparentes. Nacen
+    // invisibles: `applyTexture` los enciende solo si la carta trae capas. Asi el
+    // coste (2 draw calls por carta) no se paga hasta que hay arte segmentado.
+    const layerMaterial = () =>
+      new THREE.MeshStandardMaterial({
+        transparent: true,
+        depthWrite: false,
+        roughness: 0.58,
+        metalness: 0.12,
+        emissive: new THREE.Color(0xffffff),
+        emissiveIntensity: 0.32,
+      });
+    this.bgLayerMaterial = layerMaterial();
+    this.bgLayer = new THREE.Mesh(CARD_GEO, this.bgLayerMaterial);
+    this.bgLayer.position.z = CARD_THICKNESS / 2 - CARD_LAYER_GAP;
+    this.bgLayer.visible = false;
+    this.fgLayerMaterial = layerMaterial();
+    this.fgLayer = new THREE.Mesh(CARD_GEO, this.fgLayerMaterial);
+    this.fgLayer.position.z = CARD_THICKNESS / 2 + CARD_LAYER_GAP;
+    this.fgLayer.visible = false;
+
     this.group.add(this.halo);
     this.group.add(this.badge);
+    this.group.add(this.fgLayer);
     this.group.add(this.top);
     this.group.add(this.edge);
     this.group.add(this.face);
+    this.group.add(this.bgLayer);
     this.group.add(this.back);
 
     // Las cartas se apoyan planas sobre la mesa.
@@ -394,7 +443,13 @@ export class Card3D {
   // Contenido
   // -------------------------------------------------------------------------
 
-  setCard(card: CardInstance, cache: CardTextureCache, lang: string, art?: HTMLImageElement): void {
+  setCard(
+    card: CardInstance,
+    cache: CardTextureCache,
+    lang: string,
+    art?: HTMLImageElement,
+    layers?: LayerImages,
+  ): void {
     this.card = card;
 
     const statuses = card.statuses.map((s) => s.type);
@@ -450,8 +505,27 @@ export class Card3D {
 
     // Dos capas: el ARTE (compartido por archivo) y el TEXTO (por estado). El
     // parallax sale de que la capa de texto flota por delante de la de arte.
+    //
+    // Con CAPAS segmentadas, la cara pasa a ser SOLO el sujeto y el fondo/primer
+    // plano van a sus propios meshes (bg/fg). Sin capas, todo esto es lo de antes.
     const artKey = art?.src ?? `proc|${spec.kind}|${spec.element}|${spec.rarity}`;
-    this.applyTexture(cache.getArt(artKey, spec, art), cache.getTop(key, spec), card.def.element, art);
+    const hasLayers = !!layers?.subject;
+    this.applyTexture(
+      hasLayers
+        ? cache.getLayer(
+            `${artKey}|subject`,
+            spec,
+            'subject',
+            layers!.subject!,
+            layers!.bbox,
+            layers!.size,
+          )
+        : cache.getArt(artKey, spec, art),
+      cache.getTop(key, spec),
+      card.def.element,
+      art,
+      layers,
+    );
   }
 
   setJoker(
@@ -483,6 +557,8 @@ export class Card3D {
     // compartirian UNA sola cara procedural y se perderia la silueta/hue propios
     // de cada uno (def.art).
     const artKey = art?.src ?? `proc|${spec.kind}|${joker.def.id}|${spec.rarity}`;
+    // Los simbiontes NO llevan capas segmentadas: el segmentador corre sobre cartas
+    // y ciegos. Se pasa `undefined` a proposito para caer a la textura unica.
     this.applyTexture(cache.getArt(artKey, spec, art), cache.getTop(key, spec), 'neutral', art);
   }
 
@@ -495,9 +571,36 @@ export class Card3D {
     topTexture: THREE.Texture,
     element: string,
     art?: HTMLImageElement,
+    layers?: LayerImages,
   ): void {
     this.faceMaterial.map = texture;
     this.faceMaterial.emissiveMap = texture;
+
+    // --- Capas de arte (parallax real) ---
+    // La cara ya es el SUJETO cuando hay capas. El fondo y el primer plano van a sus
+    // meshes. Sin capas, los dos se ocultan y todo vuelve al comportamiento previo.
+    const layerTex = (img: HTMLImageElement | undefined): THREE.Texture | null =>
+      img ? new THREE.CanvasTexture(img) : null;
+    const applyLayer = (
+      mesh: THREE.Mesh,
+      material: THREE.MeshStandardMaterial,
+      img: HTMLImageElement | undefined,
+    ): void => {
+      const tex = layerTex(img);
+      if (!tex) {
+        mesh.visible = false;
+        return;
+      }
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      tex.needsUpdate = true;
+      material.map = tex;
+      material.emissiveMap = tex;
+      material.needsUpdate = true;
+      mesh.visible = true;
+    };
+    applyLayer(this.bgLayer, this.bgLayerMaterial, layers?.bg);
+    applyLayer(this.fgLayer, this.fgLayerMaterial, layers?.fg);
 
     // Capa de TEXTO: transparente salvo el texto y el marco. Va por delante del
     // arte, asi que al inclinar la carta se corre respecto a el: el parallax.

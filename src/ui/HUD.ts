@@ -28,6 +28,7 @@ import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
 import { currentLanguage, t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import type { LayerImages } from '@render/index';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
@@ -49,6 +50,7 @@ import {
   type LeaderboardPanelState,
 } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
+import { COSMETIC_KINDS } from '../meta/Cosmetics';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
@@ -177,12 +179,16 @@ export interface HudCallbacks {
   onOpenBoard: () => void;
   // --- R4b: cosméticos (dorso de carta / tapete) ---
   onOpenCosmetics: () => void;
-  onEquip: (kind: 'cardback' | 'felt', id: string) => void;
+  onEquip: (kind: CosmeticKind, id: string) => void;
   // --- R5: historial de partidas ---
   onOpenHistory: () => void;
   // --- Colonia Fungi (meta-progresion) ---
   /** Escalera de niveles de la Colonia (Recompensas). */
   onOpenColonyRewards: () => void;
+  /** El jugador reclama UNA recompensa desbloqueada de la Colonia. */
+  onClaimColonyReward: (rewardId: string) => void;
+  /** El jugador reclama TODAS las recompensas pendientes de la Colonia. */
+  onClaimAllColonyRewards: () => void;
   /** Ranking global: pide refrescar los tableros al servidor. */
   onRefreshLeaderboard: () => void;
   /** Vincular el progreso a Google Play Games. */
@@ -249,6 +255,11 @@ export class HUD {
   private readonly root: HTMLElement;
   /** Ilustracion real de una carta. Ver la nota del constructor. */
   private readonly cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
+  /**
+   * Capas segmentadas de una carta (parallax). Opcional: sin esto la cara 2D de la
+   * tienda/recompensa se compone con la ilustracion unica. Ver el constructor.
+   */
+  private readonly cardLayers?: (def: CardDefinition) => LayerImages | undefined;
   /** Ilustracion real de un joker. Ver la nota del constructor. */
   private readonly jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
   /** Ilustracion real de un ciego, por su clave `art`. Ver el constructor. */
@@ -469,8 +480,33 @@ export class HUD {
   };
   /** Cosméticos (R4b): se los empuja el controlador desde el perfil. */
   private cosmeticsState: CosmeticsState = {
-    owned: ['default'],
-    equipped: { cardback: 'default', felt: 'default' },
+    owned: {
+      avatar: ['default'],
+      frame: ['default'],
+      title: ['default'],
+      background: ['default'],
+      victoryFx: ['default'],
+      cardback: ['default'],
+      felt: ['default'],
+    },
+    equipped: {
+      avatar: 'default',
+      frame: 'default',
+      title: 'default',
+      background: 'default',
+      victoryFx: 'default',
+      cardback: 'default',
+      felt: 'default',
+    },
+    player: {
+      name: '',
+      titleKey: null,
+      levelNameKey: 'colony.band.dormant',
+      level: 1,
+      avatarUrl: null,
+      frameUrl: null,
+      backgroundUrl: null,
+    },
   };
   /** Historial (R5): se lo empuja el controlador desde el perfil. */
   private historyState: HistoryEntryView[] = [];
@@ -523,6 +559,11 @@ export class HUD {
      * misma carta se ve distinta en la mano que en el mazo.
      */
     cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
+    /**
+     * Capas segmentadas de una carta. La inyecta el render igual que `cardArt`.
+     * Opcional: si falta, la cara 2D se compone con la ilustracion unica.
+     */
+    cardLayers?: (def: CardDefinition) => LayerImages | undefined;
     /** Igual que `cardArt`, para jokers. */
     jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
     /**
@@ -536,6 +577,7 @@ export class HUD {
     this.root = options.root;
     this.callbacks = options.callbacks;
     this.cardArt = options.cardArt;
+    this.cardLayers = options.cardLayers;
     this.jokerArt = options.jokerArt;
     this.blindArt = options.blindArt;
     this.appInfo = options.appInfo ?? { version: '0.0.0', contentHash: null, packs: [] };
@@ -2619,7 +2661,11 @@ export class HUD {
         dailyRemaining: colony?.dailyRemaining,
         dailyCap: colony?.dailyCap,
       },
-      { onClose: () => this.showProfile() },
+      {
+        onClaim: (rewardId) => this.callbacks.onClaimColonyReward(rewardId),
+        onClaimAll: () => this.callbacks.onClaimAllColonyRewards(),
+        onClose: () => this.showProfile(),
+      },
     );
     this.openOverlay(panel);
   }
@@ -3154,8 +3200,11 @@ export class HUD {
     // Igual que la ascension: el `openOverlay` limpia las referencias del panel,
     // asi que se toma el estado ANTES de abrirlo.
     const state: CosmeticsState = {
-      owned: [...this.cosmeticsState.owned],
+      owned: Object.fromEntries(
+        COSMETIC_KINDS.map((kind) => [kind, [...(this.cosmeticsState.owned[kind] ?? [])]]),
+      ) as Record<CosmeticKind, string[]>,
       equipped: { ...this.cosmeticsState.equipped },
+      player: { ...this.cosmeticsState.player },
     };
     const panel = buildCosmeticsPanel(state, {
       onEquip: (kind: CosmeticKind, id: string) => {
@@ -3281,6 +3330,7 @@ export class HUD {
         artFor: (offer) =>
           offerFaceUrl(offer, this.engine, t, {
             card: this.cardArt,
+            layers: this.cardLayers,
             joker: this.jokerArt,
           }),
         labelFor: (kind) => offerLabel(kind),
@@ -3335,6 +3385,7 @@ export class HUD {
       info,
       ...(highlightUid ? { highlightUid } : {}),
       ...(this.cardArt ? { cardArt: this.cardArt } : {}),
+      ...(this.cardLayers ? { cardLayers: this.cardLayers } : {}),
     };
   }
 
@@ -4101,6 +4152,7 @@ export class HUD {
       // Miniatura de la carta: misma cara procedural que la carta real.
       const artUrl = offerFaceUrl(offer, this.engine, t, {
         card: this.cardArt,
+        layers: this.cardLayers,
         joker: this.jokerArt,
       });
       if (artUrl) {
@@ -4246,6 +4298,7 @@ export class HUD {
       };
       const artUrl = offerFaceUrl(pseudo, this.engine, t, {
         card: this.cardArt,
+        layers: this.cardLayers,
         joker: this.jokerArt,
       });
       if (artUrl) {

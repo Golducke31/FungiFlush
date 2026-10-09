@@ -1,26 +1,35 @@
 /**
- * CosmeticsScreen.ts — Cosméticos del jugador (R4b).
+ * CosmeticsScreen.ts — Cosméticos del jugador.
  *
- * Pantalla donde se elige el dorso de carta y el tapete. Es DOM puro: no conoce
- * ni el motor ni los assets. Recibe el estado ya resuelto (qué tiene el jugador
- * y qué lleva puesto) y emite `onEquip(kind, id)` cuando elige uno. Quien
- * escribe en el perfil y le dice al render qué textura poner es el controlador
- * (`main.ts`), no esta pantalla.
+ * Pantalla donde se elige lo que "viste" el jugador: la Tarjeta de Jugador
+ * (avatar, marco, título, fondo), el efecto de victoria, el dorso de carta y el
+ * tapete. Es DOM puro: no conoce ni el motor ni los assets. Recibe el estado ya
+ * resuelto (qué tiene el jugador, qué lleva puesto y las URLs de arte) y emite
+ * `onEquip(kind, id)` cuando elige uno. Quien escribe en el perfil y le dice al
+ * render qué textura poner es el controlador (`main.ts`), no esta pantalla.
  *
- * Hoy solo existe la opción `default` de cada tipo: el panel ya funciona de
- * punta a punta (listar, marcar el equipado, equipar, persistir) y está listo
- * para que un fieltro/dorso nuevo —con su arte generado— caiga sin tocar esto.
+ * Las secciones salen de `COSMETIC_KINDS`: agregar un tipo nuevo no obliga a
+ * tocar esta pantalla.
  */
 
 import { t } from '@i18n/index';
+import {
+  COSMETIC_KINDS,
+  COSMETIC_SECTION_KEY,
+  cosmeticArtUrl,
+  type CosmeticKind,
+} from '../meta/Cosmetics';
+import { buildPlayerCard, type PlayerCardState } from './PlayerCard';
 
-export type CosmeticKind = 'cardback' | 'felt';
+export type { CosmeticKind };
 
 export interface CosmeticsState {
-  /** Ids de cosméticos que el jugador posee, por tipo. */
-  owned: string[];
-  /** Lo que lleva puesto actualmente. */
-  equipped: { cardback: string; felt: string };
+  /** Ids poseídos POR TIPO (siempre incluye `'default'`). */
+  owned: Record<CosmeticKind, string[]>;
+  /** Lo que lleva puesto, por tipo. */
+  equipped: Record<CosmeticKind, string>;
+  /** Identidad para la Tarjeta de Jugador (preview en vivo). */
+  player: PlayerCardState;
 }
 
 export interface CosmeticsCallbacks {
@@ -29,17 +38,18 @@ export interface CosmeticsCallbacks {
   onClose: () => void;
 }
 
-/** Clave i18n del nombre de un cosmético. `default` es literal; el resto cae a un nombre legible del id. */
+/** Clave i18n del nombre de un cosmético. Sin clave propia, cae a un nombre legible del id. */
 function cosmeticName(kind: CosmeticKind, id: string): string {
-  if (id === 'default') return t(`cosmetics.${kind}.default`);
-  // Futuros cosméticos traen su propia clave; si no está, un nombre legible.
+  const value = t(`cosmetics.name.${kind}.${id}`);
+  // `t()` devuelve `[clave]` cuando la clave no existe: ahi va el nombre legible.
+  if (!value.startsWith('[')) return value;
   return id
     .replace(/[_-]/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /**
- * Tarjeta de un cosmético: nombre + estado (Equipado / Equipar).
+ * Tarjeta de un cosmético: miniatura (si tiene arte) + nombre + estado.
  *
  * `data-act="cosmetic-equip"` + `data-kind` + `data-id` son los ganchos del
  * smoke. La tarjeta del equipado lleva `is-selected` y el botón queda
@@ -55,6 +65,18 @@ function cosmeticCard(
   card.className = `cosmetics-card${equipped ? ' is-selected' : ''}`;
   card.dataset['kind'] = kind;
   card.dataset['id'] = id;
+
+  const thumbUrl = cosmeticArtUrl(kind, id);
+  if (thumbUrl) {
+    const thumb = document.createElement('img');
+    thumb.className = 'cosmetics-thumb';
+    thumb.src = thumbUrl;
+    thumb.alt = '';
+    thumb.decoding = 'async';
+    // Un cosmético sin arte todavía no rompe la tarjeta: la miniatura se va.
+    thumb.addEventListener('error', () => thumb.remove());
+    card.appendChild(thumb);
+  }
 
   const body = document.createElement('span');
   body.className = 'cosmetics-body';
@@ -83,25 +105,26 @@ function cosmeticCard(
 }
 
 function section(
-  titleKey: string,
   kind: CosmeticKind,
   state: CosmeticsState,
   onEquip: (kind: CosmeticKind, id: string) => void,
 ): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'cosmetics-section';
+  wrap.dataset['kind'] = kind;
 
   const title = document.createElement('h3');
   title.className = 'cosmetics-section-title';
-  title.textContent = t(titleKey);
+  title.textContent = t(COSMETIC_SECTION_KEY[kind]);
   wrap.appendChild(title);
 
   const grid = document.createElement('div');
   grid.className = 'cosmetics-grid';
-  for (const id of state.owned) {
+  const ids = state.owned[kind] ?? [];
+  for (const id of ids) {
     grid.appendChild(cosmeticCard(kind, id, state.equipped[kind] === id, onEquip));
   }
-  if (state.owned.length === 0) {
+  if (ids.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'cosmetics-empty';
     empty.textContent = t('cosmetics.none');
@@ -130,8 +153,20 @@ export function buildCosmeticsPanel(state: CosmeticsState, callbacks: CosmeticsC
 
   const body = document.createElement('div');
   body.className = 'cosmetics-body-scroll';
-  body.appendChild(section('cosmetics.cardback', 'cardback', state, callbacks.onEquip));
-  body.appendChild(section('cosmetics.felt', 'felt', state, callbacks.onEquip));
+
+  // Preview en vivo de la Tarjeta de Jugador: cambiar de avatar/marco/título/
+  // fondo se ve ACÁ, sin abrir el perfil.
+  const preview = document.createElement('div');
+  preview.className = 'cosmetics-player';
+  const previewTitle = document.createElement('h3');
+  previewTitle.className = 'cosmetics-section-title';
+  previewTitle.textContent = t('cosmetics.playerCard');
+  preview.append(previewTitle, buildPlayerCard(state.player));
+  body.appendChild(preview);
+
+  for (const kind of COSMETIC_KINDS) {
+    body.appendChild(section(kind, state, callbacks.onEquip));
+  }
 
   const footer = document.createElement('div');
   footer.className = 'cosmetics-footer';

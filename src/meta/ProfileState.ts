@@ -208,6 +208,16 @@ export interface ProfileSave {
   cosmetics: {
     equippedCardBack: string;
     equippedFelt: string;
+    /**
+     * Tarjeta de Jugador (recompensas de la Colonia): avatar + marco + titulo +
+     * fondo + efecto de victoria. `'default'` = sin cosmetico de ese tipo.
+     * Aditivo: un perfil viejo no los tiene y la migracion cae a `'default'`.
+     */
+    equippedAvatar: string;
+    equippedFrame: string;
+    equippedTitle: string;
+    equippedBackground: string;
+    equippedVictoryFx: string;
     owned: string[];
   };
   /** Copias extra en el mazo inicial, ganadas por recompensas del pase. */
@@ -371,7 +381,16 @@ export function defaultProfile(): ProfileSave {
     },
     daily: { lastClaimDate: null, lastClaimTs: 0, streak: 0, bestStreak: 0, history: [] },
     achievements: { unlockedIds: [], progress: {} },
-    cosmetics: { equippedCardBack: 'default', equippedFelt: 'default', owned: ['default', 'mycelial'] },
+    cosmetics: {
+      equippedCardBack: 'default',
+      equippedFelt: 'default',
+      equippedAvatar: 'default',
+      equippedFrame: 'default',
+      equippedTitle: 'default',
+      equippedBackground: 'default',
+      equippedVictoryFx: 'default',
+      owned: ['default', 'mycelial'],
+    },
     starterOverrides: [],
     stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },

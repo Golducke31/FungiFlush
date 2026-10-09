@@ -24,6 +24,8 @@
     "gate:parity": "node tools/parity-layout.mjs",
     "art": "python tools/optimize_art.py && node tools/genArtIndex.mjs",
     "art:index": "node tools/genArtIndex.mjs",
+    "art:layers": "python tools/segment_card_layers.py && node tools/genLayerIndex.mjs",
+    "art:layers:index": "node tools/genLayerIndex.mjs",
     "fonts": "python tools/build_fonts.py",
     "audio": "python tools/build_audio.py",
     "icons": "python tools/make_icons.py",
