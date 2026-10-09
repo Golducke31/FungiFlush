@@ -185,12 +185,52 @@ test('v4: la Colonia sobrevive el merge y el nivel se DERIVA de las Esporas', ()
   // imposible. 1200 Esporas son nivel 8 (950..1250).
   assert.equal(migrated.colony.level, 8);
   assert.deepEqual(migrated.colony.firstClears, ['1:0']);
-  assert.deepEqual(migrated.colony.unlockedRewards, ['frame_common']);
+  // RECONCILIACION: `unlockedRewards` se rellena hacia adelante con los ids de
+  // los niveles <= al nivel derivado (2..8), respetando lo que ya venia. Sin esto
+  // las recompensas de nivel alto quedaban "desbloqueadas" pero SIN boton de
+  // reclamar (ver el test de abajo).
+  assert.deepEqual(migrated.colony.unlockedRewards, [
+    'frame_common',
+    'pack_spores',
+    'bg_new',
+    'title_mycelium',
+    'victory_fx',
+    'pack_colony',
+    'avatar',
+  ]);
   assert.equal(migrated.account.provider, 'google-play');
   assert.equal(migrated.account.accountId, 'abc');
   assert.equal(migrated.account.displayName, 'Nova');
   assert.equal(migrated.account.syncState, 'pending');
   assert.equal(migrated.account.pendingResults.length, 1);
+});
+
+test('colonia: `unlockedRewards` se reconcilia con el nivel derivado (bug lvl 8)', () => {
+  // Reporte del jugador: "soy lvl 8, equipe las recompensas y parecen no
+  // aparecer, el titulo si es visible". Causa: un perfil guardado con
+  // `unlockedRewards` incompleto respecto al nivel (perfiles de antes del sistema
+  // de recompensas nombradas, o un nivel recalculado sin empujar los desbloqueos)
+  // dejaba las recompensas de nivel alto sin boton de reclamar -> nunca entraban
+  // a `cosmetics.owned` -> no se podian equipar. La migracion ahora las rellena.
+  const migrated = migrateProfileSave({
+    version: PROFILE_SAVE_VERSION,
+    colony: {
+      lifetimeSpores: 980, // nivel 8
+      unlockedRewards: ['frame_common', 'pack_spores', 'bg_new', 'title_mycelium'],
+      claimedRewards: ['frame_common', 'pack_spores', 'bg_new', 'title_mycelium'],
+    },
+  });
+  assert.equal(migrated.colony.level, 8);
+  // Las de nivel 6..8 se agregan; las ya presentes conservan su lugar.
+  for (const id of ['victory_fx', 'pack_colony', 'avatar']) {
+    assert.ok(migrated.colony.unlockedRewards.includes(id), `falta ${id}`);
+  }
+  // La de nivel 9 NO se agrega: el nivel 9 no se alcanzo.
+  assert.ok(!migrated.colony.unlockedRewards.includes('frame_uncommon'));
+  // No se duplica lo que ya venia.
+  assert.equal(migrated.colony.unlockedRewards.filter((x) => x === 'frame_common').length, 1);
+  // Nada de esto equipa solo: reclamar/equipar sigue siendo accion del jugador.
+  assert.equal(migrated.cosmetics.equippedAvatar, 'default');
 });
 
 test('v1 -> v4 recorre la cadena entera sin perder nada', () => {

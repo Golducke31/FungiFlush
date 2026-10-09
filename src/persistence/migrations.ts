@@ -13,7 +13,7 @@
  */
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
-import { levelForSpores } from '../meta/Colony';
+import { COLONY_LEVELS, levelForSpores } from '../meta/Colony';
 import { MAX_DECK_PRESETS, defaultDeckState } from '../meta/DeckPresets';
 import { defaultPackInventory } from '../meta/Packs';
 import { emptySnapshot } from '../meta/Leaderboard';
@@ -417,6 +417,21 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   colony.level = Math.max(1, Math.floor(levelForSpores(colony.lifetimeSpores)));
   if (!Array.isArray(colony.firstClears)) colony.firstClears = [];
   if (!Array.isArray(colony.unlockedRewards)) colony.unlockedRewards = [];
+  // RECONCILIACION (fix): `unlockedRewards` es la fuente AUTORITATIVA del estado
+  // de reclamo (`main.ts` enriquece cada fila con `unlockedRewards.has(id)`), pero
+  // el nivel se DERIVA de las Esporas. Si un perfil guardado venia de antes del
+  // sistema de recompensas nombradas —o si el nivel se recalculo alguna vez sin
+  // empujar los desbloqueos— las recompensas de nivel alto quedaban "desbloqueadas"
+  // para la vista (que usa el nivel) pero SIN boton de reclamar (que usa
+  // `unlockedRewards`): el jugador las veia y no podia reclamarlas, asi que nunca
+  // entraban a `cosmetics.owned` ni se podian equipar. Se rellena hacia adelante
+  // con los `rewardId` de todos los niveles <= al nivel alcanzado.
+  for (const def of COLONY_LEVELS) {
+    if (def.level > colony.level) break;
+    if (def.rewardId && !colony.unlockedRewards.includes(def.rewardId)) {
+      colony.unlockedRewards.push(def.rewardId);
+    }
+  }
   // Recompensas de la Colonia (aditivo): los ids reclamados. Un perfil viejo no
   // lo tiene y cae a `[]` por el spread, pero un valor no-array (edicion a mano)
   // se corrige aca para que `claimableRewards` no explote con `.filter`.
