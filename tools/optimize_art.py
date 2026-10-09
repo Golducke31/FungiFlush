@@ -69,10 +69,6 @@ def target_for(stem: str) -> tuple[int, int]:
     # Los ciegos comparten el recuadro vertical de una carta.
     if stem.startswith("art_blind_"):
         return CARD_TARGET
-    # Fondo de la Tarjeta de Jugador: apaisado (la tarjeta es ancha y baja).
-    if stem.startswith("art_bgcard_"):
-        return (768, 256)
-    # Avatar y marco son cuadrados (caen al DEFAULT_TARGET).
     return DEFAULT_TARGET
 
 
@@ -108,11 +104,7 @@ def fit(img: Image.Image, size: tuple[int, int]) -> Image.Image:
 
 def optimize(src: Path, out: Path, size: tuple[int, int]) -> tuple[int, int]:
     with Image.open(src) as img:
-        # El MARCO del avatar necesita su transparencia (se superpone al avatar):
-        # si la fuente la trae, se conserva (WebP soporta alfa). El resto va a RGB
-        # para ahorrar peso.
-        has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
-        img = img.convert("RGBA" if has_alpha else "RGB")
+        img = img.convert("RGB")
         img = fit(img, size)
         out.parent.mkdir(parents=True, exist_ok=True)
         img.save(out, "WEBP", quality=QUALITY, method=6)

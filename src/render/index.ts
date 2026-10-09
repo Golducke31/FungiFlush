@@ -3,8 +3,6 @@ export { SceneManager } from './SceneManager';
 export type { SceneCallbacks, SceneOptions, HandCardState } from './SceneManager';
 export { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker, blindKeysFor } from './ArtAssets';
 export type { ArtKey, CardArtKey, LegacyArtKey } from './ArtAssets';
-export { ArtLayers, layerKeysFor, ownLayerStem, pairLayerStem, phaseForStem, DEFAULT_DEPTH, DEFAULT_MOTION } from './ArtLayers';
-export type { LayerImages, LayerName, LayerMotion, LayerDepth, LayerMotions } from './ArtLayers';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
 export type { CardHome, CardKind } from './Card3D';
 export {
@@ -22,7 +20,7 @@ export { DropZone, rectContains, resolveDropZone } from './DropZone';
 export type { DropZoneHandle, DropZoneId, DropZoneOptions, ZoneRect } from './DropZone';
 export { Interaction, DRAG_PLANE_Y } from './Interaction';
 export type { InteractionCallbacks } from './Interaction';
-export { SporeField, CardSporeField } from './Particles';
+export { SporeField } from './Particles';
 export {
   FRAME_BUDGET_MS,
   FrameMonitor,

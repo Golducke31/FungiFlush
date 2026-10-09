@@ -91,7 +91,6 @@ import unlockRulesData from '@data/unlock-rules.json';
 import seasonsData from '@data/seasons.json';
 import {
   ArtAssets,
-  ArtLayers,
   CARD_DISPLAY_FONT,
   CARD_TEXT_FONT,
   SceneManager,
@@ -243,12 +242,6 @@ async function boot(): Promise<void> {
   // --- Assets ---
   const assets = new ArtAssets();
   await assets.loadAll((ratio) => loader.setProgress(ratio * 0.85));
-
-  // Capas segmentadas para el parallax. Si el arte no esta segmentado (no hay
-  // `art/layers/index.json`), `loadAll` no falla: deja el cargador vacio y el
-  // render cae a la textura unica de siempre.
-  const layers = new ArtLayers();
-  await layers.loadAll();
 
   // --- Acceso por DLC ---
   const entitlements = EntitlementStore.from(profile.entitlements);
@@ -687,7 +680,7 @@ async function boot(): Promise<void> {
         // Coleccion era lo que la hacia lenta). Se pasa un proveedor perezoso
         // que la compone solo cuando la celda entra en viewport; la composicion
         // esta memoizada en `cardArt.ts`, asi que reabrir no la recalcula.
-        faceProvider: () => cardDefFaceUrl(card, t, scene.cardArt(card), scene.cardLayers(card)),
+        faceProvider: () => cardDefFaceUrl(card, t, scene.cardArt(card)),
         // Cuantas copias se obtuvieron de sobres: la Coleccion muestra "xN" en
         // vez de repetir la carta. Los jokers no llevan contador (los sobres
         // nunca dan jokers).
@@ -810,7 +803,6 @@ async function boot(): Promise<void> {
     canvas,
     engine,
     assets,
-    layers,
     callbacks: {
       onCardClick: (uid) => {
         engine.toggleSelect(uid);
@@ -1297,7 +1289,7 @@ async function boot(): Promise<void> {
         nameKey: def.nameKey,
         element: def.element,
         rarityColor: hexToCss(RARITY_COLOR[def.rarity] ?? ELEMENT_COLOR.neutral),
-        faceUrl: cardDefFaceUrl(def, t, scene.cardArt(def), scene.cardLayers(def)),
+        faceUrl: cardDefFaceUrl(def, t, scene.cardArt(def)),
       });
     }
     // Orden estable por elemento y luego id: el jugador encuentra la carta por
@@ -1373,9 +1365,6 @@ async function boot(): Promise<void> {
     // La UI no conoce los assets: se los presta el render. Asi la miniatura del
     // mazo es el MISMO WebP que la carta en la mano.
     cardArt: (def) => scene.cardArt(def),
-    // Capas segmentadas: la cara 2D de tienda/recompensa/coleccion se compone con
-    // las MISMAS capas que la mesa, o el jugador veria dos composiciones distintas.
-    cardLayers: (def) => scene.cardLayers(def),
     jokerArt: (def) => scene.jokerArt(def),
     blindArt: (art) => scene.blindArt(art),
     appInfo: {
@@ -2046,7 +2035,7 @@ async function boot(): Promise<void> {
         rarityLabel: t(`rarity.${contentRarity}`),
         color: hexToCss(RARITY_COLOR[contentRarity] ?? ELEMENT_COLOR.neutral),
         // Misma cara que la tienda y la coleccion: misma ilustracion real.
-        faceUrl: def ? cardDefFaceUrl(def, t, scene.cardArt(def), scene.cardLayers(def)) : null,
+        faceUrl: def ? cardDefFaceUrl(def, t, scene.cardArt(def)) : null,
       };
     });
 
@@ -2637,10 +2626,6 @@ async function boot(): Promise<void> {
         profileStore,
         runStore,
         achievements,
-        // Capas segmentadas: el probe comprueba que el arte segmentado se cargo y
-        // que una carta conocida resuelve a sus tres capas (o a `undefined`, si el
-        // arte todavia no esta segmentado: el render cae a la textura unica).
-        layers,
         // Bus de audio: permite verificar desde un probe que el contexto se
         // desbloqueo, que los buffers se decodificaron y que el volumen se aplica.
         audio,

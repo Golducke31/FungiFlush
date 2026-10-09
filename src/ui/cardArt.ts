@@ -18,7 +18,6 @@ import type {
   ShopOffer,
 } from '@engine/index';
 import { createCardCanvas, type CardTextureSpec } from '@render/index';
-import type { LayerImages } from '@render/index';
 
 /** Imagenes reales disponibles para componer una cara. */
 export interface CardArtSources {
@@ -26,11 +25,6 @@ export interface CardArtSources {
   card?: (def: CardDefinition) => HTMLImageElement | undefined;
   /** Ilustracion de un joker del registro. */
   joker?: (def: JokerDefinition) => HTMLImageElement | undefined;
-  /**
-   * Capas segmentadas de una carta (fondo/sujeto/primer plano). Opcional: sin esto
-   * la cara se compone con la ilustracion unica de siempre.
-   */
-  layers?: (def: CardDefinition) => LayerImages | undefined;
 }
 
 /**
@@ -90,10 +84,9 @@ function memoFace(key: string, build: () => string | null): string | null {
 export function cardFaceUrl(
   spec: CardTextureSpec,
   realArt?: HTMLImageElement,
-  layers?: LayerImages,
 ): string | null {
   try {
-    const canvas = createCardCanvas(spec, realArt, 'full', layers);
+    const canvas = createCardCanvas(spec, realArt, 'full');
     try {
       return canvas.toDataURL('image/webp', 0.85);
     } catch {
@@ -118,7 +111,6 @@ export function cardDefFaceUrl(
   def: CardDefinition,
   translate: (key: string) => string,
   realArt?: HTMLImageElement,
-  layers?: LayerImages,
 ): string | null {
   const name = translate(def.nameKey);
   const desc = translate(def.descKey);
@@ -143,7 +135,7 @@ export function cardDefFaceUrl(
       // lila. El plan exige el mismo tratamiento en la carta ampliada.
       hasAbility: (def.effects?.length ?? 0) > 0,
     };
-    return cardFaceUrl(spec, realArt, layers);
+    return cardFaceUrl(spec, realArt);
   });
 }
 
@@ -194,13 +186,11 @@ export function offerFaceUrl(
 ): string | null {
   let spec: CardTextureSpec | null = null;
   let realArt: HTMLImageElement | undefined;
-  let layers: LayerImages | undefined;
   try {
     if (offer.kind === 'card') {
       const def = engine.registry.tryGetCard(offer.refId);
       if (!def) return null;
       realArt = sources.card?.(def);
-      layers = sources.layers?.(def);
       spec = {
         kind: 'card',
         name: translate(offer.nameKey),
@@ -249,5 +239,5 @@ export function offerFaceUrl(
     return null;
   }
   if (!spec) return null;
-  return cardFaceUrl(spec, realArt, layers);
+  return cardFaceUrl(spec, realArt);
 }

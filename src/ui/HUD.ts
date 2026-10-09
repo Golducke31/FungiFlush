@@ -28,7 +28,6 @@ import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
 import { currentLanguage, t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
-import type { LayerImages } from '@render/index';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
@@ -255,11 +254,6 @@ export class HUD {
   private readonly root: HTMLElement;
   /** Ilustracion real de una carta. Ver la nota del constructor. */
   private readonly cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
-  /**
-   * Capas segmentadas de una carta (parallax). Opcional: sin esto la cara 2D de la
-   * tienda/recompensa se compone con la ilustracion unica. Ver el constructor.
-   */
-  private readonly cardLayers?: (def: CardDefinition) => LayerImages | undefined;
   /** Ilustracion real de un joker. Ver la nota del constructor. */
   private readonly jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
   /** Ilustracion real de un ciego, por su clave `art`. Ver el constructor. */
@@ -560,11 +554,7 @@ export class HUD {
      */
     cardArt?: (def: CardDefinition) => HTMLImageElement | undefined;
     /**
-     * Capas segmentadas de una carta. La inyecta el render igual que `cardArt`.
-     * Opcional: si falta, la cara 2D se compone con la ilustracion unica.
-     */
-    cardLayers?: (def: CardDefinition) => LayerImages | undefined;
-    /** Igual que `cardArt`, para jokers. */
+     * Igual que `cardArt`, para jokers. */
     jokerArt?: (def: JokerDefinition) => HTMLImageElement | undefined;
     /**
      * Igual que `cardArt`, para ciegos. Recibe la clave `BlindDefinition.art`
@@ -577,7 +567,6 @@ export class HUD {
     this.root = options.root;
     this.callbacks = options.callbacks;
     this.cardArt = options.cardArt;
-    this.cardLayers = options.cardLayers;
     this.jokerArt = options.jokerArt;
     this.blindArt = options.blindArt;
     this.appInfo = options.appInfo ?? { version: '0.0.0', contentHash: null, packs: [] };
@@ -3330,7 +3319,6 @@ export class HUD {
         artFor: (offer) =>
           offerFaceUrl(offer, this.engine, t, {
             card: this.cardArt,
-            layers: this.cardLayers,
             joker: this.jokerArt,
           }),
         labelFor: (kind) => offerLabel(kind),
@@ -3385,7 +3373,6 @@ export class HUD {
       info,
       ...(highlightUid ? { highlightUid } : {}),
       ...(this.cardArt ? { cardArt: this.cardArt } : {}),
-      ...(this.cardLayers ? { cardLayers: this.cardLayers } : {}),
     };
   }
 
@@ -4152,7 +4139,6 @@ export class HUD {
       // Miniatura de la carta: misma cara procedural que la carta real.
       const artUrl = offerFaceUrl(offer, this.engine, t, {
         card: this.cardArt,
-        layers: this.cardLayers,
         joker: this.jokerArt,
       });
       if (artUrl) {
@@ -4298,7 +4284,6 @@ export class HUD {
       };
       const artUrl = offerFaceUrl(pseudo, this.engine, t, {
         card: this.cardArt,
-        layers: this.cardLayers,
         joker: this.jokerArt,
       });
       if (artUrl) {

@@ -20,9 +20,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as THREE from 'three';
 
-import { SporeField, CardSporeField } from '../src/render/Particles.ts';
+import { SporeField } from '../src/render/Particles.ts';
 import { ArtAssets, artFileFor, artKeysFor } from '../src/render/ArtAssets.ts';
-import { ArtLayers, DEFAULT_MOTION, phaseForStem } from '../src/render/ArtLayers.ts';
 import {
   FRAME_BUDGET_MS,
   FrameMonitor,
@@ -343,53 +342,6 @@ test('bajar el limite de particulas no reasigna memoria', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Esporas locales de una carta
-// ---------------------------------------------------------------------------
-
-test('las esporas de una carta mueven todo en la GPU: sus buffers no se reescriben', () => {
-  const spores = new CardSporeField({ count: 12, z: 0.01, seed: 42 });
-  spores.points.visible = true;
-
-  const seeds = spores.points.geometry.getAttribute('aSeed') as THREE.BufferAttribute;
-  const colors = spores.points.geometry.getAttribute('aColor') as THREE.BufferAttribute;
-  const seedVersion = seeds.version;
-  const colorVersion = colors.version;
-
-  for (let i = 0; i < 600; i++) spores.update(i * 0.016, Math.sin(i * 0.05));
-
-  assert.equal(seeds.version, seedVersion, 'la semilla no se reescribe: el movimiento vive en el shader');
-  assert.equal(colors.version, colorVersion, 'el color tampoco');
-  const uTime = (spores.points.material as THREE.ShaderMaterial).uniforms['uTime']?.value as number;
-  assert.ok(uTime > 5, 'el reloj del shader si tiene que avanzar');
-
-  spores.dispose();
-});
-
-test('la misma semilla da el mismo campo; semillas distintas, campos distintos', () => {
-  const a = new CardSporeField({ count: 8, seed: 7 });
-  const b = new CardSporeField({ count: 8, seed: 7 });
-  const c = new CardSporeField({ count: 8, seed: 99 });
-  const seedsOf = (f: CardSporeField): number[] =>
-    Array.from((f.points.geometry.getAttribute('aSeed') as THREE.BufferAttribute).array);
-
-  assert.deepEqual(seedsOf(a), seedsOf(b), 'misma semilla -> mismas esporas (determinista)');
-  assert.notDeepEqual(seedsOf(a), seedsOf(c), 'distinta semilla -> distinto campo');
-
-  a.dispose();
-  b.dispose();
-  c.dispose();
-});
-
-test('una carta invisible no actualiza uniforms (el coste se paga solo si se ve)', () => {
-  const spores = new CardSporeField({ count: 8, seed: 1 });
-  spores.points.visible = false;
-  spores.update(9.0, 0.5);
-  // Sigue en 0: sin visibilidad no hay trabajo por frame.
-  assert.equal((spores.points.material as THREE.ShaderMaterial).uniforms['uTime']?.value, 0);
-  spores.dispose();
-});
-
-// ---------------------------------------------------------------------------
 // Arte: cadena de respaldo
 // ---------------------------------------------------------------------------
 
@@ -505,90 +457,4 @@ test('getFirst devuelve el primer eslabon disponible y undefined si no hay ningu
   // Y con el especifico, gana ese.
   assets.set('card_poison_rare', fake('raro'));
   assert.equal(nameOf(assets.getFirst(keys)), 'raro');
-});
-
-// ---------------------------------------------------------------------------
-// Capas segmentadas: depth / motion (matting + movimiento por carta)
-// ---------------------------------------------------------------------------
-
-test('ArtLayers rellena depth/motion con los defaults cuando el indice no los trae', () => {
-  const layers = new ArtLayers();
-  const subject = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
-  // Entrada "vieja": solo size/subject/files, sin depth ni motion.
-  layers.setEntry(
-    'art_card_poison_common',
-    { size: [512, 744], subject: { bbox: [10, 20, 100, 200] }, files: { subject: 'a__subject.png' } },
-    { 'a__subject.png': subject },
-  );
-
-  const got = layers.getLayers(['art_card_poison_common']);
-  assert.ok(got, 'deberia resolver las capas');
-  // El indice viejo no rompe nada: se completan los defaults de modulo.
-  assert.deepEqual(got.depth, { bg: 0.15, subject: 0.5, fg: 0.85 });
-  assert.equal(got.motion.subject.amp, 0.01);
-  assert.equal(got.motion.bg.speed, 0.35);
-  // La fase es determinista y esta en [0, 2pi).
-  assert.ok(got.phase >= 0 && got.phase < Math.PI * 2);
-  assert.equal(got.phase, phaseForStem('art_card_poison_common'));
-});
-
-test('ArtLayers toma depth/motion del indice y tolera valores malformados', () => {
-  const layers = new ArtLayers();
-  const subject = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
-  layers.setEntry(
-    'art_card_own_test',
-    {
-      size: [512, 744],
-      subject: { bbox: [0, 0, 512, 744] },
-      depth: { bg: 0.2, subject: Number.NaN, fg: 0.9 },
-      motion: { subject: { amp: 0.02, speed: 0.7, noise: Number.POSITIVE_INFINITY } },
-      files: { subject: 'b__subject.png' },
-    },
-    { 'b__subject.png': subject },
-  );
-
-  const got = layers.getLayers(['art_card_own_test']);
-  assert.ok(got);
-  assert.equal(got.depth.bg, 0.2, 'un valor valido del indice se respeta');
-  assert.equal(got.depth.subject, 0.5, 'un NaN cae al default');
-  assert.equal(got.depth.fg, 0.9);
-  assert.equal(got.motion.subject.amp, 0.02);
-  assert.equal(got.motion.subject.speed, 0.7);
-  assert.equal(got.motion.subject.noise, 0.006, 'un Infinity cae al default');
-  assert.equal(got.motion.fg.amp, DEFAULT_MOTION.fg.amp, 'una capa ausente usa el default');
-});
-
-test('sin sujeto cargado no hay capas (respaldo duro intacto)', () => {
-  const layers = new ArtLayers();
-  layers.setEntry(
-    'art_card_poison_common',
-    { size: [512, 744], subject: { bbox: [0, 0, 1, 1] }, files: { subject: 'missing.png' } },
-    {},
-  );
-  assert.equal(layers.getLayers(['art_card_poison_common']), undefined);
-});
-
-test('una capa transparente de punta a punta no cuenta como capa', () => {
-  // Una capa puede salir VACIA (alfa todo 0): pasa cuando `fg_mode: "none"`, o
-  // cuando el arte no tiene un borde del que sacar el halo. Ese archivo NO es
-  // una capa: si se devolviera, el render montaria un quad invisible y
-  // encenderia el campo de esporas al pedo.
-  const layers = new ArtLayers();
-  const subject = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
-  const fg = { naturalWidth: 512, naturalHeight: 744 } as unknown as HTMLImageElement;
-  layers.setEntry(
-    'art_card_crystal_common',
-    {
-      size: [512, 744],
-      subject: { bbox: [10, 10, 100, 100] },
-      files: { subject: 'c__subject.png', fg: 'c__fg.png' },
-    },
-    { 'c__subject.png': subject, 'c__fg.png': fg },
-  );
-  layers.markEmptyLayer('c__fg.png');
-
-  const got = layers.getLayers(['art_card_crystal_common']);
-  assert.ok(got, 'el sujeto sigue resolviendose');
-  assert.equal(got.fg, undefined, 'un fg vacio se omite (no hay quad invisible)');
-  assert.equal(got.subject, subject, 'el sujeto NO se toca');
 });

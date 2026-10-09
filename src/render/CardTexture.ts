@@ -21,7 +21,6 @@ import {
   hexToRgba,
   mixHex,
 } from './palette';
-import type { LayerImages } from './ArtLayers';
 
 const W = 512;
 const H = 744;
@@ -617,91 +616,6 @@ function drawArtImage(
   }
 }
 
-/**
- * Compone las TRES capas segmentadas en el area de arte: fondo -> sujeto -> primer plano.
- *
- * El sujeto va EN SU BBOX (no estirado a toda el area): asi queda registrado con el
- * fondo y el primer plano, y la composicion 2D coincide con la 3D (donde cada capa es
- * un mesh propio). El fondo llega a sangre; el sujeto y el `fg` flotan encima.
- */
-function drawLayers(
-  ctx: CanvasRenderingContext2D,
-  spec: CardTextureSpec,
-  layers: LayerImages,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  layout: ArtLayout,
-): void {
-  const elementColor = ELEMENT_COLOR[spec.element];
-  const sx = w / Math.max(1, layers.size[0]);
-  const sy = h / Math.max(1, layers.size[1]);
-
-  ctx.save();
-  roundRect(ctx, x, y, w, h, layout.radius);
-  ctx.clip();
-
-  // 1. Fondo a sangre.
-  if (layers.bg && layers.bg.naturalWidth > 0) {
-    ctx.drawImage(layers.bg, x, y, w, h);
-  }
-
-  // 2. Sujeto en su sitio (bbox escalado al area).
-  if (layers.subject && layers.subject.naturalWidth > 0) {
-    ctx.drawImage(
-      layers.subject,
-      x + layers.bbox[0] * sx,
-      y + layers.bbox[1] * sy,
-      layers.subject.naturalWidth * sx,
-      layers.subject.naturalHeight * sy,
-    );
-  }
-
-  // 3. Primer plano encima. Es un HALO DE LUZ: se dibuja con `lighter`
-  // (aditivo), igual que el material del render 3D (`AdditiveBlending`). Con el
-  // `source-over` de antes, un anillo claro se leia como una calcomania opaca;
-  // aditivo SUMA brillo y se lee como luz que se derrama del borde del hongo.
-  // ⚠️ El orden importa: `globalCompositeOperation` tiene que apagarse ANTES de
-  // los fundidos de abajo, o el clerp de la vineta tambien se sumaria.
-  if (layers.fg && layers.fg.naturalWidth > 0) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(layers.fg, x, y, w, h);
-    ctx.restore();
-  }
-
-  // Fundidos y vineta: los mismos que en la ruta de una sola textura, para que la
-  // cara con capas y la cara sin capas se lean igual.
-  const topFade = ctx.createLinearGradient(0, y, 0, y + h * layout.topFade);
-  topFade.addColorStop(0, 'rgba(10, 14, 20, 0.72)');
-  topFade.addColorStop(1, 'rgba(10, 14, 20, 0)');
-  ctx.fillStyle = topFade;
-  ctx.fillRect(x, y, w, h * layout.topFade);
-
-  const bottom = ctx.createLinearGradient(0, y + h * layout.bottomStart, 0, y + h);
-  bottom.addColorStop(0, 'rgba(10, 14, 20, 0)');
-  bottom.addColorStop(1, 'rgba(8, 12, 18, 0.92)');
-  ctx.fillStyle = bottom;
-  ctx.fillRect(x, y + h * layout.bottomStart, w, h * (1 - layout.bottomStart));
-
-  const side = ctx.createLinearGradient(x, 0, x + w, 0);
-  side.addColorStop(0, 'rgba(10, 14, 20, 0.9)');
-  side.addColorStop(0.16, 'rgba(10, 14, 20, 0)');
-  side.addColorStop(0.84, 'rgba(10, 14, 20, 0)');
-  side.addColorStop(1, 'rgba(10, 14, 20, 0.9)');
-  ctx.fillStyle = side;
-  ctx.fillRect(x, y, w, h);
-
-  const tint = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
-  tint.addColorStop(0, hexToRgba(elementColor, 0.18));
-  tint.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = tint;
-  ctx.fillRect(x, y, w, h * 0.5);
-
-  ctx.restore();
-}
-
 function drawChip(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -805,14 +719,10 @@ function drawChip(
  */
 export type CardLayer = 'full' | 'top';
 
-/** Una de las tres capas del arte segmentado. */
-export type ArtLayerName = 'bg' | 'subject' | 'fg';
-
 export function createCardCanvas(
   spec: CardTextureSpec,
   art?: HTMLImageElement,
   layer: CardLayer = 'full',
-  layers?: LayerImages,
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -873,12 +783,7 @@ export function createCardCanvas(
     innerFrame: false,
   };
 
-  if (layers?.subject) {
-    // Con capas segmentadas: el fondo (a sangre), el sujeto EN SU BBOX y el primer
-    // plano. El resultado es el mismo arte compuesto, pero registrado por capas, asi
-    // que la cara 2D coincide con lo que hace el render 3D.
-    drawLayers(ctx, spec, layers, 0, 0, W, H, layout);
-  } else if (art && art.naturalWidth > 0) {
+  if (art && art.naturalWidth > 0) {
     drawArtImage(ctx, art, 0, 0, W, H, spec, layout);
   } else {
     // Respaldo sin assets: patron + silueta dibujada por codigo, en la misma
@@ -1331,74 +1236,6 @@ export function createCardArtCanvas(
   return canvas;
 }
 
-/**
- * Capa de ARTE segmentada: UNA de las tres capas (bg / subject / fg) sobre el fondo
- * y el tinte de la carta.
- *
- * DIFERENCIA CLAVE CON `createCardArtCanvas`
- * ------------------------------------------
- * El sujeto es un RECORTE chico (viene con su bbox), no la ilustracion entera. Si se
- * dibujara como en `createCardArtCanvas`, con `fit` tipo cover, el recorte se estiraria
- * para llenar la carta y se romperia la alineacion con el fondo. Aca se dibuja EN SU
- * SITIO: el bbox dice donde caia el sujeto dentro del canvas de 512x744 original, y ahi
- * se pega. Asi las tres capas quedan registradas y el parallax al tiltar no las
- * desalinea.
- *
- * `useCardBg` lo usa el fondo: va a sangre completa. El resto de las capas van
- * transparentes (el sujeto y el primer plano flotan sobre lo que haya detras).
- */
-export function createCardLayerCanvas(
-  spec: CardTextureSpec,
-  layer: ArtLayerName,
-  img: HTMLImageElement,
-  bbox: readonly [number, number, number, number],
-  sourceSize: readonly [number, number],
-): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return canvas;
-
-  const elementColor = ELEMENT_COLOR[spec.element];
-
-  if (layer === 'bg') {
-    // Fondo a sangre: mismo gradiente y tinte que la carta entera.
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#141b24');
-    bg.addColorStop(0.5, '#0e141c');
-    bg.addColorStop(1, '#080c12');
-    ctx.fillStyle = bg;
-    roundRect(ctx, 0, 0, W, H, 30);
-    ctx.fill();
-
-    const tint = ctx.createLinearGradient(0, 0, 0, H * 0.55);
-    tint.addColorStop(0, hexToRgba(elementColor, 0.3));
-    tint.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = tint;
-    roundRect(ctx, 0, 0, W, H, 30);
-    ctx.fill();
-  }
-
-  // Colocacion REGISTRADA: escalar del tamano de origen al de la carta y pegar en el
-  // bbox. El canvas de la carta (512x744) coincide con `sourceSize` en el caso normal,
-  // asi que la escala es 1 y el bbox cae exacto.
-  const sx = W / Math.max(1, sourceSize[0]);
-  const sy = H / Math.max(1, sourceSize[1]);
-  const dx = bbox[0] * sx;
-  const dy = bbox[1] * sy;
-  const dw = img.naturalWidth * sx;
-  const dh = img.naturalHeight * sy;
-
-  ctx.save();
-  roundRect(ctx, 0, 0, W, H, 30);
-  ctx.clip();
-  ctx.drawImage(img, dx, dy, dw, dh);
-  ctx.restore();
-
-  return canvas;
-}
-
 // ---------------------------------------------------------------------------
 // Cache de texturas
 // ---------------------------------------------------------------------------
@@ -1409,13 +1246,6 @@ export class CardTextureCache {
   private readonly artCache = new Map<string, THREE.CanvasTexture>();
   /** Capa de texto: por estado de carta (lleva el nombre y la descripcion). */
   private readonly topCache = new Map<string, THREE.CanvasTexture>();
-  /**
-   * Capas de arte segmentadas (bg/subject/fg), indexadas por ARCHIVO de capa.
-   *
-   * Igual que `artCache`: compartida por archivo, no por carta. Dos cartas que
-   * comparten ilustracion comparten sus tres texturas de capa.
-   */
-  private readonly layerCache = new Map<string, THREE.CanvasTexture>();
 
   get(key: string, spec: CardTextureSpec, art?: HTMLImageElement): THREE.CanvasTexture {
     const cached = this.cache.get(key);
@@ -1462,36 +1292,6 @@ export class CardTextureCache {
   }
 
   /**
-   * Capa de ARTE segmentada (bg / subject / fg), indexada por ARCHIVO de capa.
-   *
-   * `layerKey` es unico por archivo+rol (el llamador lo arma como `<src>|<layer>`), asi
-   * que la textura se comparte entre todas las cartas que usan la misma ilustracion.
-   */
-  getLayer(
-    layerKey: string,
-    spec: CardTextureSpec,
-    layer: ArtLayerName,
-    img: HTMLImageElement,
-    bbox: readonly [number, number, number, number],
-    sourceSize: readonly [number, number],
-  ): THREE.CanvasTexture {
-    const cached = this.layerCache.get(layerKey);
-    if (cached) return cached;
-
-    const texture = new THREE.CanvasTexture(createCardLayerCanvas(spec, layer, img, bbox, sourceSize));
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 8;
-    texture.needsUpdate = true;
-    this.layerCache.set(layerKey, texture);
-    return texture;
-  }
-
-  /** Cuantas capas de arte segmentadas vivas hay (para el panel de debug). */
-  get layerCount(): number {
-    return this.layerCache.size;
-  }
-
-  /**
    * Al cambiar de idioma hay que redibujar: el texto esta dentro de la textura.
    * La capa de ARTE no se toca: no lleva texto.
    */
@@ -1500,8 +1300,6 @@ export class CardTextureCache {
     this.cache.clear();
     for (const texture of this.topCache.values()) texture.dispose();
     this.topCache.clear();
-    for (const texture of this.layerCache.values()) texture.dispose();
-    this.layerCache.clear();
   }
 
   /**
@@ -1509,8 +1307,9 @@ export class CardTextureCache {
    * reportaria 0, porque el camino normal ya no usa la textura completa.
    */
   get size(): number {
-    return this.cache.size + this.topCache.size + this.artCache.size + this.layerCache.size;
+    return this.cache.size + this.topCache.size + this.artCache.size;
   }
+
   /**
    * Claves de la capa de TEXTO vivas. Lo usan los probes para comprobar que la
    * clave incluye el VALOR de los estados (`decay:2`), que es lo que garantiza
