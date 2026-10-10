@@ -135,9 +135,10 @@ const tutState = () =>
     };
   });
 
-/** Parsea el contador. El i18n lo pinta como "Paso 3 de 18". */
+/** Parsea el contador. El i18n lo pinta como "Paso 3 de 18" / "Step 3 of 18":
+ *  el patron acepta las dos lenguas (el juego arranca en ingles). */
 const stepNumber = (s) => {
-  const m = /(\d+)\s*(?:\/|de)\s*(\d+)/.exec(s.stepOf ?? '');
+  const m = /(\d+)\s*(?:\/|de|of)\s*(\d+)/.exec(s.stepOf ?? '');
   return m ? { n: Number(m[1]), total: Number(m[2]) } : { n: -1, total: -1 };
 };
 

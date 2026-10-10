@@ -368,7 +368,9 @@ export function defaultProfile(): ProfileSave {
     version: PROFILE_SAVE_VERSION,
     updatedAt: new Date().toISOString(),
     settings: {
-      lang: 'es',
+      // El juego arranca en INGLES (idioma base). El jugador lo cambia desde el
+      // boton EN/ES del menu principal; esa eleccion se persiste aca.
+      lang: 'en',
       reduceMotion: false,
       quality: 'auto',
       sfxVolume: 0.8,

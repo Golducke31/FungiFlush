@@ -2,11 +2,11 @@
  * probe-lang-freeze.mjs — Reproduce el CONGELAMIENTO al cambiar de idioma.
  *
  * Mide el bloqueo del hilo principal (hueco mas grande entre frames) antes y
- * despues de tocar el boton de idioma, y registra si el panel de Ajustes
- * sobrevive o se cierra solo.
+ * despues de tocar el boton de idioma (EN/ES del MENU principal, unico control)
+ * y registra si el panel sobrevive o se cierra solo.
  *
- *   node tools/probe-lang-freeze.mjs            # menu -> Ajustes
- *   FF_FROM=ingame node tools/probe-lang-freeze.mjs   # en partida (barra superior)
+ *   node tools/probe-lang-freeze.mjs                  # desde el menu
+ *   FF_FROM=ingame node tools/probe-lang-freeze.mjs   # tras entrar a una run
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -74,15 +74,19 @@ const readMeter = (label) => page.evaluate((l) => {
 
 const from = process.env.FF_FROM === 'ingame' ? 'ingame' : 'menu';
 
-if (from === 'menu') {
-  await click('.panel.is-menu [data-act="settings"]');
-  await page.waitForTimeout(900);
-} else {
+if (from === 'ingame') {
+  // Se entra a una run (escena + texturas cargadas) y se vuelve al MENU: el
+  // idioma ya SOLO se cambia desde ahi.
   await click('.panel.is-menu [data-act="new"]');
-  await page.waitForTimeout(700);
-  if (await has('.panel.is-archetypes')) { await click('[data-act="archetypes-start"]'); await page.waitForTimeout(1200); }
+  await page.waitForTimeout(900);
+  if (await has('.panel.is-archetypes')) {
+    await click('[data-act="archetypes-start"]');
+    await page.waitForTimeout(1200);
+  }
   await click('[data-act="tutorial-close"]');
   await page.waitForTimeout(600);
+  await click('[data-act="blind-menu"]');
+  await page.waitForTimeout(1400);
 }
 
 const beforePanel = await page.evaluate(() => document.querySelector('#ui-root > .overlay.is-open > .panel')?.className ?? null);
@@ -93,7 +97,8 @@ await page.waitForTimeout(1200);
 console.log('baseline:', JSON.stringify(await readMeter('baseline')));
 
 // --- El toggle ---
-const langBtnSel = from === 'menu' ? '.panel.is-settings [data-act="lang"]' : '.hud-top [data-act="lang"]';
+// UNICO control de idioma del juego: el boton EN/ES del menu principal.
+const langBtnSel = '.panel.is-menu [data-act="lang"]';
 const t0 = Date.now();
 await click(langBtnSel);
 const clickMs = Date.now() - t0;

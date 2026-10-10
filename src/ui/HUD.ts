@@ -27,7 +27,7 @@ import {
 import { FUNGI_FLUSH_MAX_CHARGES } from '@engine/constants';
 import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
-import { currentLanguage, t } from '@i18n/index';
+import { t } from '@i18n/index';
 import { ELEMENT_COLOR, RARITY_COLOR, UI_COLORS, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
@@ -1030,6 +1030,11 @@ export class HUD {
 
       bus.on('i18n:changed', () => {
         this.build();
+        // `renderOverlay` sale temprano si el estado del motor no cambio, asi
+        // que un panel abierto quedaria con los textos del idioma anterior.
+        // El unico control de idioma vive en el MENU: al tocarlo hay que
+        // redibujar el panel (y el boton EN/ES) con el idioma nuevo.
+        this.lastStatus = null;
         this.render();
       }),
 
@@ -2552,30 +2557,6 @@ export class HUD {
     body.className = 'panel-subtitle';
     body.textContent = t('menu.quitBody');
 
-    // IDIOMA: es un ajuste de SISTEMA y este es el unico "menu" que existe
-    // dentro de la partida (se abre desde el boton Menu de la barra superior).
-    // Va en su propia fila, ARRIBA de las acciones, para no competir con
-    // Cancelar / Salir, que son la decision de este panel.
-    const langRow = document.createElement('div');
-    langRow.className = 'panel-lang-row';
-    const lang = document.createElement('button');
-    lang.className = 'btn is-ghost is-small';
-    lang.dataset['act'] = 'lang';
-    lang.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
-    lang.addEventListener('click', () => {
-      // El panel no se reconstruye solo (el estado del motor no cambia y
-      // `renderOverlay` sale temprano), asi que el texto se refresca a mano
-      // cuando la promesa del cambio resuelve.
-      void Promise.resolve(this.callbacks.onToggleLanguage()).then(() => {
-        lang.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
-        title.textContent = t('menu.quitTitle');
-        body.textContent = t('menu.quitBody');
-        cancel.textContent = t('ui.cancel');
-        confirm.textContent = t('menu.quitConfirm');
-      });
-    });
-    langRow.appendChild(lang);
-
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
 
@@ -2595,7 +2576,9 @@ export class HUD {
     });
 
     actions.append(cancel, confirm);
-    panel.append(title, body, langRow, actions);
+    // El IDIOMA ya NO vive aca: el unico control esta en el menu principal
+    // (boton EN/ES de la esquina superior derecha).
+    panel.append(title, body, actions);
     // Sin `carousel`: es un panel DOM normal y tiene que tapar la escena.
     this.openOverlay(panel);
   }
@@ -3444,7 +3427,6 @@ export class HUD {
     this.showPanel(
       buildSettingsPanel(settings, {
         onPatch: (patch) => this.settingsPatch?.(patch),
-        onToggleLanguage: () => this.callbacks.onToggleLanguage(),
         onOpenGuide: () => this.callbacks.onOpenGuide(),
         onOpenAbout: () => this.callbacks.onOpenAbout(),
         onClose: () => (returnTo ? returnTo() : this.showMenu()),

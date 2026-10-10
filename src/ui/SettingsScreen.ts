@@ -4,15 +4,16 @@
  * Escribir en el perfil es responsabilidad de quien llama (`AppController`):
  * esta pantalla solo emite intenciones. Los sliders de audio ya existen y ya
  * guardan su valor: cuando el audio sea real, no hay que tocar esta pantalla.
+ *
+ * El IDIOMA no vive aca: su unico control es el boton EN/ES del menu principal.
  */
 
 import { bus } from '@engine/index';
-import { currentLanguage, t } from '@i18n/index';
+import { t } from '@i18n/index';
 import type { ProfileSettings } from '@meta/ProfileState';
 
 export interface SettingsCallbacks {
   onPatch: (patch: Partial<ProfileSettings>) => void;
-  onToggleLanguage: () => void;
   onClose: () => void;
   /** Opcional: la Guia vive dentro de Ajustes (antes era un chip del menu). */
   onOpenGuide?: () => void;
@@ -127,12 +128,6 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   const body = document.createElement('div');
   body.className = 'settings-grid';
 
-  const langButton = document.createElement('button');
-  langButton.className = 'btn is-ghost';
-  langButton.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
-  langButton.dataset['act'] = 'lang';
-  langButton.addEventListener('click', () => callbacks.onToggleLanguage());
-
   // Etiquetas: las guardamos como referencias vivas para reescribir su texto
   // al cambiar de idioma. Sin esto, despues de tocar el toggle el jugador ve
   // el mismo texto y cree que no funciono (el toggle SI cambia el idioma, pero
@@ -152,7 +147,6 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   const notifySection = section('settings.notifications');
   const sfxLabel = makeLabel('settings.sfx');
   const musicLabel = makeLabel('settings.music');
-  const langLabel = makeLabel('settings.language');
   const qualityLabel = makeLabel('settings.quality.label');
 
   const { container: qualityControl, buttons: qualityButtons } = buildSegmented(
@@ -167,7 +161,6 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   );
 
   body.append(
-    field(langLabel, langButton),
     field(reduceMotionLabel, checkbox(settings.reduceMotion, (v) => callbacks.onPatch({ reduceMotion: v }))),
     field(autoSortLabel, checkbox(settings.autoSortHand, (v) => callbacks.onPatch({ autoSortHand: v }))),
     // `settings-field--wide`: el control segmentado (Auto/Baja/Media/Alta) NO
@@ -215,16 +208,15 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
   panel.append(title, subtitle, body, actions);
 
   // Al cambiar de idioma: actualizamos todos los textos traducibles del panel.
-  // El boton de idioma ademas muestra el codigo activo, asi que se reconstruye
-  // aparte. Sin esta suscripcion, despues del toggle el panel sigue mostrando
-  // el texto del idioma anterior y el jugador piensa que no cambio nada.
+  // El boton de idioma YA NO vive aca (esta en el menu principal), pero el
+  // panel puede quedar abierto cuando el idioma cambia, asi que las etiquetas
+  // se reescriben igual.
   const allLabels = [
     reduceMotionLabel,
     autoSortLabel,
     hapticsLabel,
     sfxLabel,
     musicLabel,
-    langLabel,
     qualityLabel,
     notifyDailyLabel,
     notifyAchievementsLabel,
@@ -237,7 +229,6 @@ export function buildSettingsPanel(settings: ProfileSettings, callbacks: Setting
     }
     title.textContent = t('settings.title');
     subtitle.textContent = t('settings.audioSoon');
-    langButton.textContent = `${t('settings.language')}: ${currentLanguage().toUpperCase()}`;
     close.textContent = t('settings.close');
 
     const labels: Record<string, string> = {

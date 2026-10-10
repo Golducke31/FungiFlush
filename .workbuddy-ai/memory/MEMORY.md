@@ -44,6 +44,13 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Goldu
 - `HudCallbacks.onRefreshCosmetics?` se llama al INICIO de `HUD.showCosmetics()` (main.ts → `syncCosmetics()`) ⇒ el panel siempre pinta el estado fresco (reclamar/equipar).
 - `PlayerCard.ts`: `.player-card-avatar.is-placeholder` cuando falta el avatar O el webp falla (círculo+seta). CSS solo para la tarjeta GRANDE vía `.player-card:not(.player-card--mini)`. El chip del menú (`buildMiniPlayerCard`) y la tarjeta grande comparten `cosmeticArtUrl`.
 
+## Idioma
+- El juego **arranca en INGLÉS**: `defaultProfile().settings.lang='en'` y `detectLang()` (i18n) NO adivina por `navigator.language` (solo respeta `localStorage['fungiflush.lang']`). Un perfil existente conserva su `lang`.
+- **ÚNICO control**: botón **EN/ES** en la barra superior del menú (`MenuScreen.langChip`, `data-act="lang"`, clase `menu-gel--lang`, muestra el idioma ACTIVO). NO hay toggle en Ajustes ni en el panel de salida in-game.
+- ⚠️ `profile.settings.lang` GANA al detectado en el arranque ⇒ `onToggleLanguage` (main.ts) debe hacer `patch` + **`saveNow()`** (el autosave es debounced 1.2 s y el cambio se perdía al cerrar enseguida).
+- ⚠️ `renderOverlay` sale temprano si el estado no cambió ⇒ el handler `i18n:changed` del HUD hace `lastStatus = null` para redibujar el panel abierto.
+- ⚠️ Los gates asumen inglés: usar `ff.t('clave')` en vez de literales (`'SOLD'`, no `'VENDIDO'`). Probe `tools/probe-menu-language.mjs`.
+
 ## Mano / pilas / menú / tienda
 - Mano inicial 6. Descarte y Orden SIN botón (arrastrar/tocar la pila). Pilas: DESCARTE IZQ, MAZO DER. Seleccionada = borde verde `0x5ef08a` + badge 1-5.
 - ⚠️ Zoom `.is-armed` de JUGAR MANO usa `transform` (no reserva layout): `.hud-actions{gap:26px}` + `.btn.is-play.is-jm{flex:0 1 auto}` + `.is-armed{scale(1.08)}`.

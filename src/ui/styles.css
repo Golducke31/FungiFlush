@@ -2169,17 +2169,6 @@ body {
   justify-content: center;
 }
 
-/* Fila de IDIOMA del MENU INGAME. Va separada de las acciones por una linea
-   para que no se lea como una tercera opcion de la decision (Cancelar /
-   Salir): es un ajuste de sistema, no una salida. */
-.panel-lang-row {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--frame-rim);
-}
-
 /* Aviso de CIEGO SUPERADO: el momento entre la ultima mano y el draft. */
 .panel.is-cleared {
   display: flex;
@@ -3992,6 +3981,20 @@ body {
   60% {
     rotate: 7deg;
   }
+}
+
+/* --- Boton de IDIOMA (EN / ES) -------------------------------------------
+   Misma caja celeste que los iconos, pero con TEXTO en vez de SVG. El codigo
+   del idioma se lee como un icono mas: mismo trazo oscuro del gel, misma
+   tipografia display, misma sombra. No lleva `gel-meneo` (no hay SVG que
+   menear); el hover ya da el brillo de `.menu-gel`. */
+.menu-gel--lang .menu-gel-lang {
+  position: relative;
+  font: 400 1.05em/1 var(--font-display);
+  letter-spacing: 0.03em;
+  color: var(--gel-stroke);
+  text-shadow: 0 0.05em 0 rgba(255, 255, 255, 0.55);
+  pointer-events: none;
 }
 
 /* --- Acceso de Perfil: MINI Tarjeta de Jugador ---------------------------

@@ -47,15 +47,23 @@ function buildResources(extra?: Record<string, Record<string, unknown>>): Resour
   return out;
 }
 
+/**
+ * Idioma con el que ARRANCA la app (antes de que cargue el perfil).
+ *
+ * El juego arranca en INGLES: no se adivina por `navigator.language`. El idioma
+ * solo cambia si el jugador lo eligio a proposito desde el boton del menu, y esa
+ * eleccion vive en el PERFIL (`settings.lang`), que pisa a este valor al cargar.
+ * El `localStorage` se conserva para que la pantalla de carga (previa al perfil)
+ * ya salga en el idioma elegido.
+ */
 function detectLang(): Lang {
   try {
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (stored && (SUPPORTED_LANGS as readonly string[]).includes(stored)) return stored as Lang;
-    const nav = globalThis.navigator?.language?.toLowerCase() ?? 'en';
-    return nav.startsWith('es') ? 'es' : 'en';
   } catch {
-    return 'en';
+    /* almacenamiento no disponible: se usa el default */
   }
+  return 'en';
 }
 
 let initialized = false;

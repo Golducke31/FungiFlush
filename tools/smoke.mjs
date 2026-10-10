@@ -1281,6 +1281,9 @@ const shopBuy = await (async () => {
       // La PRIMERA tarjeta es la que se clickeo (el selector toma la primera
       // habilitada, y las vendidas quedan deshabilitadas).
       boton: sold?.querySelector('button')?.textContent ?? null,
+      // La etiqueta traducida del boton vendido, leida del propio i18n: la
+      // asercion no depende del idioma activo (el juego arranca en ingles).
+      soldLabel: ff.t('shop.sold'),
       deshabilitado: sold?.querySelector('button')?.disabled ?? null,
       sello: sold?.querySelector('.offer-sold')?.hidden === false,
       toasts: [...document.querySelectorAll('.toast')].map((el) => el.textContent),
@@ -1338,8 +1341,10 @@ const voucherShop = await (async () => {
       vouchers: cards.filter((c) => c.classList.contains('is-voucher')).length,
       // La tarjeta ya no lleva chip visible (la cara trae todo), asi que la
       // etiqueta traducida se lee del `data-kind-label` que deja el HUD. Tiene
-      // que decir "Mejora", NO la clave cruda "VOUCHER".
+      // que decir la etiqueta traducida, NO la clave cruda "VOUCHER".
       labels: cards.map((c) => c.dataset.kindLabel ?? null),
+      // Etiqueta esperada, leida del i18n activo (el juego arranca en ingles).
+      voucherLabel: window.__fungiflush.t('shop.voucher'),
       // Cada voucher tiene cara compuesta (no un hueco).
       withArt: cards.filter((c) => c.querySelector('img.offer-art')?.src?.startsWith('data:')).length,
       prices: cards.map((c) => ({
@@ -1372,6 +1377,7 @@ const voucherShop = await (async () => {
       banners: [...document.querySelectorAll('.banner')].map((b) => b.textContent),
       soldIsVoucher: sold?.classList.contains('is-voucher') ?? false,
       soldButton: sold?.querySelector('button')?.textContent ?? null,
+      soldLabel: ff.t('shop.sold'),
       multiplier: ff.engine.modifiers.targetMultiplier ?? 1,
     };
   });
@@ -1386,6 +1392,7 @@ const voucherShop = await (async () => {
     banners: bought.banners,
     soldIsVoucher: bought.soldIsVoucher,
     soldButton: bought.soldButton,
+    soldLabel: bought.soldLabel,
     multiplier: bought.multiplier,
   };
 })();
@@ -1899,21 +1906,6 @@ const collectionClosed = await page.evaluate(async () => {
 console.log('\n--- Coleccion (cerrar) ---');
 console.log(JSON.stringify(collectionClosed, null, 2));
 
-// --- Cambio de idioma en caliente ---
-const langResult = await page.evaluate(async () => {
-  const ff = window.__fungiflush;
-  const before = document.documentElement.lang;
-  const button = [...document.querySelectorAll('button')].find(
-    (b) => b.textContent === 'Idioma' || b.textContent === 'Language',
-  );
-  button?.click();
-  await new Promise((r) => setTimeout(r, 900));
-  return { before, after: document.documentElement.lang, textures: ff.scene.stats().textures };
-});
-console.log('\n--- Cambio de idioma ---');
-console.log(JSON.stringify(langResult, null, 2));
-await page.screenshot({ path: join(shotsDir, '13-language.png') });
-
 // --- Medir FPS durante 3 segundos ---
 const fps = await page.evaluate(
   () =>
@@ -2084,6 +2076,31 @@ const afterQuit = await page.evaluate(() => ({
 console.log('\n--- Salida al menu ---');
 console.log(JSON.stringify({ quitButtonExists, quitPanel, afterCancel, afterQuit }, null, 2));
 
+// --- Cambio de idioma: UNICO control, el boton EN/ES del MENU principal ---
+// Se prueba al volver al menu (el idioma ya no se cambia ni en Ajustes ni en el
+// panel de salida de la partida).
+const langResult = await page.evaluate(async () => {
+  const ff = window.__fungiflush;
+  const before = document.documentElement.lang;
+  const button = document.querySelector('.panel.is-menu [data-act="lang"]');
+  button?.click();
+  await new Promise((r) => setTimeout(r, 900));
+  return {
+    found: Boolean(button),
+    before,
+    after: document.documentElement.lang,
+    label: document.querySelector('.panel.is-menu [data-act="lang"] .menu-gel-lang')?.textContent ?? null,
+    // Cambiar de idioma reconstruye el HUD y las texturas de las cartas: el
+    // render sigue vivo (no se queda sin escena).
+    textures: ff.scene.stats().textures,
+    // El control es UNICO: no hay otro `data-act="lang"` en la UI.
+    langControls: document.querySelectorAll('[data-act="lang"]').length,
+  };
+});
+console.log('\n--- Cambio de idioma ---');
+console.log(JSON.stringify(langResult, null, 2));
+await page.screenshot({ path: join(shotsDir, '13-language.png') });
+
 // --- Reporte ---
 console.log('\n================ REPORTE ================');
 const realErrors = consoleErrors.filter((e) => !e.includes('favicon'));
@@ -2139,9 +2156,10 @@ const ok =
   chk('menuState?.particles === 0', menuState?.particles === 0) &&
   chk('menuState?.continueEnabled === false', menuState?.continueEnabled === false) &&
   chk('settingsOpened?.opened === true', settingsOpened?.opened === true) &&
-  // 9 campos: idioma, reducir movimiento, ORDEN AUTO (Fase 3), calidad, vibracion,
-  // 2 de avisos, 2 de volumen.
-  chk('settingsOpened?.fields === 9', settingsOpened?.fields === 9) &&
+  // 8 campos: reducir movimiento, ORDEN AUTO (Fase 3), calidad, vibracion,
+  // 2 de avisos, 2 de volumen. El IDIOMA ya no vive aca: su unico control es
+  // el boton EN/ES del menu principal.
+  chk('settingsOpened?.fields === 8', settingsOpened?.fields === 8) &&
   // --- Calidad grafica (V0) ---
   chk("qualityBoot?.tier === 'low'", qualityBoot?.tier === 'low') &&
   chk("qualityBoot?.reason === 'software'", qualityBoot?.reason === 'software') &&
@@ -2222,13 +2240,16 @@ const ok =
   chk('shopBuy?.clicked === true', shopBuy?.clicked === true) &&
   chk('(shopBuy?.offersBefore ?? 0) >= 1', (shopBuy?.offersBefore ?? 0) >= 1) &&
   chk('shopBuy?.vendidas === 1', shopBuy?.vendidas === 1) &&
-  chk("shopBuy?.boton === 'VENDIDO'", shopBuy?.boton === 'VENDIDO') &&
+  chk('shopBuy?.boton === shopBuy?.soldLabel', shopBuy?.boton === shopBuy?.soldLabel) &&
   chk('shopBuy?.deshabilitado === true', shopBuy?.deshabilitado === true) &&
   chk('shopBuy?.sello === true', shopBuy?.sello === true) &&
   chk('(shopBuy?.toasts ?? []).length === 0', (shopBuy?.toasts ?? []).length === 0) &&
   // --- R3: vouchers ---
   chk('voucherShop?.vouchers === 2', voucherShop?.vouchers === 2) &&
-  chk("voucherShop?.labels?.includes('Mejora') === tr", voucherShop?.labels?.includes('Mejora') === true) &&
+  chk(
+    "voucherShop?.labels?.includes(voucherLabel) === tr",
+    voucherShop?.labels?.includes(voucherShop?.voucherLabel) === true,
+  ) &&
   chk("voucherShop?.labels?.includes('VOUCHER') === f", voucherShop?.labels?.includes('VOUCHER') === false) &&
   chk('voucherShop?.withArt === 2', voucherShop?.withArt === 2) &&
   chk('voucherShop?.prices?.length === 2', voucherShop?.prices?.length === 2) &&
@@ -2238,7 +2259,7 @@ const ok =
   chk('voucherShop?.paid === 15', voucherShop?.paid === 15) &&
   chk('voucherShop?.vouchersAfter === 2', voucherShop?.vouchersAfter === 2) &&
   chk('voucherShop?.soldIsVoucher === true', voucherShop?.soldIsVoucher === true) &&
-  chk("voucherShop?.soldButton === 'VENDIDO'", voucherShop?.soldButton === 'VENDIDO') &&
+  chk('voucherShop?.soldButton === soldLabel', voucherShop?.soldButton === voucherShop?.soldLabel) &&
   chk('Math.abs((voucherShop?.multiplier ?? 1) - 0.9)', Math.abs((voucherShop?.multiplier ?? 1) - 0.9) < 1e-6) &&
   // --- R1: ascension ---
   // Chip visible y sin marcar (el nivel puesto es A0 al arrancar el bloque).
@@ -2376,7 +2397,12 @@ const ok =
   chk('afterCancel panel cerrado', afterCancel?.panel === false) &&
   chk("afterQuit.status === 'menu'", afterQuit?.status === 'menu') &&
   chk('afterQuit menuPanel visible', afterQuit?.menuPanel === true) &&
-  chk("afterWin?.status === 'shop'", afterWin?.status === 'shop') &&
+  // --- Idioma: unico control en el MENU ---
+  chk('langResult el boton EN/ES existe en el menu', langResult?.found === true) &&
+  chk('langResult cambia el idioma', langResult?.after !== langResult?.before) &&
+  chk('langResult el boton marca el idioma nuevo', langResult?.label === langResult?.after?.toUpperCase()) &&
+  chk('langResult el control de idioma es UNICO', langResult?.langControls === 1) &&
+  chk('afterWin?.status === \'shop\'', afterWin?.status === 'shop') &&
   chk('realErrors.length === 0', realErrors.length === 0) &&
   chk('pageErrors.length === 0', pageErrors.length === 0);
 

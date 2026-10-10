@@ -15,7 +15,8 @@
  * Opciones secundarias: NO van en el menu. Cada una vive donde corresponde:
  *   - Continuar        -> chip sobre el marco de "Nueva partida", y SOLO si
  *                         hay una partida guardada.
- *   - Idioma           -> dentro de Ajustes (ya estaba).
+ *   - Idioma           -> boton EN/ES de la esquina superior derecha. Es el
+ *                         UNICO lugar donde se cambia el idioma.
  *   - Expansiones/Pase -> dentro de Coleccion.
  *   - Duelo micelial   -> chip en la esquina superior izquierda.
  *
@@ -27,7 +28,7 @@
  * solo funde. Ver `styles.css`.
  */
 
-import { t } from '@i18n/index';
+import { currentLanguage, t } from '@i18n/index';
 import type { PlayerCardState } from './PlayerCard';
 import { buildMiniPlayerCard } from './PlayerCard';
 import type { ColonyRewardKind } from '../meta/ColonyRewards';
@@ -203,6 +204,32 @@ function dailyChip(pending: boolean, label: string, onClick: () => void): HTMLBu
     dot.setAttribute('aria-hidden', 'true');
     el.appendChild(dot);
   }
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+/**
+ * Boton de IDIOMA de la esquina superior derecha.
+ *
+ * Misma caja "gel" celeste que Perfil y Recompensa diaria, pero con TEXTO en
+ * vez de un SVG: el codigo del idioma ACTIVO (`EN` / `ES`). Es el UNICO control
+ * de idioma del juego — se saco de Ajustes y del menu de pausa para que la
+ * eleccion viva en un solo lugar, visible y con el mismo peso que el resto.
+ *
+ * El texto muestra el idioma ACTUAL (no el destino): quien ve `ES` esta jugando
+ * en español y al tocarlo pasa a ingles.
+ */
+function langChip(label: string, onClick: () => void): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'menu-gel menu-gel--icon menu-gel--lang';
+  el.dataset['act'] = 'lang';
+  el.setAttribute('aria-label', t('settings.language'));
+  el.title = `${t('settings.language')}: ${label}`;
+  const span = document.createElement('span');
+  span.className = 'menu-gel-lang';
+  span.textContent = label;
+  el.appendChild(span);
   el.addEventListener('click', onClick);
   return el;
 }
@@ -411,6 +438,9 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
       t(state.dailyPending === true ? 'menu.dailyReady' : 'menu.daily'),
       callbacks.onOpenDaily,
     ),
+    // Idioma: el UNICO control de idioma del juego, con la misma caja celeste
+    // que el resto. Muestra el codigo ACTIVO (`EN` por defecto).
+    langChip(currentLanguage().toUpperCase(), () => callbacks.onToggleLanguage()),
     drop,
     menuBtn,
   );

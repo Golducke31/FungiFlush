@@ -1593,9 +1593,21 @@ async function boot(): Promise<void> {
           hud?.toast(t('log.saveIncompatible'), 'warn');
         }
       },
+      // --- Idioma: unico control, el boton EN/ES del menu principal ---
       onToggleLanguage: () =>
         toggleLanguage().then(() => {
           document.documentElement.lang = currentLanguage();
+          // El idioma del PERFIL gana sobre el detectado en el arranque: sin
+          // persistirlo, el proximo inicio volveria al idioma anterior y el
+          // jugador creeria que el boton no funciona.
+          profileStore.patch((p) => {
+            p.settings.lang = currentLanguage();
+          });
+          // Guardado INMEDIATO: cambiar el idioma es una accion DELIBERADA y
+          // discreta (no un slider arrastrandose), y el autosave es debounced
+          // 1.2 s. Sin esto, tocar EN/ES y cerrar la app enseguida dejaba el
+          // idioma viejo guardado y el proximo arranque lo revertia.
+          void profileStore.saveNow();
         }),
       // --- Pantalla de inicio ---
       onStartRun: () => {
