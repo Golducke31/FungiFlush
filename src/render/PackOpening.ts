@@ -595,6 +595,10 @@ export class PackOpening {
     stopExternal();
     for (const fn of this.cleanups) fn();
     this.particles.dispose();
+    // ⚠️ `dispose()` NO libera el contexto WebGL (ver `FungiFlushFx.dispose`):
+    // sin `forceContextLoss()` cada sobre abierto deja un contexto vivo y, en
+    // movil, el navegador acaba descartando el del juego (pantalla en blanco).
+    this.renderer.forceContextLoss();
     this.renderer.dispose();
     for (const card of this.cards) {
       card.traverse((node) => {

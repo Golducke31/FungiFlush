@@ -19,6 +19,7 @@ import {
   ANTE_BASE_TARGET,
   DIE_FACES,
   ECONOMY,
+  FUNGI_FLUSH_AFTER_USE_CHARGES,
   FUNGI_FLUSH_CLEARS_STATUSES,
   FUNGI_FLUSH_DRAW,
   FUNGI_FLUSH_MAX_CHARGES,
@@ -447,6 +448,11 @@ export class GameEngine {
       Math.max(0, this.run.baseDiscards + (die?.discards ?? 0)),
     );
 
+    // HABILIDAD FungiFlush: se reabre el uso por ciego. Las CARGAS no se tocan
+    // (siguen donde quedaron: 1 tras usarla, o hasta 3 si se cargo sin gastar);
+    // lo unico que se reinicia es "ya la use en este ciego".
+    this.run.fungiFlushUsedThisBlind = false;
+
     this.run.deck.shuffle();
     this.fillHand();
 
@@ -785,23 +791,34 @@ export class GameEngine {
   }
 
   /**
-   * ¿Se puede usar ahora? Solo en `playing` con al menos una mano por jugar y
-   * cargas disponibles. No se apila sobre una mano ya armada.
+   * ¿Se puede usar ahora?
+   *
+   * REGLA (rediseno): solo en `playing`, con al menos una mano por jugar, las
+   * cargas LLENAS (`FUNGI_FLUSH_MAX_CHARGES`) y **sin haberla usado ya en este
+   * ciego**. No se apila sobre una mano ya armada.
+   *
+   * El tope es lo que convierte el boton en un objetivo: `1/3` y `2/3` son
+   * "cargando", `3/3` es "listo". Se usa una vez y vuelve a 1.
    */
   canUseFungiFlush(): boolean {
     if (this.run.status !== 'playing') return false;
     if (!this.round || this.round.handsLeft <= 0) return false;
-    if (this.run.fungiFlushCharge <= 0) return false;
+    if (this.run.fungiFlushUsedThisBlind) return false;
+    if (this.run.fungiFlushCharge < FUNGI_FLUSH_MAX_CHARGES) return false;
     if (this.run.fungiFlushArmed) return false;
     return true;
   }
 
   /**
-   * Gasta una carga y activa la habilidad: arma la proxima mano con el
-   * multiplicador de Esporas, limpia los estados negativos (podredumbre /
-   * esterilidad) del mazo y la mano, y roba cartas. NO aplica el multiplicador
-   * aqui: entra al puntaje cuando se JUEGA la mano (`playHand`), asi sale como un
-   * paso mas del score y el render ya lo sabe animar.
+   * Activa la habilidad: arma la proxima mano con el multiplicador de Esporas,
+   * limpia los estados negativos (podredumbre / esterilidad) del mazo y la mano,
+   * y roba cartas. NO aplica el multiplicador aqui: entra al puntaje cuando se
+   * JUEGA la mano (`playHand`), asi sale como un paso mas del score y el render
+   * ya lo sabe animar.
+   *
+   * ⚠️ REDISENO: las cargas NO bajan a 0 — **vuelven a
+   * `FUNGI_FLUSH_AFTER_USE_CHARGES` (1)** y se marca `fungiFlushUsedThisBlind`
+   * para que no pueda volver a dispararse hasta el proximo ciego.
    *
    * Devuelve `true` si se activo (para que la UI dispare el overlay).
    */
@@ -809,8 +826,10 @@ export class GameEngine {
     if (!this.canUseFungiFlush()) return false;
     const round = this.requireRound();
 
-    // 1) Consume una carga y arma la proxima mano.
-    this.run.fungiFlushCharge = Math.max(0, this.run.fungiFlushCharge - 1);
+    // 1) Marca el uso del ciego y RESETEA las cargas a 1 (no a 0), armando la
+    //    proxima mano.
+    this.run.fungiFlushUsedThisBlind = true;
+    this.run.fungiFlushCharge = FUNGI_FLUSH_AFTER_USE_CHARGES;
     this.run.fungiFlushArmed = true;
 
     // 2) Limpia los estados NEGATIVOS del mazo y la mano (mismo recorrido sin
@@ -852,11 +871,16 @@ export class GameEngine {
   }
 
   /**
-   * Recarga la habilidad al cerrar la mano: +1 carga si la mano formo un combo
+   * Carga la habilidad al cerrar la mano: +1 carga si la mano formo un combo
    * grande (elemento >= 3 cartas o familia >= 4). Se llama desde `playHand` con
    * los combos ya detectados. Devuelve cuantas cargas entraron (para el aviso).
+   *
+   * ⚠️ Si la habilidad YA se uso en este ciego no se carga: el tope de un uso
+   * por ciego hace que acumular cargas no sirva de nada, y dejarlas subir
+   * mostraria un 3/3 "listo" que no se puede disparar (UI mentirosa).
    */
   private rechargeFungiFlush(res: ResolutionContext): number {
+    if (this.run.fungiFlushUsedThisBlind) return 0;
     if (this.run.fungiFlushCharge >= FUNGI_FLUSH_MAX_CHARGES) return 0;
     const qualifies = res.combos.some((combo) => {
       if (combo.id.startsWith('element:')) {
@@ -2142,6 +2166,9 @@ export class GameEngine {
       // marca de "armada" viajan con la run para no perderlas al recargar.
       fungiFlushCharge: this.run.fungiFlushCharge,
       fungiFlushArmed: this.run.fungiFlushArmed,
+      // Uso por ciego (aditivo, sin bump de version). Un save viejo cae al
+      // default (`false`) al restaurar.
+      fungiFlushUsedThisBlind: this.run.fungiFlushUsedThisBlind,
     };
   }
 
@@ -2197,6 +2224,9 @@ export class GameEngine {
       ),
     );
     this.run.fungiFlushArmed = data.fungiFlushArmed === true;
+    // Aditivo: un guardado previo no trae el campo => `false` (la habilidad esta
+    // disponible en el ciego en curso, como antes).
+    this.run.fungiFlushUsedThisBlind = data.fungiFlushUsedThisBlind === true;
     // Se mezcla sobre el estado por defecto: si un campo nuevo falta en un
     // guardado migrado, la run sigue siendo jugable.
     this.run.stats = { ...this.run.stats, ...data.stats };
@@ -2303,6 +2333,8 @@ export interface RunSaveData {
   fungiFlushCharge?: number;
   /** La habilidad FungiFlush esta armada para la proxima mano (aditivo). */
   fungiFlushArmed?: boolean;
+  /** La habilidad FungiFlush ya se uso en el ciego en curso (aditivo). */
+  fungiFlushUsedThisBlind?: boolean;
   stats: {
     handsPlayed: number;
     bestHand: number;

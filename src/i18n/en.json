@@ -109,9 +109,11 @@
   "ability": {
     "fungiFlush": {
       "name": "Fungi Flush",
-      "desc": "Empty the spores: ×2.5 on the next hand, clears rot and sterility, and draws 2 cards.",
+      "desc": "Once per blind, with all 3 charges full: ×2.5 on the next hand, clears rot and sterility, and draws 2 cards.",
       "ready": "READY!",
       "notReady": "FungiFlush is not ready yet",
+      "charging": "Charging {charge}/{max}",
+      "usedThisBlind": "Already used this blind",
       "banner": "Spores unleashed"
     }
   },

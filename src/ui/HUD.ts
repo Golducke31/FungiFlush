@@ -24,6 +24,7 @@ import {
   type ScoreBreakdown,
   type ShopOffer,
 } from '@engine/index';
+import { FUNGI_FLUSH_MAX_CHARGES } from '@engine/constants';
 import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
 import { currentLanguage, t } from '@i18n/index';
@@ -1431,10 +1432,54 @@ export class HUD {
       this.elCounters.appendChild(cell);
     }
 
+    // HUECO RESERVADO para los chips laterales.
+    //
+    // `.hud-actions` va centrado en la franja (`position:absolute; inset:0`) y
+    // sus botones pueden crecer hasta PISAR los chips de MANOS/DESCARTES si no
+    // se les reserva su ancho. Aca se mide el ancho real de la columna de
+    // contadores y se publica como `--actions-gutter`: la fila centrada solo
+    // puede usar lo que sobra. Se hace tras pintar (los chips ya tienen su
+    // tamaño) y de forma DIFERIDA porque en el primer frame el layout aun no
+    // esta medido.
+    this.syncActionsGutter();
+
     // La LINEA DE ESTADO de texto se retiro: duplicaba lo que ya esta en
     // pantalla (ANTE y FUNGIS en la barra superior, Robables/Descarte en las
     // etiquetas de las pilas) y era un muro de texto en movil. Lo que queda
     // unico — lo que GASTAS (manos, descartes) — vive en los chips de recursos.
+  }
+
+  /**
+   * Publica `--actions-gutter` en la fila de accion: el ancho que ocupan los
+   * contadores a cada lado, para que el grupo de botones (centrado) no los pise.
+   *
+   * Se mide el ancho REAL de los contadores visibles (no se asume un numero
+   * magico): si mañana se agrega un chip, el hueco se recalcula solo.
+   *
+   * El valor es el ancho del chip MAS ANCHO + su separacion: en movil los chips
+   * flanquean la franja (`space-between`), asi que a cada lado del centro hay
+   * como maximo UN chip. Tomar la suma seria reservar de mas y encoger el boton
+   * sin motivo. La asignacion va en `requestAnimationFrame` porque en el mismo
+   * frame del `appendChild` el navegador todavia no resolvio el layout y mediria
+   * 0.
+   */
+  private syncActionsGutter(): void {
+    if (typeof window === 'undefined') return;
+    const apply = (): void => {
+      const row = this.elActions.parentElement;
+      if (!row) return;
+      let w = 0;
+      for (const cell of Array.from(this.elCounters.children) as HTMLElement[]) {
+        // `offsetParent === null` = oculto (display:none): no reserva lugar.
+        if (cell.offsetParent === null) continue;
+        w = Math.max(w, cell.offsetWidth);
+      }
+      // Cada chip vive en un extremo: hay que reservar su ancho en LOS DOS lados
+      // mas el gap de la fila, para que el grupo centrado nunca los toque.
+      row.style.setProperty('--actions-gutter', `${Math.ceil(w) + 12}px`);
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
+    else apply();
   }
 
   /**
@@ -1718,27 +1763,41 @@ export class HUD {
     if (this.scoreSettling) play.classList.add('jugando');
 
     // HABILIDAD INSIGNIA FungiFlush: boton propio, siempre visible en partida.
-    // No juega la mano: la ARMA (multiplicador + limpieza + robo). Se muestra el
-    // numero de cargas como ficha; sin cargas queda deshabilitado.
+    // No juega la mano: la ARMA (multiplicador + limpieza + robo).
+    //
+    // El marcador muestra las cargas como fraccion (`1/3`, `2/3`, `3/3`): es un
+    // MEDIDOR DE PROGRESO, no un contador de usos. La habilidad solo se puede
+    // disparar al llegar al tope y UNA vez por ciego; al usarla vuelve a `1/3`.
     const flushBtn = document.createElement('button');
     flushBtn.className = 'btn is-fungi-flush';
     flushBtn.dataset['act'] = 'use-fungi-flush';
     {
       const charge = this.engine.fungiFlushCharge();
       const ready = this.engine.canUseFungiFlush();
+      const max = FUNGI_FLUSH_MAX_CHARGES;
       flushBtn.innerHTML =
         '<span class="ff-shine" aria-hidden="true"></span>' +
         `<span class="ff-label">${t('action.useFungiFlush')}</span>`;
       flushBtn.setAttribute('aria-label', t('action.useFungiFlush'));
-      flushBtn.title = t('ability.fungiFlush.desc');
-      if (charge > 0) {
-        const chip = document.createElement('span');
-        chip.className = 'btn-flush-count';
-        chip.textContent = String(charge);
-        flushBtn.appendChild(chip);
-      }
+      // El `title` explica POR QUE no se puede usar cuando esta apagado: es la
+      // unica pista que el jugador tiene sin abrir nada.
+      flushBtn.title = ready
+        ? t('ability.fungiFlush.desc')
+        : this.engine.run.fungiFlushUsedThisBlind
+          ? t('ability.fungiFlush.usedThisBlind')
+          : t('ability.fungiFlush.charging', { charge, max });
+      // La ficha SIEMPRE se muestra (incluso en 0, por si un save raro lo trae):
+      // el jugador necesita ver "cuanto le falta" para llegar al 3/3.
+      const chip = document.createElement('span');
+      chip.className = 'btn-flush-count';
+      chip.textContent = `${charge}/${max}`;
+      // Al tope y sin usar, la ficha se enciende para reforzar que esta listo.
+      if (ready) chip.classList.add('is-full');
+      flushBtn.appendChild(chip);
       flushBtn.disabled = !ready;
       if (ready) flushBtn.classList.add('is-ready');
+      // Marca de "ya usado": apaga el boton aunque la ficha muestre 1/3.
+      if (this.engine.run.fungiFlushUsedThisBlind) flushBtn.classList.add('is-spent');
       flushBtn.addEventListener('click', () => this.callbacks.onUseFungiFlush());
     }
 
@@ -3247,22 +3306,31 @@ export class HUD {
    * NO toma el reloj de GSAP (`startExternal`): la habilidad se lanza durante el
    * juego, donde el loop de `SceneManager` YA bombea `updateAnim`. Un segundo
    * ticker duplicaria el avance de los tweens.
+   *
+   * ⚠️ El overlay se CREA UNA VEZ y se REUSA mientras esta montado. Crear un
+   * `WebGLRenderer` por disparo gastaba un contexto WebGL por uso: en movil el
+   * navegador acaba descartando el contexto MAS ANTIGUO, que es el canvas del
+   * juego — el bug de la pantalla en blanco. Con `forceContextLoss()` en
+   * `dispose` el contexto ya se devuelve, y reusar la instancia evita el churn.
    */
   playFungiFlush(intensity = 1): void {
-    // Si ya hay uno corriendo, se recicla: no se apilan dos overlays WebGL.
-    this.closeFungiFlush();
-    const fx = new FungiFlushFx({
-      onSound: (stage, index) => {
-        audio.unlock();
-        if (stage === 'impact') audio.play('fungi_flush', { volume: 0.95 });
-        else if (stage === 'letter') audio.play('select_1', { volume: 0.5, rate: 1 + (index ?? 0) * 0.06 });
-        else audio.play(stage === 'charge' ? 'discard_many' : 'discard_1', { volume: 0.55 });
-      },
-      onDone: () => this.closeFungiFlush(),
-    });
-    this.fungiFx = fx;
-    this.root.appendChild(fx.element);
-    fx.start();
+    if (!this.fungiFx || this.fungiFx.element.parentElement === null) {
+      // Primera vez (o tras un dispose): se crea y se monta.
+      this.closeFungiFlush();
+      this.fungiFx = new FungiFlushFx({
+        onSound: (stage, index) => {
+          audio.unlock();
+          if (stage === 'impact') audio.play('fungi_flush', { volume: 0.95 });
+          else if (stage === 'letter') audio.play('select_1', { volume: 0.5, rate: 1 + (index ?? 0) * 0.06 });
+          else audio.play(stage === 'charge' ? 'discard_many' : 'discard_1', { volume: 0.55 });
+        },
+        onDone: () => this.closeFungiFlush(),
+      });
+      this.root.appendChild(this.fungiFx.element);
+      this.fungiFx.start();
+    }
+    const fx = this.fungiFx;
+    // `prepare()` es idempotente: construye las letras una sola vez.
     void fx.prepare().then(() => {
       if (this.fungiFx !== fx) return;
       void fx.play(intensity);
@@ -4967,17 +5035,20 @@ export class HUD {
     el.append(title, sub);
 
     this.elComboBanners.appendChild(el);
-    // Entrada + salida por transform, sin reflow (leccion del ticker).
+    // Entrada + salida por transform, sin reflow (leccion del ticker). El pico
+    // de entrada baja de 1.12 a 1.06: con el cartel mas chico y abajo, un
+    // rebote grande se sentia como un golpe. La permanencia tambien se acorta
+    // (1.1 s -> 0.85 s) — el aviso es contexto, no un cartel que hay que leer.
     anim.tweenOf(el, {
       keyframes: [
-        { scale: 0.6, opacity: 0, duration: anim.d(0.01) },
-        { scale: 1.12, opacity: 1, duration: anim.d(0.22), ease: anim.EASE.cssBack },
-        { scale: 1, opacity: 1, duration: anim.d(0.16), ease: anim.EASE.cssOut },
-        { scale: 1, opacity: 1, duration: anim.d(1.1) },
-        { scale: 1.06, opacity: 0, duration: anim.d(0.3), ease: anim.EASE.cubicInOut },
+        { scale: 0.75, opacity: 0, duration: anim.d(0.01) },
+        { scale: 1.06, opacity: 1, duration: anim.d(0.18), ease: anim.EASE.cssBack },
+        { scale: 1, opacity: 1, duration: anim.d(0.14), ease: anim.EASE.cssOut },
+        { scale: 1, opacity: 1, duration: anim.d(0.85) },
+        { scale: 1.03, opacity: 0, duration: anim.d(0.26), ease: anim.EASE.cubicInOut },
       ],
     });
-    window.setTimeout(() => el.remove(), 2400);
+    window.setTimeout(() => el.remove(), 1900);
   }
 
   /**
@@ -5002,14 +5073,14 @@ export class HUD {
     this.elComboBanners.appendChild(el);
     anim.tweenOf(el, {
       keyframes: [
-        { scale: 0.6, opacity: 0, duration: anim.d(0.01) },
-        { scale: 1.14, opacity: 1, duration: anim.d(0.2), ease: anim.EASE.cssBack },
-        { scale: 1, opacity: 1, duration: anim.d(0.16), ease: anim.EASE.cssOut },
-        { scale: 1, opacity: 1, duration: anim.d(1.2) },
-        { scale: 1.06, opacity: 0, duration: anim.d(0.3), ease: anim.EASE.cubicInOut },
+        { scale: 0.75, opacity: 0, duration: anim.d(0.01) },
+        { scale: 1.06, opacity: 1, duration: anim.d(0.18), ease: anim.EASE.cssBack },
+        { scale: 1, opacity: 1, duration: anim.d(0.14), ease: anim.EASE.cssOut },
+        { scale: 1, opacity: 1, duration: anim.d(0.9) },
+        { scale: 1.03, opacity: 0, duration: anim.d(0.26), ease: anim.EASE.cubicInOut },
       ],
     });
-    window.setTimeout(() => el.remove(), 2500);
+    window.setTimeout(() => el.remove(), 1950);
   }
 
   toast(message: string, kind: 'info' | 'warn' | 'error' = 'info'): void {

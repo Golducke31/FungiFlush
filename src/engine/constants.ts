@@ -99,13 +99,19 @@ export const RUN_DEFAULTS = {
 // HABILIDAD FungiFlush
 // ---------------------------------------------------------------------------
 //
-// La habilidad INSIGNIA de la run: un boton manual con cargas (mismo espiritu
-// que el dado del Simbionte `useLoadedDie`). Arma la proxima mano con un gran
-// multiplicador de Esporas, limpia los estados negativos y roba cartas. Es el
-// momento "climax" que le faltaba a cada ciego: el jugador DECIDE cuando
-// gastarla, y cuando la suelta se ve (overlay VFX + pop-up).
+// La habilidad INSIGNIA de la run: un boton manual que arma la proxima mano con
+// un gran multiplicador de Esporas, limpia los estados negativos y roba cartas.
+//
+// ⚠️ REGLA VIGENTE (rediseno): la habilidad se CARGA sola durante el ciego y
+// solo puede dispararse **una vez por ciego**, cuando las cargas llegan al tope
+// (3/3). Al usarla, las cargas **vuelven a 1** (no a 0) y el marcador arranca el
+// proximo ciego en 1/3. Se carga jugando manos con combo grande (elemento >= 3
+// o familia >= 4).
+//
+// El tope es la FUENTE DE LA VERDAD del estado del boton: `1/3` y `2/3` estan
+// "cargando" (boton apagado), `3/3` esta "listo".
 
-/** Cargas maximas acumulables. */
+/** Cargas maximas: el boton solo se habilita al llegar a este tope. */
 export const FUNGI_FLUSH_MAX_CHARGES = 3;
 
 /** Multiplicador de Esporas que arma la habilidad para la proxima mano. */
@@ -115,7 +121,13 @@ export const FUNGI_FLUSH_SPORE_MULT = 2.5;
 export const FUNGI_FLUSH_DRAW = 2;
 
 /**
- * Tier de combo que RECARGA una carga al cerrar la mano: elemento >= 3 cartas o
+ * Cargas a las que se RESETEA la habilidad despues de usarla. No es 0: el
+ * jugador nunca queda "sin nada" — vuelve a empezar la carga del proximo ciego.
+ */
+export const FUNGI_FLUSH_AFTER_USE_CHARGES = 1;
+
+/**
+ * Tier de combo que SUMA una carga al cerrar la mano: elemento >= 3 cartas o
  * familia >= 4. Premia armar la mano, no solo jugar cartas sueltas.
  */
 export const FUNGI_FLUSH_RECHARGE_ELEMENT_TIER = 3;

@@ -549,6 +549,14 @@ export class SceneManager {
   private lastFrameDt = 1 / 60;
   private frameId = 0;
   private running = false;
+  /**
+   * El contexto WebGL esta caido (lo descarto el navegador) y todavia no se
+   * restauro. Mientras valga `true` el loop NO dibuja: hacerlo solo llena la
+   * consola de warnings. Se levanta sola con `webglcontextrestored`.
+   */
+  private contextLost = false;
+  private readonly onContextLost: (event: Event) => void;
+  private readonly onContextRestored: () => void;
   private readonly isTouch: boolean;
   private readonly isMobile: boolean;
   /**
@@ -670,6 +678,32 @@ export class SceneManager {
     // entre el composer, cada pase hace su propio `renderer.render()` y con el
     // autoReset puesto el conteo final seria el del ultimo pase (1).
     this.renderer.info.autoReset = false;
+
+    // RED DE SEGURIDAD del contexto WebGL.
+    //
+    // El navegador puede DESCARTAR el contexto del juego (GPU reseteada al
+    // volver del background en movil, driver caido, o exceso de contextos
+    // vivos). Sin handler, Three.js deja de poder dibujar y la partida queda en
+    // BLANCO aunque la logica siga corriendo — el bug reportado.
+    //
+    // Con `preventDefault()` en `webglcontextlost` el navegador RESTAURA el
+    // mismo contexto y emite `webglcontextrestored`; Three.js vuelve a subir
+    // texturas/geometrias solo (el grafo de escena sigue intacto). Lo unico que
+    // hay que hacer es PAUSAR el dibujo mientras no hay contexto, para no
+    // disparar warnings por frame.
+    this.onContextLost = (event: Event) => {
+      event.preventDefault();
+      this.contextLost = true;
+    };
+    this.onContextRestored = () => {
+      this.contextLost = false;
+      // Rehace tamano y encuadre: el renderer restaurado arranca con el
+      // drawing buffer del canvas, pero el `setSize`/DPR y el composer hay que
+      // reafirmarlos.
+      this.resize();
+    };
+    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost, false);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored, false);
 
     // El nivel de calidad se detecta ANTES de crear el rig y las particulas:
     // el DPR y la capacidad de esporas salen del tier, y cambiarlos despues
@@ -3756,6 +3790,13 @@ export class SceneManager {
         this.transitionListener?.(-1);
       }
 
+      // Sin contexto no se dibuja (ver `contextLost`): la logica sigue, el
+      // frame se salta el render y se reanuda solo cuando el navegador restaure.
+      if (this.contextLost) {
+        this.sampleFrame(rawDt);
+        return;
+      }
+
       if (this.postFx) this.postFx.render();
       else this.renderer.render(this.scene, this.rig.camera);
 
@@ -4205,6 +4246,8 @@ export class SceneManager {
     this.carousel?.dispose();
     this.carousel = null;
     this.renderer.domElement.removeEventListener('pointermove', this.onWaterPointerMove);
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.detachDieInput();
     this.water?.dispose();
     this.water = null;

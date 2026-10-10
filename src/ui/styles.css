@@ -1609,10 +1609,13 @@ body {
 /* Habilidad INSIGNIA FungiFlush: losa propia en el teal/espora de la marca.
    Es el boton mas "especial" de la barra: glow fuerte cuando esta LISTO y
    apagado cuando no hay cargas. El brillo que la recorre (`ff-shine`) solo
-   corre en `is-ready`, para que el estado se lea de un vistazo. */
+   corre en `is-ready`, para que el estado se lea de un vistazo.
+
+   ⚠️ El brillo recorta con `border-radius` en el pseudo, NO con `overflow:
+   hidden` en el boton: con `overflow: hidden` la ficha de cargas (que sobresale
+   `-6px`) quedaba CORTADA por el borde de la losa. */
 .btn.is-fungi-flush {
   position: relative;
-  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(127, 255, 240, 0.55) 0%, rgba(127, 255, 240, 0.08) 42%),
     linear-gradient(180deg, #0f6d63 0%, #0b5148 52%, #063029 100%);
@@ -1622,6 +1625,8 @@ body {
     inset 0 -2px 0 rgba(0, 0, 0, 0.4),
     0 0 22px rgba(63, 224, 208, 0.4);
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  /* Deja aire arriba/derecha para que la ficha `-6px` no toque los vecinos. */
+  overflow: visible;
 }
 
 .btn.is-fungi-flush:hover:not(:disabled) {
@@ -1635,30 +1640,52 @@ body {
   opacity: 0.55;
 }
 
-/* Ficha con las cargas disponibles (espejo del contador de la mano). */
+/* Ficha con las cargas: ahora muestra la FRACCION (`1/3`, `3/3`), asi que es
+   mas ancha que un digito suelto. `is-full` la enciende cuando esta al tope. */
 .btn.is-fungi-flush .btn-flush-count {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -7px;
+  right: -7px;
   min-width: 19px;
   height: 19px;
-  padding: 0 4px;
+  padding: 0 5px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: linear-gradient(180deg, #b6fff2, #3fe0d0);
+  background: linear-gradient(180deg, #9fe8dc, #3fb8ad);
   color: #06303c;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
-/* Brillo que recorre el boton mientras esta listo. */
+/* Al tope (3/3): la ficha se enciende en el teal brillante de la marca. */
+.btn.is-fungi-flush .btn-flush-count.is-full {
+  background: linear-gradient(180deg, #b6fff2, #3fe0d0);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 10px rgba(63, 224, 208, 0.8);
+}
+
+/* Ya usado en este ciego: el boton queda apagado aunque la ficha marque 1/3. */
+.btn.is-fungi-flush.is-spent {
+  filter: grayscale(0.85);
+  opacity: 0.5;
+}
+
+/* Brillo que recorre el boton mientras esta listo. Se recorta con su propio
+   `border-radius` (el boton ya NO tiene `overflow: hidden`, ver arriba): asi el
+   barrido no se sale de la losa y la ficha de cargas no queda cortada. */
 .btn.is-fungi-flush .ff-shine {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
   pointer-events: none;
   opacity: 0;
 }
@@ -1986,11 +2013,17 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   POP-UPS grandes de COMBO / HABILIDAD
+   POP-UPS de COMBO / HABILIDAD
    --------------------------------------------------------------------------
    Cuando la mano arma un combo, el juego deja de ser "numeros que suben": se
    ANUNCIA por nombre. El cartel es CENTRADO (no un toast de esquina) porque es
    lo que el jugador tiene que mirar justo al cerrar la mano.
+
+   ⚠️ REDISENO (menos invasivo): antes el cartel salia GRANDE y DEAD-CENTER, y
+   tapaba la mesa entera justo cuando el jugador quiere ver sus cartas puntuar.
+   Ahora es COMPACTO y vive en la BANDA LIBRE entre la mano y la barra de accion:
+   informa sin robar la escena. La escala por tier sigue (un combo de 5 se nota
+   mas que uno de 2) pero arranca mucho mas abajo.
 
    La pila va en la capa de banners (`--z-banner`, encima de los numeros
    flotantes) pero NUNCA por encima del toast del sistema. `pointer-events:
@@ -2001,8 +2034,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  /* ABAJO, no en el centro: el aviso cae sobre la franja entre la mano y los
+     botones, que es justo donde el jugador ya no necesita mirar. */
+  justify-content: flex-end;
+  padding-bottom: calc(var(--hud-bottom-h, 68px) + 8px);
+  gap: 6px;
   pointer-events: none;
   z-index: var(--z-banner);
   overflow: hidden;
@@ -2015,49 +2051,56 @@ body {
   /* 0..1 segun el tamano del combo: 2 cartas -> 0, 5 cartas -> 1. */
   --combo-weight: 0.5;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 26px;
-  border-radius: 18px;
-  border: 2px solid color-mix(in srgb, var(--combo-color) 70%, transparent);
-  background: color-mix(in srgb, var(--combo-color) 18%, rgba(8, 11, 16, 0.82));
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.55em;
+  padding: 6px 16px;
+  border-radius: 13px;
+  border: 1.5px solid color-mix(in srgb, var(--combo-color) 60%, transparent);
+  /* Fondo mas OPACO pero mas CHICO: se lee sin tapar el tablero de atras. */
+  background: color-mix(in srgb, var(--combo-color) 14%, rgba(8, 11, 16, 0.9));
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.45),
-    0 0 22px color-mix(in srgb, var(--combo-color) 45%, transparent);
-  /* El tamano escala con el tier: un combo de 2 se lee; uno de 5 SE SIENTE. */
-  font-size: calc(0.9rem + var(--combo-weight) * 0.75rem);
+    0 6px 18px rgba(0, 0, 0, 0.4),
+    0 0 14px color-mix(in srgb, var(--combo-color) 32%, transparent);
+  /* El tamano escala con el tier, pero MUCHO mas suave que antes (0.75 -> 0.45). */
+  font-size: calc(0.82rem + var(--combo-weight) * 0.45rem);
   text-align: center;
+  max-width: 78vw;
   will-change: transform, opacity;
 }
 
 .combo-banner-title {
   font-family: var(--font-display, inherit);
-  font-size: 1.25em;
+  font-size: 1em;
   line-height: 1.05;
   letter-spacing: 0.02em;
   color: var(--combo-color);
+  white-space: nowrap;
   /* El borde oscuro hace que el nombre se lea sobre cualquier fondo de mesa. */
   text-shadow:
-    0 2px 0 rgba(0, 0, 0, 0.55),
-    0 0 14px color-mix(in srgb, var(--combo-color) 55%, transparent);
+    0 1.5px 0 rgba(0, 0, 0, 0.5),
+    0 0 10px color-mix(in srgb, var(--combo-color) 45%, transparent);
 }
 
+/* El "xN CARTAS" deja de ser un renglon aparte: va al lado del titulo, mas
+   chico. Un cartel de dos lineas ocupaba el doble de alto por la mitad del
+   dato. */
 .combo-banner-sub {
   font-family: var(--font-ui, inherit);
-  font-size: 0.62em;
+  font-size: 0.6em;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
 }
 
 /* La habilidad comparte el look pero con un halo mas ancho: es un evento de la
    run, no una regla de la mano. */
 .combo-banner.is-ability {
-  border-width: 3px;
+  border-width: 2px;
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.5),
-    0 0 34px color-mix(in srgb, var(--combo-color) 60%, transparent);
+    0 6px 18px rgba(0, 0, 0, 0.45),
+    0 0 22px color-mix(in srgb, var(--combo-color) 50%, transparent);
 }
 
 /* --------------------------------------------------------------------------
@@ -7792,7 +7835,12 @@ body {
     /* (F4/D) El boton JUGAR MANO queda CENTRADO encima de los contadores, que
        flanquean la franja. `inset:0` + centro lo mantiene en medio mientras los
        chips de recursos ocupan los extremos. `pointer-events:none` deja pasar el
-       toque a traves del hueco de la franja; los botones lo recuperan. */
+       toque a traves del hueco de la franja; los botones lo recuperan.
+
+       ⚠️ La banda central que ocupan los botones esta ACOTADA: los contadores
+       reservan su ancho con `flex-basis` (ver `.hud-counters`) y la fila centra
+       lo que sobra. Sin ese tope, agregar el boton de la habilidad empujaba el
+       grupo hasta PISAR el chip de MANOS/DESCARTES (bug reportado). */
     position: absolute;
     inset: 0;
     display: flex;
@@ -7805,6 +7853,13 @@ body {
   .hud-actions .btn {
     pointer-events: auto;
     flex: 0 1 auto;
+  }
+
+  /* La habilidad no se aplasta: necesita lugar para su etiqueta + la ficha de
+     cargas. Cede ancho ANTES el boton de jugar (que es puro texto). */
+  .hud-actions .btn.is-fungi-flush {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   /* (F4/D) Franja de accion unica: la fila envuelve contadores + accion y da el
@@ -7935,9 +7990,33 @@ body {
     justify-content: center;
   }
 
+  /* La franja reserva el ancho de los chips laterales para que el grupo
+     CENTRADO (botones) no pueda pisarlos: los contadores siempre ganan su
+     ancho y el centro solo puede ocupar lo que sobra.
+     `flex: 1` es lo que los EMPUJA a los extremos (`space-between` de la regla
+     de abajo): sin estirar la fila, los chips quedaban pegados a la izquierda y
+     el boton de la habilidad caia encima del de DESCARTES. */
+  .hud-counters {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .hud-actions {
+    /* `inset: 0` con `padding` lateral = hueco garantizado para los chips: el
+       grupo centrado vive SOLO en el ancho que dejan libre. Es lo que hace
+       estructuralmente imposible el solapamiento. */
+    padding-inline: calc(var(--actions-gutter, 200px));
+    box-sizing: border-box;
+  }
+
   .hud-actions .btn.is-play.is-jm {
-    flex: 0 1 auto;
-    width: min(78vw, 460px);
+    /* El play ocupa EXACTAMENTE lo que sobra de la banda central: la fila tiene
+       `padding-inline: var(--actions-gutter)` (el ancho de los chips laterales),
+       asi que el grupo entero cabe entre ellos sin pisarlos. Antes medía 78vw
+       fijos y se comia la franja. */
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
     height: 66px;
     min-height: 66px;
     font-size: 26px;

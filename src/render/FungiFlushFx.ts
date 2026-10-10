@@ -486,6 +486,13 @@ export class FungiFlushFx {
     for (const d of this.disposables) d.dispose();
     this.pointsMat.dispose();
     this.pointsGeo.dispose();
+    // ⚠️ `dispose()` NO libera el contexto WebGL: solo suelta los recursos de
+    // Three.js. Cada `playFungiFlush` creaba un renderer nuevo y, al no liberar
+    // el contexto, el navegador iba acumulando contextos vivos hasta que la GPU
+    // descartaba el MAS ANTIGUO — que es el canvas del juego — y la partida
+    // quedaba en blanco (bug reportado). `forceContextLoss()` es lo que devuelve
+    // el contexto al pool del navegador.
+    this.renderer.forceContextLoss();
     this.renderer.dispose();
     this.element.remove();
   }

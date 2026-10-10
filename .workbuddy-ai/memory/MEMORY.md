@@ -5,7 +5,6 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 ## MÓVIL PRIMERO
 - UI/HUD = MÓVIL landscape. Doc `docs/CONVENCION_MOVIL_PRIMERO.md`. Ref 915×412; smoke 844×390. **Escritorio CONGELADO** salvo el bloque `@media (pointer: fine)` al final de `styles.css` (doc `docs/DESIGN_ESCRITORIO.md`).
 - `src/pointer.ts` ÚNICA fuente de puntero. NO `matchMedia` suelto. CSS: base=escritorio, móvil=`@media (pointer:coarse)`, tablet=`(pointer:coarse) and (min-height:600px)`.
-- Gates `gate:desktop` (31 pantallas) y `gate:parity` (dual, baseline `tools/parity-baseline.json`, `--update` para re-basar).
 
 ## Encuadre 3D (SceneManager / CameraRig)
 - ⚠️ `rig.fit()` = `max(distForWidth, distForHeight)`. Celular (aspect 2.22) manda el ALTO; escritorio 16:9 manda el ANCHO ⇒ cámara lejos, mesa al ~68% y franja plana arriba (la "franja negra" = clear color, no CSS). Fix: `DESKTOP_WIDE_PILE_X=8.8` + `biasDesktop=0.62`. Más ancho de mundo = cámara más lejos = cartas MÁS CHICAS.
@@ -13,7 +12,7 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 - ⚠️ Dos contextos Playwright simultáneos NO funcionan (SwiftShader ~2-3 FPS). `gate:parity` crea→recorre→cierra cada sesión; usar `polling: 250`, no rAF.
 
 ## Gates y tools (prefijar `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-- `typecheck` · `test` (node --import tsx --test) · `validate` · `smoke` · `audit:desc` · `sim:balance`(500) · `sim:board`.
+- `typecheck` · `test` (node --import tsx --test) · `validate` · `smoke` · `audit:desc` · `sim:balance`(500) · `sim:board` · `gate:desktop` (31 pantallas) · `gate:parity` (dual, baseline `tools/parity-baseline.json`, `--update` para re-basar).
 - Tools: `shot-desktop/tablet/mobile.mjs`, `probe-*.mjs` (muchas sondas), `parity-layout.mjs`, `smoke.mjs`.
 - El smoke necesita un server YA en **127.0.0.1:1420** (`npm run dev`); NO lo arranca solo. ⚠️ NUNCA en paralelo con `cargo`.
 - ⚠️ NUNCA `sed -i` (Windows mata casing). `waitForTimeout` no mide render → `waitForFunction`. Botones animados → `boundingBox()`+`page.mouse.click`.
@@ -37,6 +36,7 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 - Reciclado: `Deck.takeReshuffleCount()` + `GameEngine.drawFromDeck()` (único robo) emite `deck:reshuffle`.
 - **Descarte y Orden SIN botón** (arrastrar/tocar la pila; ajuste `autoSortHand`). Pilas: DESCARTE IZQUIERDA, MAZO DERECHA.
 - Seleccionada = borde VERDE `0x5ef08a` + badge 1-5. `HAND_BOOST`=1.2.
+- Barra inferior: `.hud-counters` (flex:1 1 auto) + `.hud-actions` (centrado con `padding-inline: var(--actions-gutter)`, calculado por `syncActionsGutter()` en `renderCounters()`). Móvil: TODO en una línea; `JUGAR MANO` `flex:1 1 auto` y `FUNGI FLUSH` `flex:0 0 auto`. No cerrar la barra con `overflow:hidden` en el botón FF (recorta el chip).
 
 ## Menú principal
 - `.menu-layout` → `.menu-top` + `.menu-hero`; `public/menu-bg.jpg` es fondo. El "FUNGI FLUSH" del fondo ES el logo (horneado).
@@ -83,13 +83,21 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 - Los `private` de TS se borran en runtime (envolver para espiar VFX); Playwright → `page.evaluate` + `hud.refreshPanel()`.
 - Google Auth (Play Games): bridge nativo implementado; pendiente solo APP_ID de Play Console + SHA-1 (lo hace Emanuel). Doc `docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md` §7.
 
-## Habilidad FUNGI FLUSH (insignia de run)
-- Botón manual con CARGAS: arranca en 1, max 3. `FUNGI_FLUSH_SPORE_MULT=2.5` (×Esporas), `FUNGI_FLUSH_DRAW=2`, `FUNGI_FLUSH_CLEARS_STATUSES=['decay','spore_lock']`, recarga con `element:...:>=3` o `family:...:>=4`. Save/restore ADITIVO (no bump `SAVE_VERSION`); save viejo cae al default.
-- ⚠️ No se apila sobre mano ya armada. `canUseFungiFlush` exige status `playing`, manos>0, carga>0, no armada.
-- API motor: `fungiFlushCharge()/isArmed()/canUse()/use()` + paso `MULTIPLY_SPORES` `sourceId='fungi_flush'` en `playHand`. Evento bus: `'fungi:flushed' {charge, intensity}`. `intensity = min(2, SPORE_MULT/2.5) = 1`.
-- HUD: `.btn.is-fungi-flush` con chip de cargas + shine, `data-act="use-fungi-flush"`. VFX: `src/render/FungiFlushFx.ts` (overlay WebGL propio, canvas transparente, NO `startExternal`, dt del reloj GSAP via `anim.now()` para hit-stop conjunto).
-- ⚠️ **Falta bundlear "Bagel Fat One"** para la fidelidad del logo de las letras. Solo hay Fredoka + Gasoek One. `FONT` cae a `Arial Black`/sans. Solución: añadir woff2 + `@font-face` en `styles.css` y anteponerla en `FONT` (`src/render/FungiFlushFx.ts:47`).
-- Pop-ups: `onComboBanner` (eje+tier+nameKey) y `onAbilityBanner` (nameKey+intensity) en `SceneCallbacks`; se disparan en el cierre de la mano. HUD: `.combo-banner-stack`/`.combo-banner` (color por eje UI_COLORS, escala por tier 2..5, `is-ability` con halo más ancho). i18n: `hud.comboBanner.size`, `ability.fungiFlush.banner`.
+## Habilidad FUNGI FLUSH (insignia de run) — ⚠️ NUEVA MECÁNICA (2026-10-10)
+- **Solo UNA vez por ciego y SOLO con las 3 cargas.** Marcador `n/3` siempre visible (arranca 1/3). Al usarla: `fungiFlushUsedThisBlind=true` y la carga vuelve a **1** (`FUNGI_FLUSH_AFTER_USE_CHARGES=1`, NO 0). El contador se REABRE en `chooseBlind()` (cargas intactas). Recarga: `element:...:>=3` o `family:...:>=4`, pero `rechargeFungiFlush()` devuelve 0 si `fungiFlushUsedThisBlind`.
+- `canUseFungiFlush` exige status `playing`, manos>0, `!fungiFlushUsedThisBlind`, `charge >= MAX(3)` y no armada (no se apila sobre mano armada).
+- Efectos: `FUNGI_FLUSH_SPORE_MULT=2.5` (×Esporas), `FUNGI_FLUSH_DRAW=2`, `FUNGI_FLUSH_CLEARS_STATUSES=['decay','spore_lock']`. Save/restore ADITIVO (nuevo campo `fungiFlushUsedThisBlind`, sin bump `SAVE_VERSION`).
+- API motor: `fungiFlushCharge()/isArmed()/canUse()/use()` + paso `MULTIPLY_SPORES` `sourceId='fungi_flush'` en `playHand`. Bus: `'fungi:flushed' {charge, intensity}`; `intensity = min(2, SPORE_MULT/2.5) = 1`.
+- HUD: `.btn.is-fungi-flush` (chip `n/3`, `is-full` cuando listo, `is-spent` cuando usado) + shine, `data-act="use-fungi-flush"`. VFX: `src/render/FungiFlushFx.ts` (overlay WebGL propio, canvas transparente, NO `startExternal`, dt del reloj GSAP via `anim.now()`). ⚠️ Se REUTILIZA una sola instancia desde HUD (`playFungiFlush`).
+- ⚠️ **Falta bundlear "Bagel Fat One"** para el logo de las letras. Solo hay Fredoka + Gasoek One. `FONT` cae a `Arial Black`/sans. Solución: añadir woff2 + `@font-face` en `styles.css` y anteponerla en `FONT` (`src/render/FungiFlushFx.ts:47`).
+- Pop-ups: `onComboBanner` (eje+tier+nameKey) y `onAbilityBanner` (nameKey+intensity) en `SceneCallbacks`; se disparan al cerrar la mano. **Estilo COMPACTO** (una fila, fondo opaco chico) tras queja del usuario. HUD: `.combo-banner-stack` (abajo-derecha sobre el HUD)/`.combo-banner` (color por eje UI_COLORS, escala por tier 2..5, `is-ability` con halo). i18n: `hud.comboBanner.size`, `ability.fungiFlush.banner`, `ability.fungiFlush.charging|usedThisBlind`.
+
+## ⚠️ WebGL: FUGAS DE CONTEXTO (pantalla en BLANCO) — 2026-10-10
+- **Síntoma**: escena 3D en blanco pero HUD visible (imagen rota arriba-izq) tras usar FungiFlush varias veces.
+- **Causa raíz**: `FungiFlushFx`/`PackOpening` creaban un `new THREE.WebGLRenderer` por uso y **`dispose()` NO libera el contexto WebGL**. El navegador (sobre todo móvil) evicta el contexto MÁS VIEJO = el canvas del juego → blanco. Sonda `_ff_ctx.mjs`: 13 contextos vivos en 12 usos.
+- **Fix**: en `dispose()` llamar **`renderer.forceContextLoss()` ANTES de `renderer.dispose()`** (en AMBOS). + Reutilizar UNA instancia de `FungiFlushFx` en HUD. Sonda tras el fix: 2 contextos totales.
+- **Red de seguridad**: `SceneManager` escucha `webglcontextlost` (con `event.preventDefault()` para permitir restauración) / `webglcontextrestored` (llama `resize()`); flag `contextLost` salta el render. Quitar listeners en `dispose()`.
+- **Regla general**: cualquier overlay con `WebGLRenderer` propio DEBE `forceContextLoss()` al destruirse.
 
 ## VFX test (Playwright)
-- `tools/ff-harness.html` + `tools/_ff_capture.mjs` = prueba visual reutilizable de cualquier `FungiFlushFx`. **2 trampas descubiertas** (dejadas documentadas en el script): (1) `page.screenshot()` NO captura el canvas WebGL en headless swiftshader (`preserveDrawingBuffer:false`) → usar `canvas.toDataURL()`. (2) El harness DEBE bombear `updateAnim(dt)` en un rAF, si no el reloj GSAP queda en 0 y no se emiten partículas.
+- `tools/ff-harness.html` + `tools/_ff_capture.mjs` = prueba visual reutilizable de cualquier `FungiFlushFx`. **2 trampas** (documentadas en el script): (1) `page.screenshot()` NO captura el canvas WebGL en headless swiftshader (`preserveDrawingBuffer:false`) → usar `canvas.toDataURL()`. (2) El harness DEBE bombear `updateAnim(dt)` en un rAF, si no el reloj GSAP queda en 0 y no se emiten partículas.

@@ -98,8 +98,9 @@ export interface RunState {
    * Cargas disponibles de la habilidad FungiFlush.
    *
    * La habilidad es INSIGNIA de la run (no un joker): vive aca para que una
-   * partida retomada siga con las mismas cargas. Se recarga al cerrar una mano
-   * que formo un combo grande (ver `GameEngine.useFungiFlush`).
+   * partida retomada siga con las mismas cargas. Arranca en 1, solo se puede
+   * disparar al llegar a `FUNGI_FLUSH_MAX_CHARGES` (3) y **una vez por ciego**;
+   * al usarla vuelve a 1 (ver `GameEngine.useFungiFlush`).
    */
   fungiFlushCharge: number;
   /**
@@ -108,6 +109,13 @@ export interface RunState {
    * porque gastar la habilidad y JUGAR la mano son dos momentos distintos.
    */
   fungiFlushArmed: boolean;
+  /**
+   * La habilidad YA se uso en el ciego actual. El rediseno la limita a **un uso
+   * por ciego**: se limpia en `chooseBlind` (nuevo ciego) y pasado a `true` en
+   * `useFungiFlush`. Sin este flag, cargar a 3 de nuevo dentro del mismo ciego
+   * permitiria dispararla varias veces, que es justo lo que se quiso evitar.
+   */
+  fungiFlushUsedThisBlind: boolean;
   /**
    * Arquetipo de la run (id; ver `src/data/archetypes.json`).
    *
@@ -195,6 +203,7 @@ export function createRunState(seed: number, deck: Deck, ascension = 0, archetyp
     purgesThisAnte: 0,
     fungiFlushCharge: RUN_DEFAULTS.fungiFlushCharges,
     fungiFlushArmed: false,
+    fungiFlushUsedThisBlind: false,
     archetype,
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },

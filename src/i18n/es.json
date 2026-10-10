@@ -109,9 +109,11 @@
   "ability": {
     "fungiFlush": {
       "name": "Fungi Flush",
-      "desc": "Vacía las esporas: ×2.5 en la próxima mano, limpia podredumbre y esterilidad, y roba 2 cartas.",
+      "desc": "Una vez por ciego, con las 3 cargas llenas: ×2.5 en la próxima mano, limpia podredumbre y esterilidad, y roba 2 cartas.",
       "ready": "¡LISTO!",
       "notReady": "FungiFlush no está listo todavía",
+      "charging": "Cargando {charge}/{max}",
+      "usedThisBlind": "Ya usado en este ciego",
       "banner": "Esporas liberadas"
     }
   },
