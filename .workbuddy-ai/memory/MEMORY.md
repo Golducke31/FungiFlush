@@ -37,6 +37,7 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 - **Descarte y Orden SIN botón** (arrastrar/tocar la pila; ajuste `autoSortHand`). Pilas: DESCARTE IZQUIERDA, MAZO DERECHA.
 - Seleccionada = borde VERDE `0x5ef08a` + badge 1-5. `HAND_BOOST`=1.2.
 - Barra inferior: `.hud-counters` (flex:1 1 auto) + `.hud-actions` (centrado con `padding-inline: var(--actions-gutter)`, calculado por `syncActionsGutter()` en `renderCounters()`). Móvil: TODO en una línea; `JUGAR MANO` `flex:1 1 auto` y `FUNGI FLUSH` `flex:0 0 auto`. No cerrar la barra con `overflow:hidden` en el botón FF (recorta el chip).
+- ⚠️ **Zoom de "JUGAR MANO" (`.is-armed`)**: al seleccionar ≥1 carta el botón escala con `transform` (NO reserva layout) ⇒ su caja CRECIDA se sale hacia los lados y pisaba FungiFlush. Solución en móvil: `.hud-actions { gap:26px }` + `.btn.is-play.is-jm { flex:0 1 auto }` (ancho natural, NO `flex-grow`) + `.is-armed { scale(1.08) }` (era 1.16). Con 3 cartas → 14px de holgura; peor caso (ready + 5 cartas) igual. ⚠️ Cualquier `scale` de transform en la barra necesita `gap` de colchón.
 
 ## Menú principal
 - `.menu-layout` → `.menu-top` + `.menu-hero`; `public/menu-bg.jpg` es fondo. El "FUNGI FLUSH" del fondo ES el logo (horneado).
@@ -101,3 +102,4 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 
 ## VFX test (Playwright)
 - `tools/ff-harness.html` + `tools/_ff_capture.mjs` = prueba visual reutilizable de cualquier `FungiFlushFx`. **2 trampas** (documentadas en el script): (1) `page.screenshot()` NO captura el canvas WebGL en headless swiftshader (`preserveDrawingBuffer:false`) → usar `canvas.toDataURL()`. (2) El harness DEBE bombear `updateAnim(dt)` en un rAF, si no el reloj GSAP queda en 0 y no se emiten partículas.
+- ⚠️ **Sondas de HUD y `:disabled`**: `play.disabled = selected===0`. Con 0 cartas el botón está `:disabled` y las reglas `:disabled` fijan `transform:none` **vía `animation`**, que GANA incluso a `transform: ... !important`. Para medir `is-armed` hay que SELECCIONAR cartas de verdad (`engine.toggleSelect(uid)` + `hud.render()`), NO forzar la clase. Emular móvil: `newContext({viewport:{width:915,height:412}, isMobile:true, hasTouch:true})` ⇒ `(pointer: coarse)` true y `(pointer: fine)` false.

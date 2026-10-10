@@ -8004,8 +8004,13 @@ body {
   .hud-actions {
     /* `inset: 0` con `padding` lateral = hueco garantizado para los chips: el
        grupo centrado vive SOLO en el ancho que dejan libre. Es lo que hace
-       estructuralmente imposible el solapamiento. */
+       estructuralmente imposible el solapamiento.
+       El `gap` NO es decorativo: `is-armed` aplica un `scale` de transform
+       (no reserva layout) y la caja CRECIDA se sale hacia los lados. Sin este
+       colchon, la mitad izquierda del zoom pisaba el boton de FungiFlush. Con
+       `gap` el play arranca mas a la derecha y el zoom vive dentro del hueco. */
     padding-inline: calc(var(--actions-gutter, 200px));
+    gap: 26px;
     box-sizing: border-box;
   }
 
@@ -8013,8 +8018,12 @@ body {
     /* El play ocupa EXACTAMENTE lo que sobra de la banda central: la fila tiene
        `padding-inline: var(--actions-gutter)` (el ancho de los chips laterales),
        asi que el grupo entero cabe entre ellos sin pisarlos. Antes medía 78vw
-       fijos y se comia la franja. */
-    flex: 1 1 auto;
+       fijos y se comia la franja.
+       ⚠️ `flex: 0 1 auto` + `min-width: 0`: NO se estira a ocupar todo el hueco
+       (con `flex-grow: 1` su caja llegaba hasta el chip de FungiFlush y, al
+       armarse, el zoom lo tapaba). Asi el play conserva su ancho natural y el
+       `gap` de arriba garantiza el margen para el zoom. */
+    flex: 0 1 auto;
     width: auto;
     min-width: 0;
     height: 66px;
@@ -8025,10 +8034,12 @@ body {
   }
 
   /* Zoom de jerarquia al armar la jugada (hay cartas seleccionadas). El
-     transform no mueve el layout: la fila no se reacomoda. 1.16 sobre
-     min(78vw,460px) queda dentro del viewport en landscape movil. */
+     `transform` no mueve el layout: la fila no se reacomoda.
+     ⚠️ `1.16` hacia que la caja creciera ~8% de su ancho por lado y tapara el
+     boton de FungiFlush. `1.08` sobre `flex: 0 1 auto` (ancho natural) deja el
+     crecimiento dentro del `gap` de la barra. */
   .hud-actions .btn.is-play.is-jm.is-armed {
-    transform: scale(1.16);
+    transform: scale(1.08);
   }
 
   /* --- Barra superior: tres zonas con espaciado parejo --- */
