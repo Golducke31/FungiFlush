@@ -95,6 +95,20 @@ export interface RunState {
    */
   purgesThisAnte: number;
   /**
+   * Cargas disponibles de la habilidad FungiFlush.
+   *
+   * La habilidad es INSIGNIA de la run (no un joker): vive aca para que una
+   * partida retomada siga con las mismas cargas. Se recarga al cerrar una mano
+   * que formo un combo grande (ver `GameEngine.useFungiFlush`).
+   */
+  fungiFlushCharge: number;
+  /**
+   * La habilidad fue activada y armo la PROXIMA mano: `playHand` multiplica las
+   * Esporas por `FUNGI_FLUSH_SPORE_MULT` y limpia el flag. Separado de la carga
+   * porque gastar la habilidad y JUGAR la mano son dos momentos distintos.
+   */
+  fungiFlushArmed: boolean;
+  /**
    * Arquetipo de la run (id; ver `src/data/archetypes.json`).
    *
    * Un arquetipo no cambia las REGLAS del juego: cambia el MAZO INICIAL y las
@@ -179,6 +193,8 @@ export function createRunState(seed: number, deck: Deck, ascension = 0, archetyp
     ascension,
     purgeCostBonus: 0,
     purgesThisAnte: 0,
+    fungiFlushCharge: RUN_DEFAULTS.fungiFlushCharges,
+    fungiFlushArmed: false,
     archetype,
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },

@@ -47,6 +47,8 @@ src-tauri/gen/android/app/*.jks
 
 # Artefactos del smoke test (capturas de pantalla)
 tools/shots/
+# Capturas del harness VFX de FungiFlush (evidencia visual, no fuente)
+tools/ff-shots/
 
 # Logs
 npm-debug.log*

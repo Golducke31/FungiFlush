@@ -26,6 +26,10 @@
       "file": "sfx_discard_many.ogg",
       "bytes": 18658
     },
+    "fungi_flush": {
+      "file": "sfx_fungi_flush.ogg",
+      "bytes": 30342
+    },
     "select_1": {
       "file": "sfx_select_1.ogg",
       "bytes": 7856

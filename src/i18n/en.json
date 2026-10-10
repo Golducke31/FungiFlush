@@ -46,7 +46,10 @@
     "sort": "Sort",
     "deckState": "Deck state",
     "remaining": "Remaining: {hands} hands · {discards} discards",
-    "remainingPrefix": "Remaining:"
+    "remainingPrefix": "Remaining:",
+    "comboBanner": {
+      "size": "{n} cards"
+    }
   },
   "pile": {
     "deck": "Deck",
@@ -100,7 +103,17 @@
     "viewDeck": "View deck",
     "useDie": "Roll die",
     "useDieReady": "Die ready!",
-    "useDieCharge": "{count} hands left"
+    "useDieCharge": "{count} hands left",
+    "useFungiFlush": "FUNGI FLUSH!"
+  },
+  "ability": {
+    "fungiFlush": {
+      "name": "Fungi Flush",
+      "desc": "Empty the spores: ×2.5 on the next hand, clears rot and sterility, and draws 2 cards.",
+      "ready": "READY!",
+      "notReady": "FungiFlush is not ready yet",
+      "banner": "Spores unleashed"
+    }
   },
   "phase": {
     "blind_select": "Next challenge",

@@ -196,7 +196,7 @@ test('el nivel nunca baja', () => {
   assert.equal(progress.level, Math.max(high, result.levelAfter));
 });
 
-test('nextLevelInfo describe el tramo actual para la barra', () => {
+test('nextLevelInfo describe el tramo actual y su PROXIMO desbloqueo', () => {
   const progress = defaultColonyProgress();
   progress.lifetimeSpores = 575;
   progress.level = levelForSpores(progress.lifetimeSpores);
@@ -206,7 +206,33 @@ test('nextLevelInfo describe el tramo actual para la barra', () => {
   assert.equal(info.next, 700);
   assert.equal(info.remaining, 125);
   assert.ok(Math.abs(info.progress - 75 / 200) < 1e-9);
+  // Nivel 6 -> el proximo desbloqueo es el nivel 7 (COLONY_LEVELS[6]).
   assert.equal(info.rewardId, 'pack_colony');
+});
+
+test('nextLevelInfo NO repite el premio cuando el jugador esta en el umbral', () => {
+  // Regresion del off-by-one: clavado en el umbral del nivel 6 (500 exactas) el
+  // premio del nivel 6 (victory_fx) YA es del jugador; "Proximo desbloqueo"
+  // tiene que apuntar al 7 (pack_colony), no al 6.
+  const progress = defaultColonyProgress();
+  progress.lifetimeSpores = 500;
+  progress.level = levelForSpores(progress.lifetimeSpores);
+  assert.equal(progress.level, 6);
+  const atThreshold = nextLevelInfo(progress);
+  assert.equal(atThreshold.current, 500);
+  assert.equal(atThreshold.next, levelThreshold(7));
+  assert.equal(atThreshold.rewardId, 'pack_colony');
+  assert.notEqual(atThreshold.rewardId, 'victory_fx');
+
+  // Un spore por debajo del umbral el nivel sigue siendo 5 y el proximo
+  // desbloqueo es el 6 (victory_fx).
+  progress.lifetimeSpores = 499;
+  progress.level = levelForSpores(progress.lifetimeSpores);
+  assert.equal(progress.level, 5);
+  const justBelow = nextLevelInfo(progress);
+  assert.equal(justBelow.current, levelThreshold(5));
+  assert.equal(justBelow.next, 500);
+  assert.equal(justBelow.rewardId, 'victory_fx');
 });
 
 test('la escalera definida a mano tiene la forma esperada', () => {

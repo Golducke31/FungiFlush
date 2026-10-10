@@ -251,16 +251,17 @@ function maxParticles(key: 'ambientSpores' | 'transientSpores'): number {
   return Math.max(...Object.values(TIER_CONFIG).map((config) => config[key]));
 }
 
-/** Cuantos pasos de score se animan. El resto se agrupa para no eternizar la mano. */
 /**
- * Cuantos pasos de score se animan como maximo.
+ * Cuantos pasos de score se animan como maximo. El resto se agrupa para no
+ * eternizar la mano.
  *
- * Bajado de 22 a 12 junto con el `stepStagger` mas lento: una mano con muchos
- * disparos se resolvia en una fraccion de segundo y no se veia nada. Con el tope
- * mas bajo, los pasos que SI se animan tienen tiempo de leerse, y el total
- * (que es lo que el jugador necesita) sigue cerrando exacto.
+ * Subido de 12 a 16 (Frente UX): con el `stepStagger` mas lento, una mano con
+ * combo puede tener 14-16 pasos legitimos (5 bases + combos + efectos) y con el
+ * tope viejo los ultimos se agrupaban de golpe — justo donde esta el combo. El
+ * peor caso queda en ~0.9 + 16*0.26 ≈ 5 s, y el `scoreSettleDeadline` del HUD
+ * (15 s) sigue alcanzando.
  */
-const MAX_ANIMATED_STEPS = 12;
+const MAX_ANIMATED_STEPS = 16;
 
 
 export interface SceneCallbacks {
@@ -366,6 +367,32 @@ export interface SceneCallbacks {
    * El render no sabe que hay al otro lado: solo avisa el indice tocado.
    */
   onCarouselActivate?: (index: number) => void;
+  /**
+   * La mano armo un COMBO y hay que anunciarlo.
+   *
+   * El render no dibuja texto grande: dispara el aviso y el HUD decide como se
+   * ve (banner temporal). Se manda el EJE y el TIER porque el HUD necesita
+   * ambos: el eje elige color/nombre y el tier (2..5) elige el adjetivo
+   * ("Floracion", "Supercolonia"...). `nameKey` ya viene localizado desde el
+   * motor, preferido sobre el nombre generico del eje.
+   *
+   * Se llama desde `comboFlourish` en el CIERRE de la mano (no por paso) para
+   * que sea UN banner, no cinco.
+   */
+  onComboBanner?: (info: {
+    axis: 'element' | 'family' | 'diversity';
+    tier: number;
+    nameKey: string;
+    cardUids: string[];
+  }) => void;
+  /**
+   * La habilidad FungiFlush se DISPARO: hay que anunciarla igual que un combo.
+   *
+   * Mismo canal que `onComboBanner` para que el HUD use un solo banner. Se
+   * manda `intensity` (0..2) porque la habilidad escala con el tamaño del
+   * combo que la acompaña: 0.5 es un flush chico y 2 es el maximo.
+   */
+  onAbilityBanner?: (info: { intensity: number }) => void;
 }
 
 /** Instantanea de una carta de la mano, para el panel de debug (F3) y los tests. */
@@ -480,16 +507,22 @@ export class SceneManager {
    * este flag solo decide si encima va la CAPA EXTRA. Se reinicia con la primer
    * carta de cada mano.
    */
-  private handCombo: { axis: 'element' | 'family' | 'diversity'; tier: number } | null = null;
+  private handCombo: {
+    axis: 'element' | 'family' | 'diversity';
+    tier: number;
+    nameKey: string;
+    cardUids: string[];
+  } | null = null;
   /**
    * Separacion temporal entre pasos de score.
    *
    * Estaba en 0.055 s: con hasta 22 pasos, la mano entera se resolvia en 1,2 s y
-   * era IMPOSIBLE leer que aportaba cada paso. Ahora cada paso dura lo que dura
-   * su animacion (~0.18 s) y ademas se animan MENOS pasos (12), asi que el
-   * total se mantiene parecido pero cada uno se aprecia.
+   * era IMPOSIBLE leer que aportaba cada paso. Subio a 0.18 s y ahora a 0.26 s
+   * (Frente UX): el jugador pidio que las cartas tarden mas en puntuar, para que
+   * la mano se SIENTA como una secuencia y no como un flash. Con 16 pasos el
+   * peor caso ronda los 5 s.
    */
-  private readonly stepStagger = 0.18;
+  private readonly stepStagger = 0.26;
   /** Timeline de la secuencia de puntuacion de la mano en curso. */
   private scoreTl: ReturnType<typeof anim.sequence> | null = null;
 
@@ -1836,9 +1869,28 @@ export class SceneManager {
         if (joker) this.queueFx(0.02, () => this.pulseJoker(joker, depth));
       }),
 
+      // HABILIDAD FungiFlush. El overlay WebGL (FungiFlushFx) lo dibuja el HUD;
+      // aca solo se hace la parte 3D que vive en la escena: estallido de esporas
+      // hacia arriba desde la mano. `intensity` (0..2) escala el golpe.
+      bus.on('fungi:flushed', ({ intensity }) => {
+        const center = this.scoringCenter();
+        const k = Math.max(0, Math.min(2, intensity));
+        this.particles.burst(center, Math.round(90 + k * 90), {
+          color: UI_COLORS.spores,
+          speed: 5 + k * 2.5,
+          size: 0.09,
+          life: 1.3,
+          upward: 3.2 + k,
+        });
+        if (!this.reduceMotion) {
+          this.hitStop(70 + Math.round(k * 50));
+          this.rig.addShake(0.1 + k * 0.08);
+        }
+        this.bgPulse = Math.max(this.bgPulse, this.reduceMotion ? 0 : 1);
+      }),
+
       bus.on('round:win', () => this.celebrate()),
-      bus.on('round:loss', () => {
-        this.doom();
+      bus.on('round:loss', () => {        this.doom();
         // Si la timeline del puntaje se corta en la mano que da la derrota,
         // `score:settled` no llega nunca: se manda igual lo que quedo en el
         // centro, para que las cartas no queden colgadas en la mesa.
@@ -2858,7 +2910,7 @@ export class SceneManager {
     this.scoreTl.call(
       () => this.runScoreStep(step, index),
       undefined,
-      anim.d(0.6 + index * this.stepStagger),
+      anim.d(0.9 + index * this.stepStagger),
     );
   }
 
@@ -2920,9 +2972,17 @@ export class SceneManager {
       // Se guarda el mas alto de la mano (por si hubo elemento Y familia) y se
       // resaltan las cartas que lo formaron. `closeCombo` sigue corriendo en
       // todas las manos: esto es una capa ENCIMA, no un reemplazo.
+      // Se guardan tambien `nameKey` y `cardUids`: el primero alimenta el
+      // pop-up grande del HUD; los segundos permiten RE-resaltar al cierre si el
+      // paso del combo cayo fuera de los pasos animados.
       const combo = this.comboOf(step.sourceId);
       if (combo && (!this.handCombo || combo.tier > this.handCombo.tier)) {
-        this.handCombo = combo;
+        this.handCombo = {
+          axis: combo.axis,
+          tier: combo.tier,
+          nameKey: step.sourceNameKey,
+          cardUids: [...(step.comboCardUids ?? [])],
+        };
       }
       if (step.comboCardUids && step.comboCardUids.length > 1) {
         this.highlightComboCards(step.comboCardUids, color);
@@ -2958,8 +3018,17 @@ export class SceneManager {
       // base y no se le quita nada.
       if (isLastStep) {
         this.closeCombo();
-        // Capa EXTRA: solo si la mano formo al menos un combo.
-        if (this.handCombo) this.comboFlourish(this.handCombo.axis, this.handCombo.tier);
+        // Capa EXTRA: solo si la mano formo al menos un combo. Se le pasa el
+        // combo COMPLETO (no solo eje/tier) para poder anunciarlo con su nombre.
+        if (this.handCombo) {
+          this.comboFlourish(this.handCombo.axis, this.handCombo.tier);
+          this.callbacks.onComboBanner?.({
+            axis: this.handCombo.axis,
+            tier: this.handCombo.tier,
+            nameKey: this.handCombo.nameKey,
+            cardUids: [...this.handCombo.cardUids],
+          });
+        }
       }
     }
   }

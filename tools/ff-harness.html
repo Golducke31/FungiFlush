@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>FungiFlush VFX Harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: radial-gradient(circle at 50% 38%, #14202b 0%, #0a1016 60%, #05080c 100%);
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+      }
+      #hint {
+        position: fixed;
+        left: 12px;
+        bottom: 10px;
+        color: #6f8aa0;
+        font-size: 12px;
+        z-index: 5;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="hint">FungiFlush VFX — real ported class</div>
+    <script type="module">
+      import '/src/ui/styles.css';
+      import { FungiFlushFx } from '/src/render/FungiFlushFx.ts';
+      import { updateAnim } from '/src/render/anim.ts';
+
+      const stage = document.getElementById('stage');
+      const intensity = Number(new URLSearchParams(location.search).get('i') || '1');
+
+      // El juego real bombea `updateAnim(dt)` desde el loop de SceneManager.
+      // Aqui lo hacemos a mano para que los tweens (fxTween/sleep) avancen
+      // y las particulas se emitan, igual que durante una partida.
+      let last = performance.now();
+      function pump(now) {
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+        last = now;
+        updateAnim(dt);
+        requestAnimationFrame(pump);
+      }
+      requestAnimationFrame(pump);
+
+      const fx = new FungiFlushFx({
+        onSound: (stageName) => console.log('[sound]', stageName),
+        onDone: () => console.log('[done]'),
+      });
+      stage.appendChild(fx.element);
+      fx.start();
+      fx.prepare()
+        .then(() => fx.play(intensity))
+        .catch((e) => console.error('[prepare/play]', e));
+
+      window.__ff = fx;
+    </script>
+  </body>
+</html>

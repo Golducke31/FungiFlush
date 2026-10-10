@@ -183,6 +183,12 @@ export interface GameEventMap {
    * en el acto y vale para la proxima mano jugada.
    */
   'die:loaded': { die: DieRoll };
+  /**
+   * La habilidad insignia FungiFlush se ACTIVO. `intensity` (0.5-2) lo lee el
+   * overlay VFX para escalar particulas/shake; `charge` es lo que queda. El
+   * render lo usa para lanzar la secuencia de letras "FUNGI FLUSH".
+   */
+  'fungi:flushed': { charge: number; intensity: number };
 
   // --- Disparadores (el render los usa para shake / particulas A->B) ---
   'trigger:fired': {

@@ -822,6 +822,13 @@ async function boot(): Promise<void> {
       onLongPressJoker: (joker) => hud?.showJokerTooltip(joker, lastPointer.x, lastPointer.y),
       onScorePopup: (x, y, text, color, combo) => hud?.popup(x, y, text, color, combo ?? 0),
       onScoreTick: (info) => hud?.scoreTick(info),
+      // POP-UP grande: la mano armo un combo. El render ya hizo el golpe 3D; aca
+      // se ANUNCIA con texto (nombre del eje + tier). Un solo banner por mano,
+      // disparado en el cierre, no por paso.
+      onComboBanner: (info) => hud?.comboBanner(info),
+      // Misma via para la habilidad FungiFlush: un banner hermano para que el
+      // jugador lea QUE paso, no solo que la pantalla temblo.
+      onAbilityBanner: (info) => hud?.abilityBanner('ability.fungiFlush.name', info.intensity),
       // El monitor de frames bajo el nivel solo. El render no muestra avisos:
       // avisa y el controlador decide. NO se persiste en el perfil a proposito:
       // es un ajuste de la sesion, y el jugador puede forzarlo en Ajustes.
@@ -1676,6 +1683,11 @@ async function boot(): Promise<void> {
         const die = engine.useLoadedDie();
         if (!die) return;
         scene.tossDie(die.face, () => bus.emit('die:settled', { face: die.face }));
+      },
+      onUseFungiFlush: () => {
+        // Habilidad insignia: arma la proxima mano. El motor emitira
+        // `fungi:flushed` y el HUD montara el overlay VFX; aca solo se confirma.
+        if (!engine.useFungiFlush()) hud?.toast(t('ability.fungiFlush.notReady'), 'warn');
       },
       onOpenDeck: () => openDeck(),
       onPurge: doPurge,

@@ -19,8 +19,15 @@ import {
   ANTE_BASE_TARGET,
   DIE_FACES,
   ECONOMY,
+  FUNGI_FLUSH_CLEARS_STATUSES,
+  FUNGI_FLUSH_DRAW,
+  FUNGI_FLUSH_MAX_CHARGES,
+  FUNGI_FLUSH_RECHARGE_ELEMENT_TIER,
+  FUNGI_FLUSH_RECHARGE_FAMILY_TIER,
+  FUNGI_FLUSH_SPORE_MULT,
   MAX_HAND_SIZE,
   MAX_PLAY_SIZE_DEFAULT,
+  RUN_DEFAULTS,
 } from './constants';
 import { bus } from './events';
 import { RNG } from './rng';
@@ -555,6 +562,13 @@ export class GameEngine {
       res.multiplySpores(die.multiplier, 'die', `die.face${die.face}`, 0);
     }
 
+    // HABILIDAD FungiFlush: si estaba armada, entra al puntaje como un paso mas
+    // (mismo carril que el dado). Se consume aca para que valga una sola mano.
+    if (this.run.fungiFlushArmed) {
+      res.multiplySpores(FUNGI_FLUSH_SPORE_MULT, 'fungi_flush', 'ability.fungiFlush.name', 0);
+      this.run.fungiFlushArmed = false;
+    }
+
     // --- Anuncio visual de las cartas jugadas, en orden ---
     scored.forEach((card, index) => bus.emit('card:played', { card, index }));
     for (const step of res.steps) bus.emit('score:step', { step });
@@ -601,6 +615,11 @@ export class GameEngine {
     // una carga del dado.
     this.run.die = null;
     if (this.loadedDieChargeLeft > 0) this.loadedDieChargeLeft -= 1;
+
+    // HABILIDAD FungiFlush: armar la mano tambien la recarga (se premia armar
+    // combos grandes, no solo jugar cartas sueltas). Se hace DESPUES de consumir
+    // el multiplicador, para que gastarla en una mano grande no se auto-devuelva.
+    this.rechargeFungiFlush(res);
 
     bus.emit('score:hand', { breakdown: breakdownOf(res), total: res.total });
     bus.emit('score:changed', {
@@ -743,6 +762,117 @@ export class GameEngine {
     bus.emit('die:loaded', { die });
     this.emitState();
     return die;
+  }
+
+  // ==========================================================================
+  // HABILIDAD INSIGNIA FungiFlush
+  // ==========================================================================
+  //
+  // A diferencia del Simbionte del dado, NO depende de tener un joker: es la
+  // habilidad de la run. Un boton manual con cargas que arma la proxima mano
+  // (gran multiplicador de Esporas), limpia los estados negativos y roba cartas.
+  // Se recarga al cerrar una mano que formo un combo grande: la decision de
+  // CUANDO gastarla es el climax que le faltaba a cada ciego.
+
+  /** Cargas disponibles de la habilidad. */
+  fungiFlushCharge(): number {
+    return this.run.fungiFlushCharge;
+  }
+
+  /** La habilidad armo la proxima mano (multiplicador pendiente). */
+  isFungiFlushArmed(): boolean {
+    return this.run.fungiFlushArmed;
+  }
+
+  /**
+   * ¿Se puede usar ahora? Solo en `playing` con al menos una mano por jugar y
+   * cargas disponibles. No se apila sobre una mano ya armada.
+   */
+  canUseFungiFlush(): boolean {
+    if (this.run.status !== 'playing') return false;
+    if (!this.round || this.round.handsLeft <= 0) return false;
+    if (this.run.fungiFlushCharge <= 0) return false;
+    if (this.run.fungiFlushArmed) return false;
+    return true;
+  }
+
+  /**
+   * Gasta una carga y activa la habilidad: arma la proxima mano con el
+   * multiplicador de Esporas, limpia los estados negativos (podredumbre /
+   * esterilidad) del mazo y la mano, y roba cartas. NO aplica el multiplicador
+   * aqui: entra al puntaje cuando se JUEGA la mano (`playHand`), asi sale como un
+   * paso mas del score y el render ya lo sabe animar.
+   *
+   * Devuelve `true` si se activo (para que la UI dispare el overlay).
+   */
+  useFungiFlush(): boolean {
+    if (!this.canUseFungiFlush()) return false;
+    const round = this.requireRound();
+
+    // 1) Consume una carga y arma la proxima mano.
+    this.run.fungiFlushCharge = Math.max(0, this.run.fungiFlushCharge - 1);
+    this.run.fungiFlushArmed = true;
+
+    // 2) Limpia los estados NEGATIVOS del mazo y la mano (mismo recorrido sin
+    //    duplicar por uid que `decayStatuses`). Emite `status:expired` por cada
+    //    uno para que el render anime la salida en vez de descubrirla al pintar.
+    const seen = new Set<string>();
+    const cards: CardInstance[] = [];
+    for (const card of this.run.deck.allCards) {
+      if (seen.has(card.uid)) continue;
+      seen.add(card.uid);
+      cards.push(card);
+    }
+    for (const card of round.hand) {
+      if (seen.has(card.uid)) continue;
+      seen.add(card.uid);
+      cards.push(card);
+    }
+    const clears = new Set(FUNGI_FLUSH_CLEARS_STATUSES);
+    for (const card of cards) {
+      if (card.statuses.length === 0) continue;
+      const removed = card.statuses.filter((s) => clears.has(s.type));
+      if (removed.length === 0) continue;
+      card.statuses = card.statuses.filter((s) => !clears.has(s.type));
+      for (const status of removed) bus.emit('status:expired', { uid: card.uid, status: status.type });
+    }
+
+    // 3) Roba cartas frescas (respeta MAX_HAND_SIZE dentro de `drawExtra`).
+    this.drawExtra(FUNGI_FLUSH_DRAW);
+
+    // 4) Aviso observable: el render lanza el overlay VFX y el HUD el pop-up.
+    //    La intensidad escala con la potencia de la habilidad.
+    bus.emit('fungi:flushed', {
+      charge: this.run.fungiFlushCharge,
+      intensity: Math.min(2, FUNGI_FLUSH_SPORE_MULT / 2.5),
+    });
+
+    this.emitState();
+    return true;
+  }
+
+  /**
+   * Recarga la habilidad al cerrar la mano: +1 carga si la mano formo un combo
+   * grande (elemento >= 3 cartas o familia >= 4). Se llama desde `playHand` con
+   * los combos ya detectados. Devuelve cuantas cargas entraron (para el aviso).
+   */
+  private rechargeFungiFlush(res: ResolutionContext): number {
+    if (this.run.fungiFlushCharge >= FUNGI_FLUSH_MAX_CHARGES) return 0;
+    const qualifies = res.combos.some((combo) => {
+      if (combo.id.startsWith('element:')) {
+        const tier = Number.parseInt(combo.id.split(':')[2] ?? '', 10);
+        return Number.isFinite(tier) && tier >= FUNGI_FLUSH_RECHARGE_ELEMENT_TIER;
+      }
+      if (combo.id.startsWith('family:')) {
+        const tier = Number.parseInt(combo.id.split(':')[2] ?? '', 10);
+        return Number.isFinite(tier) && tier >= FUNGI_FLUSH_RECHARGE_FAMILY_TIER;
+      }
+      return false;
+    });
+    if (!qualifies) return 0;
+    const before = this.run.fungiFlushCharge;
+    this.run.fungiFlushCharge = Math.min(FUNGI_FLUSH_MAX_CHARGES, before + 1);
+    return this.run.fungiFlushCharge - before;
   }
 
   // ==========================================================================
@@ -2008,6 +2138,10 @@ export class GameEngine {
       // Tutorial guiado (aditivo). NO es una regla: es una marca para la UI.
       // Sobrevive al guardado para que una run-tutorial retomada siga guiada.
       tutorial: this.run.tutorial,
+      // Habilidad FungiFlush (aditivo, sin bump de version): las cargas y la
+      // marca de "armada" viajan con la run para no perderlas al recargar.
+      fungiFlushCharge: this.run.fungiFlushCharge,
+      fungiFlushArmed: this.run.fungiFlushArmed,
     };
   }
 
@@ -2049,6 +2183,20 @@ export class GameEngine {
     // Tutorial (aditivo): un guardado previo no trae el campo y la run sigue
     // SIN tutorial. `=== true` para que un `undefined`/basura no lo active.
     this.run.tutorial = data.tutorial === true;
+    // FungiFlush (aditivo): un guardado previo cae al default de la run (no a 0,
+    // para no quitarle la habilidad a una partida vieja); se clampea al tope.
+    this.run.fungiFlushCharge = Math.min(
+      FUNGI_FLUSH_MAX_CHARGES,
+      Math.max(
+        0,
+        Math.floor(
+          typeof data.fungiFlushCharge === 'number'
+            ? data.fungiFlushCharge
+            : RUN_DEFAULTS.fungiFlushCharges,
+        ),
+      ),
+    );
+    this.run.fungiFlushArmed = data.fungiFlushArmed === true;
     // Se mezcla sobre el estado por defecto: si un campo nuevo falta en un
     // guardado migrado, la run sigue siendo jugable.
     this.run.stats = { ...this.run.stats, ...data.stats };
@@ -2151,6 +2299,10 @@ export interface RunSaveData {
   totalScore?: number;
   /** Tutorial guiado (aditivo): una run-tutorial retomada sigue guiada. */
   tutorial?: boolean;
+  /** Cargas de FungiFlush (aditivo): una run retomada no regala la habilidad. */
+  fungiFlushCharge?: number;
+  /** La habilidad FungiFlush esta armada para la proxima mano (aditivo). */
+  fungiFlushArmed?: boolean;
   stats: {
     handsPlayed: number;
     bestHand: number;

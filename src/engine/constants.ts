@@ -88,7 +88,45 @@ export const RUN_DEFAULTS = {
   discards: 3,
   jokerSlots: 5,
   ante: 1,
+  /**
+   * Cargas iniciales de la habilidad FungiFlush. Se arranca con una para que el
+   * jugador la descubra en el primer ciego; despues se recarga jugando bien.
+   */
+  fungiFlushCharges: 1,
 } as const;
+
+// ---------------------------------------------------------------------------
+// HABILIDAD FungiFlush
+// ---------------------------------------------------------------------------
+//
+// La habilidad INSIGNIA de la run: un boton manual con cargas (mismo espiritu
+// que el dado del Simbionte `useLoadedDie`). Arma la proxima mano con un gran
+// multiplicador de Esporas, limpia los estados negativos y roba cartas. Es el
+// momento "climax" que le faltaba a cada ciego: el jugador DECIDE cuando
+// gastarla, y cuando la suelta se ve (overlay VFX + pop-up).
+
+/** Cargas maximas acumulables. */
+export const FUNGI_FLUSH_MAX_CHARGES = 3;
+
+/** Multiplicador de Esporas que arma la habilidad para la proxima mano. */
+export const FUNGI_FLUSH_SPORE_MULT = 2.5;
+
+/** Cartas que roba al activarse (respeta MAX_HAND_SIZE). */
+export const FUNGI_FLUSH_DRAW = 2;
+
+/**
+ * Tier de combo que RECARGA una carga al cerrar la mano: elemento >= 3 cartas o
+ * familia >= 4. Premia armar la mano, no solo jugar cartas sueltas.
+ */
+export const FUNGI_FLUSH_RECHARGE_ELEMENT_TIER = 3;
+export const FUNGI_FLUSH_RECHARGE_FAMILY_TIER = 4;
+
+/**
+ * Estados que la habilidad LIMPIA (los negativos): podredumbre y esterilidad.
+ * No toca los positivos (overgrowth, etc.).
+ */
+export const FUNGI_FLUSH_CLEARS_STATUSES: readonly string[] = ['decay', 'spore_lock'];
+
 
 /** Economia. */
 export const ECONOMY = {

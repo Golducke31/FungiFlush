@@ -323,14 +323,31 @@ export interface NextLevelInfo {
   rewardNameKey: string | null;
 }
 
-/** Lo que la UI necesita para dibujar "Nivel 4 · 1.850 / 2.500" + la barra. */
+/**
+ * Lo que la UI necesita para dibujar "Nivel 4 · 1.850 / 2.500" + la barra.
+ *
+ * `rewardId`/`rewardNameKey` son los del PROXIMO desbloqueo, y eso significa
+ * SIEMPRE un nivel NO alcanzado: si el jugador esta clavado en el umbral (acaba
+ * de subir a `level`), su recompensa ya la tiene y la linea "Proximo
+ * desbloqueo" mostraria un premio repetido. Por eso el nivel de referencia es
+ * `max(level, reached) + 1`, donde `reached` es el nivel que las Esporas
+ * acumuladas realmente otorgan. `COLONY_LEVELS` es 0-indexado por
+ * `(nivel - 1)`, asi que la fila se lee con `[nextLevel - 1]`; usar `[level]`
+ * era el off-by-one (devolvia la fila del nivel siguiente al que se acababa de
+ * mostrar, repitiendo el premio al estar en el umbral).
+ */
 export function nextLevelInfo(progress: ColonyProgress): NextLevelInfo {
   const level = progress.level;
   const current = levelThreshold(level);
-  const next = levelThreshold(level + 1);
+  // Nivel que las Esporas ya otorgan (puede ir por delante de `level` si el
+  // progreso se desincronizo, o quedar por detras si el llamador lo adelanto).
+  const reached = levelForSpores(progress.lifetimeSpores);
+  // El PROXIMO desbloqueo es siempre un nivel NO alcanzado.
+  const nextLevel = Math.max(level, reached) + 1;
+  const next = levelThreshold(nextLevel);
   const span = Math.max(1, next - current);
   const into = Math.max(0, progress.lifetimeSpores - current);
-  const def = COLONY_LEVELS[level];
+  const def = COLONY_LEVELS[nextLevel - 1];
   return {
     level,
     current,

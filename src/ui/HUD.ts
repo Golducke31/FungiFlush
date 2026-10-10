@@ -27,7 +27,7 @@ import {
 import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
 import { currentLanguage, t } from '@i18n/index';
-import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import { ELEMENT_COLOR, RARITY_COLOR, UI_COLORS, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
@@ -55,6 +55,8 @@ import { buildSettingsPanel } from './SettingsScreen';
 import { buildAboutPanel } from './AboutScreen';
 import { buildRewardPanel } from './RewardPanel';
 import { PackOpening, type PackCardView } from '@render/PackOpening';
+import { FungiFlushFx } from '@render/FungiFlushFx';
+import { audio } from '@audio/AudioBus';
 import {
   buildDeckBuilderPanel,
   type DeckBuilderState,
@@ -172,6 +174,11 @@ export interface HudCallbacks {
    * esta lista.
    */
   onUseLoadedDie: () => void;
+  /**
+   * Habilidad INSIGNIA FungiFlush: arma la proxima mano (multiplicador +
+   * limpieza de estados + robo). Disponible en partida mientras haya cargas.
+   */
+  onUseFungiFlush: () => void;
   /** El jugador eligio una opcion del interludio (P2.4). */
   onChooseInterlude: (choiceId: string) => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
@@ -308,8 +315,22 @@ export class HUD {
   private elOverlay = document.createElement('div');
   /** Overlay de apertura de Sobres, vivo mientras el jugador lo tenga abierto. */
   private packOpening: PackOpening | null = null;
+  /**
+   * Overlay VFX de la habilidad FungiFlush. Vive solo mientras corre la
+   * secuencia (~4 s) y NO captura el puntero: el jugador sigue jugando debajo.
+   */
+  private fungiFx: FungiFlushFx | null = null;
   private elTooltip = document.createElement('div');
   private elPopups = document.createElement('div');
+  /**
+   * Pila de POP-UPS grandes de combo/habilidad (`.combo-banner-stack`).
+   *
+   * Va en la capa de banners (no en `.hud-popups`, que es para numeros
+   * flotantes por carta): estos carteles son CENTRADOS y de una por mano, y si
+   * compartieran contenedor con los popups numericos competirian por el mismo
+   * lugar. `pointer-events: none`: son lectura, no control.
+   */
+  private elComboBanners = document.createElement('div');
   private elToasts = document.createElement('div');
   /**
    * Aviso no bloqueante (`.banner-stack`).
@@ -733,6 +754,7 @@ export class HUD {
     this.keepState(this.elOverlay, 'overlay', ['is-open', 'is-closing', 'is-carousel', 'is-throw']);
     this.elTooltip.className = 'hud-tooltip';
     this.elPopups.className = 'hud-popups';
+    this.elComboBanners.className = 'combo-banner-stack';
     this.elToasts.className = 'toast-stack';
     this.elBanner.className = 'banner-stack';
 
@@ -778,6 +800,7 @@ export class HUD {
       this.elSelectHint,
       this.elTicker,
       this.elPopups,
+      this.elComboBanners,
       this.elBanner,
       this.elToasts,
       this.elTooltip,
@@ -1000,6 +1023,10 @@ export class HUD {
       // HUD solo sabe dibujarlo. Asi la regla de "cuando avisar" queda en un
       // solo lugar y el aviso del sistema y el in-app salen del mismo evento.
       bus.on('banner:show', ({ key, params, kind }) => this.showBanner(key, params, kind)),
+
+      // Habilidad FungiFlush: el motor avisa y el HUD monta el overlay VFX
+      // superpuesto. El render NO conoce el AudioBus ni el contenido.
+      bus.on('fungi:flushed', ({ intensity }) => this.playFungiFlush(intensity)),
     );
   }
 
@@ -1690,6 +1717,31 @@ export class HUD {
     // la animacion no), el boton nace en modo "jugando".
     if (this.scoreSettling) play.classList.add('jugando');
 
+    // HABILIDAD INSIGNIA FungiFlush: boton propio, siempre visible en partida.
+    // No juega la mano: la ARMA (multiplicador + limpieza + robo). Se muestra el
+    // numero de cargas como ficha; sin cargas queda deshabilitado.
+    const flushBtn = document.createElement('button');
+    flushBtn.className = 'btn is-fungi-flush';
+    flushBtn.dataset['act'] = 'use-fungi-flush';
+    {
+      const charge = this.engine.fungiFlushCharge();
+      const ready = this.engine.canUseFungiFlush();
+      flushBtn.innerHTML =
+        '<span class="ff-shine" aria-hidden="true"></span>' +
+        `<span class="ff-label">${t('action.useFungiFlush')}</span>`;
+      flushBtn.setAttribute('aria-label', t('action.useFungiFlush'));
+      flushBtn.title = t('ability.fungiFlush.desc');
+      if (charge > 0) {
+        const chip = document.createElement('span');
+        chip.className = 'btn-flush-count';
+        chip.textContent = String(charge);
+        flushBtn.appendChild(chip);
+      }
+      flushBtn.disabled = !ready;
+      if (ready) flushBtn.classList.add('is-ready');
+      flushBtn.addEventListener('click', () => this.callbacks.onUseFungiFlush());
+    }
+
     // Simbionte legendario `joker_loaded_die`: habilidad ACTIVA. El boton solo
     // existe si el jugador tiene el Simbionte en la mesa; mientras la carga no
     // esta lista queda deshabilitado y muestra cuantas manos faltan. Es un boton
@@ -1707,11 +1759,11 @@ export class HUD {
       dieBtn.disabled = !ready;
       dieBtn.title = t('joker.joker_loaded_die.desc');
       dieBtn.addEventListener('click', () => this.callbacks.onUseLoadedDie());
-      this.elActions.append(dieBtn, play);
+      this.elActions.append(dieBtn, flushBtn, play);
       return;
     }
 
-    this.elActions.append(play);
+    this.elActions.append(flushBtn, play);
   }
 
   /**
@@ -3183,6 +3235,45 @@ export class HUD {
    */
   packOpeningState(): ReturnType<PackOpening['debugState']> | null {
     return this.packOpening?.debugState() ?? null;
+  }
+
+  /**
+   * Monta el overlay VFX de la habilidad FungiFlush y lanza la secuencia.
+   *
+   * Va al `#ui-root` (como el sobre) para ocupar TODO el viewport, pero con
+   * `pointer-events: none`: es un festejo, no un panel, y no puede comerse los
+   * toques de las cartas que estan debajo. Se desmonta solo al terminar.
+   *
+   * NO toma el reloj de GSAP (`startExternal`): la habilidad se lanza durante el
+   * juego, donde el loop de `SceneManager` YA bombea `updateAnim`. Un segundo
+   * ticker duplicaria el avance de los tweens.
+   */
+  playFungiFlush(intensity = 1): void {
+    // Si ya hay uno corriendo, se recicla: no se apilan dos overlays WebGL.
+    this.closeFungiFlush();
+    const fx = new FungiFlushFx({
+      onSound: (stage, index) => {
+        audio.unlock();
+        if (stage === 'impact') audio.play('fungi_flush', { volume: 0.95 });
+        else if (stage === 'letter') audio.play('select_1', { volume: 0.5, rate: 1 + (index ?? 0) * 0.06 });
+        else audio.play(stage === 'charge' ? 'discard_many' : 'discard_1', { volume: 0.55 });
+      },
+      onDone: () => this.closeFungiFlush(),
+    });
+    this.fungiFx = fx;
+    this.root.appendChild(fx.element);
+    fx.start();
+    void fx.prepare().then(() => {
+      if (this.fungiFx !== fx) return;
+      void fx.play(intensity);
+    });
+  }
+
+  /** Cierra y destruye el overlay de FungiFlush si esta abierto. */
+  closeFungiFlush(): void {
+    if (!this.fungiFx) return;
+    this.fungiFx.dispose();
+    this.fungiFx = null;
   }
 
   showCosmetics(returnTo?: () => void): void {
@@ -4830,6 +4921,95 @@ export class HUD {
     this.elPopups.appendChild(el);
     // Autolimpieza: sin esto el DOM crece sin techo a lo largo de una partida.
     window.setTimeout(() => el.remove(), 1200);
+  }
+
+  /**
+   * POP-UP grande de COMBO.
+   *
+   * Reemplaza la lectura "los numeros suben y ya": cuando la mano arma un combo
+   * se anuncia por NOMBRE y con el color del EJE. Es un cartel CENTRADO y
+   * temporal (no un toast de esquina) porque es lo que el jugador debe mirar
+   * justo al cerrar la mano.
+   *
+   * El color sigue la convencion del juego (el mismo que `comboFlourish`):
+   * elemento -> dorado (multiplicar), familia -> ambar (sumar sustrato),
+   * diversidad -> verde (esporas). El TIER (2..5) escala el cartel y agrega una
+   * linea de "x2 cartas / x3 cartas..." para que el tamaño no sea arbitrario.
+   *
+   * Se apila en `.combo-banner-stack` y se autodestruye: la UI NUNCA queda
+   * esperando un tap para que desaparezca.
+   */
+  comboBanner(info: {
+    axis: 'element' | 'family' | 'diversity';
+    tier: number;
+    nameKey: string;
+    cardUids: string[];
+  }): void {
+    const color =
+      info.axis === 'element' ? UI_COLORS.xmult : info.axis === 'family' ? UI_COLORS.substrate : UI_COLORS.spores;
+
+    const el = document.createElement('div');
+    el.className = 'combo-banner';
+    el.dataset.axis = info.axis;
+    el.dataset.tier = String(info.tier);
+    el.style.setProperty('--combo-color', hexToCss(color));
+    // 2 cartas -> 0, 5 cartas -> 1. Mismo mapeo que el golpe 3D, para que el
+    // tamaño en pantalla y la fuerza del golpe cuenten la MISMA historia.
+    const weight = Math.max(0, Math.min(1, (info.tier - 2) / 3));
+    el.style.setProperty('--combo-weight', weight.toFixed(3));
+
+    const title = document.createElement('span');
+    title.className = 'combo-banner-title';
+    title.textContent = t(info.nameKey);
+    const sub = document.createElement('span');
+    sub.className = 'combo-banner-sub';
+    sub.textContent = t('hud.comboBanner.size', { n: info.tier });
+    el.append(title, sub);
+
+    this.elComboBanners.appendChild(el);
+    // Entrada + salida por transform, sin reflow (leccion del ticker).
+    anim.tweenOf(el, {
+      keyframes: [
+        { scale: 0.6, opacity: 0, duration: anim.d(0.01) },
+        { scale: 1.12, opacity: 1, duration: anim.d(0.22), ease: anim.EASE.cssBack },
+        { scale: 1, opacity: 1, duration: anim.d(0.16), ease: anim.EASE.cssOut },
+        { scale: 1, opacity: 1, duration: anim.d(1.1) },
+        { scale: 1.06, opacity: 0, duration: anim.d(0.3), ease: anim.EASE.cubicInOut },
+      ],
+    });
+    window.setTimeout(() => el.remove(), 2400);
+  }
+
+  /**
+   * POP-UP grande de HABILIDAD. Hermano de `comboBanner`: un solo lenguaje para
+   * "algo grande paso". La intensidad (0..2) escala el cartel igual que el tier.
+   */
+  abilityBanner(nameKey: string, intensity = 1): void {
+    const k = Math.max(0, Math.min(2, intensity));
+    const el = document.createElement('div');
+    el.className = 'combo-banner is-ability';
+    el.style.setProperty('--combo-color', hexToCss(UI_COLORS.spores));
+    el.style.setProperty('--combo-weight', (k / 2).toFixed(3));
+
+    const title = document.createElement('span');
+    title.className = 'combo-banner-title';
+    title.textContent = t(nameKey);
+    const sub = document.createElement('span');
+    sub.className = 'combo-banner-sub';
+    sub.textContent = t('ability.fungiFlush.banner');
+    el.append(title, sub);
+
+    this.elComboBanners.appendChild(el);
+    anim.tweenOf(el, {
+      keyframes: [
+        { scale: 0.6, opacity: 0, duration: anim.d(0.01) },
+        { scale: 1.14, opacity: 1, duration: anim.d(0.2), ease: anim.EASE.cssBack },
+        { scale: 1, opacity: 1, duration: anim.d(0.16), ease: anim.EASE.cssOut },
+        { scale: 1, opacity: 1, duration: anim.d(1.2) },
+        { scale: 1.06, opacity: 0, duration: anim.d(0.3), ease: anim.EASE.cubicInOut },
+      ],
+    });
+    window.setTimeout(() => el.remove(), 2500);
   }
 
   toast(message: string, kind: 'info' | 'warn' | 'error' = 'info'): void {

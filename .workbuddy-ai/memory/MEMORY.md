@@ -82,3 +82,14 @@ TS + Vite + Three.js (0.186) + Tauri 2 roguelite deckbuilder (Balatro-like). Rep
 - Tauri Android: toolchain `~/.cargo/bin` + `mingw64/bin`; `cargo check --target aarch64-linux-android` y host; `src-tauri/gen/android` SE VERSIONA.
 - Los `private` de TS se borran en runtime (envolver para espiar VFX); Playwright → `page.evaluate` + `hud.refreshPanel()`.
 - Google Auth (Play Games): bridge nativo implementado; pendiente solo APP_ID de Play Console + SHA-1 (lo hace Emanuel). Doc `docs/PLAN_COLONIA_Y_GOOGLE_PLAY.md` §7.
+
+## Habilidad FUNGI FLUSH (insignia de run)
+- Botón manual con CARGAS: arranca en 1, max 3. `FUNGI_FLUSH_SPORE_MULT=2.5` (×Esporas), `FUNGI_FLUSH_DRAW=2`, `FUNGI_FLUSH_CLEARS_STATUSES=['decay','spore_lock']`, recarga con `element:...:>=3` o `family:...:>=4`. Save/restore ADITIVO (no bump `SAVE_VERSION`); save viejo cae al default.
+- ⚠️ No se apila sobre mano ya armada. `canUseFungiFlush` exige status `playing`, manos>0, carga>0, no armada.
+- API motor: `fungiFlushCharge()/isArmed()/canUse()/use()` + paso `MULTIPLY_SPORES` `sourceId='fungi_flush'` en `playHand`. Evento bus: `'fungi:flushed' {charge, intensity}`. `intensity = min(2, SPORE_MULT/2.5) = 1`.
+- HUD: `.btn.is-fungi-flush` con chip de cargas + shine, `data-act="use-fungi-flush"`. VFX: `src/render/FungiFlushFx.ts` (overlay WebGL propio, canvas transparente, NO `startExternal`, dt del reloj GSAP via `anim.now()` para hit-stop conjunto).
+- ⚠️ **Falta bundlear "Bagel Fat One"** para la fidelidad del logo de las letras. Solo hay Fredoka + Gasoek One. `FONT` cae a `Arial Black`/sans. Solución: añadir woff2 + `@font-face` en `styles.css` y anteponerla en `FONT` (`src/render/FungiFlushFx.ts:47`).
+- Pop-ups: `onComboBanner` (eje+tier+nameKey) y `onAbilityBanner` (nameKey+intensity) en `SceneCallbacks`; se disparan en el cierre de la mano. HUD: `.combo-banner-stack`/`.combo-banner` (color por eje UI_COLORS, escala por tier 2..5, `is-ability` con halo más ancho). i18n: `hud.comboBanner.size`, `ability.fungiFlush.banner`.
+
+## VFX test (Playwright)
+- `tools/ff-harness.html` + `tools/_ff_capture.mjs` = prueba visual reutilizable de cualquier `FungiFlushFx`. **2 trampas descubiertas** (dejadas documentadas en el script): (1) `page.screenshot()` NO captura el canvas WebGL en headless swiftshader (`preserveDrawingBuffer:false`) → usar `canvas.toDataURL()`. (2) El harness DEBE bombear `updateAnim(dt)` en un rAF, si no el reloj GSAP queda en 0 y no se emiten partículas.
