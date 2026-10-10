@@ -20,7 +20,7 @@
  * testeable en Node sin mocks y deja al motor ignorante de que hay un tutorial
  * (el tutorial es una RUN NORMAL: misma semilla, mismas reglas, mismo balance).
  *
- * POR QUE UN MODULO Y NO UN `if` en el HUD. El guion tiene veintitres pasos que
+ * POR QUE UN MODULO Y NO UN `if` en el HUD. El guion tiene veinticinco pasos que
  * dependen del estado del juego (`GameStatus`), del ciego, del capitulo y de lo
  * que el jugador ya hizo. Repartir esa logica entre listeners del `bus` es como
  * se llega a un tutorial que se traba. Aca la secuencia es una funcion: dado el
@@ -40,6 +40,8 @@ export type TutorialStepId =
   | 'select_cards'
   | 'combo_hint'
   | 'element_family'
+  | 'discard'
+  | 'fungi_flush'
   | 'play_hand'
   | 'score_breakdown'
   | 'substrate_spores'
@@ -207,6 +209,37 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     titleKey: 'tutorial.elementFamily.title',
     bodyKey: 'tutorial.elementFamily.body',
     advanceOn: 'tap',
+  },
+  {
+    id: 'discard',
+    chapter: 'classic',
+    phase: 'playing',
+    // La pila de DESCARTE vive en WebGL (es una drop zone, no DOM), asi que no
+    // hay selector propio. El ancla es la GUIA flotante sobre la mano, que es
+    // donde el jugador tiene que empezar: seleccionar antes de descartar.
+    anchor: '[data-act="select-hint"]',
+    titleKey: 'tutorial.discard.title',
+    // Reusa `guide.tutorialDiscard`: es EXACTAMENTE la explicacion del descarte
+    // (estaba definida en ES/EN y sin usar en ningun sitio) y asi no se duplica
+    // el texto en dos claves.
+    bodyKey: 'guide.tutorialDiscard',
+    advanceOn: 'tap',
+    // Solo en la PRIMERA mano: es un gesto que se explica una vez.
+    require: (ctx) => ctx.handsPlayed === 0,
+  },
+  {
+    id: 'fungi_flush',
+    chapter: 'classic',
+    phase: 'playing',
+    // El boton de la habilidad SI es DOM: se resalta el boton real del HUD.
+    anchor: '[data-act="use-fungi-flush"]',
+    titleKey: 'tutorial.fungiFlush.title',
+    bodyKey: 'tutorial.fungiFlush.body',
+    advanceOn: 'tap',
+    // Solo en la primera mano. La habilidad no se puede DISPARAR todavia (hace
+    // falta llegar a 3/3), asi que el paso explica y se cierra con "Siguiente";
+    // nunca pide una accion que el jugador no pueda hacer.
+    require: (ctx) => ctx.handsPlayed === 0,
   },
   {
     id: 'play_hand',
@@ -395,13 +428,33 @@ function indexOfStep(id: TutorialStepId): number {
   return TUTORIAL_STEPS.findIndex((s) => s.id === id);
 }
 
+/** El paso con ese id, o `null` si no existe. */
+export function stepById(id: TutorialStepId): TutorialStep | null {
+  return TUTORIAL_STEPS.find((s) => s.id === id) ?? null;
+}
+
+/**
+ * `true` si el paso corresponde al contexto AHORA MISMO: mismo capitulo, misma
+ * fase y `require` satisfecho.
+ *
+ * Es la MISMA condicion que usa `stepAfter` para elegir el siguiente, pero
+ * expuesta aparte para que el controlador pueda preguntar "el paso que ya esta
+ * en pantalla, sigue valiendo?" SIN avanzar. Eso es lo que hace idempotente al
+ * avance: un cambio de estado que no afecta al paso en curso no lo consume.
+ */
+export function isStepApplicable(step: TutorialStep, ctx: TutorialContext): boolean {
+  if (step.chapter !== ctx.chapter) return false;
+  if (step.phase !== ctx.status) return false;
+  if (step.require && !step.require(ctx)) return false;
+  return true;
+}
+
 /**
  * El paso siguiente despues de `current`, o `null` si el capitulo termino.
  *
  * REGLA CLAVE: no se puede "saltar hacia atras". Se avanza desde el paso actual
- * recorriendo el guion hacia adelante y se devuelve el primer candidato cuyo
- * `chapter` coincida con el capitulo activo, cuyo `phase` coincida con el estado
- * del juego y cuyo `require` pase. Los pasos que no aplican se consumen en
+ * recorriendo el guion hacia adelante y se devuelve el primer candidato que
+ * aplique (`isStepApplicable`). Los pasos que no aplican se consumen en
  * silencio.
  *
  * `null` como `current` arranca el guion desde el principio.
@@ -414,9 +467,7 @@ export function stepAfter(
   for (let i = from; i < TUTORIAL_STEPS.length; i += 1) {
     const step = TUTORIAL_STEPS[i];
     if (!step) continue;
-    if (step.chapter !== ctx.chapter) continue;
-    if (step.phase !== ctx.status) continue;
-    if (step.require && !step.require(ctx)) continue;
+    if (!isStepApplicable(step, ctx)) continue;
     return step;
   }
   return null;

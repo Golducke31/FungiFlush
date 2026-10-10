@@ -1303,43 +1303,45 @@
     "select": "Select",
     "selected": "Selected",
     "unlockHint": "Win at level {level} to unlock level {next}",
+    "howToUnlock": "You start at Base (A0). Win a run at a level to unlock the next one: unlocks are never lost.",
+    "grantsLabel": "What this level adds",
     "maxReached": "Highest level reached",
     "noMods": "No changes",
     "a0": {
       "name": "Base",
-      "desc": "The rules as they ship. No surcharges, no penalties."
+      "desc": "The rules as shipped: 4 Fungis, 6 cards in hand, 4 hands, 3 discards and 5 symbiont slots. No surcharges, no penalties."
     },
     "a1": {
       "name": "Colony",
-      "desc": "Every blind's target is 10% higher and the shop charges 10% more."
+      "desc": "Every blind's target +10% and the shop charges 10% more."
     },
     "a2": {
       "name": "Dense Mycelium",
-      "desc": "Target +15%, shop +15%, and one fewer hand per round."
+      "desc": "Target +15%, shop +15% and one fewer hand."
     },
     "a3": {
       "name": "Acid Spores",
-      "desc": "Target +20%, shop +20%, one fewer hand, and rerolling the shop costs 2 more Fungis."
+      "desc": "Target +20%, shop +20%, one fewer hand, and rerolls cost 2 more Fungis."
     },
     "a4": {
       "name": "Sterile Ground",
-      "desc": "Target +30%, one fewer hand and discard, and rerolls cost 2 more Fungis."
+      "desc": "Target +30%, shop +20%, one fewer hand and discard, and rerolls cost 2 more Fungis."
     },
     "a5": {
       "name": "Hard Harvest",
-      "desc": "Target +40%, shop +25%, one fewer hand and discard, rerolls +3, and you start with 2 fewer Fungis."
+      "desc": "Target +40%, shop +25%, one fewer hand and discard, rerolls +3, and you start with 2 Fungis."
     },
     "a6": {
       "name": "Hostile Forest",
-      "desc": "Target +50%, shop +25%, one fewer hand, discard, and hand size. You start with 2 fewer Fungis."
+      "desc": "Target +50%, shop +25%, one fewer hand, discard and hand size. You start with 2 Fungis."
     },
     "a7": {
       "name": "Rot",
-      "desc": "Target +60%, shop +35%, fewer hands, discards and hand size, and purging a card costs 2 more Fungis."
+      "desc": "Target +60%, shop +35%, one fewer hand, discard and hand size, you start with 2 Fungis, and purging costs 2 more."
     },
     "a8": {
       "name": "Fungal Collapse",
-      "desc": "Target +70%, shop +40%, one fewer hand and discard, one fewer simbiont slot, no die rerolls, and every boss gains an extra modifier."
+      "desc": "Target +70%, shop +40%, one fewer hand and TWO fewer discards, one fewer symbiont slot, you start with 2 Fungis, purging costs 2 more, and no die rerolls."
     },
     "mod": {
       "target": "Each blind's target",
@@ -1824,6 +1826,13 @@
     "elementFamily": {
       "title": "Two axes, two effects",
       "body": "ELEMENT (Bloom) multiplies your Spores; FAMILY (Colony) adds Substrate. Same element = Spores; same family = Substrate. They are two different axes and it pays not to overlap them."
+    },
+    "discard": {
+      "title": "If the hand is bad, discard"
+    },
+    "fungiFlush": {
+      "title": "Your ability: FungiFlush",
+      "body": "It charges when you play a big combo: 3+ cards of the same element or 4+ of the same family. At 3/3, fire it ONCE per Blind: ×2.5 on your next hand, clears Decay and Spore Lock, and draws 2 cards."
     },
     "substrateSpores": {
       "title": "Substrate × Spores",

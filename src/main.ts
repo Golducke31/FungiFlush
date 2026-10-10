@@ -122,7 +122,9 @@ import {
   TUTORIAL_SEED,
   currentStep,
   isFinalStep,
+  isStepApplicable,
   lastStepOfChapter,
+  stepById,
   stepsOfChapter,
   type TutorialChapter,
   type TutorialContext,
@@ -1094,15 +1096,35 @@ async function boot(): Promise<void> {
    * Muestra el paso que corresponde AHORA. Se llama en cada cambio de estado y
    * cuando el jugador avanza o hace la accion que el paso pedia.
    *
+   * ES IDEMPOTENTE. Si el paso que ya esta en pantalla SIGUE aplicando (mismo
+   * capitulo, misma fase, `require` satisfecho), no se avanza. Sin esto,
+   * cualquier `state:changed` consumia un paso `tap` sin que nadie lo leyera:
+   * `toggleSelect` emite `state:changed` en CADA carta que el jugador toca, asi
+   * que seleccionar una mano se comia los pasos de combo/orden; y al entrar a
+   * `playing` se disparan DOS avisos (`state:changed` + `hand:dealt`) que se
+   * comian `hand_dealt` antes de mostrarlo.
+   *
+   * `force` es para el avance DEL JUGADOR (boton "Siguiente" / "Saltar paso"):
+   * ahi SI hay que moverse aunque el paso actual siga aplicando.
+   *
    * REGLA CLAVE: si no hay un paso para el estado actual, la capa se OCULTA
    * pero el tutorial SIGUE VIVO. Esto es lo que permite que un paso de `tap`
    * ("elegi tu ciego y tocá Luchar") se cierre y el juego quede jugable hasta
    * que el siguiente `state:changed` traiga el estado en el que vive el paso
    * siguiente. Dejar la capa puesta mostrando el paso viejo congelaba el guion.
    */
-  const advanceTutorial = (): void => {
+  const advanceTutorial = (force = false): void => {
     if (!engine.run?.tutorial) return;
     const ctx = tutorialContext();
+
+    // Idempotencia: el paso en pantalla sigue siendo el correcto -> no se toca.
+    // (El guard de `tutorialStep !== null` deja pasar el PRIMER paso, que se
+    // empuja con el puntero en null.)
+    if (!force && tutorialStep !== null) {
+      const shown = stepById(tutorialStep);
+      if (shown && isStepApplicable(shown, ctx)) return;
+    }
+
     const step = currentStep(tutorialStep, ctx);
     if (!step) {
       // No hay mas pasos para este estado: se esconde la capa (sin cerrar el
@@ -1129,11 +1151,13 @@ async function boot(): Promise<void> {
         isLast: isFinalStep(step.id),
       },
       () => {
+        // "Siguiente" es avance DEL JUGADOR: forzado, aunque el paso siga
+        // aplicando (si no, el boton no haria nada).
         if (isFinalStep(step.id)) finishTutorialChapter();
-        else advanceTutorial();
+        else advanceTutorial(true);
       },
       // "Saltar paso": marca el paso como visto y busca el siguiente.
-      () => advanceTutorial(),
+      () => advanceTutorial(true),
       () => endTutorial(),
     );
   };

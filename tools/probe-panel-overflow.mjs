@@ -137,7 +137,6 @@ const menuPanels = [
   ['cosmetics', 'cosmetics', '[data-act="cosmetics-close"]'],
   ['daily', 'daily', '[data-act="daily-close"]'],
   ['archetype', 'archetypes', '[data-act="archetypes-close"]'],
-  ['ascension', 'ascension', '[data-act="ascension-close"]'],
   ['board', 'board', '[data-act="close"]'],
 ];
 for (const [act, name, close] of menuPanels) {
@@ -147,6 +146,23 @@ for (const [act, name, close] of menuPanels) {
   if (await has(close)) await click(close);
   else await click('[data-act="close"]');
   await page.waitForTimeout(300);
+}
+
+// --- Ascension: NO es un chip suelto del menu; vive dentro de Desafios ---
+// Camino real: menu -> desplegable -> Desafios -> Ascension. Cerrar el panel de
+// ascension vuelve al MENU (su onClose es showMenu), que es donde sigue el probe.
+if (await has('.panel.is-menu')) {
+  await click('.panel.is-menu [data-act="menu-toggle"]');
+  await page.waitForTimeout(200);
+  await click('.panel.is-menu [data-act="challenges"]');
+  await page.waitForTimeout(400);
+  if (await has('.panel.is-challenges [data-act="ascension"]')) {
+    await click('.panel.is-challenges [data-act="ascension"]');
+    await waitPanel('.panel.is-ascension');
+    await visit('ascension', 'ascension');
+    await click('[data-act="ascension-close"]');
+    await page.waitForTimeout(300);
+  }
 }
 
 // --- Run: arquetipos -> ciego -> partida ---

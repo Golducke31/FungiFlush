@@ -1303,43 +1303,45 @@
     "select": "Elegir",
     "selected": "Elegida",
     "unlockHint": "Ganá en el nivel {level} para desbloquear el {next}",
+    "howToUnlock": "Arrancás en Base (A0). Ganá una partida en un nivel para desbloquear el siguiente: el desbloqueo no se pierde nunca.",
+    "grantsLabel": "Qué agrega este nivel",
     "maxReached": "Nivel máximo alcanzado",
     "noMods": "Sin cambios",
     "a0": {
       "name": "Base",
-      "desc": "Las reglas tal como vienen de fábrica. Sin recargos ni castigos."
+      "desc": "Las reglas de fábrica: 4 Fungis, 6 cartas en mano, 4 manos, 3 descartes y 5 simbiontes. Sin recargos ni castigos."
     },
     "a1": {
       "name": "Colonia",
-      "desc": "El objetivo de cada ciego sube un 10% y la tienda cobra un 10% más."
+      "desc": "Objetivo de cada ciego +10% y tienda +10% más cara."
     },
     "a2": {
       "name": "Micelio denso",
-      "desc": "Objetivo +15%, tienda +15% y una mano menos por ronda."
+      "desc": "Objetivo +15%, tienda +15% y una mano menos."
     },
     "a3": {
       "name": "Esporas ácidas",
-      "desc": "Objetivo +20%, tienda +20%, una mano menos y renovar la tienda cuesta 2 Fungis más."
+      "desc": "Objetivo +20%, tienda +20%, una mano menos y renovar cuesta 2 Fungis más."
     },
     "a4": {
       "name": "Suelo estéril",
-      "desc": "Objetivo +30%, una mano y un descarte menos, y renovar cuesta 2 Fungis más."
+      "desc": "Objetivo +30%, tienda +20%, una mano y un descarte menos, y renovar cuesta 2 Fungis más."
     },
     "a5": {
       "name": "Cosecha dura",
-      "desc": "Objetivo +40%, tienda +25%, una mano y un descarte menos, renovar +3 y arrancás con 2 Fungis menos."
+      "desc": "Objetivo +40%, tienda +25%, una mano y un descarte menos, renovar +3 y arrancás con 2 Fungis."
     },
     "a6": {
       "name": "Bosque hostil",
-      "desc": "Objetivo +50%, tienda +25%, una mano, un descarte y una carta de mano menos. Arrancás con 2 Fungis menos."
+      "desc": "Objetivo +50%, tienda +25%, una mano, un descarte y una carta de mano menos. Arrancás con 2 Fungis."
     },
     "a7": {
       "name": "Putrefacción",
-      "desc": "Objetivo +60%, tienda +35%, menos mano, descarte y tamaño de mano, y purgar una carta cuesta 2 Fungis más."
+      "desc": "Objetivo +60%, tienda +35%, una mano, un descarte y una carta de mano menos, arrancás con 2 Fungis y purgar cuesta 2 más."
     },
     "a8": {
       "name": "Colapso fúngico",
-      "desc": "Objetivo +70%, tienda +40%, una mano y un descarte menos, un espacio de simbionte menos, sin repetir la tirada del dado y todos los jefes ganan un modificador extra."
+      "desc": "Objetivo +70%, tienda +40%, una mano y DOS descartes menos, un simbionte menos, arrancás con 2 Fungis, purgar cuesta 2 más y no podés repetir la tirada del dado."
     },
     "mod": {
       "target": "Objetivo de cada ciego",
@@ -1824,6 +1826,13 @@
     "elementFamily": {
       "title": "Dos ejes, dos efectos",
       "body": "ELEMENTO (Floración) multiplica tus Esporas; FAMILIA (Colonia) suma Sustrato. Mismo elemento = Esporas; misma familia = Sustrato. Son dos ejes distintos y conviene que no se pisen."
+    },
+    "discard": {
+      "title": "Si la mano no sirve, descartá"
+    },
+    "fungiFlush": {
+      "title": "Tu habilidad: FungiFlush",
+      "body": "Se carga cuando jugás un combo grande: 3+ cartas del mismo elemento o 4+ de la misma familia. Al llegar a 3/3, disparala UNA vez por ciego: ×2.5 en la próxima mano, limpia la podredumbre y la esterilidad, y roba 2 cartas."
     },
     "substrateSpores": {
       "title": "Sustrato × Esporas",

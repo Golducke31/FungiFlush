@@ -7242,6 +7242,13 @@ body {
   align-items: center;
   gap: 12px;
   width: 100%;
+  /* `flex: 0 0 auto` es OBLIGATORIO: la tarjeta es un item de `.ascension-list`
+     (columna flex). Sin esto, su `min-height: 46px` ANULA el minimo automatico
+     de flex, la lista la ENCOGE por debajo de su contenido (nombre + prosa +
+     "que agrega" + recompensa) y el texto se desborda pisando la tarjeta
+     siguiente. Con shrink 0 la tarjeta conserva su alto y es la LISTA la que
+     scrollea. */
+  flex: 0 0 auto;
   min-height: 46px;
   padding: 10px 14px;
   border: 1px solid transparent;

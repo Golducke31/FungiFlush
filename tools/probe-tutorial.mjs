@@ -135,7 +135,7 @@ const tutState = () =>
     };
   });
 
-/** Parsea el contador. El i18n lo pinta como "Paso 3 de 18" / "Step 3 of 18":
+/** Parsea el contador. El i18n lo pinta como "Paso 3 de 20" / "Step 3 of 20":
  *  el patron acepta las dos lenguas (el juego arranca en ingles). */
 const stepNumber = (s) => {
   const m = /(\d+)\s*(?:\/|de|of)\s*(\d+)/.exec(s.stepOf ?? '');
@@ -203,7 +203,7 @@ check(first.hasCard, 'la capa tiene tarjeta de paso');
 check(first.title.length > 0, 'el paso tiene TITULO', first.title);
 check(first.body.length > 20, 'el paso tiene CUERPO explicativo', first.body.slice(0, 60));
 const p1 = stepNumber(first);
-check(p1.n === 1 && p1.total === 18, 'el contador arranca en 1 de 18', first.stepOf);
+check(p1.n === 1 && p1.total === 20, 'el contador arranca en 1 de 20', first.stepOf);
 check(first.next, 'el paso ofrece "Siguiente"');
 check(first.skipAll, 'el tutorial se puede saltar entero');
 await page.screenshot({ path: join(shotsDir, 'probe-tutorial-step1.png') });
@@ -260,6 +260,14 @@ check(
   /select-hint|deck/.test(playing.anchor),
   'el paso de la mano resalta la guia/Mazo',
   playing.anchor || '(centrado)',
+);
+// La PRIMERA mano muestra `hand_dealt` (paso 2). Antes, entrar a `playing`
+// disparaba DOS avisos (`state:changed` + `hand:dealt`) y el doble avance se
+// comia `hand_dealt` sin mostrarlo: ahora el avance es idempotente.
+check(
+  stepNumber({ stepOf: playing.stepOf }).n === 2,
+  'la primera mano muestra `hand_dealt` (paso 2, ya no se lo saltea)',
+  playing.stepOf,
 );
 
 // `hand_dealt` es un paso de "tap": se avanza pulsando "Siguiente".
@@ -385,6 +393,85 @@ check(adv.tutOpen, 'el capitulo avanzado muestra su primer paso', adv.title);
 const advStep = stepNumber({ stepOf: adv.stepOf });
 check(advStep.n === 1 && advStep.total === 5, 'el contador del avanzado arranca en 1 de 5', adv.stepOf);
 await page.screenshot({ path: join(shotsDir, 'probe-tutorial-chapter-b.png') });
+
+// --- 12. Los pasos NUEVOS (descartar + habilidad) se muestran de verdad ---
+// Se re-arranca el clasico y se avanza a `playing` pulsando "Siguiente" paso a
+// paso SIN tocar cartas: asi el auto-avance por `state:changed` (cada seleccion
+// avanza un paso) no se dispara y se recorre el guion en orden. Se recogen los
+// NUMEROS de paso vistos (independientes del idioma) y se comprueba que
+// aparecen el 6 (descartar) y el 7 (FungiFlush), que antes NO existian.
+await page.evaluate(() => window.__fungiflush.startTutorialChapter('classic'));
+await page.waitForFunction(() => window.__fungiflush?.engine?.run?.tutorial === true, {
+  timeout: 15000,
+});
+await wait(1200);
+// Paso 1 (`blind_select`): avanzar y elegir el ciego para entrar a `playing`.
+await click('[data-act="tut-next"]');
+await wait(400);
+await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
+await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, {
+  timeout: 15000,
+});
+await wait(1000);
+
+const seen = [];
+for (let i = 0; i < 12; i += 1) {
+  const st = await page.evaluate(() => {
+    const layer = document.querySelector('#ui-root .tut-layer');
+    if (!layer) return { open: false };
+    return {
+      open: true,
+      n: document.querySelector('.tut-step-of')?.textContent ?? '',
+      title: document.querySelector('.tut-title')?.textContent ?? '',
+      anchor: document.querySelector('.tut-spotlight')?.dataset?.anchor ?? '',
+    };
+  });
+  if (!st.open) break;
+  seen.push(st);
+  // Captura de los pasos NUEVOS, justo mientras se muestran.
+  const n = stepNumber({ stepOf: st.n }).n;
+  // Paso 2 (`hand_dealt`): antes NUNCA se veia (el doble aviso lo saltaba).
+  if (n === 2) await page.screenshot({ path: join(shotsDir, 'probe-tutorial-step-hand.png') });
+  if (n === 6) await page.screenshot({ path: join(shotsDir, 'probe-tutorial-step-discard.png') });
+  if (n === 7) await page.screenshot({ path: join(shotsDir, 'probe-tutorial-step-fungiflush.png') });
+  // IDEMPOTENCIA: con un paso `tap` en pantalla, SELECCIONAR una carta emite
+  // `state:changed` (toggleSelect lo emite) pero NO debe avanzar el guion.
+  if (n === 5) {
+    await page.evaluate(() => {
+      const ff = window.__fungiflush;
+      const card = ff.engine.round?.hand?.[0];
+      if (card) ff.engine.toggleSelect(card.uid);
+    });
+    await wait(400);
+    const afterSelect = await page.evaluate(
+      () => document.querySelector('.tut-step-of')?.textContent ?? '',
+    );
+    check(
+      stepNumber({ stepOf: afterSelect }).n === 5,
+      'seleccionar una carta NO avanza el paso `tap` (avance idempotente)',
+      afterSelect,
+    );
+    await page.evaluate(() => window.__fungiflush.engine.clearSelection());
+    await wait(300);
+  }
+  await click('[data-act="tut-next"]');
+  await wait(350);
+}
+const seenNumbers = seen.map((s) => stepNumber({ stepOf: s.n }).n);
+check(seenNumbers.includes(6), 'el paso de DESCARTE se muestra (paso 6)', seenNumbers.join(','));
+check(seenNumbers.includes(7), 'el paso de la HABILIDAD se muestra (paso 7)', seenNumbers.join(','));
+const flushStep = seen.find((s) => stepNumber({ stepOf: s.n }).n === 7);
+check(
+  flushStep?.anchor === '[data-act="use-fungi-flush"]',
+  'el paso de la habilidad resalta el BOTON real',
+  flushStep?.anchor ?? '(sin ancla)',
+);
+const discardStep = seen.find((s) => stepNumber({ stepOf: s.n }).n === 6);
+check(
+  (discardStep?.title ?? '').length > 0,
+  'el paso de descarte reusa la cadena del descarte',
+  discardStep?.title ?? '(sin titulo)',
+);
 
 console.log('---');
 console.log(`viewport ${VIEWPORT.width}x${VIEWPORT.height} · fallos: ${failures}`);

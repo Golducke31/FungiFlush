@@ -9,7 +9,7 @@
  *      `chapter` valido.
  *   3. Un paso OPCIONAL cuyo `require` falla se SALTEA: el guion no se traba.
  *   4. Al final de cada capitulo, `stepAfter` devuelve `null` (el capitulo cierra).
- *   5. `isFinalStep` reconoce el cierre de SU capitulo y los 23 pasos existen con
+ *   5. `isFinalStep` reconoce el cierre de SU capitulo y los 25 pasos existen con
  *      claves i18n unicas en ES y EN.
  *
  * Se corre en Node sin mocks: `Tutorial.ts` es puro.
@@ -23,8 +23,10 @@ import {
   TUTORIAL_STEPS,
   allStepIds,
   isFinalStep,
+  isStepApplicable,
   lastStepOfChapter,
   stepAfter,
+  stepById,
   stepsOfChapter,
   type TutorialChapter,
   type TutorialContext,
@@ -75,7 +77,10 @@ function walk(chapter: TutorialChapter): TutorialStepId[] {
         status: guess.phase,
         blindIndex: guess.id === 'boss_intro' ? 2 : 0,
         selectedCount: guess.id === 'select_cards' ? 0 : 3,
-        handsPlayed: guess.id === 'play_hand' ? 0 : 1,
+        // Los pasos que describen un gesto de la PRIMERA mano (descartar, la
+        // habilidad, jugar) solo aplican con `handsPlayed === 0`.
+        handsPlayed:
+          guess.id === 'play_hand' || guess.id === 'discard' || guess.id === 'fungi_flush' ? 0 : 1,
         handComboKind: guess.id === 'combo_hint' ? 'family' : null,
         lastOverlap: guess.id === 'overlap_axes',
         visitedShop: false,
@@ -89,15 +94,15 @@ function walk(chapter: TutorialChapter): TutorialStepId[] {
   return visited;
 }
 
-test('el guion tiene 23 pasos con ids unicos', () => {
-  assert.equal(TUTORIAL_STEPS.length, 23);
-  assert.equal(new Set(allStepIds()).size, 23);
+test('el guion tiene 25 pasos con ids unicos', () => {
+  assert.equal(TUTORIAL_STEPS.length, 25);
+  assert.equal(new Set(allStepIds()).size, 25);
 });
 
 test('los dos capitulos suman el guion completo', () => {
   const classic = stepsOfChapter('classic');
   const advanced = stepsOfChapter('advanced');
-  assert.equal(classic.length, 18, 'el capitulo clasico tiene 18 pasos');
+  assert.equal(classic.length, 20, 'el capitulo clasico tiene 20 pasos');
   assert.equal(advanced.length, 5, 'el capitulo avanzado tiene 5 pasos');
   assert.equal(classic.length + advanced.length, TUTORIAL_STEPS.length);
 });
@@ -137,7 +142,7 @@ test('el capitulo clasico se recorre entero, paso a paso, sin repetir', () => {
   assert.deepEqual(
     walk('classic'),
     stepsOfChapter('classic').map((s) => s.id),
-    'se recorren los 18 pasos del clasico en orden',
+    'se recorren los 20 pasos del clasico en orden',
   );
 });
 
@@ -194,6 +199,20 @@ test('si el jugador ya jugo una mano, play_hand se saltea', () => {
   assert.equal(step, null, 'sin pasos de playing pendientes');
 });
 
+test('discard y fungi_flush aparecen solo en la primera mano', () => {
+  // Con la primera mano sin jugar, tras `element_family` vienen los dos pasos
+  // nuevos, en orden, y recien despues jugar.
+  const discard = stepAfter('element_family', ctx({ status: 'playing', handsPlayed: 0 }));
+  assert.equal(discard?.id, 'discard', 'la primera mano explica el descarte');
+  const flush = stepAfter('discard', ctx({ status: 'playing', handsPlayed: 0 }));
+  assert.equal(flush?.id, 'fungi_flush', 'y despues la habilidad');
+  const played = stepAfter('fungi_flush', ctx({ status: 'playing', handsPlayed: 0 }));
+  assert.equal(played?.id, 'play_hand', 'y recien entonces jugar');
+  // Con una mano ya jugada, los tres se saltan: el guion espera a `reward`.
+  const skipped = stepAfter('element_family', ctx({ status: 'playing', handsPlayed: 1 }));
+  assert.equal(skipped, null, 'nada de playing pendiente tras la primera mano');
+});
+
 test('el guion NO retrocede: pedir el siguiente de un paso tardio no vuelve atras', () => {
   const step = stepAfter('shop_intro', ctx({ status: 'blind_select', blindIndex: 2 }));
   assert.equal(step?.id, 'boss_intro', 'desde shop_intro solo mira hacia adelante');
@@ -226,4 +245,35 @@ test('despues del ultimo paso de cada capitulo, el capitulo cierra', () => {
 
 test('la semilla del tutorial es fija y reconocible', () => {
   assert.equal(TUTORIAL_SEED, 0xf00d);
+});
+
+test('isStepApplicable decide si el paso en pantalla sigue valiendo', () => {
+  // Es la pieza que hace IDEMPOTENTE al avance del controlador: si el paso que
+  // ya esta en pantalla aplica, un `state:changed` no debe consumirlo.
+  const handDealt = stepById('hand_dealt');
+  assert.ok(handDealt, 'hand_dealt existe');
+  assert.equal(isStepApplicable(handDealt, ctx({ status: 'playing' })), true);
+  // Otra fase -> deja de aplicar.
+  assert.equal(isStepApplicable(handDealt, ctx({ status: 'reward' })), false);
+  // Otro capitulo -> deja de aplicar.
+  assert.equal(
+    isStepApplicable(handDealt, ctx({ status: 'playing', chapter: 'advanced' })),
+    false,
+  );
+  // Un paso con `require` deja de aplicar cuando el contexto lo rompe.
+  const playHand = stepById('play_hand');
+  assert.ok(playHand, 'play_hand existe');
+  assert.equal(isStepApplicable(playHand, ctx({ status: 'playing', handsPlayed: 0 })), true);
+  assert.equal(isStepApplicable(playHand, ctx({ status: 'playing', handsPlayed: 1 })), false);
+  // Los pasos nuevos se comportan igual: aplican solo en la primera mano.
+  const discard = stepById('discard');
+  assert.ok(discard, 'discard existe');
+  assert.equal(isStepApplicable(discard, ctx({ status: 'playing', handsPlayed: 0 })), true);
+  assert.equal(isStepApplicable(discard, ctx({ status: 'playing', handsPlayed: 1 })), false);
+});
+
+test('stepById resuelve un id valido y devuelve null con uno inexistente', () => {
+  assert.equal(stepById('overlap_axes')?.phase, 'reward');
+  // @ts-expect-error id inexistente a proposito
+  assert.equal(stepById('no_existe'), null);
 });

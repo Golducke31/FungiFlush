@@ -1512,12 +1512,23 @@ export function buildAscensionPanel(
   const sub = document.createElement('p');
   sub.className = 'ascension-subtitle';
   sub.textContent = t('ascension.subtitle');
+  // COMO SE LOGRA: la regla de desbloqueo, SIEMPRE visible (no solo en los
+  // niveles trabados). Sin esta linea el jugador ve la escalera pero no sabe
+  // que lo que abre el peldano siguiente es GANAR una partida.
+  const how = document.createElement('p');
+  how.className = 'ascension-why ascension-how';
+  how.dataset['act'] = 'ascension-how';
+  how.textContent = t('ascension.howToUnlock');
   // "Para quien es": la escalera no es un castigo, es un desafio para quien ya
   // domina el mazo base. Sin esta linea, cada peldano se lee como una perdida.
   const why = document.createElement('p');
   why.className = 'ascension-why';
-  why.textContent = t('ascension.whyBody');
-  head.append(title, sub, why);
+  // La etiqueta ("Que exige") estaba definida en i18n y sin usar: se cablea aca
+  // para que el parrafo se lea como una seccion y no como texto suelto.
+  const whyLabel = document.createElement('strong');
+  whyLabel.textContent = `${t('ascension.why')}: `;
+  why.append(whyLabel, document.createTextNode(t('ascension.whyBody')));
+  head.append(title, sub, how, why);
 
   const list = document.createElement('div');
   list.className = 'ascension-list';
@@ -1559,6 +1570,14 @@ export function buildAscensionPanel(
       if (deltas.length > 0) {
         const detail = document.createElement('span');
         detail.className = 'ascension-changes';
+        // Etiqueta de la lista: deja claro que son los OTORGAMIENTOS del nivel
+        // (lo que AGREGA respecto del anterior), derivados de los modificadores
+        // reales. La prosa de arriba resume el nivel; esto es el detalle exacto.
+        const detailLabel = document.createElement('span');
+        detailLabel.className = 'ascension-change ascension-changes-label';
+        detailLabel.dataset['act'] = 'ascension-grants';
+        detailLabel.textContent = t('ascension.grantsLabel');
+        detail.appendChild(detailLabel);
         for (const delta of deltas) {
           const row = document.createElement('span');
           row.className = `ascension-change${delta.harsh ? ' is-harsh' : ''}`;

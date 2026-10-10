@@ -75,15 +75,34 @@ const setup = await page.evaluate(() => {
   const unlocked = Math.min(3, max);
   ff.profileStore.current.ascension.highestUnlocked = unlocked;
   ff.profileStore.current.ascension.selected = 0;
-  ff.hud.setAscensionState({ unlocked, selected: 0, max });
+  // Modificadores REALES por nivel, igual que los empuja `main.ts`: sin ellos el
+  // panel no dibuja la lista de "que agrega este nivel" (los deltas).
+  const modifiers = [undefined];
+  for (let level = 1; level <= max; level++) {
+    modifiers[level] = ff.engine.registry.ascension(level).modifiers;
+  }
+  ff.hud.setAscensionState({ unlocked, selected: 0, max, modifiers });
   ff.hud.showMenu();
   return { max, unlocked };
 });
-await page.waitForSelector('.panel.is-menu [data-act="ascension"]', { timeout: 5000 });
+await page.waitForSelector('.panel.is-menu', { timeout: 5000 });
 await page.waitForTimeout(500);
 
+// --- Navegacion REAL: menu -> Desafios -> Ascension ---
+// El chip de ascension vive en el panel de Desafios (ya no es un chip suelto
+// del menu): hay que abrir el desplegable y entrar por ahi.
+await page.evaluate(() =>
+  document.querySelector('.panel.is-menu [data-act="menu-toggle"]')?.click(),
+);
+await page.waitForTimeout(200);
+await page.evaluate(() =>
+  document.querySelector('.panel.is-menu [data-act="challenges"]')?.click(),
+);
+await page.waitForSelector('.panel.is-challenges [data-act="ascension"]', { timeout: 5000 });
+await page.waitForTimeout(300);
+
 const chipOff = await page.evaluate(() => {
-  const el = document.querySelector('.panel.is-menu [data-act="ascension"]');
+  const el = document.querySelector('.panel.is-challenges [data-act="ascension"]');
   return {
     present: Boolean(el),
     label: el?.textContent ?? null,
@@ -92,7 +111,7 @@ const chipOff = await page.evaluate(() => {
 });
 
 // --- Abrir el panel con un tap real ---
-const chipBox = await page.locator('.panel.is-menu [data-act="ascension"]').boundingBox();
+const chipBox = await page.locator('.panel.is-challenges [data-act="ascension"]').boundingBox();
 if (chipBox) await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
 await page.waitForSelector('.panel.is-ascension .ascension-card', { timeout: 5000 });
 await page.waitForTimeout(700);
@@ -119,9 +138,12 @@ const panel = await page.evaluate(() => {
 });
 
 // --- Elegir A2 ---
-const a2Box = await page
-  .locator('.panel.is-ascension .ascension-card[data-level="2"]')
-  .boundingBox();
+// Las tarjetas ya NO se encogen (`flex: 0 0 auto`), asi que la lista scrollea de
+// verdad: hay que traer A2 a la vista antes de medir su caja.
+const a2 = page.locator('.panel.is-ascension .ascension-card[data-level="2"]');
+await a2.scrollIntoViewIfNeeded();
+await page.waitForTimeout(250);
+const a2Box = await a2.boundingBox();
 if (a2Box) await page.mouse.click(a2Box.x + a2Box.width / 2, a2Box.y + a2Box.height / 2);
 await page.waitForTimeout(700);
 await page.screenshot({ path: join(shotsDir, '20b-ascension-a2.png') });
@@ -134,7 +156,7 @@ const afterPick = await page.evaluate(() => {
   return {
     profileSelected: ff.profileStore.current.ascension.selected,
     domSelectedLevel: selected ? Number(selected.dataset.level) : null,
-    chipGone: !document.querySelector('.panel.is-menu [data-act="ascension"]'),
+    chipGone: !document.querySelector('.panel.is-challenges [data-act="ascension"]'),
   };
 });
 

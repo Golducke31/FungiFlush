@@ -1423,10 +1423,18 @@ const ascensionPanel = await (async () => {
     ff.profileStore.current.ascension.selected = 0;
     // El menu lee la ascension de un estado que se le EMPUJA: sin este sync el
     // chip no se dibujaria (el HUD no conoce el perfil).
+    // Los MODIFICADORES reales por nivel van incluidos, igual que los empuja
+    // `main.ts`: sin ellos el panel no dibuja la lista de "que agrega este
+    // nivel" (los deltas derivados del JSON).
+    const modifiers = [undefined];
+    for (let level = 1; level <= max; level++) {
+      modifiers[level] = ff.engine.registry.ascension(level).modifiers;
+    }
     ff.hud.setAscensionState({
       unlocked: ff.profileStore.current.ascension.highestUnlocked,
       selected: 0,
       max,
+      modifiers,
     });
     ff.hud.showMenu();
     return { max, unlocked: Math.min(3, max) };
@@ -1465,13 +1473,39 @@ const ascensionPanel = await (async () => {
       lockedHelp: cards
         .filter((c) => c.classList.contains('is-locked'))
         .every((c) => (c.querySelector('.ascension-desc')?.textContent ?? '').length > 8),
+      // COMO SE LOGRA: la regla de desbloqueo tiene que estar SIEMPRE visible en
+      // la cabecera (no solo en los niveles trabados).
+      howToUnlock: (document.querySelector('.panel.is-ascension [data-act="ascension-how"]')
+        ?.textContent ?? '').length > 20,
+      // OTORGAMIENTOS: cada nivel desbloqueado > A0 muestra la lista derivada de
+      // los modificadores reales (etiqueta + al menos una fila).
+      grants: cards
+        .filter((c) => !c.classList.contains('is-locked') && Number(c.dataset.level) > 0)
+        .every(
+          (c) =>
+            c.querySelector('[data-act="ascension-grants"]') !== null &&
+            c.querySelectorAll('.ascension-change[data-mod]').length > 0,
+        ),
+      // El pie (Cerrar) tiene que quedar VISIBLE: las tarjetas ya no se encogen,
+      // asi que el alto extra lo tiene que absorber la LISTA scrolleando, nunca
+      // empujar el boton fuera de la pantalla.
+      footerVisible: (() => {
+        const btn = document.querySelector('.panel.is-ascension .ascension-close');
+        if (!btn) return false;
+        const b = btn.getBoundingClientRect();
+        return b.top >= 0 && b.bottom <= window.innerHeight + 1;
+      })(),
     };
   });
 
-  // Elegir A2 (desbloqueado) con click real.
-  const a2Box = await page
-    .locator('.panel.is-ascension .ascension-card[data-level="2"]')
-    .boundingBox();
+  // Elegir A2 (desbloqueado) con click real. `scrollIntoViewIfNeeded` primero:
+  // las tarjetas ya NO se encogen (`flex: 0 0 auto`), asi que la lista scrollea
+  // de verdad y A2 puede quedar fuera del area visible; sin esto el click cae
+  // en el vacio.
+  const a2 = page.locator('.panel.is-ascension .ascension-card[data-level="2"]');
+  await a2.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
+  const a2Box = await a2.boundingBox();
   if (a2Box) {
     await page.mouse.click(a2Box.x + a2Box.width / 2, a2Box.y + a2Box.height / 2);
   }
@@ -2272,6 +2306,12 @@ const ok =
   chk('ascensionPanel?.locked === ascensionPanel?.max', ascensionPanel?.locked === ascensionPanel?.max - ascensionPanel?.unlocked) &&
   // Los bloqueados EXPLICAN la condicion (no un candado mudo).
   chk('ascensionPanel?.lockedHelp === true', ascensionPanel?.lockedHelp === true) &&
+  // COMO SE LOGRA: la cabecera explica la regla de desbloqueo, siempre.
+  chk('ascensionPanel?.howToUnlock === true', ascensionPanel?.howToUnlock === true) &&
+  // OTORGAMIENTOS: los niveles desbloqueados listan que agrega cada uno.
+  chk('ascensionPanel?.grants === true', ascensionPanel?.grants === true) &&
+  // El pie no se va de pantalla aunque la lista crezca (scrollea la lista).
+  chk('ascensionPanel?.footerVisible === true', ascensionPanel?.footerVisible === true) &&
   // Elegir A2 lo persiste en el perfil.
   chk('ascensionPanel?.selected === 2', ascensionPanel?.selected === 2) &&
   // --- Etiqueta del Simbionte: la columna del HUD se retiro ---
