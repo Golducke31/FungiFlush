@@ -98,6 +98,18 @@ const context = await browser.newContext({
 
 const page = await context.newPage();
 
+// Los ARQUETIPOS se desbloquean al superar el PRIMER Ciego: un perfil nuevo
+// arranca con el mazo CLASICO y SIN selector. El smoke recorre el selector como
+// funcion existente (y el bug mas caro posible es quedarse sin poder empezar
+// partida), asi que siembra la puerta ABIERTA. El camino del jugador nuevo
+// (bloqueado -> clasico directo) lo cubre `tools/probe-archetype-gate.mjs`.
+await page.addInitScript(() => {
+  localStorage.setItem(
+    'fungiflush.profile',
+    JSON.stringify({ version: 7, archetypesUnlocked: true }),
+  );
+});
+
 // --- Helpers de navegacion del MENU ---
 // Las acciones secundarias ya no son chips sueltos: viven en el desplegable
 // (Ajustes / Coleccion / Desafios) o dentro de los paneles de Perfil y

@@ -118,11 +118,13 @@ import {
 import { buildPassPanel } from '@ui/EventPassPanel';
 import { cardDefFaceUrl, jokerDefFaceUrl, faceComposeCount, faceCacheSize } from '@ui/cardArt';
 import {
+  TUTORIAL_ADVANCED_ARCHETYPE,
   TUTORIAL_SEED,
-  TUTORIAL_STEPS,
-  allStepIds,
   currentStep,
   isFinalStep,
+  lastStepOfChapter,
+  stepsOfChapter,
+  type TutorialChapter,
   type TutorialContext,
   type TutorialStepId,
 } from '@meta/Tutorial';
@@ -514,6 +516,20 @@ async function boot(): Promise<void> {
         params: { count: packTotal },
         kind: 'success',
       });
+    }
+
+    // PRIMER Ciego superado = se DESBLOQUEA la eleccion de arquetipo. La primera
+    // run arranca con el mazo clasico a proposito (ver `syncArchetypes`): recien
+    // cuando el jugador ya jugo una mano y entendio el circuito tiene sentido
+    // ofrecerle "otra forma de puntuar". Se emite DESPUES de los avisos de
+    // Colonia para no robarles el foco, pero se emite igual: los banners se
+    // APILAN (`.banner-stack`), asi que el jugador se entera de los dos.
+    if (!profileStore.current.archetypesUnlocked) {
+      profileStore.patch((p) => {
+        p.archetypesUnlocked = true;
+      });
+      syncArchetypes();
+      bus.emit('banner:show', { key: 'banner.archetype.unlocked', kind: 'success' });
     }
   });
 
@@ -954,22 +970,76 @@ async function boot(): Promise<void> {
 
   /** Ultimo paso ya visto, o `null` antes del primero. */
   let tutorialStep: TutorialStepId | null = null;
+  /** Capitulo activo: cambia al pasar del mazo clasico al bloque de arquetipo. */
+  let tutorialChapter: TutorialChapter = 'classic';
   /** Historial que los pasos consultan (`require`). Se resetea por ciego. */
   let tutorialCtx: {
     handsPlayed: number;
+    handComboKind: TutorialContext['handComboKind'];
     lastComboKind: TutorialContext['lastComboKind'];
+    lastOverlap: boolean;
+    lastOrder: TutorialContext['lastOrder'];
     visitedShop: boolean;
     sawPurge: boolean;
-  } = { handsPlayed: 0, lastComboKind: null, visitedShop: false, sawPurge: false };
+  } = {
+    handsPlayed: 0,
+    handComboKind: null,
+    lastComboKind: null,
+    lastOverlap: false,
+    lastOrder: null,
+    visitedShop: false,
+    sawPurge: false,
+  };
+
+  /** Reinicia el historial del tutorial (se llama por ciego). */
+  const resetTutorialCtx = (): void => {
+    tutorialCtx = {
+      handsPlayed: 0,
+      handComboKind: null,
+      lastComboKind: null,
+      lastOverlap: false,
+      lastOrder: null,
+      visitedShop: false,
+      sawPurge: false,
+    };
+  };
+
+  /** Traduce el `id` de un combo a su eje. `''`/desconocido -> `null`. */
+  const comboKindOf = (id: string): TutorialContext['handComboKind'] =>
+    id.startsWith('family:')
+      ? 'family'
+      : id.startsWith('element:')
+        ? 'element'
+        : id.startsWith('diversity:')
+          ? 'diversity'
+          : null;
+
+  /**
+   * El combo que la mano ACTUAL (sin jugar) puede formar. Se calcula en vivo:
+   * asi `combo_hint` avisa ANTES de jugar, en vez de depender de una mano ya
+   * cerrada (que ademas llegaba tarde).
+   */
+  const handComboKind = (): TutorialContext['handComboKind'] => {
+    const hand = engine.round?.hand ?? [];
+    const combos = detectCombos(hand);
+    // Preferimos el eje de ELEMENTO/FAMILIA por encima de diversidad: es el que
+    // el jugador puede "ver" en la mano.
+    const nonDiversity = combos.find((c) => !c.id.startsWith('diversity:'));
+    return comboKindOf((nonDiversity ?? combos[0])?.id ?? '');
+  };
 
   /** El contexto completo del paso, leido del motor VIVO. */
   const tutorialContext = (): TutorialContext => ({
     status: engine.run?.status ?? 'menu',
+    chapter: tutorialChapter,
     blindIndex: engine.run?.blindIndex ?? 0,
     ante: engine.run?.ante ?? 1,
     selectedCount: engine.round?.selected?.length ?? 0,
     handsPlayed: tutorialCtx.handsPlayed,
+    handComboKind: handComboKind(),
     lastComboKind: tutorialCtx.lastComboKind,
+    lastOverlap: tutorialCtx.lastOverlap,
+    lastOrder: tutorialCtx.lastOrder,
     visitedShop: tutorialCtx.visitedShop,
     sawPurge: tutorialCtx.sawPurge,
   });
@@ -982,6 +1052,42 @@ async function boot(): Promise<void> {
     profileStore.patch((p) => {
       p.seenTutorial = true;
     });
+  };
+
+  /**
+   * Arranca un capitulo del tutorial. El `classic` usa el mazo clasico; el
+   * `advanced` un mazo de ARQUETIPO (Podredumbre) para demostrar en vivo el
+   * motor decay->cosecha y el re-disparo por posicion (cartas que el clasico no
+   * tiene). El motor no cambia: sigue siendo una run normal con semilla fija.
+   */
+  const startTutorialChapter = (chapter: TutorialChapter): void => {
+    void runStore.clear();
+    if (chapter === 'advanced') {
+      engine.setArchetypeLoadout(
+        starterFor(TUTORIAL_ADVANCED_ARCHETYPE),
+        biasFor(TUTORIAL_ADVANCED_ARCHETYPE),
+      );
+      engine.startRun(TUTORIAL_SEED, 0, TUTORIAL_ADVANCED_ARCHETYPE);
+    } else {
+      engine.setArchetypeLoadout(undefined, []);
+      engine.startRun(TUTORIAL_SEED, 0, '');
+    }
+    if (engine.run) engine.run.tutorial = true;
+    tutorialChapter = chapter;
+    tutorialStep = null;
+    resetTutorialCtx();
+    scene.setMode('run');
+    // El primer paso se empuja cuando el panel de ciego ya esta montado.
+    window.setTimeout(() => advanceTutorial(), 520);
+  };
+
+  /**
+   * Cierra un capitulo: encadena el bloque avanzado tras el clasico, o termina
+   * el tutorial si ya era el ultimo capitulo.
+   */
+  const finishTutorialChapter = (): void => {
+    if (tutorialChapter === 'classic') startTutorialChapter('advanced');
+    else endTutorial();
   };
 
   /**
@@ -1002,25 +1108,28 @@ async function boot(): Promise<void> {
       // No hay mas pasos para este estado: se esconde la capa (sin cerrar el
       // tutorial) y se espera al proximo cambio de estado.
       hud?.hideTutorialStep();
-      // Unico caso de cierre: ya se mostro el paso final y no queda nada mas.
-      if (tutorialStep === 'ante_complete') endTutorial();
+      // Si el capitulo ya se agoto (se mostro su ultimo paso), se encadena el
+      // bloque avanzado o se cierra el tutorial.
+      const last = lastStepOfChapter(tutorialChapter);
+      if (last && tutorialStep === last.id) finishTutorialChapter();
       return;
     }
+    const chapterSteps = stepsOfChapter(tutorialChapter);
     tutorialStep = step.id;
     hud?.showTutorialStep(
       {
         title: t(step.titleKey),
         body: t(step.bodyKey),
         stepOf: t('tutorial.stepOf', {
-          n: allStepIds().indexOf(step.id) + 1,
-          total: TUTORIAL_STEPS.length,
+          n: chapterSteps.findIndex((s) => s.id === step.id) + 1,
+          total: chapterSteps.length,
         }),
         anchor: step.anchor,
         waitsForAction: step.advanceOn === 'player_action',
         isLast: isFinalStep(step.id),
       },
       () => {
-        if (isFinalStep(step.id)) endTutorial();
+        if (isFinalStep(step.id)) finishTutorialChapter();
         else advanceTutorial();
       },
       // "Saltar paso": marca el paso como visto y busca el siguiente.
@@ -1341,19 +1450,27 @@ async function boot(): Promise<void> {
   };
 
   const syncArchetypes = (): void => {
-    const list = ARCHETYPES.map((a) => ({
-      id: a.id,
-      nameKey: a.nameKey,
-      taglineKey: a.taglineKey,
-      howKey: a.howKey,
-      weaknessKey: a.weaknessKey,
-      element: a.element as string,
-    }));
+    // PUERTA de la eleccion de arquetipo: hasta superar el PRIMER Ciego el
+    // perfil no tiene `archetypesUnlocked`, y entonces la lista va VACIA. El
+    // menu lee `list.length` para decidir si "Nueva partida" abre el selector
+    // (arquetipo) o arranca directo con el mazo CLASICO. La lista vacia es la
+    // unica palanca: no hay un segundo flag que pueda desincronizarse.
+    const unlocked = profileStore.current.archetypesUnlocked;
+    const list = unlocked
+      ? ARCHETYPES.map((a) => ({
+          id: a.id,
+          nameKey: a.nameKey,
+          taglineKey: a.taglineKey,
+          howKey: a.howKey,
+          weaknessKey: a.weaknessKey,
+          element: a.element as string,
+        }))
+      : [];
     const starterSizes: Record<string, number> = {};
     for (const a of ARCHETYPES) starterSizes[a.id] = starterSizeOf(a.id);
     hud?.setArchetypeState({
       list,
-      selected: profileStore.current.archetype.selected,
+      selected: unlocked ? profileStore.current.archetype.selected : '',
       starterSizes,
     });
   };
@@ -1516,17 +1633,10 @@ async function boot(): Promise<void> {
         }
       },
       // --- Tutorial guiado (Frente 1) ---
-      // Arranca una run NORMAL con semilla fija y arquetipo clasico, y marca
-      // `tutorial`. El motor no cambia ninguna regla: el guion lo lleva la UI.
+      // Arranca el capitulo clasico: una run NORMAL con semilla fija y mazo
+      // clasico, marcada con `tutorial`. El motor no cambia ninguna regla.
       onStartTutorial: () => {
-        void runStore.clear();
-        engine.setArchetypeLoadout(undefined, []);
-        engine.startRun(TUTORIAL_SEED, 0, '');
-        if (engine.run) engine.run.tutorial = true;
-        scene.setMode('run');
-        tutorialStep = null;
-        // El primer paso se empuja cuando el panel de ciego ya esta montado.
-        window.setTimeout(() => advanceTutorial(), 520);
+        startTutorialChapter('classic');
       },
       onSelectAscension: (level) => {
         // El nivel elegido nunca supera el desbloqueado en el perfil. El panel
@@ -1646,6 +1756,10 @@ async function boot(): Promise<void> {
       onOpenAchievements: () => hud?.showAchievements(achievementViews()),
       // --- R4b: cosméticos ---
       onOpenCosmetics: () => hud?.showCosmetics(),
+      // El panel se dibuja con el estado fresco: reclamar una recompensa o
+      // equipar pasa por aca, asi que la Tarjeta de Jugador nunca muestra el
+      // avatar/marco/titulo previos.
+      onRefreshCosmetics: () => syncCosmetics(),
       onEquip: (kind, id) => {
         // El perfil es la fuente de verdad; el render solo refleja. Un id que
         // no se posee no llega aca (el panel solo lista lo que `owned` trae).
@@ -1751,7 +1865,7 @@ async function boot(): Promise<void> {
   // `play_hand` vuelven a aplicar en el ciego 2 y en el Jefe.
   bus.on('round:start', () => {
     if (!engine.run?.tutorial) return;
-    tutorialCtx = { handsPlayed: 0, lastComboKind: null, visitedShop: false, sawPurge: false };
+    resetTutorialCtx();
   });
 
   // `state:changed` es el unico punto de entrada: cubre blind_select, playing,
@@ -1766,18 +1880,23 @@ async function boot(): Promise<void> {
     advanceTutorial();
   });
 
-  // El combo de la mano que se cerro. Decide si `combo_hint` aparece.
+  // Datos de la mano que se cerro: que eje pego y si pago solapamiento. Decide
+  // si `combo_hint` / `overlap_axes` aparecen.
+  //
+  // ⚠️ ANTES ESTO LEIA `breakdown.combos`, UN CAMPO QUE NO EXISTIA: `breakdownOf`
+  // solo devolvia `comboKeys`, asi que el cast a `{ combos?: ... }` daba
+  // `undefined`, `lastComboKind` quedaba SIEMPRE en null y `combo_hint` nunca se
+  // mostraba en produccion. Ahora el desglose expone `combos`/`orderKeys`/
+  // `overlapFamily` y se leen tipados, sin cast.
   bus.on('score:hand', ({ breakdown }) => {
     if (!engine.run?.tutorial) return;
-    const combos = (breakdown as { combos?: Array<{ id: string }> }).combos ?? [];
-    const first = combos[0]?.id ?? '';
-    tutorialCtx.lastComboKind = first.startsWith('family:')
-      ? 'family'
-      : first.startsWith('element:')
-        ? 'element'
-        : first.startsWith('diversity:')
-          ? 'diversity'
-          : null;
+    tutorialCtx.lastComboKind = comboKindOf(breakdown.combos[0]?.id ?? '');
+    tutorialCtx.lastOverlap = breakdown.overlapFamily;
+    tutorialCtx.lastOrder = breakdown.orderKeys.includes('order.ladder')
+      ? 'ladder'
+      : breakdown.orderKeys.includes('order.crown')
+        ? 'crown'
+        : null;
   });
 
   // Contar manos jugadas: es lo que hace que `play_hand` deje de aplicar.
@@ -2693,6 +2812,22 @@ async function boot(): Promise<void> {
         // de la tienda, y las herramientas de captura/smoke necesitan medir el
         // HUD movil con ese panel abierto.
         openDeck: () => openDeck(),
+        // Tutorial: arranca un capitulo concreto sin depender de completar el
+        // anterior. El probe lo usa para verificar el bloque avanzado (mazo de
+        // arquetipo) sin tener que ganar un Ante entero con el mazo clasico.
+        startTutorialChapter,
+        // Puerta de arquetipos: el smoke y los probes necesitan la eleccion
+        // DESBLOQUEADA para recorrer el selector sin jugar un Ciego entero. Se
+        // expone como accion explicita (no un setter silencioso) para que el
+        // probe pueda verificar las DOS caras: bloqueada (primera run = clasico)
+        // y desbloqueada.
+        unlockArchetypes: () => {
+          if (profileStore.current.archetypesUnlocked) return;
+          profileStore.patch((p) => {
+            p.archetypesUnlocked = true;
+          });
+          syncArchetypes();
+        },
       },
     });
   }

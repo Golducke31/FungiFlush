@@ -26,15 +26,25 @@ export interface PlayerCardState {
   backgroundUrl: string | null;
 }
 
-/** `<img>` que se elimina solo si el archivo no existe. `null` si no hay URL. */
-function image(className: string, url: string | null, alt = ''): HTMLImageElement | null {
+/** `<img>` que se elimina solo si el archivo no existe. `null` si no hay URL.
+ *  `onFail` deja reaccionar al llamador (p. ej. mostrar el placeholder) cuando
+ *  la imagen no carga, en vez de dejar un hueco vacio. */
+function image(
+  className: string,
+  url: string | null,
+  alt = '',
+  onFail?: () => void,
+): HTMLImageElement | null {
   if (!url) return null;
   const img = document.createElement('img');
   img.className = className;
   img.src = url;
   img.alt = alt;
   img.decoding = 'async';
-  img.addEventListener('error', () => img.remove());
+  img.addEventListener('error', () => {
+    img.remove();
+    onFail?.();
+  });
   return img;
 }
 
@@ -50,8 +60,13 @@ export function buildPlayerCard(state: PlayerCardState): HTMLElement {
 
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'player-card-avatar';
-  const avatar = image('player-card-avatar-img', state.avatarUrl);
+  // Sin avatar (o si el arte no carga) queda el placeholder circular: un hueco
+  // de 64px sin nada se leia como "tarjeta rota".
+  const avatar = image('player-card-avatar-img', state.avatarUrl, '', () =>
+    avatarWrap.classList.add('is-placeholder'),
+  );
   if (avatar) avatarWrap.appendChild(avatar);
+  else avatarWrap.classList.add('is-placeholder');
   const frame = image('player-card-frame', state.frameUrl);
   if (frame) avatarWrap.appendChild(frame);
 
@@ -99,7 +114,9 @@ export function buildMiniPlayerCard(state: PlayerCardState): HTMLElement {
 
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'player-card-avatar';
-  const avatar = image('player-card-avatar-img', state.avatarUrl);
+  const avatar = image('player-card-avatar-img', state.avatarUrl, '', () =>
+    avatarWrap.classList.add('is-placeholder'),
+  );
   if (avatar) avatarWrap.appendChild(avatar);
   // Placeholder: sin avatar, una seta para que el chip no quede vacio.
   else avatarWrap.classList.add('is-placeholder');

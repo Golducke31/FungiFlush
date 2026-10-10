@@ -74,7 +74,8 @@
     "baseSubstrate": 3,
     "baseSpores": 3,
     "cost": 5,
-    "tags": ["archetype", "bridge"],
+    "copies": 2,
+    "tags": ["archetype", "bridge", "starter"],
     "art": { "hue": 48, "hue2": 180, "pattern": "crystal", "silhouette": "coral", "glow": 0.65 },
     "effects": [
       {
@@ -96,7 +97,8 @@
     "baseSubstrate": 4,
     "baseSpores": 2,
     "cost": 4,
-    "tags": ["archetype", "bridge"],
+    "copies": 2,
+    "tags": ["archetype", "bridge", "starter"],
     "art": { "hue": 262, "hue2": 40, "pattern": "fibrous", "silhouette": "mold", "glow": 0.36 },
     "effects": [
       {
@@ -118,7 +120,8 @@
     "baseSubstrate": 5,
     "baseSpores": 1,
     "cost": 4,
-    "tags": ["archetype", "bridge"],
+    "copies": 2,
+    "tags": ["archetype", "bridge", "starter"],
     "art": { "hue": 270, "hue2": 95, "pattern": "fibrous", "silhouette": "truffle", "glow": 0.35 },
     "effects": [
       {
@@ -275,7 +278,8 @@
     "baseSubstrate": 2,
     "baseSpores": 3,
     "cost": 4,
-    "tags": ["archetype", "bridge"],
+    "copies": 2,
+    "tags": ["archetype", "bridge", "starter"],
     "art": { "hue": 186, "hue2": 46, "pattern": "crystal", "silhouette": "cap", "glow": 0.7 },
     "effects": [
       {
@@ -297,7 +301,8 @@
     "baseSubstrate": 3,
     "baseSpores": 2,
     "cost": 4,
-    "tags": ["archetype", "bridge"],
+    "copies": 2,
+    "tags": ["archetype", "bridge", "starter"],
     "art": { "hue": 192, "hue2": 92, "pattern": "crystal", "silhouette": "cluster", "glow": 0.68 },
     "effects": [
       {

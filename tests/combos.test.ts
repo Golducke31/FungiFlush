@@ -96,8 +96,9 @@ test('elemento: el combo multiplica Esporas y NO suma Sustrato plano', () => {
   assert.ok(combo.sporeMultiplier > 1);
 });
 
-test('solapamiento: si Floracion y Colonia pegan juntas, el Sustrato de familia se reduce a la mitad', () => {
+test('solapamiento: si Floracion y Colonia pegan con las MISMAS cartas, el Sustrato de familia se reduce', () => {
   // Caso base: mismo elemento y misma familia se solapan (el eje 1:1 del juego).
+  // Solapamiento TOTAL -> la familia paga el piso (100 * 0.4 = 40).
   const overlapping = detectCombos(
     Array.from({ length: 5 }, () => card({ element: 'spore', family: 'boletaceae' })),
   );
@@ -105,9 +106,10 @@ test('solapamiento: si Floracion y Colonia pegan juntas, el Sustrato de familia 
   assert.ok(famOverlap);
   assert.ok(overlapping.some((c) => c.id.startsWith('element:')));
   assert.equal(famOverlap.flatSubstrate, 40);
+  assert.equal(famOverlap.overlapped, true);
 
   // Contraprueba: la misma familia de 5 cartas repartida en 5 elementos distintos
-  // no activa Floracion, asi que conserva el Sustrato pleno.
+  // no activa Floracion, asi que conserva el Sustrato pleno (cruzar ejes paga).
   const spread = detectCombos(
     (['spore', 'mycelium', 'decay', 'crystal', 'symbiosis'] as const).map((element) =>
       card({ element, family: 'boletaceae' }),
@@ -116,7 +118,25 @@ test('solapamiento: si Floracion y Colonia pegan juntas, el Sustrato de familia 
   const famSpread = spread.find((c) => c.id === 'family:boletaceae:5');
   assert.ok(famSpread);
   assert.ok(!spread.some((c) => c.id.startsWith('element:')));
-  assert.equal(famSpread.flatSubstrate, 80);
+  assert.equal(famSpread.flatSubstrate, 100);
+  assert.equal(famSpread.overlapped, false);
+});
+
+test('solapamiento PARCIAL: la penalizacion escala con la proporcion', () => {
+  // Familia de 4: 3 cartas de spore (Floracion) + 1 de mycelium. Solo 3 de las 4
+  // califican al solapamiento -> ratio 0.75 -> 50 * (1 - 0.6*0.75) = 27.5 -> 28.
+  const hand = [
+    card({ element: 'spore', family: 'boletaceae' }),
+    card({ element: 'spore', family: 'boletaceae' }),
+    card({ element: 'spore', family: 'boletaceae' }),
+    card({ element: 'mycelium', family: 'boletaceae' }),
+  ];
+  const combos = detectCombos(hand);
+  assert.ok(combos.some((c) => c.id === 'element:spore:3'), 'hay Floracion de 3');
+  const fam = combos.find((c) => c.id === 'family:boletaceae:4');
+  assert.ok(fam);
+  assert.equal(fam.flatSubstrate, 28, 'solapamiento parcial = penalizacion parcial');
+  assert.equal(fam.overlapped, true);
 });
 
 test('diversidad: 5 elementos distintos dan el bonus', () => {

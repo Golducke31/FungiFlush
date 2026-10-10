@@ -189,6 +189,16 @@ export interface HudCallbacks {
   onOpenBoard: () => void;
   // --- R4b: cosméticos (dorso de carta / tapete) ---
   onOpenCosmetics: () => void;
+  /**
+   * Refresca el estado de cosméticos ANTES de dibujar el panel.
+   *
+   * El HUD no conoce el perfil: quien lo tiene es el controlador. Se llama al
+   * ABRIR el panel para que la Tarjeta de Jugador refleje lo último reclamado o
+   * equipado (sin esto, abrir Cosmeticos justo despues de reclamar una
+   * recompensa mostraba el estado previo). Opcional: sin callback, el panel usa
+   * el ultimo estado empujado con `setCosmeticsState`.
+   */
+  onRefreshCosmetics?: () => void;
   onEquip: (kind: CosmeticKind, id: string) => void;
   // --- R5: historial de partidas ---
   onOpenHistory: () => void;
@@ -3349,6 +3359,11 @@ export class HUD {
   }
 
   showCosmetics(returnTo?: () => void): void {
+    // El panel SIEMPRE se dibuja con el estado MAS RECIENTE: reclamar una
+    // recompensa de la Colonia (o equipar) pasa por el controlador, que empuja
+    // el estado nuevo; refrescar aca cubre el caso de abrir Cosmeticos justo
+    // despues de reclamar, sin depender de que alguien haya llamado antes.
+    this.callbacks.onRefreshCosmetics?.();
     // Igual que la ascension: el `openOverlay` limpia las referencias del panel,
     // asi que se toma el estado ANTES de abrirlo.
     const state: CosmeticsState = {

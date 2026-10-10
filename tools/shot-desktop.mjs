@@ -59,6 +59,14 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext({ viewport: VIEWPORT });
 const page = await context.newPage();
+// Arquetipos: se siembra la puerta abierta (se desbloquean al superar el primer
+// Ciego). Ver `tools/probe-archetype-gate.mjs` para el camino bloqueado.
+await page.addInitScript(() => {
+  localStorage.setItem(
+    'fungiflush.profile',
+    JSON.stringify({ version: 7, archetypesUnlocked: true }),
+  );
+});
 const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
 page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));

@@ -100,6 +100,7 @@ export class ScoreCalculator {
     // ORDEN. Se aplica despues de los combos y antes de los efectos por carta,
     // asi los ON_PLAY ya ven el Sustrato con el bonus incluido.
     for (const bonus of detectOrderBonuses(opts.scored)) {
+      res.orders.push(bonus);
       const sourceId = `order:${bonus.id}`;
       if (bonus.flatSubstrate !== 0) {
         res.addSubstrate(bonus.flatSubstrate, sourceId, bonus.nameKey, 0);
@@ -287,5 +288,8 @@ export function breakdownOf(res: ResolutionContext): ScoreBreakdown {
     multipliedSpores: res.sporesMultiplier,
     total: res.total,
     comboKeys: res.combos.map((combo) => combo.nameKey),
+    combos: res.combos.map((combo) => ({ id: combo.id, nameKey: combo.nameKey })),
+    orderKeys: res.orders.map((order) => order.nameKey),
+    overlapFamily: res.combos.some((combo) => combo.overlapped === true),
   };
 }

@@ -349,6 +349,40 @@ test('v7: la lista de presets se capea a MAX_DECK_PRESETS', () => {
   assert.equal(migrated.decks.presets.length, MAX_DECK_PRESETS);
 });
 
+// ---------------------------------------------------------------------------
+// Puerta de la eleccion de arquetipo (`archetypesUnlocked`, aditivo)
+// ---------------------------------------------------------------------------
+// La PRIMERA run de un perfil nuevo arranca con el mazo clasico; el selector de
+// arquetipo se desbloquea al superar el primer Ciego. Un perfil viejo NO puede
+// perder la funcion que ya usaba: la migracion la deduce de `stats.runs`.
+
+test('arquetipos: un perfil NUEVO arranca BLOQUEADO', () => {
+  assert.equal(defaultProfile().archetypesUnlocked, false);
+  const fresh = migrateProfileSave({ version: 7 });
+  assert.equal(fresh.archetypesUnlocked, false);
+});
+
+test('arquetipos: la bandera explicita sobrevive la migracion', () => {
+  const migrated = migrateProfileSave({ version: 7, archetypesUnlocked: true });
+  assert.equal(migrated.archetypesUnlocked, true);
+  // Basura (no booleano) NO desbloquea: se cae a la deduccion por progreso.
+  const junk = migrateProfileSave({ version: 7, archetypesUnlocked: 'si' });
+  assert.equal(junk.archetypesUnlocked, false);
+});
+
+test('arquetipos: un perfil que YA jugo conserva el acceso (back-fill)', () => {
+  const played = migrateProfileSave({ version: 7, stats: { runs: 3, wins: 1, bestAnte: 4 } });
+  assert.equal(played.archetypesUnlocked, true);
+  const withArchetype = migrateProfileSave({ version: 7, archetype: { selected: 'spores' } });
+  assert.equal(withArchetype.archetypesUnlocked, true);
+});
+
+test('arquetipos: un perfil v1 que nunca jugo llega BLOQUEADO (cadena entera)', () => {
+  const migrated = migrateProfileSave({ version: 1 });
+  assert.equal(migrated.version, PROFILE_SAVE_VERSION);
+  assert.equal(migrated.archetypesUnlocked, false);
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);

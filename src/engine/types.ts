@@ -468,6 +468,17 @@ export interface ScoreBreakdown {
    * de puntaje no traduce.
    */
   comboKeys: string[];
+  /**
+   * Combos detectados con su `id` (prefijo `element:` / `family:` / `diversity:`)
+   * y su `nameKey`. `comboKeys` se conserva para la UI existente; esto es lo que
+   * permite distinguir QUE eje pego (y para el tutorial, saber si hubo combo en
+   * la mano ANTES de jugarla).
+   */
+  combos: Array<{ id: string; nameKey: string }>;
+  /** `nameKey` de los bonus de orden (escalera / corona). Vacio si no hubo. */
+  orderKeys: string[];
+  /** `true` si algun combo de familia pago la penalizacion de solapamiento. */
+  overlapFamily: boolean;
 }
 
 export interface RoundSnapshot {

@@ -55,7 +55,7 @@ test('la Escalera premia el sustrato estrictamente creciente, y solo con 3+ cart
   // El valor es el fijo, no escala con la cantidad de cartas: el nameKey es una
   // clave i18n estatica y no podria traducir un valor dinamico.
   const ladder = detectOrderBonuses([cardWith(2), cardWith(5), cardWith(9)]).find((b) => b.id === 'ladder');
-  assert.equal(ladder?.flatSubstrate, 12);
+  assert.equal(ladder?.flatSubstrate, 18);
   assert.equal(ladder?.sporeMultiplier, 1);
 });
 

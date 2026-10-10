@@ -1078,8 +1078,8 @@
     "blocked": "Not ready yet"
   },
   "order": {
-    "ladder": "Ladder (+12 Substrate)",
-    "crown": "Crown (x1.2 Spores)"
+    "ladder": "Ladder (+18 Substrate)",
+    "crown": "Crown (x1.25 Spores)"
   },
   "daily": {
     "title": "Daily reward",
@@ -1182,6 +1182,9 @@
     "pack": {
       "earned": "You earned a Pack! ({count} unopened)",
       "expansion": "You earned an Expansion Pack! ({count} unopened)"
+    },
+    "archetype": {
+      "unlocked": "New styles unlocked! Try Spores, Colony, Decay or Crystal"
     }
   },
   "unlockRule": {
@@ -1817,6 +1820,50 @@
     "anteComplete": {
       "title": "Ante complete!",
       "body": "You just played a full Ante: that’s how FungiFlush plays. Now go solo — the next Ante asks for a higher score. Good luck!"
+    },
+    "elementFamily": {
+      "title": "Two axes, two effects",
+      "body": "ELEMENT (Bloom) multiplies your Spores; FAMILY (Colony) adds Substrate. Same element = Spores; same family = Substrate. They are two different axes and it pays not to overlap them."
+    },
+    "substrateSpores": {
+      "title": "Substrate × Spores",
+      "body": "A hand's score is Substrate × Spores. Substrate is ADDED (cards, family, diversity); Spores are MULTIPLIED (element, upgrades). Raise the multiplier and the total skyrockets."
+    },
+    "overlapAxes": {
+      "title": "Don't let the deck play for you",
+      "body": "Your Bloom and your Colony used the SAME cards, so the Colony paid half. To collect both axes in full, cross them: have a family spread across elements, or an element spread across families."
+    },
+    "archetypeBias": {
+      "title": "The shop is biased",
+      "body": "Each archetype (Spores, Colony, Decay, Crystal) biases what the shop offers toward its element. This tutorial run uses the classic deck; in your runs you pick an archetype at the start."
+    },
+    "diversityBonus": {
+      "title": "Reward for variety",
+      "body": "Five different elements in the same hand give +25 Substrate. It's the opposite of overlapping: the more spread out the element, the more you collect."
+    },
+    "orderBonus": {
+      "title": "Order scores too",
+      "body": "If Substrate grows in the order you play, you get Ladder (+18). If you close with the strongest card, you get Crown (×1.25 Spores). Arrange your hand before playing."
+    },
+    "chapterBIntro": {
+      "title": "Advanced block: Decay deck",
+      "body": "Now you play a short run with an archetype deck. These cards are NOT in the classic deck: they show you decay, retrigger and symbiotes live."
+    },
+    "decayHarvest": {
+      "title": "Decay: from burden to harvest",
+      "body": "Decay subtracts Substrate every time a card fires. Harvester cards consume it and turn it into Spores or Substrate. Sow decay and harvest it in the same hand."
+    },
+    "retriggerPosition": {
+      "title": "Position and retrigger",
+      "body": "Some cards retrigger the previous or the next one (Echo, Parasite). Placing a powerful card next to a retrigger multiplies its effect: position stops being a detail."
+    },
+    "jokerDemo": {
+      "title": "Symbiotes",
+      "body": "Symbiotes are passive: they have a trigger and a condition (for example, ×1.5 Spores when you play a Poison card). They chain together: stack the ones that share a condition."
+    },
+    "chapterBComplete": {
+      "title": "Tutorial complete",
+      "body": "You've seen FungiFlush's logic: the two axes, crossing them, order, decay and symbiotes. Now go play. Good luck!"
     }
   }
 }

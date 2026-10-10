@@ -404,6 +404,17 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   };
   if (typeof archetype.selected !== 'string') archetype.selected = '';
 
+  // Eleccion de arquetipo (aditivo): booleano. La PRIMERA run de un perfil nuevo
+  // arranca con el mazo clasico; el arquetipo se desbloquea al superar el primer
+  // Ciego. Back-fill a proposito: quien YA jugo (o ya tenia un arquetipo elegido)
+  // conserva el acceso — castigar a un jugador existente escondiendo una funcion
+  // que ya usaba seria peor que mostrarsela a un novato un poco antes.
+  const archetypesUnlocked =
+    migrated['archetypesUnlocked'] === true ||
+    stats.runs > 0 ||
+    stats.wins > 0 ||
+    archetype.selected !== '';
+
   // Colonia Fungi (v4): OBJETO anidado ADITIVO. Un perfil v3 no lo tiene y cae
   // al default (cero Esporas). El merge sobre el default protege de un perfil
   // editado a mano al que le falte un campo.
@@ -526,6 +537,7 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     board,
     ascension,
     archetype,
+    archetypesUnlocked,
     history,
     seenTutorial,
     ui: {

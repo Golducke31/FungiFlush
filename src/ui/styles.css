@@ -7475,6 +7475,23 @@ body {
   object-fit: contain;
   border-radius: 50%;
 }
+/* Placeholder del avatar en la tarjeta GRANDE: sin arte (o si el webp no carga)
+   queda un circulo con una seta muda, IGUAL que el chip del menu, en vez del
+   hueco vacio de 64px que se leia como "tarjeta rota". Se excluye la mini
+   tarjeta (`.player-card--mini`) porque esa ya define su propio fondo. */
+.player-card:not(.player-card--mini) .player-card-avatar.is-placeholder {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(43, 106, 114, 0.6), rgba(12, 50, 58, 0.8) 78%);
+  box-shadow: inset 0 0 0 2px rgba(210, 255, 248, 0.28);
+}
+.player-card:not(.player-card--mini) .player-card-avatar.is-placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 24% 26% 18% 26%;
+  border-radius: 50% 50% 42% 42%;
+  background: #d9fff8;
+  opacity: 0.85;
+}
 .player-card-frame {
   position: absolute;
   inset: -6px;

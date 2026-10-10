@@ -1078,8 +1078,8 @@
     "blocked": "Todavía no está lista"
   },
   "order": {
-    "ladder": "Escalera (+12 Sustrato)",
-    "crown": "Corona (x1.2 Esporas)"
+    "ladder": "Escalera (+18 Sustrato)",
+    "crown": "Corona (x1.25 Esporas)"
   },
   "daily": {
     "title": "Recompensa diaria",
@@ -1182,6 +1182,9 @@
     "pack": {
       "earned": "¡Ganaste un Sobre! ({count} sin abrir)",
       "expansion": "¡Ganaste un Sobre de expansión! ({count} sin abrir)"
+    },
+    "archetype": {
+      "unlocked": "¡Nuevos estilos desbloqueados! Probá Esporas, Colonia, Putrefacción o Cristal"
     }
   },
   "unlockRule": {
@@ -1817,6 +1820,50 @@
     "anteComplete": {
       "title": "¡Ante completo!",
       "body": "Ya jugaste un Ante entero: así se juega FungiFlush. Ahora seguí solo — el Ante siguiente pide más puntaje. ¡Suerte!"
+    },
+    "elementFamily": {
+      "title": "Dos ejes, dos efectos",
+      "body": "ELEMENTO (Floración) multiplica tus Esporas; FAMILIA (Colonia) suma Sustrato. Mismo elemento = Esporas; misma familia = Sustrato. Son dos ejes distintos y conviene que no se pisen."
+    },
+    "substrateSpores": {
+      "title": "Sustrato × Esporas",
+      "body": "El puntaje de una mano es Sustrato × Esporas. El Sustrato se SUMA (cartas, familia, diversidad); las Esporas se MULTIPLICAN (elemento, mejoras). Subí el multiplicador y el total se dispara."
+    },
+    "overlapAxes": {
+      "title": "No dejes que el mazo juegue por vos",
+      "body": "Tu Floración y tu Colonia usaron las MISMAS cartas, así que la Colonia pagó la mitad. Para cobrar los dos ejes enteros, cruzalos: que una familia reparta elementos, o que un elemento reparta familias."
+    },
+    "archetypeBias": {
+      "title": "La tienda tiene un sesgo",
+      "body": "Cada arquetipo (Esporas, Colonia, Podredumbre, Cristal) sesga lo que ofrece la tienda hacia su elemento. Esta run de tutorial usa el mazo clásico; en tus partidas elegís arquetipo al empezar."
+    },
+    "diversityBonus": {
+      "title": "Premio a la variedad",
+      "body": "Cinco elementos distintos en la misma mano dan +25 de Sustrato. Es lo opuesto a solapar: cuanto más repartido el elemento, más cobrás."
+    },
+    "orderBonus": {
+      "title": "El orden también puntúa",
+      "body": "Si el Sustrato crece en el orden en que jugás, ganás Escalera (+18). Si cerrás con la carta más fuerte, ganás Corona (×1.25 Esporas). Acomodá la mano antes de soltar."
+    },
+    "chapterBIntro": {
+      "title": "Bloque avanzado: mazo de Podredumbre",
+      "body": "Ahora jugás una run corta con un mazo de arquetipo. Estas cartas NO están en el mazo clásico: sirven para mostrarte en vivo la podredumbre, el re-disparo y los simbiontes."
+    },
+    "decayHarvest": {
+      "title": "Podredumbre: de lastre a cosecha",
+      "body": "La Podredumbre resta Sustrato cada vez que una carta dispara. Las cartas cosechadoras la consumen y la convierten en Esporas o Sustrato. Sembrá podredumbre y cosechala en la misma mano."
+    },
+    "retriggerPosition": {
+      "title": "Posición y re-disparo",
+      "body": "Algunas cartas re-disparan la anterior o la siguiente (Eco, Parásito). Poner una carta potente al lado de un re-disparador multiplica su efecto: la posición deja de ser un detalle."
+    },
+    "jokerDemo": {
+      "title": "Simbiontes",
+      "body": "Los Simbiontes son pasivos: tienen un disparador y una condición (por ejemplo, ×1.5 Esporas cuando jugás una carta de Veneno). Se encadenan entre sí: apilá los que comparten condición."
+    },
+    "chapterBComplete": {
+      "title": "Tutorial completo",
+      "body": "Ya viste la lógica de FungiFlush: los dos ejes, cruzarlos, el orden, la podredumbre y los simbiontes. Ahora sí, a jugar. ¡Suerte!"
     }
   }
 }

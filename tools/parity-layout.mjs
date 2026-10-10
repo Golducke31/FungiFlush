@@ -73,6 +73,14 @@ async function makeSession({ name, viewport, mobile }) {
     ...(mobile ? { deviceScaleFactor: 2, isMobile: true, hasTouch: true } : {}),
   });
   const page = await context.newPage();
+  // Arquetipos: se siembra la puerta abierta (se desbloquean al superar el
+  // primer Ciego). Ver `tools/probe-archetype-gate.mjs` para el camino bloqueado.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'fungiflush.profile',
+      JSON.stringify({ version: 7, archetypesUnlocked: true }),
+    );
+  });
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));

@@ -77,6 +77,20 @@ const ARCHETYPES: ArchetypeDef[] = JSON.parse(
   readFileSync(new URL('../src/data/archetypes.json', import.meta.url), 'utf8'),
 ) as ArchetypeDef[];
 
+/**
+ * Mazo CLASICO (sin arquetipo): el del tutorial y el del jugador que no elige.
+ * `starter` vacio => `buildStarterDeck` cae al mazo base (tag `starter`). Sirve
+ * para medir el mazo por defecto, que hasta ahora NO se medía y es justo el que
+ * usa el tutorial con semilla fija.
+ */
+const CLASSIC: ArchetypeDef = {
+  id: 'classic',
+  element: 'neutral',
+  accentElement: 'neutral',
+  starter: [],
+  bias: [],
+};
+
 // ---------------------------------------------------------------------------
 // Analisis de una mano
 // ---------------------------------------------------------------------------
@@ -98,22 +112,44 @@ interface HandShape {
   maxElem: number;
   maxFam: number;
   hasMult: boolean;
+  /**
+   * La familia dominante (>=3 cartas) abarca >=2 elementos distintos. Es la
+   * metrica que mide si "CRUZAR EJES" es posible: con el mazo clasico 1:1
+   * elemento<->familia siempre da `false` (misma carta = mismo par), asi que la
+   * penalizacion de solapamiento es un impuesto plano y no una decision.
+   */
+  famSpansElements: boolean;
 }
 
 function analyzeHand(hand: readonly CardInstance[]): HandShape {
   const elems = new Map<string, number>();
   const fams = new Map<string, number>();
+  // Elementos distintos por familia, para medir si una familia CRUZA elementos.
+  const famElems = new Map<string, Set<string>>();
   let hasMult = false;
   for (const c of hand) {
     if (c.def.element !== 'neutral') {
       elems.set(c.def.element, (elems.get(c.def.element) ?? 0) + 1);
     }
     fams.set(c.def.family, (fams.get(c.def.family) ?? 0) + 1);
+    let set = famElems.get(c.def.family);
+    if (!set) {
+      set = new Set<string>();
+      famElems.set(c.def.family, set);
+    }
+    if (c.def.element !== 'neutral') set.add(c.def.element);
     if (multipliesSpores(c)) hasMult = true;
   }
   const maxElem = Math.max(0, ...elems.values());
   const maxFam = Math.max(0, ...fams.values());
-  return { maxElem, maxFam, hasMult };
+  let famSpansElements = false;
+  for (const [fam, count] of fams) {
+    if (count >= 3 && (famElems.get(fam)?.size ?? 0) >= 2) {
+      famSpansElements = true;
+      break;
+    }
+  }
+  return { maxElem, maxFam, hasMult, famSpansElements };
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +164,8 @@ interface ArchResult {
   fam3: number;
   triple: number;
   noCombo: number;
+  /** Manos cuya familia dominante (>=3) abarca >=2 elementos: cruzar es posible. */
+  famCross: number;
   scores: number[];
   deckElements: Record<string, number>;
   deckFamilies: Record<string, number>;
@@ -142,13 +180,18 @@ function measure(arch: ArchetypeDef): ArchResult {
     fam3: 0,
     triple: 0,
     noCombo: 0,
+    famCross: 0,
     scores: [],
     deckElements: {},
     deckFamilies: {},
   };
 
   // El mazo real del arquetipo (una sola vez: es deterministico por contenido).
-  const deck = cardRegistry.buildStarterDeck(new RNG(1), arch.starter);
+  // `starter` vacio = mazo CLASICO (el del tutorial y del jugador que no elige):
+  // `buildStarterDeck` cae al mazo base (tag `starter`) y el motor recibe
+  // `undefined` para no marcar una carga de arquetipo que no existe.
+  const starter = arch.starter.length > 0 ? arch.starter : undefined;
+  const deck = cardRegistry.buildStarterDeck(new RNG(1), starter);
   res.deckSize = deck.length;
   for (const c of deck) {
     res.deckElements[c.def.element] = (res.deckElements[c.def.element] ?? 0) + 1;
@@ -160,7 +203,7 @@ function measure(arch: ArchetypeDef): ArchResult {
     // sola run. (xorshift-ish para no repetir semilla cercana.)
     const seed = ((i + 1) * 2654435761) % 2147483647 || 1;
     const engine = new GameEngine({ seed, bundle });
-    engine.setArchetypeLoadout(arch.starter, arch.bias);
+    engine.setArchetypeLoadout(starter, arch.bias);
     engine.startRun(seed, 0, arch.id);
     engine.chooseBlind();
 
@@ -173,6 +216,7 @@ function measure(arch: ArchetypeDef): ArchResult {
     if (shape.maxFam >= 3) res.fam3++;
     if (shape.maxElem >= 3 && shape.maxFam >= 3 && shape.hasMult) res.triple++;
     if (shape.maxElem < 3 && shape.maxFam < 3) res.noCombo++;
+    if (shape.famSpansElements) res.famCross++;
 
     if (i % Math.max(1, Math.floor(HANDS / 200)) === 0) {
       const score = bestPlayScore(engine);
@@ -237,6 +281,7 @@ function report(results: ArchResult[]): void {
     );
     console.log(`  3+ elemento  (Floracion auto): ${pct(r.elem3, r.hands)}`);
     console.log(`  3+ familia   (Colonia auto)  : ${pct(r.fam3, r.hands)}`);
+    console.log(`  familia cruza >=2 elementos  : ${pct(r.famCross, r.hands)}`);
     console.log(`  TRIPLE BONUS automatico      : ${pct(r.triple, r.hands)}`);
     console.log(`  sin combo posible            : ${pct(r.noCombo, r.hands)}`);
     if (sorted.length > 0) {
@@ -256,7 +301,8 @@ function report(results: ArchResult[]): void {
 // ---------------------------------------------------------------------------
 
 function main(): void {
-  const targets = ONLY ? ARCHETYPES.filter((a) => a.id === ONLY) : ARCHETYPES;
+  const all = [...ARCHETYPES, CLASSIC];
+  const targets = ONLY ? all.filter((a) => a.id === ONLY) : all;
   if (targets.length === 0) {
     console.error(`Arquetipo desconocido: ${ONLY}`);
     process.exit(1);
@@ -272,7 +318,10 @@ function main(): void {
   console.log(
     `\nConsistencia de aperturas — mano de ${HAND_SIZE} (juega hasta ${PLAY_SIZE}), ` +
       `${HANDS} manos por arquetipo.\n` +
-      `Objetivos: 3+ elemento 50-70%, 3+ familia 35-55%, triple <20%, sin combo <20%.`,
+      `Objetivos: 3+ elemento 50-70%, 3+ familia 35-55%, triple <20%, sin combo <20%.\n` +
+      `"familia cruza >=2 elementos" mide si CRUZAR EJES es posible: el mazo clasico\n` +
+      `1:1 elemento<->familia da 0% (misma carta = mismo par) y la penalizacion de\n` +
+      `solapamiento se vuelve un impuesto plano en vez de una decision.`,
   );
   report(results);
 }

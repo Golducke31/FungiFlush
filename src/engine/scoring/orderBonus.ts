@@ -33,14 +33,14 @@ export interface OrderBonus {
 const MIN_CARDS = 3;
 /**
  * Sustrato plano de la Escalera. Es FIJO y no escala con la cantidad de cartas
- * a proposito: el `nameKey` es una clave i18n estatica ("Escalera (+12
+ * a proposito: el `nameKey` es una clave i18n estatica ("Escalera (+18
  * Sustrato)"), asi que un valor que dependiera del tamano de la mano no podria
  * traducirse. Si alguna vez se quiere escalar, hay que pasar por claves por
  * tamano como hace `combos.ts` (combo.family.3 / .4 / .5).
  */
-const LADDER_FLAT = 12;
+const LADDER_FLAT = 18;
 /** Multiplicador de Esporas de la Corona. */
-const CROWN_MULTIPLIER = 1.2;
+const CROWN_MULTIPLIER = 1.25;
 
 function substrateOf(card: CardInstance): number {
   return card.def.baseSubstrate + card.bonusSubstrate;

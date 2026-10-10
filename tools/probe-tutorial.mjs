@@ -20,6 +20,9 @@
  *      (40 cartas) y sin arquetipo, igual que una run normal.
  *   9. Terminar el ciego lleva a la RECOMPENSA, donde el guion sigue.
  *  10. No hay errores de consola durante toda la secuencia.
+ *  11. El CAPITULO AVANZADO arranca con un MAZO DE ARQUETIPO (Podredumbre, 24
+ *      cartas) y su propio contador (5 pasos): las cartas que el clasico no
+ *      tiene (podredumbre, re-disparo, simbiontes) se demuestran en vivo.
  *
  *   node tools/probe-tutorial.mjs
  *   FF_VIEWPORT=smoke node tools/probe-tutorial.mjs
@@ -65,6 +68,14 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2 });
 const page = await context.newPage();
+// El probe recorre el SELECTOR de arquetipo (donde vive el boton del tutorial),
+// asi que siembra la puerta abierta: se desbloquea al superar el primer Ciego.
+await page.addInitScript(() => {
+  localStorage.setItem(
+    'fungiflush.profile',
+    JSON.stringify({ version: 7, archetypesUnlocked: true }),
+  );
+});
 const errors = [];
 page.on('console', (m) => {
   if (m.type() === 'error') errors.push(m.text());
@@ -124,7 +135,7 @@ const tutState = () =>
     };
   });
 
-/** Parsea el contador. El i18n lo pinta como "Paso 3 de 12". */
+/** Parsea el contador. El i18n lo pinta como "Paso 3 de 18". */
 const stepNumber = (s) => {
   const m = /(\d+)\s*(?:\/|de)\s*(\d+)/.exec(s.stepOf ?? '');
   return m ? { n: Number(m[1]), total: Number(m[2]) } : { n: -1, total: -1 };
@@ -172,7 +183,7 @@ const runInfo = await page.evaluate(() => {
   const r = eng.run;
   return {
     tutorial: r.tutorial,
-    archetype: r.archetypeId ?? '',
+    archetype: r.archetype ?? '',
     status: r.status,
     deckSize: r.deck ? r.deck.allCards.length : -1,
     ante: r.ante,
@@ -191,7 +202,7 @@ check(first.hasCard, 'la capa tiene tarjeta de paso');
 check(first.title.length > 0, 'el paso tiene TITULO', first.title);
 check(first.body.length > 20, 'el paso tiene CUERPO explicativo', first.body.slice(0, 60));
 const p1 = stepNumber(first);
-check(p1.n === 1 && p1.total === 12, 'el contador arranca en 1 de 12', first.stepOf);
+check(p1.n === 1 && p1.total === 18, 'el contador arranca en 1 de 18', first.stepOf);
 check(first.next, 'el paso ofrece "Siguiente"');
 check(first.skipAll, 'el tutorial se puede saltar entero');
 await page.screenshot({ path: join(shotsDir, 'probe-tutorial-step1.png') });
@@ -345,6 +356,34 @@ const stillPlayable = await page.evaluate(
   () => ['reward', 'shop', 'interlude', 'blind_select', 'playing'].includes(window.__fungiflush.engine.run.status),
 );
 check(stillPlayable, 'el juego sigue corriendo normalmente tras saltar el tutorial');
+
+// --- 11. Capitulo AVANZADO: mazo de arquetipo (Podredumbre) ---
+// Se arranca directo por la API DEV (sin tener que ganar un Ante entero con el
+// mazo clasico, que es debil): asi se verifica que el bloque avanzado usa OTRO
+// mazo (24 cartas, arquetipo decay) y su propio contador de 5 pasos.
+await page.evaluate(() => window.__fungiflush.startTutorialChapter('advanced'));
+await page.waitForFunction(() => window.__fungiflush?.engine?.run?.tutorial === true, {
+  timeout: 15000,
+});
+await wait(1400);
+const adv = await page.evaluate(() => {
+  const r = window.__fungiflush.engine.run;
+  return {
+    tutorial: r.tutorial,
+    archetype: r.archetype ?? '',
+    deckSize: r.deck ? r.deck.allCards.length : -1,
+    tutOpen: Boolean(document.querySelector('#ui-root .tut-layer')),
+    stepOf: document.querySelector('.tut-step-of')?.textContent ?? '',
+    title: document.querySelector('.tut-title')?.textContent ?? '',
+  };
+});
+check(adv.tutorial === true, 'el capitulo avanzado arranca como tutorial');
+check(adv.archetype === 'decay', 'el capitulo avanzado usa el mazo de Podredumbre', adv.archetype);
+check(adv.deckSize === 24, 'el mazo del capitulo avanzado tiene 24 cartas', String(adv.deckSize));
+check(adv.tutOpen, 'el capitulo avanzado muestra su primer paso', adv.title);
+const advStep = stepNumber({ stepOf: adv.stepOf });
+check(advStep.n === 1 && advStep.total === 5, 'el contador del avanzado arranca en 1 de 5', adv.stepOf);
+await page.screenshot({ path: join(shotsDir, 'probe-tutorial-chapter-b.png') });
 
 console.log('---');
 console.log(`viewport ${VIEWPORT.width}x${VIEWPORT.height} · fallos: ${failures}`);

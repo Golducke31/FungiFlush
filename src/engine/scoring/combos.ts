@@ -33,6 +33,13 @@ export interface ComboResult {
   flatSubstrate: number;
   /** Multiplicador de Spores. */
   sporeMultiplier: number;
+  /**
+   * Solo en combos de FAMILIA: la penalizacion de solapamiento se aplico (la
+   * familia entera pertenecia a un elemento que ya formo Floracion, asi que las
+   * MISMAS cartas hicieron doble trabajo). Lo consumen el desglose y el tutorial
+   * para explicar por que el Sustrato de la Colonia vino a la mitad.
+   */
+  overlapped?: boolean;
 }
 
 interface ElementComboTier {
@@ -49,9 +56,9 @@ const ELEMENT_TIERS: readonly ElementComboTier[] = [
 ];
 
 const FAMILY_TIERS: readonly { cards: number; flat: number; key: string }[] = [
-  { cards: 5, flat: 80, key: 'combo.family.5' },
-  { cards: 4, flat: 40, key: 'combo.family.4' },
-  { cards: 3, flat: 16, key: 'combo.family.3' },
+  { cards: 5, flat: 100, key: 'combo.family.5' },
+  { cards: 4, flat: 50, key: 'combo.family.4' },
+  { cards: 3, flat: 20, key: 'combo.family.3' },
 ];
 
 /** Bonus por jugar 5 elementos distintos en la misma mano. */
@@ -62,12 +69,17 @@ const DIVERSITY_BONUS = { flat: 25, key: 'combo.diversity' } as const;
  *
  * Una mano puede activar Floracion (elemento) y Colonia (familia) con LAS
  * MISMAS cartas fisicas — pasa siempre que el elemento y la familia vayan 1:1.
- * Si ambos ejes pegan a la vez, el sustrato plano de la familia se reduce a la
- * mitad: construir una mano que gane en los dos frentes sin cruzarlos sigue
- * siendo la jugada optima, pero deja de ser un doble premio gratis. El bonus de
- * diversidad NO se toca: ese si premia lo opuesto (no solapar).
+ * Si parte de la familia pega tambien en la Floracion, el Sustrato plano de la
+ * familia se reduce de forma PROPORCIONAL al solapamiento: una familia que
+ * reparte elementos cobra entero, una que los solapa paga.
+ *
+ * El factor es el piso (solapamiento TOTAL): `flat * OVERLAP_FAMILY_FACTOR`.
+ * Con los tiers de arriba (100/50/20) y 0.4, el solapamiento total deja el
+ * mismo valor que antes (100*0.4 = 80*0.5 = 40), asi que CRUZAR ejes paga +25%
+ * sin abaratar la jugada perezosa. El bonus de diversidad NO se toca: ese si
+ * premia lo opuesto (no solapar).
  */
-const OVERLAP_FAMILY_FACTOR = 0.5;
+const OVERLAP_FAMILY_FACTOR = 0.4;
 
 function groupBy<K extends string>(
   cards: readonly CardInstance[],
@@ -118,21 +130,26 @@ export function detectCombos(cards: readonly CardInstance[]): ComboResult[] {
   for (const [family, group] of byFamily) {
     const tier = FAMILY_TIERS.find((t) => group.length >= t.cards);
     if (!tier) continue;
-    // Solo penalizamos el solapamiento REAL: la familia entera pertenece a un
-    // elemento que ya formo Floracion (mismas cartas fisicas haciendo doble
-    // trabajo). Si las cartas de la familia estan repartidas en varios
-    // elementos, el jugador construyo dos ejes distintos y conserva el valor.
+    // Penalizacion ESCALADA por ratio: cuantas de las cartas que califican
+    // pertenecen a un elemento que YA formo Floracion (mismas cartas fisicas
+    // haciendo doble trabajo). Antes era todo-o-nada (`every`): o pagaba la
+    // mitad o nada. Con ratio, una familia que reparte elementos cobra
+    // proporcionalmente, asi "cruzar ejes" deja de ser binario.
     const qualifying = group.slice(0, tier.cards);
-    const overlapsElement =
-      hasElementCombo && qualifying.every((c) => comboElements.has(c.def.element));
+    const overlapping = hasElementCombo
+      ? qualifying.filter((c) => comboElements.has(c.def.element)).length
+      : 0;
+    const overlapRatio = qualifying.length > 0 ? overlapping / qualifying.length : 0;
+    const overlapsElement = overlapRatio > 0;
     results.push({
       id: `family:${family}:${tier.cards}`,
       nameKey: tier.key,
       cardUids: qualifying.map((c) => c.uid),
-      flatSubstrate: overlapsElement
-        ? Math.round(tier.flat * OVERLAP_FAMILY_FACTOR)
-        : tier.flat,
+      flatSubstrate: Math.round(
+        tier.flat * (1 - (1 - OVERLAP_FAMILY_FACTOR) * overlapRatio),
+      ),
       sporeMultiplier: 1,
+      overlapped: overlapsElement,
     });
   }
 

@@ -258,6 +258,20 @@ export interface ProfileSave {
     selected: string;
   };
   /**
+   * El jugador YA puede elegir arquetipo (aditivo).
+   *
+   * La PRIMERA run arranca siempre con el mazo CLASICO: la pantalla de
+   * arquetipos llega demasiado pronto para alguien que todavia aprende las
+   * reglas, y elegir "una forma de puntuar" sin conocer el sistema no es una
+   * decision, es ruido. Se desbloquea al superar el PRIMER Ciego (ver
+   * `round:win` en `main.ts`), que es cuando el jugador ya jugo una mano y
+   * entendio el circuito.
+   *
+   * Aditivo: un perfil viejo no lo tiene y la migracion lo deduce de
+   * `stats.runs` (quien ya jugo una partida conserva el acceso).
+   */
+  archetypesUnlocked: boolean;
+  /**
    * Historial de partidas (R5). Lo ultimo primero, capeado por `HISTORY_CAP`.
    *
    * `reason` distingue la victoria final (llegar al ante maximo) de una derrota
@@ -396,6 +410,7 @@ export function defaultProfile(): ProfileSave {
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
     ascension: { highestUnlocked: 0, selected: 0 },
     archetype: { selected: '' },
+    archetypesUnlocked: false,
     history: [],
     seenTutorial: false,
     ui: { missionsOpen: false, helpOpen: false },

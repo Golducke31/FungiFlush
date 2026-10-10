@@ -56,16 +56,22 @@ export const COSMETIC_SECTION_KEY: Record<CosmeticKind, string> = {
  * La convencion de archivo es la misma que el resto del arte:
  * `public/art/art_<clave>_<id>.webp`. Si el archivo no existe, la UI lo oculta
  * (el `onerror` del `<img>`), asi que un cosmetico sin arte NO rompe el panel.
+ *
+ * ⚠️ La ruta es RELATIVA (`art/...`, sin barra inicial) a proposito, igual que
+ * `ArtAssets.BASE`: el build usa `base: './'` (Tauri sirve el bundle desde una
+ * ruta local y la web puede montarse en un subdirectorio). Una ruta ABSOLUTA
+ * (`/art/...`) solo resuelve si el juego vive en la RAIZ del host; montado en un
+ * subpath da 404 y la Tarjeta de Jugador se quedaba sin avatar/marco (bug).
  */
 export function cosmeticArtUrl(kind: CosmeticKind, id: string): string | null {
   if (id === 'default') return null;
   switch (kind) {
     case 'avatar':
-      return `/art/art_avatar_${id}.webp`;
+      return `art/art_avatar_${id}.webp`;
     case 'frame':
-      return `/art/art_frame_${id}.webp`;
+      return `art/art_frame_${id}.webp`;
     case 'background':
-      return `/art/art_bgcard_${id}.webp`;
+      return `art/art_bgcard_${id}.webp`;
     default:
       return null;
   }

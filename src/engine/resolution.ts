@@ -12,6 +12,7 @@
 
 import { MAX_TRIGGERS_PER_RESOLUTION } from './constants';
 import type { ComboResult } from './scoring/combos';
+import type { OrderBonus } from './scoring/orderBonus';
 import type { CardInstance, ScoreStep, StatusEvent, StatusType } from './types';
 
 export interface ResolutionInit {
@@ -48,6 +49,12 @@ export class ResolutionContext {
   readonly steps: ScoreStep[] = [];
   /** Combos de mano detectados (elemento / familia / diversidad). */
   readonly combos: ComboResult[] = [];
+  /**
+   * Bonus de ORDEN detectados (escalera / corona). Espejo de `combos`: el
+   * desglose los expone para que el tutorial pueda celebrar "acomodaste bien la
+   * mano" sin que el motor conozca el tutorial.
+   */
+  readonly orders: OrderBonus[] = [];
 
   // --- Estado externo proyectado (para condiciones) ---
   money: number;
