@@ -80,3 +80,47 @@ export function buildPlayerCard(state: PlayerCardState): HTMLElement {
   card.appendChild(inner);
   return card;
 }
+
+/**
+ * MINI Tarjeta de Jugador para el MENU: la misma identidad (avatar + marco +
+ * titulo) pero COMPACTA, para vivir en la esquina superior como un boton mas.
+ *
+ * Diferencia clave con `buildPlayerCard`: aca el nombre NO va (ya se ve el
+ * titulo y el nivel), y el fondo decorativo se omite para no recargar un chip de
+ * ~40px. Si no hay avatar, el slot queda con un placeholder (una seta muda) para
+ * que el boton SIEMPRE tenga cara, incluso en un perfil recien creado.
+ *
+ * El elemento devuelto NO es un `<button>`: el llamador lo envuelve (o le pone
+ * el handler), asi esta funcion se queda en "dibujar la tarjeta".
+ */
+export function buildMiniPlayerCard(state: PlayerCardState): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'player-card player-card--mini';
+
+  const avatarWrap = document.createElement('div');
+  avatarWrap.className = 'player-card-avatar';
+  const avatar = image('player-card-avatar-img', state.avatarUrl);
+  if (avatar) avatarWrap.appendChild(avatar);
+  // Placeholder: sin avatar, una seta para que el chip no quede vacio.
+  else avatarWrap.classList.add('is-placeholder');
+  const frame = image('player-card-frame', state.frameUrl);
+  if (frame) avatarWrap.appendChild(frame);
+
+  const meta = document.createElement('div');
+  meta.className = 'player-card-meta';
+  const title = document.createElement('span');
+  title.className = 'player-card-title';
+  if (state.titleKey) {
+    title.textContent = t(state.titleKey);
+  } else {
+    title.classList.add('is-empty');
+    title.textContent = t('cosmetics.name.title.default');
+  }
+  const level = document.createElement('span');
+  level.className = 'player-card-level';
+  level.textContent = t('colony.levelLabel', { level: state.level });
+  meta.append(title, level);
+
+  card.append(avatarWrap, meta);
+  return card;
+}

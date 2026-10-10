@@ -2175,6 +2175,9 @@ async function boot(): Promise<void> {
       streak: p.daily.streak,
       achievements: { unlocked: views.filter((v) => v.unlocked).length, total: views.length },
       dailyPending: !daily.alreadyClaimedToday,
+      // Mini Tarjeta de Jugador del menu: la misma identidad que el panel de
+      // Cosmeticos, resuelta una sola vez.
+      player: buildCosmeticsState().player,
       recommendation,
     });
   };

@@ -28,6 +28,8 @@
  */
 
 import { t } from '@i18n/index';
+import type { PlayerCardState } from './PlayerCard';
+import { buildMiniPlayerCard } from './PlayerCard';
 import type { ColonyRewardKind } from '../meta/ColonyRewards';
 import {
   DECK_MAX,
@@ -113,6 +115,12 @@ export interface MenuState {
    * existe: el icono de Perfil se dibuja igual, sin insignia.
    */
   colonyLevel?: number;
+  /**
+   * Identidad para la MINI Tarjeta de Jugador del acceso de Perfil (esquina
+   * superior izquierda). Si falta, se cae al icono de seta de siempre: la
+   * tarjeta es una mejora, no un requisito.
+   */
+  player?: PlayerCardState;
 }
 
 /**
@@ -339,12 +347,30 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
   const top = document.createElement('div');
   top.className = 'menu-top';
 
-  const profileBtn = gelIconButton('profile', t('menu.profile'), callbacks.onOpenProfile, {
-    profile: true,
-  });
+  // Acceso de PERFIL: la MINI Tarjeta de Jugador (avatar + marco + titulo + nivel)
+  // en la misma caja "gel" celeste que los demas iconos. Es mas visible que la
+  // seta y muestra de un vistazo quien sos. Si el estado del jugador todavia no
+  // llego, se cae al icono de seta: la tarjeta es una mejora, no un requisito.
+  const profileBtn = document.createElement('button');
+  profileBtn.type = 'button';
+  // `menu-gel--card` SOLO cuando hay tarjeta: esa clase ensancha el boton a una
+  // pildora (avatar + texto). El icono de seta del respaldo tiene que seguir
+  // siendo cuadrado, asi que sin `state.player` se omite.
+  profileBtn.className = state.player
+    ? 'menu-gel menu-gel--icon menu-gel--profile menu-gel--card'
+    : 'menu-gel menu-gel--icon menu-gel--profile';
+  profileBtn.dataset['act'] = 'profile';
+  profileBtn.setAttribute('aria-label', t('menu.profile'));
+  profileBtn.title = t('menu.profile');
+  if (state.player) {
+    profileBtn.appendChild(buildMiniPlayerCard(state.player));
+  } else {
+    profileBtn.innerHTML = MENU_ICONS.profile;
+  }
+  profileBtn.addEventListener('click', callbacks.onOpenProfile);
   // Nivel de la Colonia Fungi: si todavia no existe (0), el icono se dibuja
   // igual, sin insignia.
-  if ((state.colonyLevel ?? 0) > 0) {
+  if ((state.colonyLevel ?? 0) > 0 && !state.player) {
     const badge = document.createElement('span');
     badge.className = 'menu-icon-badge';
     const prefix = document.createElement('span');

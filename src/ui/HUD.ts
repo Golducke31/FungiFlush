@@ -50,6 +50,7 @@ import {
   type LeaderboardPanelState,
 } from './MenuScreen';
 import { buildCosmeticsPanel, type CosmeticKind, type CosmeticsState } from './CosmeticsScreen';
+import type { PlayerCardState } from './PlayerCard';
 import { COSMETIC_KINDS } from '../meta/Cosmetics';
 import { buildHistoryPanel, type HistoryEntryView } from './HistoryScreen';
 import { buildSettingsPanel } from './SettingsScreen';
@@ -104,6 +105,8 @@ export interface MenuMetaState {
   achievements: { unlocked: number; total: number };
   /** Hay recompensa diaria sin reclamar. */
   dailyPending: boolean;
+  /** Identidad para la MINI Tarjeta de Jugador del menu (avatar/marco/titulo/nivel). */
+  player?: PlayerCardState;
   /** Clave i18n de la recomendacion, o null si no hay ninguna. */
   recommendation: { key: string; params?: Record<string, string | number> } | null;
 }
@@ -2642,6 +2645,7 @@ export class HUD {
         selectedArchetype: this.archetypeState.selected,
         colonyLevel: this.menuMeta.colonyLevel,
         dailyPending: this.menuMeta.dailyPending,
+        player: this.menuMeta.player ?? this.cosmeticsState.player,
       },
       {
         onStartRun: () => this.callbacks.onStartRun(),

@@ -14,6 +14,7 @@
 
 import { SAVE_VERSION, type RunSaveData } from '@engine/index';
 import { COLONY_LEVELS, levelForSpores } from '../meta/Colony';
+import { COLONY_REWARDS } from '../meta/ColonyRewards';
 import { MAX_DECK_PRESETS, defaultDeckState } from '../meta/DeckPresets';
 import { defaultPackInventory } from '../meta/Packs';
 import { emptySnapshot } from '../meta/Leaderboard';
@@ -436,6 +437,20 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
   // lo tiene y cae a `[]` por el spread, pero un valor no-array (edicion a mano)
   // se corrige aca para que `claimableRewards` no explote con `.filter`.
   if (!Array.isArray(colony.claimedRewards)) colony.claimedRewards = [];
+  // RECONCILIACION (fix): `claimedRewards` marca lo que el jugador YA reclamo,
+  // pero reclamar es lo que mete el `cosmeticId` en `cosmetics.owned`. Un perfil
+  // que reclamo ANTES de este fix (cuando el boton no actualizaba `owned`, o el
+  // boton ni aparecia por el bug de `unlockedRewards`) tenia las recompensas como
+  // reclamadas SIN la propiedad: `claimableRewards` las filtra y el jugador nunca
+  // las obtiene — quedaban perdidas para siempre aunque las equipara. Se
+  // backfillea `cosmetics.owned` con el `cosmeticId` de todo lo reclamado que
+  // falte. Idempotente: re-migrar no duplica.
+  const claimedSet = new Set(colony.claimedRewards);
+  for (const def of Object.values(COLONY_REWARDS)) {
+    if (!def.cosmeticId) continue;
+    if (!claimedSet.has(def.id)) continue;
+    if (!cosmetics.owned.includes(def.cosmeticId)) cosmetics.owned.push(def.cosmeticId);
+  }
 
   // Sobres (v5): OBJETO anidado ADITIVO. Un perfil v4 no lo tiene y cae al
   // default (cero sobres). Si llegara con la forma equivocada (numero suelto,

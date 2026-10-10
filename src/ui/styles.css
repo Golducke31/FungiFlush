@@ -3994,6 +3994,115 @@ body {
   }
 }
 
+/* --- Acceso de Perfil: MINI Tarjeta de Jugador ---------------------------
+   La caja celeste de siempre (`.menu-gel--icon`) pero ANCHA: en vez de un icono
+   cuadrado, lleva avatar + marco + titulo + nivel. Sigue siendo un boton, asi
+   que conserva el gel y el foco.
+   ⚠️ El selector va DOBLE (`.menu-gel--icon.menu-gel--card`, especificidad
+   0,2,0) a proposito: `.menu-gel--icon` se redefine en TRES media queries mas
+   abajo (tactil / tablet / escritorio alto) y con la misma especificidad (0,1,0)
+   esas reglas GANAN por venir despues. Con el doble selector esta base manda
+   siempre y las media queries solo afectan a los iconos cuadrados.
+   ⚠️ Sizing en px, NO en em: `.menu-gel--icon` tiene `font-size: clamp(18px,
+   3.2vw, 28px)` (+ los remates de las media queries), asi que `em` heredaria eso
+   y el chip saldria enorme. */
+.menu-gel--icon.menu-gel--card {
+  width: auto;
+  height: auto;
+  min-height: 46px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  /* Sin el `place-items:center` de `.menu-gel--icon`: aca el contenido va en
+     fila (avatar | texto), asi que el centrado lo da el flex. */
+  place-items: initial;
+}
+/* El avatar de la mini tarjeta: circulo con el marco encima. */
+.menu-gel--card .player-card-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2b6a72, #0c323a 78%);
+  box-shadow: inset 0 0 0 2px rgba(210, 255, 248, 0.35);
+}
+.menu-gel--card .player-card-avatar.is-placeholder::after {
+  /* Seta muda de relleno cuando no hay avatar: el chip nunca queda vacio. */
+  content: '';
+  position: absolute;
+  inset: 24% 26% 18% 26%;
+  border-radius: 50% 50% 42% 42%;
+  background: #d9fff8;
+  opacity: 0.85;
+}
+.menu-gel--card .player-card-avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.menu-gel--card .player-card-frame {
+  position: absolute;
+  inset: -13%;
+  width: 126%;
+  height: 126%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.menu-gel--card .player-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 116px;
+  line-height: 1.05;
+}
+.menu-gel--card .player-card-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #effffb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-shadow: 0 1px 1px rgba(4, 32, 43, 0.7);
+}
+.menu-gel--card .player-card-title.is-empty {
+  opacity: 0.7;
+}
+.menu-gel--card .player-card-level {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #cdeee9;
+  opacity: 0.9;
+  white-space: nowrap;
+}
+/* ⚠️ La mini tarjeta NO reusa la caja grande (`.player-card`, linea ~7423):
+   esa base trae `min-height: 96px` + borde dorado + fondo oscuro y, como vive
+   MAS ABAJO en el archivo, gana por orden de fuente. Aca se apaga todo eso
+   (el chip celeste ya es la caja) y se deja solo el contenido en fila. */
+.menu-gel--card .player-card.player-card--mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
 /* Barras de la hamburguesa (dentro de `.menu-gel--icon`). */
 .menu-gel .gel-bars {
   position: relative;

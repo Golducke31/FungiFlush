@@ -163,3 +163,58 @@ test('R10: un claimedRewards no-array se corrige a []', () => {
   });
   assert.deepEqual(migrated.colony.claimedRewards, []);
 });
+
+test('R11: lo RECLAMADO sin propiedad se backfillea a cosmetics.owned (bug de recompensas perdidas)', () => {
+  // Escenario del usuario: reclamo las recompensas cuando el flujo todavia no
+  // metia el cosmetico en `owned` (o el boton ni aparecia). Resultado: los ids
+  // quedaban en `claimedRewards` => `claimableRewards` los filtra => el jugador
+  // nunca los obtiene, ni siquiera equipandolos.
+  const raw = {
+    version: PROFILE_SAVE_VERSION,
+    colony: {
+      lifetimeSpores: 1300, // nivel 9
+      level: 9,
+      claimedRewards: [
+        'frame_common',
+        'bg_new',
+        'title_mycelium',
+        'victory_fx',
+        'avatar',
+        'frame_uncommon',
+      ],
+      unlockedRewards: [],
+    },
+    cosmetics: { owned: ['default'], equippedAvatar: 'avatar', equippedFrame: 'frame_uncommon' },
+  };
+  const migrated = migrateProfileSave(raw);
+
+  // Los cosmeticos reclamados entran a `owned` aunque `claimedRewards` los marque.
+  for (const id of ['frame_common', 'bg_new', 'title_mycelium', 'victory_fx', 'avatar', 'frame_uncommon']) {
+    assert.ok(migrated.cosmetics.owned.includes(id), `falta ${id} en cosmetics.owned`);
+  }
+  // Lo equipado se conserva.
+  assert.equal(migrated.cosmetics.equippedAvatar, 'avatar');
+  assert.equal(migrated.cosmetics.equippedFrame, 'frame_uncommon');
+  // Los SOBRES no fueron parte del lote reclamado: siguen pendientes y NO se
+  // duplican al reclamarlos ahora (idempotencia del resto del flujo).
+  const re = claimColonyRewards(migrated);
+  assert.deepEqual(re.claimed, ['pack_spores', 'pack_colony'], 'solo faltaban los sobres');
+  assert.equal(migrated.packs.pending, 1, 'un sobre base, sin duplicar');
+  assert.equal(migrated.packs.expansionPending, 1, 'un sobre de expansion, sin duplicar');
+  // Tras reclamar los sobres, ya no queda nada pendiente.
+  assert.deepEqual(claimableRewards(migrated.colony), []);
+});
+
+test('R12: la reconciliacion NO regala lo que no fue reclamado (respeta el ENTREGA = RECLAMAR)', () => {
+  // Nivel 9 pero sin reclamar nada: los cosmeticos NO deben aparecer en `owned`
+  // solo por el nivel. Siguen siendo reclamables.
+  const raw = {
+    version: PROFILE_SAVE_VERSION,
+    colony: { lifetimeSpores: 1300, level: 9, claimedRewards: [], unlockedRewards: [] },
+    cosmetics: { owned: ['default'] },
+  };
+  const migrated = migrateProfileSave(raw);
+  assert.ok(!migrated.cosmetics.owned.includes('avatar'), 'no reclamado no se regala');
+  assert.ok(!migrated.cosmetics.owned.includes('frame_uncommon'), 'no reclamado no se regala');
+  assert.ok(claimableRewards(migrated.colony).length >= 6, 'siguen pendientes de reclamar');
+});
