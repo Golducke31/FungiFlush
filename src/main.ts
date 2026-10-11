@@ -1363,6 +1363,13 @@ async function boot(): Promise<void> {
     scene.setCardBack(c.equippedCardBack);
     scene.setFelt(c.equippedFelt);
     scene.setVictoryFx(c.equippedVictoryFx);
+    // La MINI Tarjeta de Jugador del menu se arma desde `menuMeta.player`, que
+    // NO lo refresca `setCosmeticsState`. Sin esto, equipar un avatar/marco en
+    // Personalizar no se veia en el chip hasta reiniciar: el jugador equipaba y
+    // el menu seguia mostrando el placeholder ("el avatar no aparece").
+    // `syncMenuMeta` se define mas abajo, pero es una `const` ya inicializada
+    // para cuando este callback corre (siempre despues del boot).
+    syncMenuMeta();
   };
 
   // --- Colonia: reclamar recompensas desbloqueadas ---
@@ -2879,6 +2886,12 @@ async function boot(): Promise<void> {
           });
           syncArchetypes();
         },
+        // Cosméticos: re-empuja el estado (owned/equipped + Tarjeta de Jugador)
+        // al HUD. Lo necesitan los probes para simular un perfil con cosméticos
+        // desbloqueados (p. ej. el avatar de nivel 8) sin jugar los niveles, y
+        // para verificar que lo EQUIPADO siempre aparece aunque el perfil llegue
+        // raro (invariante: equipado ⇒ poseído).
+        syncCosmetics: () => syncCosmetics(),
       },
     });
   }
