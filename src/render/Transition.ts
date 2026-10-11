@@ -129,7 +129,17 @@ const FRAG = /* glsl */ `
 
     vec3 col = mix(oldC, newC, mask);
     col += edgeColor * glow * 0.9 * punch;
-    gl_FragColor = vec4(col, 1.0);
+    // Mezclar el alpha de los dos frames para que las zonas sin geometria
+    // sigan siendo transparentes durante el barrido. Antes el pase forzaba
+    // alpha=1.0 (vec4(col, 1.0)): el canvas se volvia opaco, #arena-bg se
+    // escondia y las areas vacias salian en NEGRO ("al jugar una mano y
+    // activarse el effect composer el arena desaparece y se vuelve la pantalla
+    // negra"). oldA y newA se muestrean al MISMO iuv que la crominancia:
+    // asi el alpha se pixela/zoomea igual que el color y el barrido queda
+    // consistente.
+    float oldA = texture2D(tOld, iuv).a;
+    float newA = texture2D(tNew, iuv).a;
+    gl_FragColor = vec4(col, mix(oldA, newA, mask));
   }
 `;
 
