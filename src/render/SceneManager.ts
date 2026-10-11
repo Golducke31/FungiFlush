@@ -30,15 +30,6 @@ import {
 import { ArtAssets, CARD_BACK_KEY, artKeysFor, artKeysForJoker, blindKeysFor, type ArtKey } from './ArtAssets';
 import { victoryFxPreset, type VictoryFxPreset } from './VictoryFx';
 import { isCoarsePointer, isTouchOnly } from '../pointer';
-import {
-  ARENA_GLOW_BASE,
-  ARENA_GLOW_ENVIRONMENT,
-  PLATFORM_HALF_X,
-  PLATFORM_HALF_Z,
-  WATER_Y,
-  type Arena,
-  buildArena,
-} from './Arena';
 import { CARD_HALO_WIDTH, CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
 import { CameraRig } from './CameraRig';
@@ -58,10 +49,8 @@ import {
   type TierDetection,
   type TierReason,
 } from './Quality';
-import { createSkyMaterial } from './Shaders';
 import { TweenManager } from './Tween';
 import { CardCarousel, type CarouselEntryView } from './CardCarousel';
-import { Water, hitHorizontalPlane } from './Water';
 import { Die3D, type DieImpulse } from './Die3D';
 import * as anim from './anim';
 import { ABILITY_COLOR, ELEMENT_COLOR, STATUS_COLOR, UI_COLORS } from './palette';
@@ -477,11 +466,8 @@ export class SceneManager {
    */
   private bgPulse = 0;
   private bgPulseActive = false;
-  /** Color de fondo base (no se toca; el pulso lo mezcla y lo restaura). */
-  private readonly baseBg = new THREE.Color();
-  /** Tinte calido al que tiende el fondo durante el pulso (ember, sutil). */
-  private readonly pulseColor = new THREE.Color(0x3a0d08);
-  private readonly bgTmp = new THREE.Color();
+  /** Callback opcional para el pulso de cierre: la HUD puede realzar el fondo. */
+  onBgPulse?: (intensity: number) => void;
 
   /** Zonas de destino del arrastre, en orden de prioridad. */
   private readonly dropZones: DropZone[] = [];
@@ -589,12 +575,6 @@ export class SceneManager {
   private carouselActive = false;
   private carouselDrag: { id: number; x: number; moved: number } | null = null;
 
-  // --- Agua reactiva (F2). Solo en tiers con `environment`. ---
-  private water: Water | null = null;
-  private readonly waterRay = new THREE.Raycaster();
-  private readonly waterNdc = new THREE.Vector2();
-  private lastWaterRipple = -1;
-
   /** Dado multiplicador de la ronda (F-dado). Se crea al elegir el ciego. */
   private die3d: Die3D | null = null;
   /**
@@ -644,10 +624,6 @@ export class SceneManager {
   private keyLight: THREE.DirectionalLight | null = null;
   /** Cubo PMREM procedural. Se genera una sola vez, la primera vez que hace falta. */
   private envTexture: THREE.Texture | null = null;
-  /** La Arena: suelo de tiles 3D + vegetacion. Dos draw calls, ver `Arena.ts`. */
-  private arena: Arena | null = null;
-  /** Esfera de cielo con degradado. Propia de los tiers con `environment`. */
-  private skyMesh: THREE.Mesh | null = null;
   /** Rim light tenue. Una sola y solo con `environment`. */
   private rimLight: THREE.PointLight | null = null;
 
@@ -667,13 +643,19 @@ export class SceneManager {
       canvas: options.canvas,
       // MSAA es caro en GPU de celular y con estas texturas no se nota.
       antialias: !this.isMobile,
-      alpha: false,
+      // Canvas transparente: deja ver el fondo de arena (#arena-bg, DOM) que
+      // vive detras. `premultipliedAlpha: false` para que el navegador componga
+      // el alpha recto del framebuffer contra la pagina sin halos oscuros.
+      alpha: true,
+      premultipliedAlpha: false,
       powerPreference: 'high-performance',
       stencil: false,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
+    // Fondo transparente: el DOM (#arena-bg) aporta el backdrop fullscreen.
+    this.renderer.setClearAlpha(0);
     // Los contadores de `renderer.info` se leen a mano UNA vez por frame: cuando
     // entre el composer, cada pase hace su propio `renderer.render()` y con el
     // autoReset puesto el conteo final seria el del ultimo pase (1).
@@ -796,41 +778,13 @@ export class SceneManager {
     // Menos de 1: el IBL suma, no reemplaza. Con intensidad plena el tapete
     // se lava y las caras pierden contraste.
     this.scene.environmentIntensity = on ? 0.55 : 0;
-    // Los hongos de la Arena brillan mas cuando entra el IBL: con la escena mas
-    // levantada, el glow de siempre ya no alcanza para despegarlos del fondo.
-    this.arena?.setGlow(on ? ARENA_GLOW_ENVIRONMENT : ARENA_GLOW_BASE);
-
-    if (this.skyMesh) this.skyMesh.visible = on;
     if (this.rimLight) this.rimLight.visible = on;
-
-    // Agua reactiva: se crea PEREZOSAMENTE la primera vez que el tier la
-    // habilita (igual que el IBL) y despues solo se prende/apaga. En `low` no
-    // existe: ese tier no tiene margen de presupuesto.
-    if (on && !this.water) {
-      this.water = new Water(this.tier === 'high' ? 'high' : 'medium');
-      // La superficie va por debajo de la cara superior de la plataforma, asi se
-      // ve el costado del bloque emergiendo (el "cubo" de la referencia).
-      this.water.mesh.position.set(0, WATER_Y, 0);
-      this.water.setDryHalf(PLATFORM_HALF_X + 0.2, PLATFORM_HALF_Z + 0.2);
-      this.scene.add(this.water.mesh);
-      this.attachWaterInput();
-    }
-    this.water?.setEnabled(on);
 
     // Con IBL las dos luces base BAJAN: el ambiente ya aporta luz difusa, y
     // dejarlas como estan suma de mas y aplana las caras. Los valores de `off`
     // son exactamente los de siempre, asi que `low` no cambia.
     if (this.hemiLight) this.hemiLight.intensity = on ? 0.72 : 1.05;
     if (this.keyLight) this.keyLight.intensity = on ? 1.45 : 1.7;
-
-    // Niebla: en los tiers con atmosfera se usa la exponencial, que crece sin
-    // llegar a saturar y se lee como una bruma detras de la mesa. Three.js
-    // acepta UNA sola `scene.fog`, asi que la "segunda capa" del plan se
-    // expresa cambiando la curva, no apilandola: `FogExp2` a densidad 0.014
-    // deja la mesa legible (12% a 30u) y funde el horizonte (40% a 60u).
-    this.scene.fog = on
-      ? new THREE.FogExp2(UI_COLORS.background, 0.014)
-      : new THREE.Fog(UI_COLORS.background, 30, 62);
   }
 
   /**
@@ -877,17 +831,6 @@ export class SceneManager {
     }
 
     this.disposables.push(this.envTexture);
-
-    // --- Cielo (C3) ---
-    const skyGeometry = new THREE.SphereGeometry(120, 24, 16);
-    const skyMaterial = createSkyMaterial();
-    this.skyMesh = new THREE.Mesh(skyGeometry, skyMaterial);
-    // Se dibuja PRIMERO y no escribe profundidad: asi todo lo demas queda
-    // encima sin pelear por el depth buffer.
-    this.skyMesh.renderOrder = -1;
-    this.skyMesh.frustumCulled = false;
-    this.scene.add(this.skyMesh);
-    this.disposables.push(skyGeometry, skyMaterial);
 
     // --- Rim light (C2) ---
     // Una sola y tenue: separa las cartas del fondo sin sumar una vuelta cara
@@ -990,25 +933,11 @@ export class SceneManager {
   // ==========================================================================
 
   private buildWorld(): void {
-    this.scene.background = new THREE.Color(UI_COLORS.background);
-    this.baseBg.set(UI_COLORS.background);
-    this.scene.fog = new THREE.Fog(UI_COLORS.background, 30, 62);
-
-    // --- Arena: losa runica + vegetacion ---
-    //
-    // La cara superior es la losa de `art_arena` (con normal map y mapa de
-    // emision sacados de la propia imagen) y los hongos se apiñan en la banda de
-    // atras, que es la que la camara ve. Ver `Arena.ts`: la arena entera sale en
-    // TRES draw calls.
-    //
-    // La losa se aplica DESPUES de construir: `buildArena` no conoce
-    // `ArtAssets` a proposito, y el arte ya esta cargado cuando esto corre (el
-    // arranque espera a `loadAll`). Si faltara, la plataforma queda en piedra
-    // lisa y el juego sigue.
-    this.arena = buildArena();
-    this.arena.applyFloorArt(this.assets.get('art_arena'));
-    this.scene.add(this.arena.group);
-    this.disposables.push(...this.arena.disposables);
+    // Sin fondo ni niebla: el canvas es transparente y deja ver el fondo de
+    // arena (#arena-bg, DOM) que vive detras. La "arena" 3D se elimino en el
+    // rediseno; el suelo pintado ahora es el backdrop fullscreen.
+    this.scene.background = null;
+    this.scene.fog = null;
 
     // --- Luces ---
     //
@@ -1505,30 +1434,6 @@ export class SceneManager {
   }
 
   // ==========================================================================
-  // Agua reactiva (F2)
-  // ==========================================================================
-
-  private readonly onWaterPointerMove = (event: PointerEvent): void => {
-    const water = this.water;
-    if (!water?.enabled || this.carouselActive) return;
-    // Un ripple cada ~60 ms: mas seguido no se distingue y gasta slots.
-    if (this.clock - this.lastWaterRipple < 0.06) return;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.waterNdc.set(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    this.waterRay.setFromCamera(this.waterNdc, this.rig.camera);
-    const hit = hitHorizontalPlane(
-      this.waterRay.ray.origin,
-      this.waterRay.ray.direction,
-      water.mesh.position.y,
-    );
-    if (!hit) return;
-    this.lastWaterRipple = this.clock;
-    water.ripple(hit.x, hit.z, 0.45);
-  };
-
   /**
    * Prepara la TIRADA manual del dado: el cubo aparece adelante y al centro,
    * agrandado y girando despacio, esperando que lo arrastren y lo suelten.
@@ -1601,10 +1506,6 @@ export class SceneManager {
    */
   setDieVisible(visible: boolean): void {
     this.die3d?.setShown(visible);
-  }
-
-  private attachWaterInput(): void {
-    this.renderer.domElement.addEventListener('pointermove', this.onWaterPointerMove);
   }
 
   // ==========================================================================
@@ -2553,8 +2454,10 @@ export class SceneManager {
    * el tapete.
    */
   setFelt(id: string): void {
-    const art = id === 'default' ? undefined : this.assets.get(`felt_${id}` as ArtKey);
-    this.arena?.setFelt(art);
+    // El tapete (felt) era un overlay sobre la losa 3D de la Arena, que se
+    // elimino en el rediseno. Sin suelo 3D no hay tapete que pintar; el fondo
+    // fullscreen lo aporta el backdrop DOM (#arena-bg).
+    void id;
   }
 
   /**
@@ -2780,8 +2683,6 @@ export class SceneManager {
           life: 0.85,
         });
         this.rig.addShake(0.035);
-        // La carta "cae" al agua: la onda sale de donde aterrizo.
-        this.water?.ripple(xFor(card3d), PLAY_Z, 0.75);
       });
   }
 
@@ -2828,7 +2729,6 @@ export class SceneManager {
           size: 0.05,
           life: 0.6,
         });
-        this.water?.ripple(this.discardX + jitter, DISCARD_Z, 0.95);
         this.retire(card3d);
       });
   }
@@ -3193,13 +3093,12 @@ export class SceneManager {
     audio.playChord([0, 4, 7], { volume: 0.16 });
   }
 
-  /** Decae el pulso de cierre y mezcla/restaura el fondo y el bloom. */
+  /** Decae el pulso de cierre y realza/restaura el fondo y el bloom. */
   private updateComboPulse(step: number): void {
-    if (this.bgPulse <= 0) {
+    const t = this.bgPulse;
+    if (t <= 0) {
       if (this.bgPulseActive) {
-        (this.scene.background as THREE.Color | null)?.copy(this.baseBg);
-        const fog = this.scene.fog as (THREE.Fog | THREE.FogExp2) | null;
-        fog?.color.copy(this.baseBg);
+        this.applyBgPulse(0);
         this.postFx?.pulseBloom(0);
         this.bgPulseActive = false;
       }
@@ -3207,12 +3106,29 @@ export class SceneManager {
     }
     this.bgPulseActive = true;
     this.bgPulse = Math.max(0, this.bgPulse - step * 3);
-    const t = this.bgPulse;
-    this.bgTmp.copy(this.baseBg).lerp(this.pulseColor, 0.3 * t);
-    (this.scene.background as THREE.Color | null)?.copy(this.bgTmp);
-    const fog = this.scene.fog as (THREE.Fog | THREE.FogExp2) | null;
-    fog?.color.copy(this.bgTmp);
-    this.postFx?.pulseBloom(t * 0.5);
+    this.applyBgPulse(this.bgPulse);
+    this.postFx?.pulseBloom(this.bgPulse * 0.5);
+  }
+
+  /**
+   * Aplica el pulso de cierre al fondo de arena (DOM #arena-bg). El canvas es
+   * transparente, asi que el "flash" de combo se hace brillando/escalando el
+   * backdrop por detras en vez de teñir el `scene.background`.
+   */
+  private applyBgPulse(t: number): void {
+    if (this.onBgPulse) {
+      this.onBgPulse(t);
+      return;
+    }
+    const el = document.getElementById('arena-bg');
+    if (!el) return;
+    if (t > 0) {
+      el.style.filter = `brightness(${(1 + 0.18 * t).toFixed(3)}) saturate(${(1 + 0.12 * t).toFixed(3)})`;
+      el.style.transform = `scale(${(1 + 0.015 * t).toFixed(4)})`;
+    } else {
+      el.style.filter = '';
+      el.style.transform = '';
+    }
   }
 
   private drawChain(fromId: string, toId: string, depth: number): void {
@@ -3272,10 +3188,9 @@ export class SceneManager {
     const center = new THREE.Vector3(0, 0.6, PLAY_Z);
     const preset = this.victoryFx;
     const seq = anim.sequence();
-    // Oleada 0 en el centro: la victoria "golpea" el agua.
+    // Oleada 0 en el centro: la victoria "golpea" el tablero.
     seq.add(() => {
       this.rig.addShake(preset.shake);
-      this.water?.ripple(0, PLAY_Z, 1.6);
     }, 0);
     // Una oleada de particulas por color, escalonadas (la segunda entra cuando
     // la primera ya sube).
@@ -3304,7 +3219,6 @@ export class SceneManager {
       .sequence()
       .add(() => {
         this.rig.addShake(0.5);
-        this.water?.ripple(0, PLAY_Z, 1.9);
       }, 0)
       .add(() => {
         this.particles.burst(center, 80, {
@@ -3449,7 +3363,6 @@ export class SceneManager {
               size: 0.05,
               life: 0.5,
             });
-            this.water?.ripple(this.discardX + jitter, DISCARD_Z, 0.95);
             this.flyingCards.delete(card3d);
             card3d.dispose();
             this.scene.remove(card3d.group);
@@ -3763,7 +3676,6 @@ export class SceneManager {
       // La fisica del dado va con el MISMO dt acotado: es lo que impide que un
       // tiron de frames la mande al infinito.
       this.die3d?.update(step);
-      this.water?.update(this.clock);
       this.rig.update(step, this.clock);
       this.updateComboPulse(step);
 
@@ -4245,12 +4157,9 @@ export class SceneManager {
     this.detachCarouselInput();
     this.carousel?.dispose();
     this.carousel = null;
-    this.renderer.domElement.removeEventListener('pointermove', this.onWaterPointerMove);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.detachDieInput();
-    this.water?.dispose();
-    this.water = null;
     this.die3d?.dispose();
     this.die3d = null;
     for (const unsubscribe of this.unsubscribes) unsubscribe();

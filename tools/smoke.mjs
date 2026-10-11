@@ -2237,10 +2237,11 @@ const ok =
   chk('postFx?.drawCalls > 0', postFx?.drawCalls > 0) &&
   chk('postFx?.drawCallsTotal > postFx?.drawCalls', postFx?.drawCallsTotal > postFx?.drawCalls) &&
   // El camino con post-procesamiento NO debe inflar los draw calls de escena.
-  // El tier alto agrega cosas legitimas sobre el baseline de `low`: el sky dome
-  // (+1), el agua (+1) y las sombras de contacto (+1). Con el techo en +4 la
-  // asercion pasaba por IGUALDAD exacta y el smoke fallaba de forma
-  // intermitente; +8 deja aire sin dejar de detectar una inflacion real.
+  // El tier alto agrega cosas legitimas sobre el baseline de `low`: solo las
+  // sombras de contacto (+1). El sky dome y el agua (que existian antes del
+  // rediseno) se eliminaron; el fondo ahora es el backdrop DOM (#arena-bg).
+  // Con el techo en +8 la asercion deja aire sin dejar de detectar una
+  // inflacion real.
   chk('fxPlaying?.drawCalls <= (afterBlind?.drawCalls', fxPlaying?.drawCalls <= (afterBlind?.drawCalls ?? 0) + 8) &&
   chk("fxPlaying?.status === 'playing'", fxPlaying?.status === 'playing') &&
   chk('(fxPlaying?.hand ?? 0) > 0', (fxPlaying?.hand ?? 0) > 0) &&

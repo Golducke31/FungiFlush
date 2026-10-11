@@ -147,9 +147,12 @@ const COMPOSITE_FRAG = /* glsl */ `
   varying vec2 vUv;
 
   void main() {
-    vec3 base = texture2D(tDiffuse, vUv).rgb;
+    vec4 baseColor = texture2D(tDiffuse, vUv);
+    vec3 base = baseColor.rgb;
     vec3 bloom = texture2D(tBloom, vUv).rgb;
-    gl_FragColor = vec4(base + bloom * uStrength, 1.0);
+    // baseColor.a respeta el alpha del framebuffer: el canvas es
+    // transparente y deja ver el fondo de arena (#arena-bg) por detras.
+    gl_FragColor = vec4(base + bloom * uStrength, baseColor.a);
   }
 `;
 

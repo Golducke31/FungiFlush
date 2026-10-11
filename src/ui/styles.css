@@ -283,6 +283,20 @@ body {
   touch-action: none;
 }
 
+/* Fondo de arena fullscreen. El canvas WebGL es transparente, asi que el
+   backdrop se ve por donde no hay geometria 3D. El pulso de combo lo realza
+   via JS (filter/transform). El z-index va a 0 (no -1) porque un hijo con
+   z-index:-1 de <body> —que no forma contexto de apilamiento— queda DETRAS
+   del fondo del body, ocultando la imagen; con 0 queda por encima del fondo
+   del body y por debajo del canvas (orden DOM: #arena-bg -> canvas -> #ui-root). */
+#arena-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #080b10 url('/art_backdrop.jpg') center / cover no-repeat;
+  will-change: transform, filter;
+}
+
 #ui-root {
   position: fixed;
   inset: 0;
@@ -1333,6 +1347,11 @@ body {
   padding: 12px 22px;
   border-radius: 11px;
   cursor: pointer;
+  /* Marco pintado Fase C: el `::after` dibuja el borde wood/moss/gold sin
+     desplazar layout. La posición relativa ancla el pseudo al botón, y el
+     `border: 1px` propio se queda debajo como red de seguridad si la imagen
+     no carga. */
+  position: relative;
   /* 44px minimo: es el tamaño de un dedo, no de un puntero. */
   min-height: 46px;
   /* El transform USA `--ease-back`: al soltar, el boton rebota un pelo antes
@@ -1812,6 +1831,19 @@ body {
   background:
     linear-gradient(180deg, rgba(46, 178, 164, 0.5) 0%, rgba(46, 178, 164, 0.08) 40%),
     linear-gradient(180deg, var(--frame-body-hi) 0%, var(--frame-body-lo) 100%);
+}
+
+/* Marco wood/moss/gold (Fase C). Dibuja el ring de 12px encima del botón
+   con centro transparente: el gradiente de estado del botón sigue asomando.
+   `pointer-events:none` deja pasar los clicks. */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 12px solid transparent;
+  border-image: url(./frames/button.webp) 22 / 12px round;
+  border-radius: 11px;
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -2467,7 +2499,10 @@ body {
       rgba(0, 0, 0, 0.02) 2px 5px
     ),
     linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep) 55%, var(--frame-deep-lo) 100%);
-  border: 1px solid var(--frame-edge);
+  /* Marco wood/moss/gold (Fase C). El centro es transparente: el degradado
+     del panel sigue asomando dentro del ring. */
+  border: 18px solid transparent;
+  border-image: url(./frames/panel.webp) 32 / 18px round;
   border-radius: 18px;
   padding: 22px 24px;
   box-shadow:

@@ -27,6 +27,31 @@ const H = 744;
 const TAU = Math.PI * 2;
 
 /**
+ * Marco de carta pintado (rediseño visual). Un solo asset global, sin rareza:
+ * se carga con `art_card_frame.webp` al arrancar y se dibuja sobre el arte y
+ * el texto de la carta. Centro transparente: el arte se ve a traves.
+ *
+ * Se guarda como singleton (no se cachea por carta) porque es el mismo para
+ * todas y vive como un unico HTMLImageElement. Si el archivo no esta, se cae
+ * al marco procedural viejo (gradiente + doble filete).
+ */
+let cardFrameImage: HTMLImageElement | null = null;
+
+/**
+ * Reemplaza el marco procedural por la imagen pintada. Llamar una sola vez
+ * despues de cargar los assets, antes de hornear la primera carta.
+ */
+export function setCardFrameImage(img: HTMLImageElement | null): void {
+  cardFrameImage = img && img.naturalWidth > 0 ? img : null;
+}
+
+function cardFrameReady(): HTMLImageElement | null {
+  return cardFrameImage && cardFrameImage.complete && cardFrameImage.naturalWidth > 0
+    ? cardFrameImage
+    : null;
+}
+
+/**
  * Carril derecho que la cara COMPACTA le reserva al badge del numero de
  * seleccion (esquina superior derecha, dibujado en 3D por `Card3D`).
  *
@@ -802,6 +827,30 @@ export function createCardCanvas(
 
   }
 
+  // --- 10. Marco exterior (imagen pintada; cae al procedural si no cargo) ---
+  // Va DESPUES del arte pero ANTES del texto/chips/gema/level: asi esos se
+  // dibujan ENCIMA del anillo (la gema y el level estan justo dentro del
+  // borde; si el marco los tapara quedarian invisibles en algunas rarezas).
+  const cardFrame = cardFrameReady();
+  if (cardFrame) {
+    ctx.drawImage(cardFrame, 0, 0, W, H);
+  } else {
+    const frameGradient = ctx.createLinearGradient(0, 0, W, H);
+    frameGradient.addColorStop(0, hexToCss(mixHex(rarityColor, elementColor, 0.5)));
+    frameGradient.addColorStop(1, hexToCss(elementColor));
+    ctx.strokeStyle = frameGradient;
+    ctx.lineWidth = border;
+    ctx.shadowColor = hexToCss(elementColor);
+    ctx.shadowBlur = 26;
+    roundRect(ctx, border / 2, border / 2, W - border, H - border, 30);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, pad, pad, W - pad * 2, H - pad * 2, 22);
+    ctx.stroke();
+  }
+
   // --- 4. Cabecera: taxonomia (Elemento · Familia) + nombre ---
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
@@ -1158,24 +1207,6 @@ export function createCardCanvas(
     }
     ctx.textBaseline = 'top';
   });
-
-  // --- 10. Marco exterior ---
-  const frameGradient = ctx.createLinearGradient(0, 0, W, H);
-  frameGradient.addColorStop(0, hexToCss(mixHex(rarityColor, elementColor, 0.5)));
-  frameGradient.addColorStop(1, hexToCss(elementColor));
-  ctx.strokeStyle = frameGradient;
-  ctx.lineWidth = border;
-  ctx.shadowColor = hexToCss(elementColor);
-  ctx.shadowBlur = 26;
-  roundRect(ctx, border / 2, border / 2, W - border, H - border, 30);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Linea interior fina: da sensacion de carta impresa.
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, pad, pad, W - pad * 2, H - pad * 2, 22);
-  ctx.stroke();
 
   return canvas;
 }
@@ -1626,11 +1657,16 @@ export function createCardBackCanvas(art?: HTMLImageElement): HTMLCanvasElement 
     }
   }
 
-  // Marco comun, para que el dorso combine con el frente.
-  ctx.strokeStyle = 'rgba(95, 216, 232, 0.55)';
-  ctx.lineWidth = 6;
-  roundRect(ctx, 4, 4, W - 8, H - 8, 28);
-  ctx.stroke();
+  // Marco comun: imagen pintada si cargo, respaldo procedural si no.
+  const backFrame = cardFrameReady();
+  if (backFrame) {
+    ctx.drawImage(backFrame, 0, 0, W, H);
+  } else {
+    ctx.strokeStyle = 'rgba(95, 216, 232, 0.55)';
+    ctx.lineWidth = 6;
+    roundRect(ctx, 4, 4, W - 8, H - 8, 28);
+    ctx.stroke();
+  }
 
   return canvas;
 }

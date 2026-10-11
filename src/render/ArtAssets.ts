@@ -110,13 +110,20 @@ export type CardBackArtKey = `cardback_${string}`;
  * losa rúnica (sin fieltro). El archivo se resuelve por patron en `keyForFile`.
  */
 export type FeltArtKey = `felt_${string}`;
+/**
+ * Marco de carta pintado (rediseño visual). Unico archivo, sin rareza:
+ * `art_card_frame.webp`. Se carga con el resto del arte al arrancar y se
+ * dibuja sobre el arte y el texto para reemplazar el marco procedural.
+ */
+export type FrameArtKey = 'card_frame';
 export type ArtKey =
   | CardArtKey
   | LegacyArtKey
   | CardOwnArtKey
   | BlindArtKey
   | CardBackArtKey
-  | FeltArtKey;
+  | FeltArtKey
+  | FrameArtKey;
 
 function buildFileMap(): Record<ArtKey, string> {
   const map = {} as Record<ArtKey, string>;
@@ -132,6 +139,7 @@ function buildFileMap(): Record<ArtKey, string> {
   map['art_cardback'] = 'art_cardback.webp';
   map['art_table'] = 'art_table.webp';
   map['art_arena'] = 'art_arena.webp';
+  map['card_frame'] = 'art_card_frame.webp';
 
   return map;
 }

@@ -98,6 +98,7 @@ import {
 } from '@render/index';
 import type { QualityTier } from '@render/index';
 import { ELEMENT_COLOR, RARITY_COLOR, hexToCss } from '@render/palette';
+import { setCardFrameImage } from '@render/CardTexture';
 import { HUD } from '@ui/HUD';
 import type { CosmeticsState } from '@ui/CosmeticsScreen';
 import { sortHand } from '@ui/handSort';
@@ -246,6 +247,9 @@ async function boot(): Promise<void> {
   // --- Assets ---
   const assets = new ArtAssets();
   await assets.loadAll((ratio) => loader.setProgress(ratio * 0.85));
+  // El marco pintado de carta se carga con el resto del arte y se inyecta al
+  // singleton de CardTexture antes de que se hornee la primera carta.
+  setCardFrameImage(assets.get('card_frame') ?? null);
 
   // --- Acceso por DLC ---
   const entitlements = EntitlementStore.from(profile.entitlements);
