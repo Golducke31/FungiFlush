@@ -462,6 +462,23 @@ export function migrateProfileSave(raw: unknown): ProfileSave {
     if (!claimedSet.has(def.id)) continue;
     if (!cosmetics.owned.includes(def.cosmeticId)) cosmetics.owned.push(def.cosmeticId);
   }
+  // INVARIANTE: lo EQUIPADO tiene que estar POSEIDO.
+  //
+  // El panel de Personalizar arma cada seccion desde `owned`, asi que un id
+  // equipado que no este en esa lista DESAPARECE de la UI: el jugador ve la
+  // Tarjeta con el cosmetico puesto pero no puede verlo ni volver a elegirlo
+  // (bug: "el avatar esta equipado y no aparece en Cosmeticos"). El juego nunca
+  // deberia producir ese estado, pero un perfil historico puede tenerlo, y este
+  // es el unico punto por el que pasa todo guardado. Se repara aca.
+  //
+  // Se aplica a TODOS los slots (los de la Colonia y los clasicos dorso/tapete):
+  // el sintoma es el mismo en cualquiera.
+  for (const slot of equipSlots) {
+    const equipped = cosmetics[slot];
+    if (equipped !== 'default' && !cosmetics.owned.includes(equipped)) {
+      cosmetics.owned.push(equipped);
+    }
+  }
 
   // Sobres (v5): OBJETO anidado ADITIVO. Un perfil v4 no lo tiene y cae al
   // default (cero sobres). Si llegara con la forma equivocada (numero suelto,

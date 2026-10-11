@@ -51,6 +51,11 @@
     <!-- Capa 3D: Three.js renderiza aca -->
     <canvas id="fungiflush-canvas"></canvas>
 
+    <!-- Flash del cierre de combo. Vive ARRIBA del canvas (no sobre el backdrop):
+         asi el pulso se anima con `opacity` sola y nunca toca la capa fullscreen
+         del fondo, que es lo que dejaba la pantalla en negro en movil. -->
+    <div id="arena-pulse" aria-hidden="true"></div>
+
     <!-- Capa de UI: HTML/CSS puro, nunca dibujado por Three.js -->
     <div id="ui-root"></div>
 

@@ -3,16 +3,20 @@
 Genera los marcos pintados del HUD (Fase C del rediseño visual).
 
 Produce, en src/ui/frames/:
-  - panel.webp    : marco 9-slice wood/moss/gold para .panel (radio ~30)
-  - button.webp   : marco 9-slice wood/moss/gold para .btn  (radio ~18)
-  - gold_corner.webp : medallón circular dorado (seta) para las esquinas del
-                       panel del menú principal.
+  - panel.webp  : marco 9-slice wood/moss/gold para .panel (radio ~30)
+  - button.webp : marco 9-slice wood/moss/gold para .btn  (radio ~18)
 
-Estética coherente con public/art/card_frame.webp: madera [58,42,28] con grano
-vertical suave, parches de musgo difuminados y doble línea de oro (#d9b25a).
+⚠️ SIN SETAS. Las versiones anteriores sembraban una seta en cada esquina
+(`corner_mushroom`) y el resultado se leia como pegatina: ademas el medallon de
+la esquina superior derecha del boton FungiFlush TAPABA la ficha de cargas
+(`.btn-flush-count`, que sobresale `-7px`). El marco queda con madera, musgo y
+doble linea de oro, que es lo que le da el caracter sin competir con el contenido.
+
 Centro transparente para que el gradiente propio del elemento asome.
 
 Requiere Pillow + numpy (venv fungiflush).
+
+Uso:  python tools/gen_hud_frames.py
 """
 import os
 import numpy as np
@@ -29,14 +33,6 @@ GOLD_HI = (240, 210, 136, 255)
 WOOD = (58, 42, 28, 255)
 MOSS = (72, 102, 58, 200)
 MOSS_HI = (95, 132, 72, 220)
-
-# Acentos de las 4 esquinas (violeta espora, ámbar, cian cristal, óxido decaimiento)
-CORNER_ACCENTS = [
-    (167, 139, 250, 235),  # mycelium
-    (242, 193, 78, 235),   # spore
-    (95, 216, 232, 235),   # crystal
-    (193, 104, 58, 235),   # decay
-]
 
 
 def make_wood(size, base=WOOD):
@@ -68,7 +64,7 @@ def add_moss(img, strength=0.5):
         tint = arr[..., i].astype(np.float32)
         tint[mask] = tint[mask] * (1 - strength) + MOSS[i] * strength
         arr[..., i] = tint.clip(0, 255).astype(np.uint8)
-    # parches más claros de musgo
+    # parches mas claros de musgo
     mask_hi = b > 0.72
     for i in range(3):
         tint = arr[..., i].astype(np.float32)
@@ -114,36 +110,8 @@ def draw_gold_lines(img, size, ring, radius):
     )
 
 
-def corner_mushroom(img, cx, cy, r, color):
-    d = ImageDraw.Draw(img)
-    # halo suave
-    for i in range(7):
-        a = max(0, 70 - i * 10)
-        d.ellipse(
-            [cx - r + i, cy - r + i, cx + r - i, cy + r - i],
-            outline=(color[0], color[1], color[2], a),
-            width=2,
-        )
-    # sombrero de la seta
-    d.ellipse(
-        [cx - r * 0.62, cy - r * 0.72, cx + r * 0.62, cy + r * 0.12],
-        fill=(color[0], color[1], color[2], 235),
-    )
-    # brillo del sombrero
-    d.ellipse(
-        [cx - r * 0.34, cy - r * 0.52, cx + r * 0.18, cy - r * 0.12],
-        fill=(255, 255, 255, 90),
-    )
-    # pie
-    d.rounded_rectangle(
-        [cx - r * 0.16, cy - r * 0.05, cx + r * 0.16, cy + r * 0.62],
-        radius=r * 0.16,
-        fill=(238, 232, 222, 220),
-    )
-
-
-def make_frame(size, ring, radius, fname, mushrooms=True):
-    """Pinta un anillo de marco.
+def make_frame(size, ring, radius, fname):
+    """Pinta un anillo de marco (madera + musgo + lineas de oro), SIN setas.
 
     `radius` es el radio exterior pintado: se fija igual al `cornerBox` del
     9-slice para que el arco toque los bordes del cuadrante de esquina y no
@@ -158,47 +126,6 @@ def make_frame(size, ring, radius, fname, mushrooms=True):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     img.paste(tex, (0, 0), tex)
     draw_gold_lines(img, size, ring, radius)
-    if mushrooms:
-        # setas en las 4 esquinas, dentro del cuadrante de esquina
-        off = radius * 0.62
-        corners = [
-            (off, off),
-            (size - off, off),
-            (off, size - off),
-            (size - off, size - off),
-        ]
-        for (cx, cy), col in zip(corners, CORNER_ACCENTS):
-            corner_mushroom(img, cx, cy, ring * 0.95, col)
-    out = os.path.join(OUT, fname)
-    img.save(out, "WEBP", quality=92)
-    print("wrote", out, img.size)
-
-
-def make_medallion(size, fname):
-    """Medallón circular dorado con seta para las esquinas del panel del menú."""
-    S = size
-    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    c = S // 2
-    r = S * 0.42
-    # anillo exterior
-    d.ellipse([c - r, c - r, c + r, c + r], outline=GOLD, width=4)
-    d.ellipse([c - r + 3, c - r + 3, c + r - 3, c + r - 3], outline=GOLD_HI, width=2)
-    # relleno tenue de madera
-    d.ellipse(
-        [c - r + 4, c - r + 4, c + r - 4, c + r - 4],
-        fill=(58, 42, 28, 150),
-    )
-    # seta central (acento espora ámbar)
-    col = (242, 193, 78, 235)
-    mr = r * 0.5
-    d.ellipse([c - mr, c - mr * 1.05, c + mr, c + mr * 0.2], fill=col)
-    d.ellipse([c - mr * 0.5, c - mr * 0.7, c + mr * 0.3, c - mr * 0.15], fill=(255, 255, 255, 100))
-    d.rounded_rectangle(
-        [c - mr * 0.18, c - mr * 0.05, c + mr * 0.18, c + mr * 0.85],
-        radius=mr * 0.18,
-        fill=(238, 232, 222, 220),
-    )
     out = os.path.join(OUT, fname)
     img.save(out, "WEBP", quality=92)
     print("wrote", out, img.size)
@@ -206,10 +133,9 @@ def make_medallion(size, fname):
 
 def main():
     # panel.webp : 320x320, anillo de 18px, radio exterior = cornerBox 32
-    make_frame(320, 18, 32, "panel.webp", mushrooms=True)
+    make_frame(320, 18, 32, "panel.webp")
     # button.webp : 200x200, anillo de 12px, radio exterior = cornerBox 22
-    make_frame(200, 12, 22, "button.webp", mushrooms=True)
-    make_medallion(96, "gold_corner.webp")
+    make_frame(200, 12, 22, "button.webp")
 
 
 if __name__ == "__main__":

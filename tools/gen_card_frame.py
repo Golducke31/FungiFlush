@@ -1,129 +1,153 @@
-"""
-gen_card_frame.py — Genera el marco de carta pintado del rediseño visual.
+"""gen_card_frame.py — Marco de carta organico del rediseño visual.
 
-Produce `public/art/card_frame.webp` (1024x1488 = 2x de 512x744) con:
-  - centro TRANSPARENTE (el arte de la carta se ve a traves);
-  - anillo exterior pintado: madera oscura + musgo + doble linea dorada;
-  - setas diminutas en las 4 esquinas (acentos del paleta del juego).
+Toma `art-source/card_frame_raw.png` (una guirnalda pintada de enredaderas,
+raices, setas y hojas alrededor de un centro VACIO, generada por imagen a partir
+de la referencia del usuario) y produce `public/art/art_card_frame.webp`, listo
+para dibujarse encima del arte en `CardTexture.createCardCanvas` /
+`createCardBackCanvas`.
 
-Se dibuja encima del arte en `CardTexture.createCardCanvas` (capas full + top)
-y en `createCardBackCanvas`. Reemplaza el marco procedural por uno pintado que
-combina con el fondo de arena y el resto del HUD.
+Pasos:
+  1. encaja a 1024x1488 (2x de la carta 512x744) RECORTANDO el sobrante, sin
+     deformar (misma `fit()` que `optimize_art.py`);
+  2. redondea las esquinas exteriores (radio 60 = 2x el de la carta) para que el
+     marco siga el mismo contorno que el arte;
+  3. garantiza el CENTRO transparente: el arte de la carta se ve a traves;
+  4. exporta WebP con alfa.
+
+⚠️ El archivo TIENE que llamarse `art_card_frame.webp`: `ArtAssets` resuelve la
+clave `card_frame` a ese nombre. Con otro nombre el manifiesto no lo mapea a
+ninguna clave, nunca se carga y las cartas caen al marco procedural en silencio
+(sin un solo 404, el smoke no lo ve).
 
 Uso:  python tools/gen_card_frame.py
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
-W2, H2 = 1024, 1488          # 2x de la carta (512x744)
-BW = 64                      # ancho del anillo en 2x (~32px en 1x)
-R_OUT = 60                   # radio exterior (30px en 1x, igual que la carta)
-R_IN = 40                    # radio del borde interior del anillo
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
 
-OUT = "C:/Users/emanu/Desktop/FungiFlush/public/art/card_frame.webp"
+SRC = os.path.join(ROOT, "art-source", "raw", "card_frame_raw.png")
+OUT = os.path.join(ROOT, "public", "art", "art_card_frame.webp")
 
-# Paleta bloqueada (ver docs/PROMPTS_REDISENO.md §1.1)
-GOLD = (217, 178, 90, 255)
-GOLD_HI = (240, 210, 136, 255)
-MOSS = (72, 102, 58, 170)
-MOSS_HI = (95, 132, 72, 195)
-ACCENTS = [
-    (167, 139, 250, 255),   # mycelium violeta
-    (242, 193, 78, 255),    # spore ambar
-    (95, 216, 232, 255),    # crystal cian
-    (196, 104, 58, 255),    # decay oxido
-]
+W2, H2 = 768, 1116          # 1.5x de la carta (512x744)
+R_OUT = 45                   # radio exterior (30px en 1x, el mismo del arte)
 
+# La guirnalda generada ocupa ~10% del ancho por lado, que a 512px son ~54px:
+# mas que el margen del contenido (pad = 30), asi que pisaba los chips y el
+# panel de descripcion. Se ESCALA alrededor del centro (por eje: el anillo es
+# mas grueso a los lados que arriba/abajo) hasta que su borde interior cae en
+# `WINDOW_INSET`; el sobrante se sale del canvas y el marco queda pegado al borde.
+SCALE_X = 1.08
+SCALE_Y = 1.05
 
-def build_mask() -> np.ndarray:
-    """Mascara del anillo: 255 dentro del anillo, 0 en el centro."""
-    m = Image.new("L", (W2, H2), 0)
-    d = ImageDraw.Draw(m)
-    d.rounded_rectangle([0, 0, W2, H2], radius=R_OUT, fill=255)
-    d.rounded_rectangle([BW, BW, W2 - BW, H2 - BW], radius=R_IN, fill=0)
-    return np.asarray(m, dtype=np.uint8)
+# Margen de la ventana interior, en unidades de CARTA (512x744). Tiene que ser
+# <= el `pad` del contenido (30) para no tocar los chips ni el texto, y es el
+# mismo valor al que se recorta el ARTE (`CardTexture.CARD_FRAME_INSET`).
+WINDOW_INSET = 26
 
+# El marco se ve a traves del render 3D, que es oscuro y lo ilumina con las
+# mismas luces que la escena. A la ganancia natural se leia como una mancha
+# negra: se le sube la luz (y un poco la saturacion) para que el anillo se
+# distinga de la carta sin llegar a verse pegado.
+GAIN = 1.38
+SATURATION = 1.12
 
-def wood_array(rng: np.random.Generator) -> np.ndarray:
-    """Textura de madera: base marron + veta vertical + ruido fino (despues se suaviza)."""
-    base = np.array([58, 42, 28], dtype=np.float32)
-    xx = np.arange(W2, dtype=np.float32)
-    grain = (
-        np.sin(xx / 14.0) * 11.0
-        + np.sin(xx / 40.0 + 1.3) * 7.0
-        + np.sin(xx / 90.0) * 6.0
-    )
-    yy = np.arange(H2, dtype=np.float32)
-    plank = np.sin(yy / 220.0) * 4.0
-    noise = rng.normal(0.0, 2.5, (H2, W2)).astype(np.float32)
-    val = base[None, None, :] + grain[None, :, None] + plank[:, None, None] + noise[:, :, None]
-    rgb = np.clip(val, 0, 255).astype(np.uint8)
-    # Suaviza la madera para que lea como pintada, no como ruido de TV.
-    return np.asarray(Image.fromarray(rgb, "RGB").filter(ImageFilter.GaussianBlur(1.6)), dtype=np.uint8)
+# El arte organico (filamentos, hojas, motas) tiene MUCHISIMA alta frecuencia:
+# a 1024x1488 el WebP pesaba 370 KB. A 1.5x del canvas (768x1116) sigue
+# sobremuestreado para como se dibuja (512x744) y baja a ~220 KB.
+QUALITY = 86
+METHOD = 6
 
 
-def mushroom(d: ImageDraw.ImageDraw, cx: int, cy: int, s: int, cap: tuple[int, int, int, int]) -> None:
-    """Seta diminuta: halo + pie + sombrero + brillo."""
-    d.ellipse([cx - s * 1.7, cy - s * 1.7, cx + s * 1.7, cy + s * 1.7], fill=(cap[0], cap[1], cap[2], 38))
-    d.rounded_rectangle([cx - s * 0.2, cy, cx + s * 0.2, cy + s * 1.4], radius=int(s * 0.2), fill=(232, 222, 202, 235))
-    d.ellipse([cx - s, cy - s * 0.85, cx + s, cy + s * 0.85], fill=cap)
-    d.ellipse([cx - s * 0.62, cy - s * 0.55, cx + s * 0.62, cy + s * 0.05], fill=(255, 255, 255, 55))
-    d.ellipse([cx - s * 0.5, cy - s * 0.35, cx - s * 0.1, cy + s * 0.05], fill=(255, 255, 255, 40))
+def fit(img: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Encaja recortando el sobrante (cover), sin deformar. Igual que optimize_art."""
+    target_ratio = size[0] / size[1]
+    width, height = img.size
+    ratio = width / height
+    if ratio > target_ratio:                     # sobra ancho
+        nw = round(height * target_ratio)
+        left = (width - nw) // 2
+        img = img.crop((left, 0, left + nw, height))
+    elif ratio < target_ratio:                   # sobra alto
+        nh = round(width / target_ratio)
+        top = (height - nh) // 2
+        img = img.crop((0, top, width, top + nh))
+    return img.resize(size, Image.LANCZOS)
+
+
+def zoom_about_center(img: Image.Image, kx: float, ky: float) -> Image.Image:
+    """Escala alrededor del CENTRO conservando el tamano del lienzo.
+
+    Lo que se sale del cuadro se recorta: la guirnalda queda con su borde
+    interior mas adentro y el exterior se pierde fuera del canvas, que es
+    exactamente lo que hace que el marco se vea pegado al borde.
+    """
+    w, h = img.size
+    big = img.resize((round(w * kx), round(h * ky)), Image.LANCZOS)
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    out.paste(big, (round((w - big.width) / 2), round((h - big.height) / 2)))
+    return out
+
+
+def rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
+    """Mascara opaca dentro de un rectangulo redondeado."""
+    m = Image.new("L", size, 0)
+    ImageDraw.Draw(m).rounded_rectangle([0, 0, size[0] - 1, size[1] - 1], radius=radius, fill=255)
+    return m
 
 
 def main() -> None:
-    rng = np.random.default_rng(20261010)
-    mask = build_mask()
-    ring = mask == 255
+    if not os.path.exists(SRC):
+        raise SystemExit(f"falta la fuente {SRC}")
 
-    # --- madera en el anillo ---
-    wood = wood_array(rng)
-    frame = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
-    wood_img = Image.fromarray(wood, "RGB")
-    frame.paste(wood_img, (0, 0), Image.fromarray(mask, "L"))
+    raw = Image.open(SRC).convert("RGBA")
+    frame = fit(raw, (W2, H2))
+    frame = zoom_about_center(frame, SCALE_X, SCALE_Y)
 
-    # --- musgo: tintado continuo (parches, no puntos) en el anillo ---
-    smooth = (
-        np.asarray(
-            Image.fromarray((rng.random((H2, W2)) * 255).astype(np.uint8), "L").filter(
-                ImageFilter.GaussianBlur(42)
-            ),
-            dtype=np.float32,
-        )
-        / 255.0
-    )
-    moss_strength = np.clip((smooth - 0.38) * 2.2, 0.0, 1.0)[..., None]
-    moss_rgb = np.array([72, 102, 58], dtype=np.float32)
-    wood_f = wood.astype(np.float32)
-    tinted = wood_f * (1.0 - 0.55 * moss_strength) + moss_rgb * (0.55 * moss_strength)
-    tinted = np.clip(tinted, 0, 255).astype(np.uint8)
+    alpha = np.asarray(frame)[..., 3].astype(np.float32) / 255.0
 
-    frame = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
-    frame.paste(Image.fromarray(tinted, "RGB"), (0, 0), Image.fromarray(mask, "L"))
+    # --- 1) esquinas exteriores redondeadas ---
+    outer = np.asarray(rounded_mask((W2, H2), R_OUT), dtype=np.float32) / 255.0
+    alpha *= outer
 
-    d = ImageDraw.Draw(frame)
+    # --- 2) ventana interior LIMPIA ---
+    # Garantiza que el marco no entre ni un pixel en la zona del arte y del
+    # contenido: el borde interior queda en `WINDOW_INSET` (en unidades de carta)
+    # con un rectangulo redondeado, sin importar cuanto se meta la guirnalda.
+    scale = W2 / 512.0
+    inset = round(WINDOW_INSET * scale)
+    inner = np.asarray(
+        rounded_mask((W2 - 2 * inset, H2 - 2 * inset), max(8, R_OUT - inset // 2)),
+        dtype=np.float32,
+    ) / 255.0
+    clear = np.zeros((H2, W2), dtype=np.float32)
+    clear[inset:H2 - inset, inset:W2 - inset] = inner
+    alpha *= 1.0 - clear
 
-    # --- doble linea dorada ---
-    d.rounded_rectangle([10, 10, W2 - 10, H2 - 10], radius=R_OUT - 10, outline=GOLD, width=5)
-    d.rounded_rectangle([54, 54, W2 - 54, H2 - 54], radius=R_IN - 6, outline=GOLD_HI, width=4)
-    # filete claro interior (profundidad)
-    d.rounded_rectangle([60, 60, W2 - 60, H2 - 60], radius=R_IN - 10, outline=(255, 255, 255, 40), width=2)
+    out = np.asarray(frame).copy()
+    out[..., 3] = np.clip(alpha * 255.0, 0, 255).astype(np.uint8)
 
-    # --- setas en las esquinas ---
-    s = 26
-    corners = [
-        (BW + 40, BW + 40),
-        (W2 - BW - 40, BW + 40),
-        (BW + 40, H2 - BW - 40),
-        (W2 - BW - 40, H2 - BW - 40),
-    ]
-    for (cx, cy), cap in zip(corners, ACCENTS):
-        mushroom(d, cx, cy, s, cap)
+    # Ganancia de luz y saturacion SOLO sobre lo pintado (alpha > 0).
+    rgb = out[..., :3].astype(np.float32) * GAIN
+    lum = rgb.mean(axis=2, keepdims=True)
+    rgb = lum + (rgb - lum) * SATURATION
+    out[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
 
-    frame.save(OUT, "WEBP", quality=95, method=4)
-    print(f"escrito {OUT}  {frame.size}  transparencia_centro={not ring[int(H2/2), int(W2/2)]}")
+    result = Image.fromarray(out, "RGBA")
+
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    result.save(OUT, "WEBP", quality=QUALITY, method=METHOD)
+
+    ring = np.asarray(result)[..., 3] > 8
+    print(f"escrito {OUT}")
+    print(f"  {result.size}  escala=({SCALE_X},{SCALE_Y})  ventana={WINDOW_INSET}px(carta)")
+    print(f"  pixeles de marco: {ring.sum()}  centro transparente: {not ring[H2 // 2, W2 // 2]}")
+    print(f"  bytes: {os.path.getsize(OUT)}")
 
 
 if __name__ == "__main__":

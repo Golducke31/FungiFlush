@@ -3111,24 +3111,29 @@ export class SceneManager {
   }
 
   /**
-   * Aplica el pulso de cierre al fondo de arena (DOM #arena-bg). El canvas es
-   * transparente, asi que el "flash" de combo se hace brillando/escalando el
-   * backdrop por detras en vez de teñir el `scene.background`.
+   * Aplica el pulso de cierre al flash de combo (`#arena-pulse`, DOM).
+   *
+   * El canvas es transparente, asi que el "flash" se dibuja como una capa DOM
+   * ENCIMA del canvas, no tiñendo el `scene.background`.
+   *
+   * ⚠️ POR QUE NO se toca `#arena-bg`: la version anterior ponia
+   * `filter: brightness()/saturate()` + `transform: scale()` sobre la capa
+   * fullscreen del fondo. Eso fuerza al navegador a re-rasterizar una capa de
+   * pantalla completa que vive DEBAJO de un canvas WebGL transparente, y en
+   * movil (Chrome/WebView) ese combo deja el canvas en negro justo en el frame
+   * del pulso — el bug "al suceder el bloom la pantalla queda negra". Animando
+   * SOLO `opacity` sobre una capa por encima del canvas el compositor no toca
+   * ni el backdrop ni el canvas.
    */
   private applyBgPulse(t: number): void {
     if (this.onBgPulse) {
       this.onBgPulse(t);
       return;
     }
-    const el = document.getElementById('arena-bg');
+    const el = document.getElementById('arena-pulse');
     if (!el) return;
-    if (t > 0) {
-      el.style.filter = `brightness(${(1 + 0.18 * t).toFixed(3)}) saturate(${(1 + 0.12 * t).toFixed(3)})`;
-      el.style.transform = `scale(${(1 + 0.015 * t).toFixed(4)})`;
-    } else {
-      el.style.filter = '';
-      el.style.transform = '';
-    }
+    // El gradiente del CSS ya trae la intensidad; aca solo se escala 0..1.
+    el.style.opacity = t > 0 ? (t * 0.9).toFixed(3) : '0';
   }
 
   private drawChain(fromId: string, toId: string, depth: number): void {

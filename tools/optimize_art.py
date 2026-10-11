@@ -50,6 +50,10 @@ CARD_TARGET = (512, 744)
 # nombre exacto -> (ancho, alto). Lo que no este aca se resuelve por prefijo.
 TARGETS: dict[str, tuple[int, int]] = {
     "art_cardback": CARD_TARGET,
+    # El marco de carta vive a 1.5x del canvas (768x1116) a proposito: se dibuja
+    # escalado a 512x744 y su arte organico pesa mucho, asi que bajarlo a
+    # CARD_TARGET le comeria nitidez y subirlo a 2x duplicaba los KB sin ganancia.
+    "art_card_frame": (768, 1116),
     "art_arena": (1024, 512),
     "art_table": (768, 768),
     # Los 7 elementos del catalogo viejo y las dos rarezas altas son cuadrados.

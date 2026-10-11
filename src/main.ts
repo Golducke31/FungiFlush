@@ -1311,19 +1311,30 @@ async function boot(): Promise<void> {
       .map((def) => def.cosmeticId as string),
   ];
 
+  /**
+   * La lista de una seccion SIEMPRE incluye lo EQUIPADO.
+   *
+   * La migracion ya repara `owned` (ver `migrations.ts`), pero el panel se arma
+   * desde esta lista y el render desde `equipped`: si por lo que sea divergen,
+   * el jugador ve el cosmetico puesto en la Tarjeta y la seccion sin el. Incluir
+   * lo equipado aca cierra el sintoma en la UI aunque el perfil llegue raro.
+   */
+  const withEquipped = (ids: string[], equipped: string): string[] =>
+    equipped !== 'default' && !ids.includes(equipped) ? [...ids, equipped] : ids;
+
   const buildCosmeticsState = (): CosmeticsState => {
     const p = profileStore.current;
     const c = p.cosmetics;
     const legacy = c.owned.filter((id) => !colonyCosmeticIds.has(id));
     return {
       owned: {
-        avatar: ownedOfKind('avatar', c.owned),
-        frame: ownedOfKind('frame', c.owned),
-        title: ownedOfKind('title', c.owned),
-        background: ownedOfKind('background', c.owned),
-        victoryFx: ownedOfKind('victoryFx', c.owned),
-        cardback: legacy,
-        felt: legacy,
+        avatar: withEquipped(ownedOfKind('avatar', c.owned), c.equippedAvatar),
+        frame: withEquipped(ownedOfKind('frame', c.owned), c.equippedFrame),
+        title: withEquipped(ownedOfKind('title', c.owned), c.equippedTitle),
+        background: withEquipped(ownedOfKind('background', c.owned), c.equippedBackground),
+        victoryFx: withEquipped(ownedOfKind('victoryFx', c.owned), c.equippedVictoryFx),
+        cardback: withEquipped(legacy, c.equippedCardBack),
+        felt: withEquipped(legacy, c.equippedFelt),
       },
       equipped: {
         avatar: c.equippedAvatar,

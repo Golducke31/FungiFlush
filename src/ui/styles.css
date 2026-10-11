@@ -294,7 +294,29 @@ body {
   inset: 0;
   z-index: 0;
   background: #080b10 url('/art_backdrop.jpg') center / cover no-repeat;
-  will-change: transform, filter;
+}
+
+/* Flash del cierre de combo.
+ *
+ * Vive ARRIBA del canvas (y por debajo de #ui-root, por orden DOM) a proposito:
+ * el pulso anima SOLO `opacity`, que el compositor resuelve sin re-rasterizar
+ * nada. La version anterior ponia `filter` + `transform` sobre `#arena-bg` —una
+ * capa de pantalla completa DEBAJO de un canvas WebGL transparente— y en movil
+ * eso dejaba la pantalla en negro justo al dispararse el pulso.
+ *
+ * El gradiente trae la forma (un halo calido centrado en la mesa); el JS solo
+ * mueve `opacity` de 0 a ~0.9. */
+#arena-pulse {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 78% 78% at 50% 56%,
+    rgba(255, 228, 176, 0.34),
+    rgba(255, 186, 96, 0.13) 52%,
+    rgba(255, 150, 60, 0) 82%
+  );
 }
 
 #ui-root {
@@ -1665,6 +1687,10 @@ body {
   position: absolute;
   top: -7px;
   right: -7px;
+  /* Por encima del borde pintado del boton: la ficha sobresale del anillo y
+     tiene que ganarle SIEMPRE (antes el medallon de seta de la esquina la
+     tapaba, ver `gen_hud_frames.py`). */
+  z-index: 2;
   min-width: 19px;
   height: 19px;
   padding: 0 5px;

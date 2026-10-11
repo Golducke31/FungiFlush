@@ -24,7 +24,13 @@
  * que un texto mas grande solo puede pedir MAS lineas.
  */
 import { loadContentFromDisk, loadDictionaries } from './loadContent.node.ts';
-import { descLineBudget, wrapTextLines } from '../src/render/CardTexture.ts';
+import {
+  CARD_BOX_INSET_MAX,
+  CARD_DESC_FONT_PX,
+  CARD_DESC_TEXT_MARGIN,
+  descLineBudget,
+  wrapTextLines,
+} from '../src/render/CardTexture.ts';
 
 const asJson = process.argv.includes('--json');
 const scaleArg = process.argv.find((a) => a.startsWith('--scale='));
@@ -50,10 +56,17 @@ function tr(lang: string, key: string): string {
  */
 const LANG = 'es';
 
-/** Metrica real de `drawCardFace` (W=512, pad=16, margen 34). */
+/**
+ * Metrica real de `drawCardFace`.
+ *
+ * `PAD` NO se escribe a mano: sale de `CARD_BOX_INSET_MAX` del propio
+ * `CardTexture`. Antes estaba fijo en 16 y cuando el margen real subio a 38
+ * (para que las cajas no toquen el anillo del marco) el auditor seguia midiendo
+ * un panel 44px mas ancho, o sea SUBESTIMANDO las lineas.
+ */
 const CARD_W = 512;
-const PAD = 16;
-const MARGIN = 34;
+const PAD = CARD_BOX_INSET_MAX;
+const MARGIN = CARD_DESC_TEXT_MARGIN;
 const MAX_WIDTH = CARD_W - PAD * 2 - MARGIN;
 const DESC_PANEL_H = 126;
 const ABILITY_TAG_H = 38;
@@ -75,7 +88,7 @@ for (const card of bundle.cards) {
   // `SCALE` simula una tipografia mas grande: el presupuesto de lineas NO
   // cambia (el panel mide lo mismo), asi que un texto mas grande solo puede
   // pedir mas lineas. Con `--scale=1` esto es la metrica real.
-  const fontPx = (hasAbility ? 23 : 25) * SCALE;
+  const fontPx = (hasAbility ? CARD_DESC_FONT_PX.ability : CARD_DESC_FONT_PX.plain) * SCALE;
   const lines = wrapTextLines(text, { fontPx, maxWidth: MAX_WIDTH }).length;
   rows.push({ id: card.id, ability: hasAbility, lines, budget, chars: text.length, text });
 }

@@ -233,6 +233,41 @@ test('colonia: `unlockedRewards` se reconcilia con el nivel derivado (bug lvl 8)
   assert.equal(migrated.cosmetics.equippedAvatar, 'default');
 });
 
+test('cosmeticos: lo EQUIPADO entra a `owned` aunque el perfil no lo tenga', () => {
+  // Reporte del jugador: "el avatar de la Colonia esta equipado y no se ve ni en
+  // la Tarjeta ni en Cosmeticos". El panel arma cada seccion desde `owned`, asi
+  // que un id equipado que no este ahi DESAPARECE de la UI: se ve puesto en la
+  // Tarjeta pero no se puede ver ni volver a elegir. La migracion ahora garantiza
+  // la invariante equipado => poseido.
+  const migrated = migrateProfileSave({
+    version: PROFILE_SAVE_VERSION,
+    colony: { lifetimeSpores: 0, claimedRewards: [], unlockedRewards: [] },
+    cosmetics: {
+      equippedAvatar: 'avatar',
+      equippedFrame: 'frame_uncommon',
+      equippedCardBack: 'mycelial',
+      owned: ['default'],
+    },
+  });
+  for (const id of ['avatar', 'frame_uncommon', 'mycelial']) {
+    assert.ok(migrated.cosmetics.owned.includes(id), `falta ${id} en owned`);
+  }
+  // Sin duplicados (el dorso ya venia en el default del perfil).
+  assert.equal(migrated.cosmetics.owned.filter((x) => x === 'mycelial').length, 1);
+  // `default` sigue estando y nada se des-equipa solo.
+  assert.ok(migrated.cosmetics.owned.includes('default'));
+  assert.equal(migrated.cosmetics.equippedAvatar, 'avatar');
+});
+
+test('cosmeticos: un slot equipado con basura cae a `default` y no ensucia `owned`', () => {
+  const migrated = migrateProfileSave({
+    version: PROFILE_SAVE_VERSION,
+    cosmetics: { equippedAvatar: 42, owned: ['default'] },
+  });
+  assert.equal(migrated.cosmetics.equippedAvatar, 'default');
+  assert.deepEqual(migrated.cosmetics.owned, ['default', 'mycelial']);
+});
+
 test('v1 -> v4 recorre la cadena entera sin perder nada', () => {
   const migrated = migrateProfileSave({ version: 1, stats: { runs: 2 } });
   assert.equal(migrated.version, PROFILE_SAVE_VERSION);

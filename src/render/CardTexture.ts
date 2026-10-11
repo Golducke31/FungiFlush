@@ -24,6 +24,48 @@ import {
 
 const W = 512;
 const H = 744;
+
+/**
+ * Margen del marco pintado, en px del canvas de la carta.
+ *
+ * El anillo organico del marco ocupa ~26px: la ilustracion se dibuja DENTRO de
+ * esa ventana para que el marco no pise nada del frente (ni la ilustracion ni
+ * los datos). Tiene que coincidir con `WINDOW_INSET` de
+ * `tools/gen_card_frame.py`: si no, o se ve un canto del arte por debajo del
+ * anillo, o queda un canal vacio entre los dos.
+ */
+const CARD_FRAME_INSET = 26;
+
+/**
+ * Margen de las cajas del pie en el PEOR caso (el panel mas angosto).
+ *
+ * Lo consume `tools/audit-card-desc.ts`. El auditor tiene que medir con el
+ * MISMO ancho que dibuja la carta: con un ancho mayor SUBESTIMA las lineas y da
+ * por buenas descripciones que en la carta salen cortadas con "…". Exportarlo
+ * es lo que impide que las dos medidas se separen cuando cambia el margen.
+ */
+export const CARD_BOX_INSET_MAX = Math.max(
+  ...Object.values(RARITY_BORDER).map((b) => Math.max(b + 8, CARD_FRAME_INSET + 12)),
+);
+
+/**
+ * Aire entre el texto de la descripcion y el borde de su panel.
+ *
+ * Lo consume tambien `tools/audit-card-desc.ts`. Se bajo de 34 a 20 al mismo
+ * tiempo que subia el margen de las cajas: el panel se angosta 44px por el
+ * marco, y sin recuperar ancho por dentro las descripciones largas se cortaban
+ * con "…" (de 5 cartas a 12).
+ */
+export const CARD_DESC_TEXT_MARGIN = 14;
+
+/**
+ * Cuerpo de la descripcion (con y sin etiqueta de habilidad), en px de textura.
+ *
+ * Bajado 1px respecto del original para compensar el panel mas angosto. Lo
+ * consume `tools/audit-card-desc.ts`: medir con otro tamaño da un conteo de
+ * lineas distinto al que dibuja la carta.
+ */
+export const CARD_DESC_FONT_PX = { ability: 22, plain: 24 } as const;
 const TAU = Math.PI * 2;
 
 /**
@@ -173,6 +215,37 @@ function roundRect(
   ctx.lineTo(x, y + radius);
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
+}
+
+/**
+ * Texto BLANCO con contorno oscuro.
+ *
+ * Es la unica forma de que el texto gane sobre la ilustracion: la cara se dibuja
+ * ENCIMA de una pintura con zonas claras y oscuras, asi que un relleno claro sin
+ * contorno desaparece sobre el arte claro (el caso de la seta palida o del cristal
+ * cian). El contorno se traza ANTES del relleno, y con `lineJoin: round` para que
+ * las esquinas no salgan picudas a tamaño chico.
+ */
+const TEXT_OUTLINE = 'rgba(6, 10, 16, 0.92)';
+
+function outlinedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fill: string,
+  outlineWidth: number,
+  outline: string = TEXT_OUTLINE,
+): void {
+  if (outlineWidth > 0) {
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = outlineWidth;
+    ctx.strokeText(text, x, y);
+  }
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y);
 }
 
 function wrapText(
@@ -685,10 +758,19 @@ function drawChip(
       labelPx -= 1;
       ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
     }
-    ctx.fillStyle = hexToRgba(color, 0.95);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(labelText, x + w / 2, y + h * 0.3);
+    // Etiqueta casi blanca: el tinte del elemento se conserva pero ACLARADO
+    // hacia el blanco. A plena saturacion (y a 6px reales en pantalla) el color
+    // del elemento se leia como mancha; el contorno lo separa del chip.
+    outlinedText(
+      ctx,
+      labelText,
+      x + w / 2,
+      y + h * 0.3,
+      hexToCss(mixHex(color, 0xffffff, 0.55)),
+      3.5 * Math.min(scale, 2),
+    );
 
     const valueMaxW = w - 20 * scale;
     let valuePx = Math.round(40 * scale);
@@ -697,8 +779,7 @@ function drawChip(
       valuePx -= 1;
       ctx.font = `700 ${valuePx}px ${CARD_TEXT_FONT}`;
     }
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(value, x + w / 2, y + h * 0.72);
+    outlinedText(ctx, value, x + w / 2, y + h * 0.72, '#ffffff', 4.5 * Math.min(scale, 2));
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -712,23 +793,27 @@ function drawChip(
   // tamano sin perder nitidez y no depende de una fuente de iconos externa.
   const labelX = x + 14;
   if (glyph) {
-    ctx.fillStyle = hexToCss(color);
     ctx.font = `700 20px ${CARD_TEXT_FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(glyph, labelX, y + h / 2 + 1);
+    outlinedText(ctx, glyph, labelX, y + h / 2 + 1, hexToCss(mixHex(color, 0xffffff, 0.3)), 3);
   }
 
-  ctx.fillStyle = hexToRgba(color, 0.85);
-  ctx.font = `700 15px ${CARD_TEXT_FONT}`;
+  ctx.font = `700 16px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label.toUpperCase(), labelX + (glyph ? 26 : 0), y + h / 2 + 1);
+  outlinedText(
+    ctx,
+    label.toUpperCase(),
+    labelX + (glyph ? 26 : 0),
+    y + h / 2 + 1,
+    hexToCss(mixHex(color, 0xffffff, 0.55)),
+    3,
+  );
 
-  ctx.fillStyle = '#ffffff';
   ctx.font = `700 38px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'right';
-  ctx.fillText(value, x + w - 14, y + h / 2 + 2);
+  outlinedText(ctx, value, x + w - 14, y + h / 2 + 2, '#ffffff', 4.5);
 }
 
 // ---------------------------------------------------------------------------
@@ -759,6 +844,16 @@ export function createCardCanvas(
   const rarityColor = RARITY_COLOR[spec.rarity];
   const border = RARITY_BORDER[spec.rarity];
   const pad = border + 8;
+  /**
+   * Margen de las CAJAS del pie (chips, panel de descripcion, etiqueta de
+   * habilidad y estados).
+   *
+   * `pad` es solo `border + 8` (12-20px), asi que las cajas entraban DEBAJO del
+   * anillo del marco (la ventana arranca en `CARD_FRAME_INSET`): la placa de
+   * SUSTRATO quedaba a 2px del filamento y se veia pegada. Se toma el mayor
+   * entre `pad` y la ventana mas un canal de 12px.
+   */
+  const boxPad = Math.max(pad, CARD_FRAME_INSET + 12);
 
   // El voucher es la unica pieza que no viene del pool: no es una carta que
   // juegues ni un joker que ocupa slot, es una REGLA. Se pinta con el acento
@@ -801,19 +896,23 @@ export function createCardCanvas(
   //
   // El radio del clip tiene que coincidir con el del marco de la carta, y el
   // marco interno se omite (quedaria pegado al borde, encima del otro).
+  // El arte vive DENTRO de la ventana del marco (ver `CARD_FRAME_INSET`): el
+  // anillo pintado no pisa la ilustracion. El radio del clip acompana al de la
+  // ventana del marco para que las dos curvas coincidan.
+  const artInset = CARD_FRAME_INSET;
   const layout: ArtLayout = {
-    radius: 30,
+    radius: 18,
     topFade: 0.18,
     bottomStart: 0.62,
     innerFrame: false,
   };
 
   if (art && art.naturalWidth > 0) {
-    drawArtImage(ctx, art, 0, 0, W, H, spec, layout);
+    drawArtImage(ctx, art, artInset, artInset, W - artInset * 2, H - artInset * 2, spec, layout);
   } else {
     // Respaldo sin assets: patron + silueta dibujada por codigo, en la misma
     // area que el arte real para que una carta sin imagen no cambie de forma.
-    drawPattern(ctx, spec, 0, 0, W, H);
+    drawPattern(ctx, spec, artInset, artInset, W - artInset * 2, H - artInset * 2);
     drawSilhouette(spec, {
       ctx,
       cx: W / 2,
@@ -827,7 +926,21 @@ export function createCardCanvas(
 
   }
 
-  // --- 10. Marco exterior (imagen pintada; cae al procedural si no cargo) ---
+  // --- 10. Velo del nombre (cara COMPACTA) ---
+  // Va ANTES del marco a proposito. Estaba despues y el gradiente oscuro tapaba
+  // el anillo pintado justo ARRIBA, que es la zona que mas se mira: la carta
+  // parecia no tener marco. El velo solo tiene que oscurecer el ARTE, para que
+  // el nombre gane; el marco se dibuja encima y queda entero.
+  if (compact) {
+    const scrim = ctx.createLinearGradient(0, 0, 0, 210);
+    scrim.addColorStop(0, 'rgba(4, 8, 13, 0.92)');
+    scrim.addColorStop(0.62, 'rgba(4, 8, 13, 0.7)');
+    scrim.addColorStop(1, 'rgba(4, 8, 13, 0)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, W, 210);
+  }
+
+  // --- 11. Marco exterior (imagen pintada; cae al procedural si no cargo) ---
   // Va DESPUES del arte pero ANTES del texto/chips/gema/level: asi esos se
   // dibujan ENCIMA del anillo (la gema y el level estan justo dentro del
   // borde; si el marco los tapara quedarian invisibles en algunas rarezas).
@@ -869,7 +982,7 @@ export function createCardCanvas(
       // La linea tiene que entrar en el ancho util: familias largas
       // ("TRICOLOMATACEAS") con elementos largos ("SIMBIOSIS") se salian del
       // marco. Se busca el tamano mas grande que entra, de 17px para abajo.
-      const maxWidth = W - pad * 2 - 24;
+      const maxWidth = W - boxPad * 2 - 24;
       let fontPx = 17;
       while (fontPx > 11) {
         ctx.font = `400 ${fontPx}px ${CARD_DISPLAY_FONT}`;
@@ -902,16 +1015,9 @@ export function createCardCanvas(
 
   // --- Nombre ---
   // En la cara COMPACTA es EL dato principal: va mucho mas grande (84px de
-  // textura ≈ 13px reales en pantalla) y con un velo oscuro detras para que
-  // gane sobre la ilustracion. En la cara completa queda como siempre.
-  if (compact) {
-    const scrim = ctx.createLinearGradient(0, 0, 0, 210);
-    scrim.addColorStop(0, 'rgba(4, 8, 13, 0.92)');
-    scrim.addColorStop(0.62, 'rgba(4, 8, 13, 0.7)');
-    scrim.addColorStop(1, 'rgba(4, 8, 13, 0)');
-    ctx.fillStyle = scrim;
-    ctx.fillRect(0, 0, W, 210);
-  }
+  // textura ≈ 13px reales en pantalla). El velo oscuro que lo hace ganar sobre
+  // la ilustracion se dibuja ANTES del marco (ver paso 10): si va aca, tapa el
+  // anillo pintado de arriba.
   // El nombre va en UNA sola linea y se achica solo si no entra. En DOS lineas
   // se comia la ilustracion: la carta es de 112px en pantalla y el nombre es
   // contexto, no el contenido.
@@ -926,7 +1032,7 @@ export function createCardCanvas(
   // La marca de habilidad va DELANTE del nombre (ver mas abajo): hay que
   // descontarle su ancho al presupuesto del nombre.
   const MARKER = '✦ ';
-  const nameMaxW = compact ? W - pad * 2 - NAME_BADGE_LANE : W - pad * 2 - 24;
+  const nameMaxW = compact ? W - boxPad * 2 - NAME_BADGE_LANE : W - boxPad * 2 - 24;
   if (compact) {
     let px = 62;
     for (;;) {
@@ -936,13 +1042,16 @@ export function createCardCanvas(
       px -= 2;
     }
   } else {
-    ctx.font = `400 31px ${CARD_DISPLAY_FONT}`;
+    // Nombre de la cara COMPLETA: antes iba en `400` (peso fino) y casi blanco,
+    // y sobre la pintura nueva (con zonas claras) se perdia. Ahora es BLANCO
+    // PURO en `800` con contorno oscuro: es el dato que el jugador lee primero.
+    ctx.font = `800 33px ${CARD_DISPLAY_FONT}`;
   }
-  ctx.fillStyle = '#f2f6fb';
   const nameLines = wrapText(ctx, spec.name, nameMaxW, compact ? 1 : 2);
   const nameLineH = compact ? 78 : 36;
   const nameY = compact ? 48 : 56;
-  let nameX = compact ? pad : W / 2;
+  let nameX = compact ? boxPad : W / 2;
+  const nameOutline = compact ? 6 : 5;
   if (compact) {
     ctx.textAlign = 'left';
     if (spec.hasAbility) {
@@ -950,13 +1059,13 @@ export function createCardCanvas(
       // justo debajo del badge del numero: al seleccionar la carta quedaba
       // tapada y a 46px de textura era casi invisible. Como prefijo del nombre
       // se ve SIEMPRE y no compite con nada.
-      ctx.fillStyle = hexToCss(ABILITY_COLOR);
-      ctx.fillText('✦', nameX, nameY);
+      outlinedText(ctx, '✦', nameX, nameY, hexToCss(ABILITY_COLOR), nameOutline);
       nameX += ctx.measureText(MARKER).width;
-      ctx.fillStyle = '#f2f6fb';
     }
   }
-  nameLines.forEach((line, i) => ctx.fillText(line, nameX, nameY + i * nameLineH));
+  nameLines.forEach((line, i) =>
+    outlinedText(ctx, line, nameX, nameY + i * nameLineH, '#ffffff', nameOutline),
+  );
   if (compact) ctx.textAlign = 'center';
 
   // --- 5. Pie: chips de stats + descripcion ---
@@ -980,9 +1089,9 @@ export function createCardCanvas(
   const statusTop = descTop + descHeight + 10;
 
   if (spec.kind === 'card') {
-    const chipW = (W - pad * 2 - 18) / 2;
-    drawChip(ctx, pad, chipsTop, chipW, chipsHeight, 'SUSTRATO', `+${spec.substrate ?? 0}`, 0xf2a63b, '▲', chipScale);
-    drawChip(ctx, pad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱', chipScale);
+    const chipW = (W - boxPad * 2 - 18) / 2;
+    drawChip(ctx, boxPad, chipsTop, chipW, chipsHeight, 'SUSTRATO', `+${spec.substrate ?? 0}`, 0xf2a63b, '▲', chipScale);
+    drawChip(ctx, boxPad + chipW + 18, chipsTop, chipW, chipsHeight, 'ESPORAS', `x${spec.spores ?? 1}`, 0x4fd18b, '✱', chipScale);
   } else {
     // Jokers, mutaciones y vouchers: sin stats, solo un rotulo de tipo.
     // SIMBIONTE y no "JOKER": es el nombre que usa todo el juego (i18n
@@ -997,11 +1106,11 @@ export function createCardCanvas(
     g.addColorStop(0, hexToRgba(accent, 0.34));
     g.addColorStop(1, hexToRgba(accent, 0.12));
     ctx.fillStyle = g;
-    roundRect(ctx, pad, chipsTop, W - pad * 2, labelH, 12);
+    roundRect(ctx, boxPad, chipsTop, W - boxPad * 2, labelH, 12);
     ctx.fill();
     ctx.strokeStyle = hexToRgba(accent, 0.75);
     ctx.lineWidth = 2.5;
-    roundRect(ctx, pad, chipsTop, W - pad * 2, labelH, 12);
+    roundRect(ctx, boxPad, chipsTop, W - boxPad * 2, labelH, 12);
     ctx.stroke();
     ctx.fillStyle = hexToCss(accent);
     ctx.font = `400 ${compact ? 56 : 24}px ${CARD_DISPLAY_FONT}`;
@@ -1033,27 +1142,36 @@ export function createCardCanvas(
   // mazo/coleccion/tienda donde la carta se muestra grande.
   if (!compact) {
   ctx.fillStyle = hasAbility ? 'rgba(26, 18, 42, 0.62)' : 'rgba(6, 10, 16, 0.55)';
-  roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
+  roundRect(ctx, boxPad, descTop, W - boxPad * 2, descHeight, 14);
   ctx.fill();
   ctx.strokeStyle = hexToRgba(panelBorder, hasAbility ? 0.8 : 0.38);
   ctx.lineWidth = hasAbility ? 3 : 2;
-  roundRect(ctx, pad, descTop, W - pad * 2, descHeight, 14);
+  roundRect(ctx, boxPad, descTop, W - boxPad * 2, descHeight, 14);
   ctx.stroke();
 
   // Etiqueta "✦ HABILIDAD": banda propia arriba del panel de texto. Va con
   // FORMA (el glifo ✦ y la banda), no solo color, para no depender del color.
+  // Se mete 8px dentro del panel: la banda tiene que verse como una pestana
+  // DENTRO del panel, no como un segundo marco pegado al anillo.
   let abilityBodyTop = descTop;
   let abilityBodyHeight = descHeight;
   if (hasAbility) {
     const tagHeight = 38;
+    const tagInset = boxPad + 8;
     ctx.fillStyle = hexToRgba(abilityColor, 0.3);
-    roundRect(ctx, pad, descTop, W - pad * 2, tagHeight, 12);
+    roundRect(ctx, tagInset, descTop, W - tagInset * 2, tagHeight, 12);
     ctx.fill();
-    ctx.fillStyle = hexToCss(abilityColor);
-    ctx.font = `400 19px ${CARD_DISPLAY_FONT}`;
+    ctx.font = `700 19px ${CARD_DISPLAY_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('✦ HABILIDAD', W / 2, descTop + tagHeight / 2 + 1);
+    outlinedText(
+      ctx,
+      '✦ HABILIDAD',
+      W / 2,
+      descTop + tagHeight / 2 + 1,
+      hexToCss(mixHex(abilityColor, 0xffffff, 0.55)),
+      3,
+    );
     ctx.textBaseline = 'top';
     abilityBodyTop = descTop + tagHeight + 3;
     abilityBodyHeight = descHeight - tagHeight - 3;
@@ -1065,21 +1183,26 @@ export function createCardCanvas(
   // la mitad izquierda de la carta y se veia apretado contra el medio. Ese era
   // el "mal distribuida". Hay que reponer el centrado antes de dibujar.
   ctx.textAlign = 'center';
-  ctx.fillStyle = hasAbility ? hexToCss(abilityColor) : 'rgba(233, 241, 249, 0.97)';
+  // Texto de la descripcion en BLANCO (con el tinte de habilidad aclarado
+  // cuando la carta tiene una): el panel ya es oscuro, pero el contorno
+  // mantiene el texto separado del arte en las cartas sin panel.
+  const descFill = hasAbility ? hexToCss(mixHex(abilityColor, 0xffffff, 0.45)) : '#ffffff';
   // Las cartas CON habilidad tienen menos alto util (la etiqueta ✦ se lleva
   // 38px), por eso el presupuesto es menor — pero SIN habilidad tambien sube a
   // 4: el texto largo entraba con "…" y el jugador no leia la regla.
-  const descFontPx = hasAbility ? 23 : 25;
-  const descLineHeight = hasAbility ? 29 : 32;
+  const descFontPx = hasAbility ? CARD_DESC_FONT_PX.ability : CARD_DESC_FONT_PX.plain;
+  const descLineHeight = hasAbility ? 28 : 31;
   ctx.font = `700 ${descFontPx}px ${CARD_TEXT_FONT}`;
-  const descLines = wrapText(ctx, spec.desc, W - pad * 2 - 34, descLineBudget(hasAbility));
+  const descLines = wrapText(ctx, spec.desc, W - boxPad * 2 - CARD_DESC_TEXT_MARGIN, descLineBudget(hasAbility));
   // El bloque se centra VERTICALMENTE en el panel: una descripcion de una sola
   // linea queda al medio en vez de pegada al borde de arriba.
   const descBlockHeight = descLines.length * descLineHeight;
   const descFirstLineY =
     abilityBodyTop + abilityBodyHeight / 2 - descBlockHeight / 2 + descLineHeight / 2;
   ctx.textBaseline = 'middle';
-  descLines.forEach((line, i) => ctx.fillText(line, W / 2, descFirstLineY + i * descLineHeight));
+  descLines.forEach((line, i) =>
+    outlinedText(ctx, line, W / 2, descFirstLineY + i * descLineHeight, descFill, 2.5),
+  );
   ctx.textBaseline = 'top';
   }
   ctx.textBaseline = 'top';
@@ -1109,10 +1232,9 @@ export function createCardCanvas(
     ctx.lineWidth = 2.5;
     roundRect(ctx, 22, 22, 52, 40, 10);
     ctx.stroke();
-    ctx.fillStyle = hexToCss(rarityColor);
     ctx.font = `700 22px ${CARD_TEXT_FONT}`;
     ctx.textBaseline = 'middle';
-    ctx.fillText(`+${spec.level ?? 1}`, 48, 43);
+    outlinedText(ctx, `+${spec.level ?? 1}`, 48, 43, '#ffffff', 3);
     ctx.textBaseline = 'top';
   }
 
@@ -1129,7 +1251,7 @@ export function createCardCanvas(
   const statusGap = 8;
   statuses.slice(0, 4).forEach((status, i) => {
     const color = STATUS_COLOR[status];
-    const x = pad + i * (statusW + statusGap);
+    const x = boxPad + i * (statusW + statusGap);
     const y = statusTop;
     const w = statusW;
     const h = 30;
@@ -1657,16 +1779,14 @@ export function createCardBackCanvas(art?: HTMLImageElement): HTMLCanvasElement 
     }
   }
 
-  // Marco comun: imagen pintada si cargo, respaldo procedural si no.
-  const backFrame = cardFrameReady();
-  if (backFrame) {
-    ctx.drawImage(backFrame, 0, 0, W, H);
-  } else {
-    ctx.strokeStyle = 'rgba(95, 216, 232, 0.55)';
-    ctx.lineWidth = 6;
-    roundRect(ctx, 4, 4, W - 8, H - 8, 28);
-    ctx.stroke();
-  }
+  // El dorso NO lleva el marco pintado de la cara: son dos objetos distintos y
+  // el anillo organico (micelio, hojas, setas) leia como si el dorso fuera una
+  // carta boca abajo con la cara de otra. Queda su propio filete cian, como
+  // estaba antes del rediseño.
+  ctx.strokeStyle = 'rgba(95, 216, 232, 0.55)';
+  ctx.lineWidth = 6;
+  roundRect(ctx, 4, 4, W - 8, H - 8, 28);
+  ctx.stroke();
 
   return canvas;
 }

@@ -37,6 +37,7 @@
     "art_card_decay_mythic.webp",
     "art_card_decay_rare.webp",
     "art_card_decay_uncommon.webp",
+    "art_card_frame.webp",
     "art_card_mycelium_common.webp",
     "art_card_mycelium_legendary.webp",
     "art_card_mycelium_mythic.webp",
@@ -135,7 +136,6 @@
     "art_spore.webp",
     "art_symbiosis.webp",
     "art_table.webp",
-    "card_frame.webp",
     "ui_play_frame.webp",
     "ui_play_text_en.webp",
     "ui_play_text_es.webp"

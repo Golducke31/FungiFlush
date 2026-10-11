@@ -262,7 +262,11 @@ class BloomPass extends Pass {
   /** Fuerza del bloom en vivo (la usa el pulso de cierre del combo). */
   setStrength(value: number): void {
     const u = this.composite.uniforms.uStrength;
-    if (u) u.value = value;
+    if (!u) return;
+    // El composite hace `base + bloom * uStrength`: un valor no finito o
+    // negativo pinta el cuadro de negro (o de basura). Se sanea en el unico
+    // punto que escribe el uniform, venga de donde venga.
+    u.value = Number.isFinite(value) ? Math.max(0, value) : 0;
   }
 
   override setSize(width: number, height: number): void {
@@ -525,7 +529,11 @@ export class PostFx {
    * como el bloom puede estar desactivado (calidad baja), es un no-op ahi.
    */
   pulseBloom(extra: number): void {
-    this.bloomPass?.setStrength(this.baseBloomStrength + extra);
+    if (!this.bloomPass) return;
+    // `extra` sale del pulso del combo (0..1 * 0.5). Se acota igual: sumar de
+    // mas satura el cuadro y un NaN lo apaga.
+    const safe = Number.isFinite(extra) ? Math.min(Math.max(extra, 0), 1) : 0;
+    this.bloomPass.setStrength(this.baseBloomStrength + safe);
   }
 
   dispose(): void {
