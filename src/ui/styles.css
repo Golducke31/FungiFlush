@@ -297,13 +297,12 @@ body {
 #arena-bg {
   position: fixed;
   inset: 0;
-  /* RUTA RELATIVA a proposito (antes `/art_backdrop.jpg`): el build usa
-     `base: './'` (Tauri sirve el bundle desde una ruta local y la web puede
-     montarse en un subdirectorio). Una ruta ABSOLUTA solo resuelve si el juego
-     vive en la RAIZ del host; montado en un subpath da 404 y el backdrop
-     desaparece — el jugador ve NEGRO detras de la mesa ("el bloom se come el
-     fondo"). Es la misma trampa que documenta `Cosmetics.cosmeticArtUrl`. */
-  background: #080b10 url('./art_backdrop.jpg') center / cover no-repeat;
+  /* La imagen (art_backdrop.jpg) se inyecta desde `main.ts` contra
+     `document.baseURI` (idéntico a `Cosmetics.cosmeticArtUrl`): una `url()` en
+     la hoja se resolveria contra la ruta de la hoja (`/src/ui/...`) y daria 404
+     — el jugador veria NEGRO detras de la mesa. El color de respaldo cubre el
+     instante previo a que cargue la imagen. */
+  background: #080b10 center / cover no-repeat;
   z-index: 0;
 }
 

@@ -785,6 +785,17 @@ async function boot(): Promise<void> {
   const uiRoot = document.getElementById('ui-root');
   if (!canvas || !uiRoot) throw new Error('Faltan #fungiflush-canvas o #ui-root en el DOM.');
 
+  // Fondo de arena fullscreen (detras del canvas WebGL transparente).
+  // La URL se resuelve contra `document.baseURI`, NO se escribe relativa en el
+  // CSS: una `url('./art_backdrop.jpg')` en la hoja se resuelve contra la RUTA
+  // de la hoja (`/src/ui/art_backdrop.jpg`) y da 404 — el jugador ve NEGRO
+  // detras de la mesa. Igual que `Cosmetics.cosmeticArtUrl`, contra `baseURI`
+  // anda en el dev server y bajo el `asset://` de Tauri (`base: './'`).
+  const arenaBg = document.getElementById('arena-bg');
+  if (arenaBg) {
+    arenaBg.style.backgroundImage = `url("${new URL('art_backdrop.jpg', document.baseURI).href}")`;
+  }
+
   const lastPointer = { x: 0, y: 0 };
   window.addEventListener(
     'pointermove',
