@@ -63,6 +63,11 @@ def target_for(stem: str) -> tuple[int, int]:
     """Tamano de salida: primero por nombre exacto, despues por prefijo."""
     if stem in TARGETS:
         return TARGETS[stem]
+    # Cualquier dorso (art_cardback y las variantes art_cardback_<id>) comparte
+    # la proporcion de la carta. Sin esto, `art_cardback_mycelial` cae al
+    # cuadrado por defecto y el dorso sale recortado.
+    if stem.startswith("art_cardback"):
+        return CARD_TARGET
     # `art_card_<elemento>_<rareza>` son 2:3, como la carta.
     if stem.startswith("art_card_"):
         return CARD_TARGET

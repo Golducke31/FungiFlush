@@ -33,8 +33,11 @@ Plan: quitar "agua" ingame→Arena fullscreen; reskin HUDS + ilustraciones de ca
 - **Fase B (quitar agua+arena 3D)** ✅: borrados `Water.ts`/`Arena.ts`; gates green.
 - **Fase D (card_frame)** ✅: `tools/gen_card_frame.py`→`public/art/card_frame.webp`(1024×1488); singleton `setCardFrameImage/getCardFrameImage` en `CardTexture.ts`; `createCardCanvas`/`createCardBackCanvas` lo dibujan antes del texto. `ArtAssets` key `card_frame`→`art_card_frame.webp`. `main.ts` `setCardFrameImage(assets.get('card_frame')??null)`. Gates green (typecheck/validate/build/smoke/test 508).
 - **Fase C (kit HUD `border-image`)** 🔄: generar `public/ui/frames/{panel,plate,button,chip,gold_corner,badge_circle}.png` (centro transparente, wood/moss/gold) y cablear en `styles.css` (`.btn`,`.menu-gel`,`.panel`,`.plate`,`.chip`,`.badge`) SIN quitar gradientes de estado teal/amber. Falta ejecutar.
-- **Fase E** (integrar ~109 ilustraciones del usuario vía `docs/PROMPTS_REDISENO.md`): bloqueada en entregas del usuario.
+- **Fase E (set de arte completo)** ✅: 103 piezas nuevas por img2img anclado (backdrop→commons→rarezas→propias→ciegos). **40/40** elemento×rareza + **54/54** propias + **24/24** ciegos (el dato pide 24, no 13) + **2** reversos. `art/index.json`=139 (94 de carta); 222 MB→4.57 MB.
+  - ⚠️ **ImageGen**: paralelizar solo con prefijo único `S_<clave>.` en el prompt (si no, colisiona por timestamp a segundos y `output_dir` por llamada no se respeta). El slug se trunca a ~30 chars ⇒ reparar por prefijo (`tools/_install_staged.py`). El elemento/rareza de las propias sale del DATO, no de la tabla del doc.
+  - ⚠️ `optimize_art.py`: `startswith("art_cardback")`→`CARD_TARGET` (antes `art_cardback_mycelial` salía 512×512).
+  - Hoja de contacto: `tools/shots/art-contact-sheet-new.png`.
 - **Fase F** (menú principal): pendiente.
-- **Fase G** (gates + re-baseline `gate:desktop`/`gate:parity`): pendiente.
+- **Fase G** (gates + re-baseline `gate:desktop`/`gate:parity`): pendiente (fallan ahora: cambiaron todas las caras).
 
 Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spore `#f2c14e`, decay `#c1683a`, symbiosis `#4fd18b`, crystal `#5fd8e8`, mycelium `#a78bfa`, parasite `#e05c8a`; frame gold `#d9b25a`.
