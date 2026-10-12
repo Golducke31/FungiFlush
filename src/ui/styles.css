@@ -107,19 +107,22 @@
 
   /* -------------------------------------------------------------------------
      Color por ELEMENTO (los 8 del catalogo).
-     Los mismos hex que `ELEMENT_COLOR` en `src/render/palette.ts`: el acento de
-     una carta en 3D y el de su tarjeta en el panel de arquetipos tienen que ser
+     EXACTAMENTE los hex de `ELEMENT_COLOR` en `src/render/palette.ts`: el acento
+     de una carta en 3D y el de su tarjeta en el panel de arquetipos tienen que ser
      el MISMO o la identidad no se lee. Se exponen como custom properties para
      que el DOM (que no importa el render) pueda usarlos por `var()`.
+     P5.4: se ALINEARON los 4 que diferian (neutral, poison, symbiosis,
+     parasite) y heredan el cromo recortado de los neones. Si se cambia un valor
+     aca, se cambia en `palette.ts` (y viceversa): son la misma paleta.
      ------------------------------------------------------------------------- */
-  --element-neutral: #9aa7b4;
-  --element-poison: #7ddc7d;
+  --element-neutral: #9aa5b1;
+  --element-poison: #8dd550;
   --element-spore: #f2c14e;
   --element-decay: #c1683a;
-  --element-symbiosis: #6fd0a8;
-  --element-crystal: #5fd8e8;
-  --element-mycelium: #a78bfa;
-  --element-parasite: #e06c9f;
+  --element-symbiosis: #5cc48c;
+  --element-crystal: #6dceda;
+  --element-mycelium: #ac96ef;
+  --element-parasite: #d3698e;
 
   /* -------------------------------------------------------------------------
      Marco de madera y musgo del HUD.
@@ -1212,12 +1215,6 @@ body {
   background: var(--frame-body-lo);
 }
 
-.hud-missions-toggle-progress {
-  color: var(--frame-dim);
-  font-weight: 500;
-  font-size: 10px;
-}
-
 .hud-missions-title {
   font-size: 9px;
   letter-spacing: 0.14em;
@@ -1863,6 +1860,26 @@ body {
     linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
 }
 
+/* Abandonar la partida (panel de "Volver al menu"): mismo tablon que fantasma,
+   pero con tinte rojo-parasito. Es la UNICA accion destructiva del panel, y el
+   rojo la separa de "Guardar y salir" (verde de juego) sin alarmar en la barra
+   del HUD, donde ese boton no vive. */
+.btn.is-danger {
+  color: #f2a3bd;
+  border-color: rgba(224, 92, 138, 0.45);
+  background:
+    linear-gradient(180deg, rgba(224, 92, 138, 0.18) 0%, rgba(224, 92, 138, 0) 34%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
+.btn.is-danger:hover:not(:disabled) {
+  color: #ffd3e0;
+  border-color: rgba(224, 92, 138, 0.75);
+  background:
+    linear-gradient(180deg, rgba(224, 92, 138, 0.32) 0%, rgba(224, 92, 138, 0.04) 42%),
+    linear-gradient(180deg, var(--frame-deep-hi) 0%, var(--frame-deep-lo) 100%);
+}
+
 /* Pestaña activa: la unica que lleva la luz de musgo al maximo.
    La del constructor de mazo tiene su propia regla mas abajo en el archivo (mas
    especifica), asi que se edito alla y no aca: una regla puesta en este punto
@@ -2072,6 +2089,43 @@ body {
   margin-top: 9px;
   font-size: 11.5px;
   color: var(--spores);
+}
+
+/* Glosario de estados de la carta (tooltip): una fila por estado con su
+   magnitud y una linea llana de efecto. Reemplaza al listado de nombres
+   sueltos, que no explicaba que hacia cada uno. */
+.tooltip-statuses {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.tooltip-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.tooltip-status-name {
+  font-weight: 700;
+}
+
+.tooltip-status-value {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.tooltip-status-gloss {
+  /* El glosario NO hereda el color del estado: es texto de apoyo, no la
+     senal. Va en gris para que el nombre siga siendo lo que se lee. */
+  color: var(--dim);
+  flex: 1 1 100%;
 }
 
 /* --------------------------------------------------------------------------
@@ -2567,6 +2621,20 @@ body {
   font-size: 14.5px;
   color: var(--dim);
   margin: 0 0 18px;
+}
+
+/* Propuesta del modo infinito (panel de victoria del ultimo ante): la linea
+   que le dice al jugador que su partida PUEDE seguir. Va despues del resumen
+   y antes de los botones, con el mismo gris del subtitulo pero mas presencia. */
+.panel-pitch {
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text);
+  background: color-mix(in srgb, var(--spores) 10%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
 }
 
 .offer-grid {
@@ -9980,6 +10048,10 @@ body {
   width: 22px;
   height: 22px;
 }
+.colony-icon.is-chip {
+  width: 20px;
+  height: 20px;
+}
 
 /* --- Bloque de la Colonia dentro del panel de Perfil --- */
 .profile-colony-top {
@@ -10106,6 +10178,14 @@ body {
 .colony-result-bonus {
   font-size: 11px;
   color: rgba(207, 230, 242, 0.62);
+}
+/* Que SON las Esporas y donde se ven: la Colonia vive detras del menu y el
+   jugador no tenia forma de saberlo (feedback del playtest). */
+.colony-result-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(207, 230, 242, 0.66);
 }
 
 /* --- Panel de Recompensas de la Colonia --- */

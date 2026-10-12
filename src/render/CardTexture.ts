@@ -61,11 +61,13 @@ export const CARD_DESC_TEXT_MARGIN = 14;
 /**
  * Cuerpo de la descripcion (con y sin etiqueta de habilidad), en px de textura.
  *
- * Bajado 1px respecto del original para compensar el panel mas angosto. Lo
- * consume `tools/audit-card-desc.ts`: medir con otro tamaño da un conteo de
- * lineas distinto al que dibuja la carta.
+ * P5.1 — Subidos 1px (22→23 / 24→25). La textura se muestra a k≈0.148, asi que
+ * 1px de textura son ~0.15px reales: el aumento es chico a proposito. El auditor
+ * (`--scale=1.06`) dice que ninguna descripcion se pasa de linea con estos
+ * valores, y pasarse de linea SI es grave (corta la regla con "…"). Para subir
+ * mas haria falta recortar copy o achicar el margen de las cajas.
  */
-export const CARD_DESC_FONT_PX = { ability: 22, plain: 24 } as const;
+export const CARD_DESC_FONT_PX = { ability: 23, plain: 25 } as const;
 const TAU = Math.PI * 2;
 
 /**
@@ -752,7 +754,7 @@ function drawChip(
     // etiqueta y 80px = ~12px para el numero.
     const labelText = label.toUpperCase();
     const labelMaxW = w - 16 * scale;
-    let labelPx = Math.round(24 * scale);
+    let labelPx = Math.round(26 * scale);
     ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
     while (labelPx > 14 && ctx.measureText(labelText).width > labelMaxW) {
       labelPx -= 1;
@@ -799,7 +801,7 @@ function drawChip(
     outlinedText(ctx, glyph, labelX, y + h / 2 + 1, hexToCss(mixHex(color, 0xffffff, 0.3)), 3);
   }
 
-  ctx.font = `700 16px ${CARD_TEXT_FONT}`;
+  ctx.font = `700 17px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   outlinedText(
@@ -811,7 +813,7 @@ function drawChip(
     3,
   );
 
-  ctx.font = `700 38px ${CARD_TEXT_FONT}`;
+  ctx.font = `700 40px ${CARD_TEXT_FONT}`;
   ctx.textAlign = 'right';
   outlinedText(ctx, value, x + w - 14, y + h / 2 + 2, '#ffffff', 4.5);
 }
@@ -880,8 +882,13 @@ export function createCardCanvas(
   ctx.fill();
 
   // --- 2. Tinte del elemento arriba ---
+  // P5.4: bajado de 0.30 a 0.18. El tinte cubre el 55% superior de la carta (el
+  // area del arte) y a 0.30 de un neon sobre el fondo oscuro la ilustracion
+  // entera se TENIA del elemento: era "la paleta" que el playtest marcó como
+  // cansadora. Con 0.18 el elemento sigue anunciandose arriba (borde, chip y
+  // cabecera lo repiten) pero el arte vuelve a verse.
   const tint = ctx.createLinearGradient(0, 0, 0, H * 0.55);
-  tint.addColorStop(0, hexToRgba(elementColor, 0.3));
+  tint.addColorStop(0, hexToRgba(elementColor, 0.18));
   tint.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = tint;
   roundRect(ctx, 0, 0, W, H, 30);
@@ -981,10 +988,15 @@ export function createCardCanvas(
       const sep = ' · ';
       // La linea tiene que entrar en el ancho util: familias largas
       // ("TRICOLOMATACEAS") con elementos largos ("SIMBIOSIS") se salian del
-      // marco. Se busca el tamano mas grande que entra, de 17px para abajo.
+      // marco. Se busca el tamano mas grande que entra, de 19px para abajo.
+      //
+      // P5.1: el arranque sube de 17 a 19 y el piso de 11 a 13. Medido: el peor
+      // caso ("SIMBIOSIS · TRICOLOMATACEAS") ocupa 269px de los 412 utiles, asi
+      // que 19px entra SIEMPRE y el auto-achique ya casi no se usa. Antes este
+      // texto no llevaba contorno y sobre el arte claro se perdia.
       const maxWidth = W - boxPad * 2 - 24;
-      let fontPx = 17;
-      while (fontPx > 11) {
+      let fontPx = 19;
+      while (fontPx > 13) {
         ctx.font = `400 ${fontPx}px ${CARD_DISPLAY_FONT}`;
         const width =
           ctx.measureText(elementLabel).width +
@@ -997,19 +1009,15 @@ export function createCardCanvas(
       const sepWidth = ctx.measureText(sep).width;
       let cursor = W / 2 - (elementWidth + sepWidth + ctx.measureText(familyLabel).width) / 2;
       ctx.textAlign = 'left';
-      ctx.fillStyle = hexToRgba(accent, 0.95);
-      ctx.fillText(elementLabel, cursor, 30);
+      outlinedText(ctx, elementLabel, cursor, 30, hexToRgba(accent, 0.95), 2.5);
       cursor += elementWidth;
-      ctx.fillStyle = hexToRgba(accent, 0.5);
-      ctx.fillText(sep, cursor, 30);
+      outlinedText(ctx, sep, cursor, 30, hexToRgba(accent, 0.5), 2.5);
       cursor += sepWidth;
-      ctx.fillStyle = 'rgba(214, 226, 236, 0.85)';
-      ctx.fillText(familyLabel, cursor, 30);
+      outlinedText(ctx, familyLabel, cursor, 30, 'rgba(214, 226, 236, 0.85)', 2.5);
       ctx.textAlign = 'center';
     } else {
-      ctx.fillStyle = hexToRgba(accent, 0.95);
-      ctx.font = `400 17px ${CARD_DISPLAY_FONT}`;
-      ctx.fillText(elementLabel, W / 2, 30);
+      ctx.font = `400 19px ${CARD_DISPLAY_FONT}`;
+      outlinedText(ctx, elementLabel, W / 2, 30, hexToRgba(accent, 0.95), 2.5);
     }
   }
 
@@ -1161,7 +1169,7 @@ export function createCardCanvas(
     ctx.fillStyle = hexToRgba(abilityColor, 0.3);
     roundRect(ctx, tagInset, descTop, W - tagInset * 2, tagHeight, 12);
     ctx.fill();
-    ctx.font = `700 19px ${CARD_DISPLAY_FONT}`;
+    ctx.font = `700 21px ${CARD_DISPLAY_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     outlinedText(
@@ -1232,7 +1240,7 @@ export function createCardCanvas(
     ctx.lineWidth = 2.5;
     roundRect(ctx, 22, 22, 52, 40, 10);
     ctx.stroke();
-    ctx.font = `700 22px ${CARD_TEXT_FONT}`;
+    ctx.font = `700 24px ${CARD_TEXT_FONT}`;
     ctx.textBaseline = 'middle';
     outlinedText(ctx, `+${spec.level ?? 1}`, 48, 43, '#ffffff', 3);
     ctx.textBaseline = 'top';
@@ -1244,11 +1252,19 @@ export function createCardCanvas(
   // la descripcion: los chips de estado tapaban la ultima linea del texto.
   const statuses = spec.statuses ?? [];
   // El chip lleva etiqueta + VALOR ("Pudriéndose 4"): 54px no alcanzaban y el
-  // texto se cortaba a "DECA". 76px entra la etiqueta completa en castellano
-  // ("Pudriéndose") en el cuerpo pequeno y el numero en negrita al lado. Se
-  // separan 84px entre chips para que no se toquen.
-  const statusW = 76;
-  const statusGap = 8;
+  // texto se cortaba a "DECA".
+  //
+  // P5.1 — el chip se ensancha de 76 a 104px (4 chips = 434 de los 436 utiles,
+  // entran justos) y el texto sube: etiqueta de 13 a 16, valor de 16 a 19, y
+  // los dos con CONTORNO (antes no lo llevaban: a 13px de textura, sobre el
+  // fondo tiecho del chip, la etiqueta se veía como una mancha de color).
+  // La etiqueta se auto-achica desde 16 (piso 12) si no entra con el valor al
+  // lado: medido, "Sobrecrecida" a 16px ocupa 97px y el huero con valor es ~76,
+  // así que los nombres largos del castellano caen solos sin cortarse.
+  const statusW = 104;
+  const statusGap = 6;
+  const statusLabelPx = 16;
+  const statusValuePx = 19;
   statuses.slice(0, 4).forEach((status, i) => {
     const color = STATUS_COLOR[status];
     const x = boxPad + i * (statusW + statusGap);
@@ -1294,18 +1310,34 @@ export function createCardCanvas(
 
     // Etiqueta TRADUCIDA + magnitud. Se recorta a 11 caracteres para que no se
     // salga del chip en idiomas largos ("Pudriéndose" = 11 justos). El valor va
-    // en negrita a la derecha, pegado al borde interno.
+    // en negrita a la derecha, pegado al borde interno, y se le RESERVA su
+    // ancho medido antes de achicar la etiqueta (si no, se pisan).
     const label = (spec.statusLabels?.[status] ?? status).slice(0, 11);
     const value = spec.statusValues?.[status];
-    ctx.fillStyle = hexToCss(color);
-    ctx.font = `700 13px ${CARD_TEXT_FONT}`;
+    const valueText = typeof value === 'number' ? String(value) : null;
+    const padL = 7;
+    const padR = 7;
+    const gap = 5;
+    let valueW = 0;
+    if (valueText !== null) {
+      ctx.font = `900 ${statusValuePx}px ${CARD_TEXT_FONT}`;
+      valueW = ctx.measureText(valueText).width;
+    }
+    // El huero de la etiqueta: chip menos los pads menos el valor reservado.
+    const labelAvail = w - padL - padR - (valueW > 0 ? valueW + gap : 0);
+    let labelPx = statusLabelPx;
+    ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
+    while (labelPx > 12 && ctx.measureText(label).width > labelAvail) {
+      labelPx -= 1;
+      ctx.font = `700 ${labelPx}px ${CARD_TEXT_FONT}`;
+    }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, x + 7, y + 16);
-    if (typeof value === 'number') {
-      ctx.font = `900 16px ${CARD_TEXT_FONT}`;
+    outlinedText(ctx, label, x + padL, y + 16, hexToCss(color), 2.5);
+    if (valueText !== null) {
+      ctx.font = `900 ${statusValuePx}px ${CARD_TEXT_FONT}`;
       ctx.textAlign = 'right';
-      ctx.fillText(String(value), x + w - 7, y + 16);
+      outlinedText(ctx, valueText, x + w - padR, y + 16, '#ffffff', 3);
       ctx.textAlign = 'left';
     }
 
@@ -1363,8 +1395,11 @@ export function createCardArtCanvas(
   roundRect(ctx, 0, 0, W, H, 30);
   ctx.fill();
 
+  // Acompaña al tinte de `createCardCanvas` (P5.4, 0.18): si las dos capas
+  // llevaran alfas distintas, el parallax delataria el cambiazo al mover la
+  // carta (la de texto flota por delante de esta).
   const tint = ctx.createLinearGradient(0, 0, 0, H * 0.55);
-  tint.addColorStop(0, hexToRgba(elementColor, 0.3));
+  tint.addColorStop(0, hexToRgba(elementColor, 0.18));
   tint.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = tint;
   roundRect(ctx, 0, 0, W, H, 30);

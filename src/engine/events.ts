@@ -120,7 +120,14 @@ export interface GameEventMap {
     };
   };
   'round:loss': { score: number; target: number };
-  'game:over': { reason: 'loss' | 'victory'; ante: number };
+  'game:over': {
+    reason: 'loss' | 'victory';
+    ante: number;
+    /** La run SIGUE (commit de victoria al entrar en modo infinito): no pintar panel final. */
+    continues?: boolean;
+    /** Derrota final de una run que ya commiteo su victoria en modo infinito. */
+    endless?: boolean;
+  };
 
   // --- Cartas ---
   'hand:dealt': { cards: CardInstance[] };

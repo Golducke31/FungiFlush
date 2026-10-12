@@ -23,12 +23,13 @@ import {
   type RunSnapshot,
   type ScoreBreakdown,
   type ShopOffer,
+  type StatusInstance,
 } from '@engine/index';
 import { FUNGI_FLUSH_MAX_CHARGES } from '@engine/constants';
 import type { BoardView } from '@engine/board';
 import type { RoundState } from '@engine/state/RoundState';
 import { t } from '@i18n/index';
-import { ELEMENT_COLOR, RARITY_COLOR, UI_COLORS, hexToCss } from '@render/palette';
+import { ELEMENT_COLOR, RARITY_COLOR, STATUS_COLOR, UI_COLORS, hexToCss } from '@render/palette';
 import * as anim from '@render/anim';
 import type { ProfileSettings } from '@meta/ProfileState';
 import { offerFaceUrl } from './cardArt';
@@ -87,6 +88,28 @@ function createPileLabelEl(pile: 'deck' | 'descarte'): HTMLDivElement {
 }
 
 /**
+ * Detalle numerico de un estado, para el glosario del tooltip.
+ *
+ * El nombre del estado ("Pudriéndose") no lleva la magnitud: sin el numero, dos
+ * cartas con pudrición 1 y con 6 se leen iguales. Devuelve `''` cuando el
+ * estado no tiene magnitud que mostrar (los estados sin riesgo inmediato se
+ * explican solos con el glosario).
+ */
+function statusDetailOf(status: StatusInstance, tt: (key: string, params?: Record<string, string | number>) => string): string {
+  switch (status.type) {
+    case 'decay':
+      return `−${status.value} ${tt('hud.substrate')}`;
+    case 'overgrowth':
+      return `+${status.value} ${tt('hud.spores')}`;
+    case 'spore_lock':
+      // `turnsLeft` = manos que falta aguantar (-1 = permanente en la ronda).
+      return status.turnsLeft > 0 ? tt('statusInfo.hands', { n: status.turnsLeft }) : '';
+    default:
+      return '';
+  }
+}
+
+/**
  * Estado meta que alimenta el menu principal: progreso del jugador, la
  * recomendacion contextual ("que deberia hacer ahora?") y el nivel de la
  * Colonia Fungi (meta-progresion futura). El HUD no conoce el perfil: el
@@ -125,13 +148,30 @@ export interface HudCallbacks {
   onStartBlind: () => void;
   onRestart: () => void;
   /**
-   * Abandonar la run y volver al MENU PRINCIPAL (boton "Menu" del HUD).
-   *
-   * Distinto de `onRestart`, que arranca otra run de inmediato: aca el jugador
-   * sale al menu. El controlador se encarga de borrar el guardado, o al recargar
-   * le ofreceria "Continuar" una run que acaba de abandonar.
+   * Salir al MENU PRINCIPAL desde la partida (barra superior y panel de ciegos):
+   * PAUSA la run. El guardado se conserva para que "Continuar" la retoma;
+   * borrarla es una decision aparte y explicita (`onAbandonRun`).
    */
   onQuitToMenu: () => void;
+  /**
+   * Abandonar la run de verdad: borra el guardado. No hay vuelta atras, por eso
+   * vive detras de una confirmacion explicita. El perfil (Colonia, unlocks,
+   * stats) no se toca: se escribio en vivo durante la run.
+   */
+  onAbandonRun: () => void;
+  /**
+   * SEGUIR jugando desde el panel de victoria del ante 8 (modo infinito).
+   * El motor commitea la victoria UNA vez y avanza de ante sin cortar la run.
+   */
+  onEndlessContinue: () => void;
+  /**
+   * TERMINAR la partida en victoria desde ese mismo panel: se commitea el
+   * resultado (contada como victoria en el perfil) y el HUD repinta el panel
+   * final normal, que es el que muestra el resumen y las Esporas de Colonia.
+   * La partida nueva se arranca desde ahi (`onRestart`), no de un salto: si se
+   * arrancara aca, el jugador nunca veria el resumen de su victoria.
+   */
+  onVictoryNewRun: () => void;
   /** Devuelve la promesa del cambio para poder refrescar el texto que lo dispara. */
   onToggleLanguage: () => void | Promise<void>;
   onContinueRun: () => void;
@@ -922,7 +962,10 @@ export class HUD {
       // (derrota en la ultima mano), `score:settled` nunca llega y el jugador se
       // queda mirando la partida congelada. Aca se fuerza el panel final sin
       // depender de `score:settled`, de las particulas ni de ningun overlay.
-      bus.on('game:over', ({ reason }) => {
+      bus.on('game:over', ({ reason, continues }) => {
+        // El commit de victoria de `continueEndless` se emite con la run
+        // SIGUIENDO (modo infinito): ahi no se pinta ningun panel final.
+        if (continues) return;
         this.forceGameOver(reason);
       }),
 
@@ -1095,10 +1138,14 @@ export class HUD {
    * P0.3 (HUD movil) — Misiones plegables.
    *
    * En movil horizontal la franja completa tapaba la esquina inferior izquierda
-   * del tablero; ahora hay un chip pequeño ("[ Misiones 1/2 ]") SIEMPRE visible
-   * durante la run y un panel lateral que se desliza al tocarlo. El chip tambien
-   * muestra el progreso de un vistazo sin abrir ("PURGA · 0/2") y cambia a
-   * "[ ✓ Misión completada ]" cuando todas estan hechas.
+   * del tablero; ahora hay un chip pequeño ("Misiones 1/2") SIEMPRE visible
+   * durante la run y un panel lateral que se desliza al tocarlo. El chip cambia
+   * a "[ ✓ Misión completada ]" cuando todas estan hechas.
+   *
+   * P4.4 — El chip NO muestra el progreso de la mision destacada: en una franja
+   * de 40 px de alto, el nombre de la mision y su "0/2" se leian como ruido y
+   * competian con el marcador. El progreso vive en el panel, que es donde se
+   * abre cuando se quiere saber mas.
    */
   private renderMissions(): void {
     const hasRun =
@@ -1121,15 +1168,6 @@ export class HUD {
         ? t('mission.allDoneBadge')
         : t('mission.toggle', { done: missions.length - pending, total: missions.length });
       this.elMissionsToggle.append(label);
-      // Una mision destacada durante la partida: la primera pendiente incremental
-      // muestra su progreso ("PURGA · 0/2") para dar direccion sin abrir.
-      const featured = missions.find((m) => !m.state.completed);
-      if (featured && featured.def.incremental) {
-        const progress = document.createElement('span');
-        progress.className = 'hud-missions-toggle-progress';
-        progress.textContent = `${t(featured.def.nameKey)} · ${featured.state.progress}/${featured.def.incremental.max}`;
-        this.elMissionsToggle.append(progress);
-      }
     }
 
     // El panel lateral: misma lista de siempre, pero se desliza desde la
@@ -1964,6 +2002,11 @@ export class HUD {
       case 'victory':
         this.showGameOver('victory');
         break;
+      // Fase 3 — El ante 8 se supero: el panel final se abre en modo OFERTA
+      // (seguir en infinito o terminar). La run sigue viva, no es un game over.
+      case 'victory_offer':
+        this.showGameOver('victory', { offer: true });
+        break;
       default:
         this.hideOverlay();
     }
@@ -2541,9 +2584,11 @@ export class HUD {
   /**
    * Salida al MENU PRINCIPAL desde la partida, con un panel de confirmacion.
    *
-   * Se usa un panel y no el "dos toques" del boton de vender joker: abandonar la
-   * run borra el guardado y no tiene vuelta atras, asi que merece una decision
-   * explicita con las DOS opciones a la vista, no un boton que cambia de texto.
+   * Tres salidas a la vista: cancelar (no pasa nada), "Guardar y salir" (la run
+   * queda PAUSADA y "Continuar" la retoma) y "Abandonar partida" (borra el
+   * guardado; no tiene vuelta atras). Antes el panel de ciegos salia directo y
+   * sin preguntar: un toque de mas borraba la run y el jugador se encontraba con
+   * el menu sin "Continuar" mientras su perfil SI conservaba el progreso.
    */
   private confirmQuitToMenu(): void {
     const panel = document.createElement('div');
@@ -2566,16 +2611,25 @@ export class HUD {
     cancel.textContent = t('ui.cancel');
     cancel.addEventListener('click', () => this.closePanel());
 
-    const confirm = document.createElement('button');
-    confirm.className = 'btn is-play';
-    confirm.dataset['act'] = 'quit-confirm';
-    confirm.textContent = t('menu.quitConfirm');
-    confirm.addEventListener('click', () => {
+    const pause = document.createElement('button');
+    pause.className = 'btn is-play';
+    pause.dataset['act'] = 'quit-confirm';
+    pause.textContent = t('menu.quitPause');
+    pause.addEventListener('click', () => {
       this.closePanel();
       this.callbacks.onQuitToMenu();
     });
 
-    actions.append(cancel, confirm);
+    const abandon = document.createElement('button');
+    abandon.className = 'btn is-danger';
+    abandon.dataset['act'] = 'quit-abandon';
+    abandon.textContent = t('menu.abandonConfirm');
+    abandon.addEventListener('click', () => {
+      this.closePanel();
+      this.callbacks.onAbandonRun();
+    });
+
+    actions.append(cancel, pause, abandon);
     // El IDIOMA ya NO vive aca: el unico control esta en el menu principal
     // (boton EN/ES de la esquina superior derecha).
     panel.append(title, body, actions);
@@ -2660,6 +2714,7 @@ export class HUD {
         },
         onOpenArchetypes: () => this.showArchetypes(),
         onOpenProfile: () => this.showProfile(),
+        onOpenColonyRewards: () => this.showColonyRewards(() => this.showMenu()),
         onOpenChallenges: () => this.showChallenges(),
       },
     );
@@ -2748,7 +2803,7 @@ export class HUD {
    * cuanto falta. No es una tienda: las recompensas se desbloquean al alcanzar
    * el nivel, el jugador solo necesita saber que gana si sigue jugando.
    */
-  showColonyRewards(): void {
+  showColonyRewards(onClose: () => void = () => this.showProfile()): void {
     const colony = this.menuMeta.colony;
     const panel = buildColonyRewardsPanel(
       {
@@ -2761,7 +2816,8 @@ export class HUD {
       {
         onClaim: (rewardId) => this.callbacks.onClaimColonyReward(rewardId),
         onClaimAll: () => this.callbacks.onClaimAllColonyRewards(),
-        onClose: () => this.showProfile(),
+        // Desde el chip del MENU se vuelve al menu; desde el Perfil, al Perfil.
+        onClose,
       },
     );
     this.openOverlay(panel);
@@ -3909,7 +3965,11 @@ export class HUD {
     }
 
     if (current) {
-      const isBoss = (current.effects?.length ?? 0) > 0;
+      // Etiqueta de CONTENIDO, no derivada: desde la Fase 2 los pequenos y
+      // grandes tambien traen penalizaciones, asi que `effects.length` ya no
+      // identifica al jefe.
+      const isBoss = current.tier === 'boss';
+      const hasEffects = (current.effects?.length ?? 0) > 0;
 
       const card = document.createElement('div');
       card.className = `blind-card is-current${isBoss ? ' is-boss' : ''}`;
@@ -3944,16 +4004,16 @@ export class HUD {
         head.append(bossTag);
       }
 
-      // Descripcion: para un ciego normal es sabor; para un JEFE es su EFECTO
-      // (el contenido pone la regla en `descKey`), asi que se etiqueta como tal
-      // en vez de repetirla dos veces. En un ciego comun se muestra solo si
-      // aporta algo distinto del nombre.
+      // Descripcion: si el ciego trae EFECTOS (jefe o penalizado), la
+      // descripcion ES la regla y se etiqueta como tal; un ciego comun muestra
+      // solo el texto de sabor. Asi una penalidad en un ciego pequeno se lee
+      // igual de clara que la de un jefe.
       const descText = t(current.descKey);
       let desc: HTMLElement | null = null;
       if (descText && descText !== t(current.nameKey)) {
         desc = document.createElement('div');
-        desc.className = isBoss ? 'blind-effect' : 'blind-desc';
-        if (isBoss) {
+        desc.className = hasEffects ? 'blind-effect' : 'blind-desc';
+        if (hasEffects) {
           const effectTag = document.createElement('span');
           effectTag.className = 'blind-effect-tag';
           effectTag.textContent = t('blindCard.effect');
@@ -4082,7 +4142,9 @@ export class HUD {
     menu.className = 'btn is-ghost';
     menu.dataset['act'] = 'blind-menu';
     menu.textContent = t('ui.menu');
-    menu.addEventListener('click', () => this.callbacks.onQuitToMenu());
+    // Mismo panel de confirmacion que el "Menu" de la barra superior: salir sin
+    // preguntar borraba la run y dejaba el menu sin "Continuar".
+    menu.addEventListener('click', () => this.confirmQuitToMenu());
 
     actions.append(deck, details, menu);
 
@@ -4516,7 +4578,14 @@ export class HUD {
     return wrap;
   }
 
-  private showGameOver(reason: 'loss' | 'victory'): void {
+  /**
+   * Panel final de la run.
+   *
+   * `offer` = es el panel de VICTORIA del ultimo ante (ante 8) y la run sigue
+   * viva: ademas del resumen ofrece SEGUIR en modo infinito. Terminar la
+   * partida commitea la victoria y repinta este mismo panel sin la oferta.
+   */
+  private showGameOver(reason: 'loss' | 'victory', opts?: { offer?: boolean }): void {
     const run = this.engine.run;
     const panel = document.createElement('div');
     panel.className = `panel is-gameover is-${reason}`;
@@ -4604,16 +4673,49 @@ export class HUD {
       colonyBox.appendChild(list);
     }
 
+    // Que SON las Esporas y donde se ven: sin esta linea el jugador gana
+    // "cosas de colonia" sin saber que la Colonia es el progreso permanente
+    // que vive detras del menu (feedback del playtest).
+    const colonyHint = document.createElement('p');
+    colonyHint.className = 'colony-result-hint';
+    colonyHint.textContent = t('colony.earnedHint');
+    colonyBox.appendChild(colonyHint);
+
     // El idioma se saco de aca tambien: este panel es el resumen de la run, no
     // un menu de sistema. Cambiar de idioma se hace en Ajustes (menu principal)
     // o en el MENU INGAME.
     const restart = document.createElement('button');
     restart.className = 'btn is-play';
-    restart.textContent = t('ui.newRun');
-    restart.addEventListener('click', () => this.callbacks.onRestart());
 
-    actions.append(restart);
-    panel.append(title, subtitle, grid, colonyBox, actions);
+    if (opts?.offer) {
+      // --- Oferta de modo infinito (ante 8 superado) ---
+      // La propuesta va ANTES de los botones: si el jugador lee solo una linea,
+      // tiene que ser la que le dice que su partida puede seguir.
+      const pitch = document.createElement('p');
+      pitch.className = 'panel-pitch';
+      pitch.textContent = t('endless.pitch');
+
+      const keep = document.createElement('button');
+      keep.className = 'btn is-play';
+      keep.textContent = t('endless.continue');
+      keep.dataset['act'] = 'victory-continue';
+      keep.addEventListener('click', () => this.callbacks.onEndlessContinue());
+
+      // Terminar NO arranca otra partida de golpe: commitea la victoria y deja
+      // que el panel final (sin oferta) se pinte con su resumen y sus Esporas.
+      restart.textContent = t('endless.endRun');
+      restart.addEventListener('click', () => this.callbacks.onVictoryNewRun());
+
+      actions.append(keep, restart);
+      // El `append` final MUEVE los nodos: la propuesta se encola ACA y no con
+      // `appendChild` (si no, quedaba despues del titulo).
+      panel.append(title, subtitle, grid, colonyBox, pitch, actions);
+    } else {
+      restart.textContent = t('ui.newRun');
+      restart.addEventListener('click', () => this.callbacks.onRestart());
+      actions.append(restart);
+      panel.append(title, subtitle, grid, colonyBox, actions);
+    }
     this.openOverlay(panel);
   }
 
@@ -4728,10 +4830,38 @@ export class HUD {
     this.elTooltip.append(name, taxonomy, rarity, desc, stats);
 
     if (card.statuses.length > 0) {
+      // Glosario: "Estéril" o "Pudriéndose" no le dicen a nadie QUÉ pasa con la
+      // carta. Cada fila lleva el nombre del estado (con su color, que ya
+      // distingue penalización de ventaja) y una línea llana con el efecto
+      // real, que es lo que hace falta para decidir si se juega o se descarta.
       const statuses = document.createElement('div');
-      statuses.className = 'tooltip-combos';
-      statuses.style.color = hexToCss(0xe05c8a);
-      statuses.textContent = card.statuses.map((s) => t(`status.${s.type}`)).join(' · ');
+      statuses.className = 'tooltip-statuses';
+      for (const status of card.statuses) {
+        const row = document.createElement('div');
+        row.className = 'tooltip-status';
+        row.dataset['status'] = status.type;
+        // El color sale de `STATUS_COLOR`: es el MISMO que pinta el chip en la
+        // cara de la carta, asi que "verde = crece" se lee igual en los dos
+        // sitios. Las penalizaciones comparten el rojo de peligro de la UI.
+        row.style.color = hexToCss(
+          status.type === 'overgrowth' ? STATUS_COLOR.overgrowth : 0xe05c8a,
+        );
+        const head = document.createElement('span');
+        head.className = 'tooltip-status-name';
+        head.textContent = t(`status.${status.type}`);
+        const detail = statusDetailOf(status, t);
+        if (detail) {
+          const value = document.createElement('span');
+          value.className = 'tooltip-status-value';
+          value.textContent = ` ${detail}`;
+          head.appendChild(value);
+        }
+        const gloss = document.createElement('span');
+        gloss.className = 'tooltip-status-gloss';
+        gloss.textContent = t(`statusInfo.${status.type}`);
+        row.append(head, gloss);
+        statuses.appendChild(row);
+      }
       this.elTooltip.appendChild(statuses);
     }
 

@@ -217,9 +217,9 @@
       "5": "Eclosión Total (x3 Esporas)"
     },
     "family": {
-      "3": "Colonia (+16 Sustrato)",
-      "4": "Gran Colonia (+40 Sustrato)",
-      "5": "Supercolonia (+80 Sustrato)"
+      "3": "Racimo (+16 Sustrato)",
+      "4": "Gran Racimo (+40 Sustrato)",
+      "5": "Superracimo (+80 Sustrato)"
     },
     "diversity": "Diversidad (+25 Sustrato)"
   },
@@ -228,6 +228,13 @@
     "decay": "Pudriéndose",
     "spore_lock": "Estéril",
     "overgrowth": "Sobrecrecida"
+  },
+  "statusInfo": {
+    "dormant": "No dispara sus habilidades mientras dure.",
+    "decay": "Pierde Sustrato cada vez que dispara.",
+    "spore_lock": "No aporta Esporas al puntuar.",
+    "overgrowth": "Aporta Esporas extra al jugarse.",
+    "hands": "{n} manos"
   },
   "effect": {
     "latent": "Latencia",
@@ -303,11 +310,11 @@
     },
     "blind_a2_small": {
       "name": "Tronco Caído",
-      "desc": "Alguien ya lo está comiendo."
+      "desc": "Una carta de tu mano nace estéril esta ronda."
     },
     "blind_a2_big": {
       "name": "Nido de Hormigas",
-      "desc": "La colonia defiende lo suyo."
+      "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
     },
     "blind_a2_boss": {
       "name": "El Micelio Hambriento",
@@ -315,11 +322,11 @@
     },
     "blind_a3_small": {
       "name": "Anillo de Hongos",
-      "desc": "El círculo no es decoración."
+      "desc": "Cada mano reduce tus Esporas un 10%."
     },
     "blind_a3_big": {
       "name": "Fosa de Compost",
-      "desc": "Rica, tibia y observándote."
+      "desc": "Cada mano reduce tus Esporas un 15%."
     },
     "blind_a3_boss": {
       "name": "La Reina Esporada",
@@ -327,11 +334,11 @@
     },
     "blind_a4_small": {
       "name": "Piedra Seca",
-      "desc": "Acá nada crece sin pelear."
+      "desc": "Empezás esta ronda con una mano menos."
     },
     "blind_a4_big": {
       "name": "Bosque Ciego",
-      "desc": "El dosel se traga la luz."
+      "desc": "Empezás esta ronda con un descarte menos."
     },
     "blind_a4_boss": {
       "name": "El Hongo Ciego",
@@ -339,11 +346,11 @@
     },
     "blind_a5_small": {
       "name": "Arboleda Inundada",
-      "desc": "Raíces encharcadas, podredumbre lenta."
+      "desc": "Cada mano reduce tus Esporas un 10%."
     },
     "blind_a5_big": {
       "name": "Osario",
-      "desc": "El calcio viejo alimenta lo nuevo."
+      "desc": "Cada descarte te cuesta 10 de Sustrato."
     },
     "blind_a5_boss": {
       "name": "La Colonia Devoradora",
@@ -351,11 +358,11 @@
     },
     "blind_a6_small": {
       "name": "Capa de Ceniza",
-      "desc": "Lo que se quemó alimenta lo que viene."
+      "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
     },
     "blind_a6_big": {
       "name": "Capilla Podrida",
-      "desc": "Los himnos ahora son fúngicos."
+      "desc": "Empezás esta ronda con una mano menos."
     },
     "blind_a6_boss": {
       "name": "Titán del Suelo",
@@ -363,11 +370,11 @@
     },
     "blind_a7_small": {
       "name": "Salar",
-      "desc": "Casi nada sobrevive. Casi."
+      "desc": "Cada mano reduce tus Esporas un 10%."
     },
     "blind_a7_big": {
       "name": "Campo Marchito",
-      "desc": "La cosecha falló. Vos sos la cosecha."
+      "desc": "Empezás esta ronda con un descarte menos."
     },
     "blind_a7_boss": {
       "name": "El Anillo de Ceniza",
@@ -375,11 +382,11 @@
     },
     "blind_a8_small": {
       "name": "Floración Final",
-      "desc": "La última ronda tranquila."
+      "desc": "Cada mano reduce tus Esporas un 15%."
     },
     "blind_a8_big": {
       "name": "Mar Micelial",
-      "desc": "Un océano de filamentos, todos conectados."
+      "desc": "Cada descarte te cuesta 15 de Sustrato."
     },
     "blind_a8_boss": {
       "name": "Dios Micelio",
@@ -853,7 +860,6 @@
     "history": "Historial",
     "profile": "Perfil",
     "profileSubtitle": "Tu progreso y tu colección",
-    "colonySoon": "Próximamente",
     "openMenu": "Menú",
     "levelShort": "Nv",
     "challenges": "Desafíos",
@@ -873,8 +879,9 @@
       "beatBest": "Tu mejor ante es {ante} — superalo"
     },
     "quitTitle": "Volver al menú",
-    "quitBody": "Vas a abandonar esta partida. Se pierde el progreso de la run.",
-    "quitConfirm": "Abandonar y salir"
+    "quitBody": "Si salís al menú, tu partida queda guardada y podés continuar cuando quieras. Si la abandonás, se borra el guardado. Tu perfil y tu Colonia se conservan siempre.",
+    "quitPause": "Guardar y salir",
+    "abandonConfirm": "Abandonar partida"
   },
   "settings": {
     "title": "Ajustes",
@@ -1667,6 +1674,8 @@
     "spores": "Esporas de Colonia",
     "sporesTotal": "Esporas de Colonia: {value}",
     "earned": "Esporas de Colonia",
+    "earnedHint": "Son progreso permanente: suben el nivel de tu Colonia y desbloquean cosméticos. No cambian la partida. Las ves y las reclamás en el menú → Colonia.",
+    "chip": "Colonia · Nivel {level}",
     "nextUnlock": "Próximo desbloqueo: {name}",
     "noNext": "Ya desbloqueaste todas las recompensas por nivel",
     "rewards": "Recompensas",
@@ -1766,6 +1775,11 @@
         "conflict": "Encontramos progreso distinto: elegí cuál conservar"
       }
     }
+  },
+  "endless": {
+    "pitch": "¡Superaste el último ante! Podés terminar acá con la victoria, o seguir jugando en modo infinito: los antes no tienen techo y cada uno pide más puntos.",
+    "continue": "Seguir jugando",
+    "endRun": "Terminar la partida"
   },
   "tutorial": {
     "start": "Tutorial guiado",

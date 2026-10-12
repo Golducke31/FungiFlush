@@ -29,7 +29,9 @@ export type GameStatus =
   | 'interlude'
   | 'shop'
   | 'game_over'
-  | 'victory';
+  | 'victory'
+  /** Se gano el ultimo ante: oferta de terminar o seguir en modo infinito. */
+  | 'victory_offer';
 
 export interface ShopState {
   offers: ShopOffer[];
@@ -156,6 +158,15 @@ export interface RunState {
    * version de las reglas, y el tutorial es una run normal con semilla fija.
    */
   tutorial: boolean;
+  /**
+   * La run sigue MAS ALLA del ultimo ante declarado (modo infinito).
+   *
+   * Se pone al elegir "seguir jugando" en el panel de victoria. El tope de
+   * `registry.maxAnte()` deja de aplicar: los objetivos escalan solos
+   * (`anteTarget` extrapola) y los ciegos reutilizan el ultimo ante. Viaja
+   * serializado (aditivo) para que una run infinita retomada siga siendolo.
+   */
+  endless: boolean;
   /** Estadisticas para la pantalla final. */
   stats: {
     handsPlayed: number;
@@ -211,6 +222,7 @@ export function createRunState(seed: number, deck: Deck, ascension = 0, archetyp
     missions: [],
     totalScore: 0,
     tutorial: false,
+    endless: false,
     stats: {
       handsPlayed: 0,
       bestHand: 0,

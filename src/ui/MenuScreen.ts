@@ -66,6 +66,8 @@ export interface MenuCallbacks {
   onOpenArchetypes: () => void;
   /** Abre el panel de PERFIL (esquina superior izquierda). */
   onOpenProfile: () => void;
+  /** Escalera de Recompensas de la Colonia (chip de la esquina superior). */
+  onOpenColonyRewards: () => void;
   /** Abre el panel de DESAFIOS (menu de la esquina superior derecha). */
   onOpenChallenges: () => void;
 }
@@ -181,6 +183,36 @@ function dropItem(label: string, act: string, onClick: () => void): HTMLButtonEl
 }
 
 /**
+ * Chip de la COLONIA en la esquina superior derecha.
+ *
+ * La Colonia se nombraba en todos lados (Esporas, nivel, recompensas) pero no
+ * tenia NINGUNA puerta visible: el feedback fue "gano cosas de colonia y no se
+ * que es ni donde esta". Este chip abre la escalera de Recompensas y muestra el
+ * nivel de un vistazo. A diferencia del diario NO es un aviso: siempre esta,
+ * con o sin recompensas para reclamar.
+ */
+function colonyChip(level: number, onClick: () => void): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'menu-gel menu-gel--icon menu-colony';
+  el.dataset['act'] = 'colony';
+  el.setAttribute('aria-label', t('colony.chip', { level }));
+  el.title = t('colony.chip', { level });
+  el.appendChild(colonyIconEl('is-chip'));
+  const badge = document.createElement('span');
+  badge.className = 'menu-icon-badge';
+  const prefix = document.createElement('span');
+  prefix.className = 'badge-prefix';
+  prefix.textContent = t('menu.levelShort');
+  const value = document.createElement('span');
+  value.textContent = String(level);
+  badge.append(prefix, value);
+  el.appendChild(badge);
+  el.addEventListener('click', onClick);
+  return el;
+}
+
+/**
  * Chip de RECOMPENSA DIARIA de la esquina superior derecha.
  *
  * No es una accion secundaria mas: es un AVISO. Lleva el punto de notificacion
@@ -189,8 +221,7 @@ function dropItem(label: string, act: string, onClick: () => void): HTMLButtonEl
  * espera aca, sin interrumpir. El chip sigue en el DOM aunque ya se haya
  * reclamado, para que la escalera de dias siga siendo alcanzable.
  */
-function dailyChip(pending: boolean, label: string, onClick: () => void): HTMLButtonElement {
-  const el = document.createElement('button');
+function dailyChip(pending: boolean, label: string, onClick: () => void): HTMLButtonElement {  const el = document.createElement('button');
   el.type = 'button';
   el.className = 'menu-gel menu-gel--icon menu-daily';
   el.dataset['act'] = 'daily';
@@ -438,6 +469,8 @@ export function buildMenuPanel(state: MenuState, callbacks: MenuCallbacks): HTML
       t(state.dailyPending === true ? 'menu.dailyReady' : 'menu.daily'),
       callbacks.onOpenDaily,
     ),
+    // Colonia: la puerta visible a las Esporas y su escalera de Recompensas.
+    colonyChip(state.colonyLevel ?? 1, callbacks.onOpenColonyRewards),
     // Idioma: el UNICO control de idioma del juego, con la misma caja celeste
     // que el resto. Muestra el codigo ACTIVO (`EN` por defecto).
     langChip(currentLanguage().toUpperCase(), () => callbacks.onToggleLanguage()),
@@ -676,9 +709,12 @@ export function buildProfilePanel(
   colonyName.textContent = t('colony.title');
   const colonyLevel = document.createElement('span');
   colonyLevel.className = 'profile-colony-level';
+  // `syncMenuMeta` SIEMPRE empuja la vista de la Colonia: el respaldo
+  // "Proximamente" (`menu.colonySoon》) era codigo muerto que prometia una
+  // funcion que ya existia. Sin vista se muestra el nivel 1, no una excusa.
   colonyLevel.textContent = colony
     ? `${t(colony.levelNameKey)} · ${t('colony.levelLabel', { level: colony.level })}`
-    : t('menu.colonySoon');
+    : t('colony.levelLabel', { level: 1 });
   colonyTop.append(colonyName, colonyLevel);
 
   const sporesRow = document.createElement('div');

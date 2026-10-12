@@ -6,16 +6,29 @@
 
 import type { ElementType, Rarity, StatusType } from '@engine/index';
 
-/** Color de cada elemento. Define el borde de la carta y su glow. */
+/**
+ * Color de cada elemento. Define el borde de la carta y su glow.
+ *
+ * P5.4 — Cromo bajado ~20% en los cinco NEONES (poison, symbiosis, crystal,
+ * mycelium, parasite). El feedback del playtest fue que "la paleta de colores
+ * molesta visualmente al rato": a saturacion maxima y sobre fondo casi negro,
+ * esos cinco tonos VIBRAN entre si y contra el marco, y la fatiga aparece
+ * aunque cada carta se lea bien por separado. Se recorta croma manteniendo
+ * MATIZ y luminancia, asi que la identidad de cada elemento sigue intacta (un
+ * veneno sigue siendo verde-lima, un parasito sigue siendo rosa).
+ *
+ * Los valores son ahora la UNICA fuente: los pares `--element-*` de
+ * `styles.css` se alinearon a estos hexes (antes 4 de ellos diferian).
+ */
 export const ELEMENT_COLOR: Record<ElementType, number> = {
   neutral: 0x9aa5b1,
-  poison: 0x8ce63f,
+  poison: 0x8dd550,
   spore: 0xf2c14e,
   decay: 0xc1683a,
-  symbiosis: 0x4fd18b,
-  crystal: 0x5fd8e8,
-  mycelium: 0xa78bfa,
-  parasite: 0xe05c8a,
+  symbiosis: 0x5cc48c,
+  crystal: 0x6dceda,
+  mycelium: 0xac96ef,
+  parasite: 0xd3698e,
 };
 
 /** Color de rareza. Define el grosor y brillo del marco. */
@@ -40,7 +53,8 @@ export const STATUS_COLOR: Record<StatusType, number> = {
   dormant: 0x5b6472,
   decay: 0xc1683a,
   spore_lock: 0x7a8794,
-  overgrowth: 0x4fd18b,
+  // El verde de "crece" es el de simbiosis: una sola fuente para ese tono (P5.4).
+  overgrowth: ELEMENT_COLOR.symbiosis,
 };
 
 export const UI_COLORS = {

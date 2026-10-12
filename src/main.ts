@@ -43,6 +43,7 @@ import { HISTORY_CAP, type ColonyRunResult } from '@meta/ProfileState';
 import {
   DAILY_HARD_CAP,
   applyBlindAward,
+  bonusForDaily,
   bonusForMission,
   colonyLevelNameKey,
   computeBlindAward,
@@ -382,6 +383,13 @@ async function boot(): Promise<void> {
       runStore.cancelAutosave();
       return;
     }
+    if (run.status === 'victory_offer') {
+      // Oferta de terminar o seguir en infinito: no es un punto para guardar.
+      // Si el jugador sale al menu aca, la pausa reoferta al retomar (tuvo que
+      // volver a ganar el ultimo jefe para llegar de nuevo).
+      runStore.cancelAutosave();
+      return;
+    }
     if (run.status === 'game_over' || run.status === 'victory') {
       // Una run terminada no se continua: se borra el guardado.
       runStore.cancelAutosave();
@@ -470,10 +478,12 @@ async function boot(): Promise<void> {
     // Los Sobres ya NO caen en cualquier ciego: solo los suelta un JEFE, y no
     // siempre. `round:win` se emite ANTES de que `leaveShop` avance el
     // `blindIndex`, asi que en este instante `round.blind` es el ciego recien
-    // vencido. `tier === 'boss'` es la etiqueta de contenido; `effects.length`
-    // es el respaldo para contenido viejo que no declara `tier`.
+    // vencido. El gate es `tier === 'boss'`: desde la Fase 2 los ciegos
+    // pequenos y grandes tambien llevan penalizaciones, asi que
+    // `effects.length > 0` ya NO identifica a un jefe (si se guardara como
+    // respaldo, cada ciego con penalty soltaria sobre).
     const blind = round.blind;
-    const isBoss = blind?.tier === 'boss' || (blind?.effects?.length ?? 0) > 0;
+    const isBoss = blind?.tier === 'boss';
     // RNG sembrado con el reloj: un drop NO necesita ser reproducible (a
     // diferencia de la run) y sembrarlo con la semilla de la partida filtraria
     // el estado del juego a la economia meta. Mismo criterio que `openPacks`.
@@ -549,20 +559,27 @@ async function boot(): Promise<void> {
   });
 
   // --- Estadisticas de perfil ---
-  bus.on('game:over', ({ reason, ante }) => {
+  // `endless: true` = la run YA commiteo su victoria (modo infinito) y esta es
+  // su derrota FINAL: no suma otra partida, solo actualiza el desenlace del
+  // historial (es la MISMA partida, no una nueva).
+  bus.on('game:over', ({ reason, ante, endless }) => {
+    const endlessFinal = endless === true;
     // El banner se emite FUERA del patch: `patch` es sincrono y devuelve una
     // copia nueva, asi que el aviso tiene que esperar a que el guardado real
     // haya ocurrido para no anunciar un nivel que todavia no existe.
     let unlockedAscension = 0;
     profileStore.patch((p) => {
-      p.stats.runs += 1;
+      if (!endlessFinal) p.stats.runs += 1;
       if (reason === 'victory') p.stats.wins += 1;
       p.stats.bestAnte = Math.max(p.stats.bestAnte, ante);
       // R5: historial de la partida. Lo ultimo primero y capeado. Se deduplica
       // por `seed` porque `game:over` puede reemitirse si el jugador restaura
       // una run ya terminada (el save se escribe al morir, no al salir).
-      const already = p.history.some((h) => h.seed === engine.run.seed);
-      if (!already) {
+      // Modo infinito: la victoria YA quedo anotada cuando se ofrecio seguir,
+      // asi que la rendicion final ACTUALIZA esa misma entrada (misma seed) en
+      // vez de duplicar la partida. Es la misma run, no una nueva.
+      const existing = p.history.find((h) => h.seed === engine.run.seed);
+      if (!existing) {
         const stats = engine.run.stats;
         p.history.unshift({
           seed: engine.run.seed,
@@ -582,6 +599,19 @@ async function boot(): Promise<void> {
           archetype: engine.run.archetype,
         });
         if (p.history.length > HISTORY_CAP) p.history.length = HISTORY_CAP;
+      } else if (endlessFinal) {
+        // Derrota final en modo infinito: el desenlace de la entrada existente
+        // pasa de victoria a derrota, pero conserva su posicion en el historial
+        // (fue la primera aparicion de la seed la que la ordeno).
+        const stats = engine.run.stats;
+        existing.ante = ante;
+        existing.win = false;
+        existing.reason = 'loss';
+        existing.at = Date.now();
+        existing.bestHand = stats.bestHand;
+        existing.totalScore = engine.run.totalScore;
+        existing.blindsCleared = stats.blindsCleared;
+        existing.cardsDestroyed = stats.cardsDestroyed;
       }
       // R1: ganar en el nivel N desbloquea N+1 (hasta el maximo del contenido).
       // `highestUnlocked` es MONOTONO: nunca baja, ni siquiera perdiendo A8.
@@ -594,30 +624,34 @@ async function boot(): Promise<void> {
         }
       }
       // P4: XP de temporada por run (ante * 50, +200 si gana).
-      if (seasonDef) addXp(p, seasonDef.id, ante * 50 + (reason === 'victory' ? 200 : 0));
+      // En modo infinito la derrota final NO re-puntua: la XP ya se dio cuando
+      // se cerro la victoria (repetirla seria cobrarla dos veces).
+      if (!endlessFinal && seasonDef) addXp(p, seasonDef.id, ante * 50 + (reason === 'victory' ? 200 : 0));
       // Colonia (v4): el resultado de la run queda ENCOLADO para el sync.
       // Anti-trampa: se encola el RESULTADO (modo, Ciegos superados, score y
       // version), nunca las Esporas calculadas en el cliente: el servidor las
       // recalcula. Sin cuenta vinculada el estado queda `offline` y la cola
       // espera (el juego es offline-first).
-      const colonyResult: ColonyRunResult = makeRunResult({
-        runId: runColony.runId || `${engine.run.seed}-${Date.now()}`,
-        startedAt: runColony.startedAt || new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        mode: engine.run.ascension > 0 ? 'ascension' : 'classic',
-        highestBlind: ante,
-        completedBlinds: engine.run.stats.blindsCleared,
-        scoreSummary: engine.run.totalScore,
-        clientVersion: APP_VERSION,
-      });
-      queueRunResult(p, colonyResult);
+      if (!endlessFinal) {
+        const colonyResult: ColonyRunResult = makeRunResult({
+          runId: runColony.runId || `${engine.run.seed}-${Date.now()}`,
+          startedAt: runColony.startedAt || new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          mode: engine.run.ascension > 0 ? 'ascension' : 'classic',
+          highestBlind: ante,
+          completedBlinds: engine.run.stats.blindsCleared,
+          scoreSummary: engine.run.totalScore,
+          clientVersion: APP_VERSION,
+        });
+        queueRunResult(p, colonyResult);
+      }
     });
     // El desglose de la run ya esta cerrado: el panel de resultados lo lee.
     pushColonyResult();
     // Ranking (V1.3): subir el resultado y refrescar los tableros. Es
     // best-effort y no bloquea el panel: sin cuenta o sin servidor no hace nada.
     if (leaderboardTransport.enabled && accountIdentity()) void syncLeaderboard();
-    if (seasonDef) {
+    if (seasonDef && !endlessFinal) {
       const total =
         profileStore.current.entitlements.passes.find((x) => x.seasonId === seasonDef.id)?.xp ?? 0;
       bus.emit('pass:xp', {
@@ -1612,20 +1646,34 @@ async function boot(): Promise<void> {
         scene.setMode('run');
       },
       /**
-       * Salir al MENU PRINCIPAL desde la partida.
+       * Salir al MENU PRINCIPAL desde la partida: PAUSA, no abandono.
        *
-       * Tres cosas que NO son opcionales:
-       *   1. El guardado se BORRA. Si sobreviviera, al volver al menu el chip
-       *      "Continuar" ofreceria retomar una run que el jugador acaba de
-       *      abandonar.
-       *   2. `savedRun` se limpia para que el chip no reaparezca en memoria.
-       *   3. La escena vuelve a modo menu (decorado + sin arena de juego).
+       * El guardado se CONSERVA y se vuelca a disco ya mismo (sin esperar el
+       * debounce de 1.5 s) para que "Continuar" en el menu retome la run
+       * exacta. `savedRun` se refresca con el snapshot: si se queda con el
+       * valor de boot (null en una run empezada en esta sesion), el chip de
+       * "Continuar" no apareceria y el bug original seguiria vivo.
        *
-       * El `clear()` es ASINCRONO: el chip se apaga ya (punto 2), pero recien
-       * cuando el borrado termina se vuelve a leer el disco. Leerlo antes
-       * resucitaria el guardado viejo y el chip reapareceria solo.
+       * Borrar la run es una decision aparte y explicita: `onAbandonRun`.
        */
       onQuitToMenu: () => {
+        savedRun = engine.serialize();
+        syncContinueState();
+        void runStore.save(savedRun);
+        // El estado meta se empuja ANTES de `enterMenu`: el panel del menu se
+        // construye en ese cambio de estado y no se vuelve a dibujar.
+        syncMenuMeta();
+        engine.enterMenu();
+        scene.setMode('menu', { reduceMotion: profileStore.current.settings.reduceMotion });
+      },
+      /**
+       * Abandonar la run de verdad: el guardado se BORRA. `savedRun` se limpia
+       * para que el chip no reaparezca en memoria, y el `clear()` asincron se
+       * confirma re-leyendo el disco (leerlo antes resucitaria el guardado
+       * viejo). El perfil (Colonia, unlocks, stats) no se toca: se escribio en
+       * vivo durante la run.
+       */
+      onAbandonRun: () => {
         savedRun = null;
         syncContinueState();
         void runStore.clear().then(() => {
@@ -1634,8 +1682,6 @@ async function boot(): Promise<void> {
             syncContinueState();
           });
         });
-        // El estado meta se empuja ANTES de `enterMenu`: el panel del menu se
-        // construye en ese cambio de estado y no se vuelve a dibujar.
         syncMenuMeta();
         engine.enterMenu();
         scene.setMode('menu', { reduceMotion: profileStore.current.settings.reduceMotion });
@@ -1649,6 +1695,17 @@ async function boot(): Promise<void> {
         } else {
           hud?.toast(t('log.saveIncompatible'), 'warn');
         }
+      },
+      // --- Fase 3: modo infinito (panel `victory_offer`) ---
+      onEndlessContinue: () => {
+        engine.continueEndless();
+      },
+      onVictoryNewRun: () => {
+        // Commitea la victoria (el perfil la cuenta como ganada) y el HUD
+        // repinta el panel final SIN la oferta, con el resumen y las Esporas de
+        // Colonia. La partida nueva se arranca desde ese panel: saltar directo
+        // aca haria que el jugador nunca viera el resultado de su victoria.
+        engine.acceptVictory();
       },
       // --- Idioma: unico control, el boton EN/ES del menu principal ---
       onToggleLanguage: () =>
@@ -1798,8 +1855,15 @@ async function boot(): Promise<void> {
         // en el callback y una variable suelta no sobrevive al analisis de
         // tipos (y tampoco se lee con claridad).
         const box: { claim: DailyClaim | null } = { claim: null };
+        let dailySpores = 0;
         profileStore.patch((p) => {
           box.claim = claimDaily(p, Date.now(), dailyTable);
+          // La diaria tambien alimenta la Colonia: `bonusForDaily` (base +
+          // racha) estaba definido pero nunca se llamaba, asi que la string
+          // `colony.bonus.daily` era mentira. Se acredita dentro del MISMO
+          // patch para no dejar un "reclamado" sin esporas si el proceso muere.
+          if (box.claim?.ok) dailySpores = bonusForDaily(box.claim.streak).amount;
+          if (dailySpores > 0) grantSpores(p.colony, dailySpores, Date.now());
         });
         const claim = box.claim;
         if (!claim?.ok) {

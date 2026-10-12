@@ -217,9 +217,9 @@
       "5": "Total Eclosion (x3 Spores)"
     },
     "family": {
-      "3": "Colony (+16 Substrate)",
-      "4": "Great Colony (+40 Substrate)",
-      "5": "Supercolony (+80 Substrate)"
+      "3": "Cluster (+16 Substrate)",
+      "4": "Great Cluster (+40 Substrate)",
+      "5": "Mega Cluster (+80 Substrate)"
     },
     "diversity": "Diversity (+25 Substrate)"
   },
@@ -228,6 +228,13 @@
     "decay": "Decaying",
     "spore_lock": "Sterile",
     "overgrowth": "Overgrown"
+  },
+  "statusInfo": {
+    "dormant": "Its abilities don't fire while this lasts.",
+    "decay": "It loses Substrate every time it fires.",
+    "spore_lock": "It adds no Spores when scored.",
+    "overgrowth": "It adds extra Spores when played.",
+    "hands": "{n} hands"
   },
   "effect": {
     "latent": "Latency",
@@ -303,11 +310,11 @@
     },
     "blind_a2_small": {
       "name": "Fallen Log",
-      "desc": "Something is already eating it."
+      "desc": "One card in your hand is born sterile this round."
     },
     "blind_a2_big": {
       "name": "Ant Nest",
-      "desc": "The colony defends its own."
+      "desc": "One card decays, bleeding 2 Substrate per trigger."
     },
     "blind_a2_boss": {
       "name": "The Hungry Mycelium",
@@ -315,11 +322,11 @@
     },
     "blind_a3_small": {
       "name": "Fairy Ring",
-      "desc": "The circle is not decoration."
+      "desc": "Every hand cuts your Spores by 10%."
     },
     "blind_a3_big": {
       "name": "Compost Pit",
-      "desc": "Rich, warm, and watching."
+      "desc": "Every hand cuts your Spores by 15%."
     },
     "blind_a3_boss": {
       "name": "The Spore Queen",
@@ -327,11 +334,11 @@
     },
     "blind_a4_small": {
       "name": "Dry Stone",
-      "desc": "Nothing grows here without a fight."
+      "desc": "You start this round with one hand fewer."
     },
     "blind_a4_big": {
       "name": "Blind Forest",
-      "desc": "The canopy swallows the light."
+      "desc": "You start this round with one discard fewer."
     },
     "blind_a4_boss": {
       "name": "The Eyeless Fungus",
@@ -339,11 +346,11 @@
     },
     "blind_a5_small": {
       "name": "Flooded Grove",
-      "desc": "Waterlogged roots, slow rot."
+      "desc": "Every hand cuts your Spores by 10%."
     },
     "blind_a5_big": {
       "name": "Bone Yard",
-      "desc": "Old calcium feeds new growth."
+      "desc": "Each discard costs you 10 Substrate."
     },
     "blind_a5_boss": {
       "name": "The Devouring Colony",
@@ -351,11 +358,11 @@
     },
     "blind_a6_small": {
       "name": "Ash Layer",
-      "desc": "What burned feeds what comes next."
+      "desc": "One card decays, bleeding 2 Substrate per trigger."
     },
     "blind_a6_big": {
       "name": "Rotting Chapel",
-      "desc": "The hymns are fungal now."
+      "desc": "You start this round with one hand fewer."
     },
     "blind_a6_boss": {
       "name": "Soil Titan",
@@ -363,11 +370,11 @@
     },
     "blind_a7_small": {
       "name": "Salt Flat",
-      "desc": "Almost nothing survives. Almost."
+      "desc": "Every hand cuts your Spores by 10%."
     },
     "blind_a7_big": {
       "name": "Withered Field",
-      "desc": "The harvest failed. You are the harvest."
+      "desc": "You start this round with one discard fewer."
     },
     "blind_a7_boss": {
       "name": "The Ash Ring",
@@ -375,11 +382,11 @@
     },
     "blind_a8_small": {
       "name": "Final Bloom",
-      "desc": "The last quiet round."
+      "desc": "Every hand cuts your Spores by 15%."
     },
     "blind_a8_big": {
       "name": "Mycelial Sea",
-      "desc": "An ocean of threads, all connected."
+      "desc": "Each discard costs you 15 Substrate."
     },
     "blind_a8_boss": {
       "name": "Mycelium God",
@@ -853,7 +860,6 @@
     "history": "History",
     "profile": "Profile",
     "profileSubtitle": "Your progress and collection",
-    "colonySoon": "Coming soon",
     "openMenu": "Menu",
     "levelShort": "Lv",
     "challenges": "Challenges",
@@ -873,8 +879,9 @@
       "beatBest": "Your best ante is {ante} — beat it"
     },
     "quitTitle": "Back to menu",
-    "quitBody": "You are about to abandon this run. Run progress will be lost.",
-    "quitConfirm": "Abandon and exit"
+    "quitBody": "If you quit to the menu, your run is saved and you can continue anytime. Abandoning deletes the saved run. Your profile and Colony are always kept.",
+    "quitPause": "Save & quit",
+    "abandonConfirm": "Abandon run"
   },
   "settings": {
     "title": "Settings",
@@ -1667,6 +1674,8 @@
     "spores": "Colony Spores",
     "sporesTotal": "Colony Spores: {value}",
     "earned": "Colony Spores",
+    "earnedHint": "They are permanent progress: they raise your Colony level and unlock cosmetics. They never change a run. Find and claim them in Menu → Colony.",
+    "chip": "Colony · Level {level}",
     "nextUnlock": "Next unlock: {name}",
     "noNext": "You unlocked every level reward",
     "rewards": "Rewards",
@@ -1766,6 +1775,11 @@
         "conflict": "We found different progress: choose which to keep"
       }
     }
+  },
+  "endless": {
+    "pitch": "You beat the last ante! You can end the run here with the win, or keep going in endless mode: antes have no ceiling and each one asks for more points.",
+    "continue": "Keep going",
+    "endRun": "End the run"
   },
   "tutorial": {
     "start": "Guided tutorial",

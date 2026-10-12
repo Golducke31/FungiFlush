@@ -797,7 +797,13 @@ export interface RunSnapshot {
     | 'interlude'
     | 'shop'
     | 'game_over'
-    | 'victory';
+    | 'victory'
+    /**
+     * Se gano el ultima ante declarado: el panel ofrece TERMINAR la run
+     * (victoria) o SEGUIR en modo infinito. No es `victory`: el guardado
+     * todavia vive y la run puede continuar.
+     */
+    | 'victory_offer';
 }
 
 // ---------------------------------------------------------------------------

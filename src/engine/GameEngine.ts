@@ -424,14 +424,16 @@ export class GameEngine {
 
     const target = this.targetFor(blind);
 
-    // ASCENSION: los niveles altos suman efectos EXTRA al jefe. Un jefe es un
-    // ciego con efectos propios, asi que el gate es `effects.length > 0`.
-    // Se concatenan sobre una copia: la definicion del contenido es inmutable
+    // ASCENSION: los niveles altos suman efectos EXTRA al jefe. El gate es
+    // `tier === 'boss'`: desde la Fase 2 los ciegos pequenos/grandes tambien
+    // tienen efectos propios, asi que `effects.length` ya NO distingue. Se
+    // concatenan sobre una copia: la definicion del contenido es inmutable
     // y no puede quedar contaminada entre runs.
     const extraBoss = this.ascension.modifiers.extraBossEffects;
-    const blindOut: BlindDefinition = blind.effects?.length && extraBoss?.length
-      ? { ...blind, effects: [...blind.effects, ...extraBoss] }
-      : blind;
+    const blindOut: BlindDefinition =
+      blind.tier === 'boss' && extraBoss?.length
+        ? { ...blind, effects: [...(blind.effects ?? []), ...extraBoss] }
+        : blind;
 
     // DADO: la tirada ya no se sortea por ciego. `run.die` solo tiene valor si
     // el Simbionte legendario `joker_loaded_die` lo cargo para ESTA ronda (ver
@@ -458,7 +460,19 @@ export class GameEngine {
 
     bus.emit('blind:selected', { blind: blindOut, target });
     this.dispatchGlobal('ON_BLIND_SELECTED');
+    // El handicap de arranque del ciego (y los bonus por ronda de los
+    // simbiontes) es de ESTA ronda: `applyDeltas` escribe el delta TAMBIEN en
+    // las bases de la run, y si no se revierte queda aplicado para el resto de
+    // la partida y se ACUMULA con el proximo ciego penalizado (una mano menos
+    // para siempre). Los bonus permanentes (vouchers, mutaciones) se aplican
+    // por otro camino (`applyImmediateEffects`) y no se tocan aca.
+    const handsBefore = this.run.baseHands;
+    const discardsBefore = this.run.baseDiscards;
+    const handSizeBefore = this.run.baseHandSize;
     this.dispatchGlobal('ON_ROUND_START');
+    this.run.baseHands = handsBefore;
+    this.run.baseDiscards = discardsBefore;
+    this.run.baseHandSize = handSizeBefore;
 
     this.run.status = 'playing';
     bus.emit('round:start', { snapshot: this.roundSnapshot() });
@@ -1322,24 +1336,17 @@ export class GameEngine {
     if (this.run.blindIndex < 2) {
       this.run.blindIndex += 1;
     } else {
-      this.run.ante += 1;
-      this.run.blindIndex = 0;
-      // Ante NUEVO ⇒ se devuelven las purgas. El reset va EN LA RAMA del ante,
-      // no en cada ciego: purgar es una decision de ante, no de ciego.
-      this.run.purgesThisAnte = 0;
-      bus.emit('purge:changed', {
-        used: 0,
-        left: this.purgesPerAnte,
-        perAnte: this.purgesPerAnte,
-        ante: this.run.ante,
-      });
-      // El tope lo define el contenido: una expansion puede agregar antes.
-      if (this.run.ante > this.registry.maxAnte()) {
-        this.run.status = 'victory';
-        bus.emit('game:over', { reason: 'victory', ante: this.run.ante });
+      // El tope lo define el contenido: una expansion puede agregar antes. Al
+      // pasarlo NO se termina la run directo: primero se OFRECE terminar o
+      // seguir en modo infinito (`victory_offer`), para no cortarle al jugador
+      // la mejor partida de su vida con un panel final.
+      const nextAnte = this.run.ante + 1;
+      if (nextAnte > this.registry.maxAnte() && !this.run.endless) {
+        this.run.status = 'victory_offer';
         this.emitState();
         return;
       }
+      this.advanceAnte();
     }
 
     // Los statuses temporales se limpian entre blinds.
@@ -1352,6 +1359,54 @@ export class GameEngine {
     if (this.tryEnterInterlude()) return;
 
     // Vuelve a la pantalla de eleccion: el jugador decide con que ciego sigue.
+    this.enterBlindSelect();
+  }
+
+  /** Pasa al ante siguiente (resetea ruta y purgas). Sin toques de victoria. */
+  private advanceAnte(): void {
+    this.run.ante += 1;
+    this.run.blindIndex = 0;
+    // Ante NUEVO ⇒ se devuelven las purgas. El reset va EN LA RAMA del ante,
+    // no en cada ciego: purgar es una decision de ante, no de ciego.
+    this.run.purgesThisAnte = 0;
+    bus.emit('purge:changed', {
+      used: 0,
+      left: this.purgesPerAnte,
+      perAnte: this.purgesPerAnte,
+      ante: this.run.ante,
+    });
+  }
+
+  /**
+   * TERMINAR la run en victoria (opcion del panel `victory_offer`).
+   *
+   * Incrementa el ante igual que hacia `leaveShop` antes: el historico y los
+   * desbloqueos leen el ante FINAL como siempre (uno mas que el ultimo jugado).
+   */
+  acceptVictory(): void {
+    this.advanceAnte();
+    this.run.status = 'victory';
+    bus.emit('game:over', { reason: 'victory', ante: this.run.ante });
+    this.emitState();
+  }
+
+  /**
+   * SEGUIR en modo infinito (opcion del panel `victory_offer`).
+   *
+   * La victoria se COMMITEA una sola vez (mismo evento que `acceptVictory`:
+   * runs+1, victoria, mejor ante, ascension, temporada) y la run sigue: el
+   * estado NUNCA pasa por `'victory'`, asi que el guardado no se borra a
+   * mitad. `endless` viaja serializado para que una run retomada siga siendolo.
+   */
+  continueEndless(): void {
+    this.run.status = 'victory';
+    bus.emit('game:over', { reason: 'victory', ante: this.run.ante + 1, continues: true });
+    this.run.status = 'victory_offer';
+    this.emitState();
+    this.run.endless = true;
+    this.advanceAnte();
+    this.decayStatuses();
+    if (this.tryEnterInterlude()) return;
     this.enterBlindSelect();
   }
 
@@ -1695,7 +1750,7 @@ export class GameEngine {
       // Misma conservacion al PERDER: quedarse sin manos no destruye cartas.
       this.conserveDeck();
       this.run.status = 'game_over';
-      bus.emit('game:over', { reason: 'loss', ante: this.run.ante });
+      bus.emit('game:over', { reason: 'loss', ante: this.run.ante, endless: this.run.endless });
       this.emitState();
     }
   }
@@ -2162,6 +2217,9 @@ export class GameEngine {
       // Tutorial guiado (aditivo). NO es una regla: es una marca para la UI.
       // Sobrevive al guardado para que una run-tutorial retomada siga guiada.
       tutorial: this.run.tutorial,
+      // Modo infinito (aditivo, sin bump de version): una run que siguio tras
+      // el ante 8 retomada tiene que SEGUIR en infinito, no reofertar victoria.
+      endless: this.run.endless,
       // Habilidad FungiFlush (aditivo, sin bump de version): las cargas y la
       // marca de "armada" viajan con la run para no perderlas al recargar.
       fungiFlushCharge: this.run.fungiFlushCharge,
@@ -2210,6 +2268,8 @@ export class GameEngine {
     // Tutorial (aditivo): un guardado previo no trae el campo y la run sigue
     // SIN tutorial. `=== true` para que un `undefined`/basura no lo active.
     this.run.tutorial = data.tutorial === true;
+    // Modo infinito (aditivo): un guardado previo no trae el campo => `false`.
+    this.run.endless = data.endless === true;
     // FungiFlush (aditivo): un guardado previo cae al default de la run (no a 0,
     // para no quitarle la habilidad a una partida vieja); se clampea al tope.
     this.run.fungiFlushCharge = Math.min(
@@ -2329,6 +2389,12 @@ export interface RunSaveData {
   totalScore?: number;
   /** Tutorial guiado (aditivo): una run-tutorial retomada sigue guiada. */
   tutorial?: boolean;
+  /**
+   * Modo infinito (Fase 3, aditivo): la run siguio tras el ultimo ante. Un
+   * guardado previo no lo tiene y `restore` cae a `false` (reoferta la
+   * victoria al cruzar el borde de nuevo).
+   */
+  endless?: boolean;
   /** Cargas de FungiFlush (aditivo): una run retomada no regala la habilidad. */
   fungiFlushCharge?: number;
   /** La habilidad FungiFlush esta armada para la proxima mano (aditivo). */

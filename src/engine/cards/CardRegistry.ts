@@ -255,9 +255,20 @@ export class CardRegistry {
   }
 
   blindsForAnte(ante: number): BlindDefinition[] {
-    return [...this.blinds.values()]
+    const exact = [...this.blinds.values()]
       .filter((b) => b.ante === ante)
       .sort((a, b) => a.scoreMultiplier - b.scoreMultiplier);
+    if (exact.length > 0 || this.blinds.size === 0) return exact;
+    // MODO INFINITO: el ante se paso del ultimo declarado. Se reutiliza la ruta
+    // del ultimo ante con un bonus de recompensa por ante de más (tope +4): es
+    // determinista y no hace falta declarar contenido nuevo. Los objetivos ya
+    // escalan solos (`anteTarget` extrapola x2.4 por ante).
+    const lastAnte = Math.max(...[...this.blinds.values()].map((b) => b.ante));
+    const bonus = Math.min(ante - lastAnte, 4);
+    return [...this.blinds.values()]
+      .filter((b) => b.ante === lastAnte)
+      .sort((a, b) => a.scoreMultiplier - b.scoreMultiplier)
+      .map((b) => ({ ...b, ante, reward: b.reward + bonus }));
   }
 
   // --- Instanciacion --------------------------------------------------------
