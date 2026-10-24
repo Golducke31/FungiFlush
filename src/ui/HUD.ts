@@ -128,6 +128,8 @@ export interface MenuMetaState {
   achievements: { unlocked: number; total: number };
   /** Hay recompensa diaria sin reclamar. */
   dailyPending: boolean;
+  /** El desafio diario de HOY ya se jugo (el intento esta consumido). */
+  dailyPlayed: boolean;
   /** Identidad para la MINI Tarjeta de Jugador del menu (avatar/marco/titulo/nivel). */
   player?: PlayerCardState;
   /** Clave i18n de la recomendacion, o null si no hay ninguna. */
@@ -188,6 +190,8 @@ export interface HudCallbacks {
   onOpenDaily: () => void;
   onClaimDaily: () => void;
   onOpenAchievements: () => void;
+  /** Desafio diario (R1): arranca la run del dia desde el panel Desafios. */
+  onStartDaily: () => void;
   // --- R1: ascension ---
   /** El jugador eligio un nivel de ascension (0 = sin ascension). */
   onSelectAscension: (level: number) => void;
@@ -522,6 +526,7 @@ export class HUD {
     streak: 0,
     achievements: { unlocked: 0, total: 0 },
     dailyPending: false,
+    dailyPlayed: false,
     recommendation: null,
   };
   /**
@@ -2832,13 +2837,14 @@ export class HUD {
     const panel = buildChallengesPanel(
       {
         dailyPending: this.menuMeta.dailyPending,
+        dailyPlayed: this.menuMeta.dailyPlayed,
         ascension: this.ascensionState,
         archetypes: this.archetypeState.list,
         selectedArchetype: this.archetypeState.selected,
         showBoard: this.boardAvailable,
       },
       {
-        onOpenDaily: () => this.callbacks.onOpenDaily(),
+        onStartDaily: () => this.callbacks.onStartDaily(),
         onOpenAscension: () => this.showAscension(),
         onOpenArchetypes: () => this.showArchetypes(),
         onOpenBoard: () => this.callbacks.onOpenBoard(),
@@ -4597,7 +4603,15 @@ export class HUD {
 
     const subtitle = document.createElement('p');
     subtitle.className = 'panel-subtitle';
-    subtitle.textContent = `${t('ui.seed')}: ${run.seed}`;
+    // Desafio diario (R1): el panel tiene que decir QUE se jugo. Va en el
+    // subtitulo (no en un elemento nuevo) para no mover el layout del panel,
+    // y con `data-mode` para que el probe lo pueda aseverar sin leer texto.
+    if (run.daily) {
+      subtitle.dataset['mode'] = 'daily';
+      subtitle.textContent = `${t('daily.modeLabel')} · ${t('ui.seed')}: ${run.seed}`;
+    } else {
+      subtitle.textContent = `${t('ui.seed')}: ${run.seed}`;
+    }
 
     const grid = document.createElement('div');
     grid.className = 'stat-grid';

@@ -126,6 +126,15 @@ export interface RunState {
    * en cada reroll y el resumen/historial lo muestran. Vacio = mazo base.
    */
   archetype: string;
+  /**
+   * Desafio diario (R1): la semilla salio de la FECHA, no del reloj.
+   *
+   * No cambia ninguna regla: es una run clasica con semilla derivada del dia
+   * (misma para todos los jugadores). Se guarda en la run —y se serializa—
+   * porque una run retomada sigue siendo diaria: el resultado tiene que salir
+   * con `mode: 'daily'` aunque el jugador cierre el juego a mitad.
+   */
+  daily: boolean;
   shop: ShopState | null;
   /**
    * Modificadores acumulados por los interludios (P2.4). Se leen en cada
@@ -189,7 +198,13 @@ export interface RunState {
  * leyera la ascension, bastaria olvidarse de uno para que A5 fuera mas facil
  * que A4 sin que nadie lo note.
  */
-export function createRunState(seed: number, deck: Deck, ascension = 0, archetype = ''): RunState {
+export function createRunState(
+  seed: number,
+  deck: Deck,
+  ascension = 0,
+  archetype = '',
+  daily = false,
+): RunState {
   const mods = ascensionModifiersFor(ascension);
   return {
     seed,
@@ -216,6 +231,7 @@ export function createRunState(seed: number, deck: Deck, ascension = 0, archetyp
     fungiFlushArmed: false,
     fungiFlushUsedThisBlind: false,
     archetype,
+    daily,
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
     seenInterludes: [],

@@ -279,7 +279,14 @@ test('Enrejado de Carroña cobra +12 si hay putrefaccion en la mano', () => {
     hasSubstrateStep(res, lattice.uid, 12),
     'cobra el +12 con la podredumbre en otra carta',
   );
-  assert.equal(decayLeft(victim), 2, 'y no la consume');
+  // El +12 NO consume la podredumbre. OJO: el `ON_PLAY` de la propia carta tira
+  // `decay 2` a una carta AL AZAR de la mano, asi que la victima puede quedar en
+  // 2 (el azar cayo en otra) o en 4 (cayo en ella). Lo que NO puede pasar es que
+  // baje de 2: eso seria consumirla.
+  assert.ok(
+    decayLeft(victim) >= 2,
+    `no puede consumir la podredumbre (quedo en ${decayLeft(victim)})`,
+  );
 });
 
 test('Ceniza de Clavaria consume 1 punto de CADA carta podrida (3 Esporas cada una)', () => {

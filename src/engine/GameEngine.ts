@@ -267,14 +267,26 @@ export class GameEngine {
    * conoce `archetypes.json`: el controlador le pasa el id (para guardarlo y
    * para el HUD) y, por separado, el mazo y el sesgo ya resueltos
    * (`archetypeStarter`/`archetypeBias`). Asi el motor sigue siendo puro.
+   *
+   * `daily` marca la run como desafio diario (R1). NO cambia ninguna regla: la
+   * semilla ya viene derivada de la fecha y el flag solo hace que el resultado
+   * salga con `mode: 'daily'`. El motor no sabe que dia es hoy ni si el jugador
+   * ya lo jugo: eso lo decide el controlador, que es quien conoce el perfil.
    */
-  startRun(seed?: number, ascension = 0, archetype = ''): void {    const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
-    const deck = new Deck(seed !== undefined ? new RNG(seed) : this.rng);
-    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype);
+  startRun(seed?: number, ascension = 0, archetype = '', daily = false): void {
+    const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
+    // El RNG de la RUN: con semilla explicita (desafio diario, tests, sims) el
+    // mazo INICIAL tambien sale de ella. Antes `buildStarterDeck` barajaba con
+    // `this.rng` (el del motor, sembrado al construirlo), asi que dos runs con
+    // la MISMA semilla repartian manos distintas: el diario no habria sido el
+    // mismo para todos. Sin semilla se cae al RNG del motor, como siempre.
+    const runRng = seed !== undefined ? new RNG(seed) : this.rng;
+    const deck = new Deck(runRng);
+    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype, daily);
     // El mazo del arquetipo gana sobre el del perfil: elegir arquetipo es
     // arrancar con ESE mazo, y las copias del pase no tienen por que mezclarse.
     const starter = this.archetypeStarter ?? this.starterOverrides;
-    deck.setCards(this.registry.buildStarterDeck(this.rng, starter));
+    deck.setCards(this.registry.buildStarterDeck(runRng, starter));
 
     // Una run nueva no hereda el draft ni el interludio de la anterior: si el
     // jugador reiniciaba DESDE la pantalla de interludio, el trato viejo
@@ -2204,6 +2216,9 @@ export class GameEngine {
       // Arquetipo de la run (ADITIVO, sin bump de version como vouchers). Es un
       // id, no un objeto: rebalancear el arquetipo no invalida guardados.
       archetype: this.run.archetype,
+      // Desafio diario (aditivo, sin bump de version): una run diaria retomada
+      // tiene que SEGUIR siendo diaria, o el resultado saldria como `classic`.
+      daily: this.run.daily,
       // --- P2.4: interludios (aditivo, sin bump de version como vouchers) ---
       interludeTargetMultiplier: this.run.interludeModifiers.targetMultiplier,
       seenInterludes: [...this.run.seenInterludes],
@@ -2254,7 +2269,9 @@ export class GameEngine {
     // una recompensa) se medirian contra una base equivocada.
     const savedAscension = typeof data.ascension === 'number' ? data.ascension : 0;
     const savedArchetype = typeof data.archetype === 'string' ? data.archetype : '';
-    this.run = createRunState(data.seed, deck, savedAscension, savedArchetype);
+    // Aditivo: un guardado anterior al diario no trae el campo y cae a `false`.
+    const savedDaily = data.daily === true;
+    this.run = createRunState(data.seed, deck, savedAscension, savedArchetype, savedDaily);
     this.run.ante = data.ante;
     this.run.blindIndex = data.blindIndex;
     this.run.money = data.money;
@@ -2428,6 +2445,11 @@ export interface RunSaveData {
    * `SAVE_VERSION`.
    */
   archetype?: string;
+  /**
+   * Desafio diario (R1). OPCIONAL y aditivo: un guardado previo no lo tiene y
+   * `restore` cae a `false`. NO hace falta subir `SAVE_VERSION`.
+   */
+  daily?: boolean;
   /**
    * Multiplicador de objetivo acumulado por interludios (P2.4). OPCIONAL y
    * aditivo: los guardados previos no lo tienen y `restore` cae a 1.

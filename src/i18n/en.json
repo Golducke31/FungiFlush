@@ -1098,7 +1098,11 @@
     "claimedToday": "Already claimed today. Come back tomorrow to keep the streak.",
     "ready": "Claim today's reward to keep the streak alive",
     "empty": "Nothing today",
-    "claimDone": "Unlocked {name}"
+    "claimDone": "Unlocked {name}",
+    "start": "Play today's run (same seed for everyone)",
+    "playedToday": "Played today · back tomorrow",
+    "alreadyPlayed": "You already played today's challenge. Come back tomorrow.",
+    "modeLabel": "Daily challenge"
   },
   "achievement": {
     "title": "Achievements",

@@ -38,6 +38,7 @@ export const PROFILE_MIGRATIONS: Record<number, Migration> = {
   4: migrateProfileV4toV5,
   5: migrateProfileV5toV6,
   6: migrateProfileV6toV7,
+  7: migrateProfileV7toV8,
 };
 
 export function migrateChain(
@@ -268,6 +269,46 @@ export function migrateProfileV6toV7(input: UnknownRecord): UnknownRecord {
     ...input,
     version: 7,
     decks: defaultDeckState(),
+  };
+}
+
+/**
+ * Perfil: v7 -> v8
+ *
+ * v8 agrega, en UNA sola migracion (no dos):
+ *   1. `daily.playedDate`: el dia del ultimo DESAFIO DIARIO jugado, distinto de
+ *      `lastClaimDate` (que es la recompensa diaria). `null` = nunca jugo uno.
+ *   2. `stats.dailyRuns` / `stats.dailyWins` / `stats.bestScore` /
+ *      `stats.totalBlinds`: los contadores del perfil de jugador.
+ *
+ * Un perfil v7 es de alguien que jugo antes del diario: `null` y ceros es lo
+ * correcto. Inventarle un intento jugado le BLOQUEARIA el diario del dia, que
+ * es el peor default posible.
+ *
+ * Los contadores se sanean a entero >= 0: un perfil editado a mano con
+ * `"bestScore": "mucho"` no puede romper el panel de perfil.
+ */
+export function migrateProfileV7toV8(input: UnknownRecord): UnknownRecord {
+  const dailyRaw = input['daily'];
+  const daily: UnknownRecord =
+    typeof dailyRaw === 'object' && dailyRaw !== null ? { ...(dailyRaw as UnknownRecord) } : {};
+  if (typeof daily['playedDate'] !== 'string' || daily['playedDate'].length === 0) {
+    daily['playedDate'] = null;
+  }
+  const statsRaw = input['stats'];
+  const stats: UnknownRecord =
+    typeof statsRaw === 'object' && statsRaw !== null ? { ...(statsRaw as UnknownRecord) } : {};
+  const counter = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  stats['dailyRuns'] = counter(stats['dailyRuns']);
+  stats['dailyWins'] = counter(stats['dailyWins']);
+  stats['bestScore'] = counter(stats['bestScore']);
+  stats['totalBlinds'] = counter(stats['totalBlinds']);
+  return {
+    ...input,
+    version: 8,
+    daily,
+    stats,
   };
 }
 

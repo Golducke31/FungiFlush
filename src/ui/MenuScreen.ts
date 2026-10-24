@@ -1275,7 +1275,8 @@ export function buildLeaderboardPanel(
 // ---------------------------------------------------------------------------
 
 export interface ChallengesPanelCallbacks {
-  onOpenDaily: () => void;
+  /** Arranca la run del dia (R1). Si ya se jugo, el controlador avisa. */
+  onStartDaily: () => void;
   onOpenAscension: () => void;
   onOpenArchetypes: () => void;
   onOpenBoard: () => void;
@@ -1284,6 +1285,8 @@ export interface ChallengesPanelCallbacks {
 
 export interface ChallengesPanelState {
   dailyPending?: boolean;
+  /** El desafio de HOY ya se jugo: la tarjeta lo dice y no arranca otro. */
+  dailyPlayed?: boolean;
   ascension?: { unlocked: number; selected: number; max: number };
   archetypes?: MenuArchetype[];
   selectedArchetype?: string;
@@ -1343,10 +1346,14 @@ export function buildChallengesPanel(
   grid.appendChild(
     card(
       t('menu.daily'),
-      state.dailyPending ? t('daily.ready') : '',
+      state.dailyPlayed
+        ? t('daily.playedToday')
+        : state.dailyPending
+          ? t('daily.ready')
+          : t('daily.start'),
       'daily',
-      callbacks.onOpenDaily,
-      Boolean(state.dailyPending),
+      callbacks.onStartDaily,
+      !state.dailyPlayed && Boolean(state.dailyPending),
     ),
   );
 

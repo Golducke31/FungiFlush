@@ -19,7 +19,14 @@ import { defaultPackInventory } from './Packs';
 import type { LeaderboardSnapshot } from './Leaderboard';
 import { emptySnapshot } from './Leaderboard';
 
-export const PROFILE_SAVE_VERSION = 7;
+/**
+ * Version del formato del perfil.
+ *
+ * v7 -> v8 (R1/R4): `daily.playedDate` (intento del desafio diario) y los
+ * contadores nuevos de `stats` (`dailyRuns`, `dailyWins`, `bestScore`,
+ * `totalBlinds`). UNA sola migracion para las dos features.
+ */
+export const PROFILE_SAVE_VERSION = 8;
 
 export type Language = 'en' | 'es';
 
@@ -69,6 +76,16 @@ export interface DailyState {
   bestStreak: number;
   /** Dias ya reclamados, 'YYYY-MM-DD'. Solo para poder medir retencion. */
   history: string[];
+  /**
+   * Dia ('YYYY-MM-DD' local) del ultimo DESAFIO DIARIO jugado, o null.
+   *
+   * Separado de `lastClaimDate` a proposito: la recompensa diaria y la run
+   * diaria son dos cosas distintas (se puede reclamar sin jugar la run, y
+   * viceversa). El intento se consume al ARRANCAR la run: con la semilla fija
+   * no hay reroll del contenido, pero cerrar la app a mitad no debe permitir
+   * repetir la ejecucion hasta que salga mejor.
+   */
+  playedDate: string | null;
 }
 
 /** Logros desbloqueados y el progreso de los incrementales. */
@@ -228,6 +245,14 @@ export interface ProfileSave {
     bestAnte: number;
     totalXp: number;
     playtimeMs: number;
+    /** Desafios diarios jugados (R1). Se cuentan al ARRANCAR la run. */
+    dailyRuns: number;
+    /** Desafios diarios ganados (R1). */
+    dailyWins: number;
+    /** Mejor score total de una run (R4). Se actualiza al terminar cada run. */
+    bestScore: number;
+    /** Ciegos superados sumando todas las runs (R4). */
+    totalBlinds: number;
   };
   board: {
     hotSeatWins: number;
@@ -395,7 +420,14 @@ export function defaultProfile(): ProfileSave {
       pendingUnlocks: {},
       ownedCounts: {},
     },
-    daily: { lastClaimDate: null, lastClaimTs: 0, streak: 0, bestStreak: 0, history: [] },
+    daily: {
+      lastClaimDate: null,
+      lastClaimTs: 0,
+      streak: 0,
+      bestStreak: 0,
+      history: [],
+      playedDate: null,
+    },
     achievements: { unlockedIds: [], progress: {} },
     cosmetics: {
       equippedCardBack: 'default',
@@ -408,7 +440,17 @@ export function defaultProfile(): ProfileSave {
       owned: ['default', 'mycelial'],
     },
     starterOverrides: [],
-    stats: { runs: 0, wins: 0, bestAnte: 0, totalXp: 0, playtimeMs: 0 },
+    stats: {
+      runs: 0,
+      wins: 0,
+      bestAnte: 0,
+      totalXp: 0,
+      playtimeMs: 0,
+      dailyRuns: 0,
+      dailyWins: 0,
+      bestScore: 0,
+      totalBlinds: 0,
+    },
     board: { hotSeatWins: 0, hotSeatLosses: 0 },
     ascension: { highestUnlocked: 0, selected: 0 },
     archetype: { selected: '' },

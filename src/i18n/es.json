@@ -1098,7 +1098,11 @@
     "claimedToday": "Ya la reclamaste hoy. Volvé mañana para no cortar la racha.",
     "ready": "Reclamá la recompensa de hoy para no cortar la racha",
     "empty": "Nada por hoy",
-    "claimDone": "Desbloqueaste {name}"
+    "claimDone": "Desbloqueaste {name}",
+    "start": "Jugá la run del día (misma semilla para todos)",
+    "playedToday": "Jugado hoy · volvé mañana",
+    "alreadyPlayed": "Ya jugaste el desafío de hoy. Volvé mañana.",
+    "modeLabel": "Desafío diario"
   },
   "achievement": {
     "title": "Logros",

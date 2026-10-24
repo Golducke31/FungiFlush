@@ -3,7 +3,7 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,562)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa).
+`typecheck`·`test`(tsx,571)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
@@ -93,3 +93,13 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 - ⚠️ `CameraRig.addShake` ahora tiene gate central `setReducedMotion` (los ~14 call sites viejos tampoco lo respetaban); la respiración de cámara NO se toca (no es golpe).
 - ⚠️ `SceneManager.stopCard` borra de `trails` (red central) y `flyToDiscard`/`retire`/`flyScoredToDiscard` hacen `stopTrail` ANTES de `dispose()` en sus `onComplete`: sin eso la entrada quedaba en el `Map` para siempre reteniendo la carta destruida.
 - ⚠️ `waitForFunction(fn, {timeout})` manda el objeto como **`arg`**: el timeout real cae al default de 30 s. Siempre `(fn, null, {timeout})`. Y el status de run perdida es `'game_over'` (con guion bajo).
+
+## Desafio diario — R1 ✅
+
+`src/meta/DailyRun.ts` (puro): `dailySeed(date) = hashString('fungiflush:daily:' + YYYY-MM-DD)`, con fecha **LOCAL** (`dateKey` de DailyReward). `RunState.daily` + `RunSaveData.daily?` (aditivo, sin bump de `SAVE_VERSION`). Perfil **v8**: `daily.playedDate` + `stats.dailyRuns/dailyWins/bestScore/totalBlinds` en UNA migracion. `startRun(seed?, ascension?, archetype?, daily?)`.
+
+- ⚠️ **La semilla de la run manda sobre TODO el arranque**: `startRun` baraja el mazo inicial con el RNG de la run (`new RNG(seed)`), no con el del motor. Antes usaba `this.rng` ⇒ dos runs con la misma semilla repartian manos distintas (el diario no habria sido el mismo para todos). Sin semilla se cae al RNG del motor, como siempre.
+- ⚠️ **El intento se consume al ARRANCAR** (`daily.playedDate`, `saveNow()` inmediato). Consumirlo al terminar permitiria repetir la ejecucion hasta que salga mejor.
+- ⚠️ **Recompensa diaria ≠ run diaria**: `lastClaimDate` vs `playedDate`, campos separados a proposito.
+- UI: la tarjeta "Diaria" de Desafios ARRANCA la run; el chip del menu abre la recompensa. Game over marca `data-mode="daily"`.
+- Gates: `tests/dailyRun.test.ts` (9) · `tools/simulate.ts --daily [fecha]` (imprime la firma) · `tools/probe-daily.mjs` (10 checks; la fecha fijada va con `page.clock.setFixedTime` y en la MISMA pagina: dos contextos WebGL en SwiftShader no inicializan).

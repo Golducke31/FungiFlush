@@ -22,6 +22,8 @@ import {
   type ResolutionContext,
 } from '../src/engine/index.ts';
 import { validateDictionaryCoverage } from '../src/i18n/coverage.ts';
+import { dailySeed } from '../src/meta/DailyRun.ts';
+import { dateKey } from '../src/retention/DailyReward.ts';
 import { loadContentFromDisk, loadDictionaries } from './loadContent.node.ts';
 import { SIMULATED_PHASES } from './simPhases.ts';
 
@@ -47,6 +49,14 @@ const SEED = Number(flag('seed', '20260927')) || 20260927;
  * publicarlo. Sin el flag, corre A0 (la curva base de siempre).
  */
 const ASCENSION = Number(flag('ascension', '0')) || 0;
+/**
+ * Desafio diario (R1): `--daily` (fecha de hoy) o `--daily 2026-10-24`.
+ *
+ * Corre UNA run con la semilla del dia e imprime su firma (semilla, primer
+ * ciego, mano inicial) en vez de simular balance. Es el gate de "misma fecha =
+ * misma run": dos invocaciones con la misma fecha tienen que coincidir.
+ */
+const DAILY = flag('daily');
 /**
  * Mazo CUSTOM a simular: `--deck <cardId>:<copies>,<cardId>:<copies>`.
  *
@@ -656,6 +666,33 @@ if (missingKeys.length === 0) {
   for (const key of missingKeys.slice(0, 20)) console.log(`      ${key}`);
   if (missingKeys.length > 20) console.log(`      ${C.dim}... y ${missingKeys.length - 20} mas.${C.reset}`);
   process.exit(1);
+}
+
+// --- 1c. Desafio diario (R1) ---
+//
+// Corre UNA run con la semilla del dia e imprime su "firma": semilla, primer
+// ciego y mano inicial. Dos invocaciones con la MISMA fecha tienen que imprimir
+// exactamente lo mismo (es lo que hace que todos jueguen la misma run); con
+// fechas distintas, otra cosa. Lo verifica `tools/probe-daily.mjs`.
+if (DAILY !== undefined) {
+  const date = DAILY === 'true' ? dateKey(Date.now()) : DAILY;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    console.log(`  ${C.red}✗ --daily espera una fecha YYYY-MM-DD (recibido: ${date})${C.reset}`);
+    process.exit(1);
+  }
+  const seed = dailySeed(date);
+  const dailyEngine = new GameEngine({ seed, bundle: content });
+  dailyEngine.startRun(seed, 0, '', true);
+  dailyEngine.chooseBlind();
+  const round = dailyEngine.round;
+  const hand = (round?.hand ?? []).map((card) => card.def.id).sort().join(',');
+  console.log(`\n${C.bold}Desafio diario${C.reset}`);
+  console.log(`  fecha        : ${date}`);
+  console.log(`  semilla      : ${seed}`);
+  console.log(`  modo         : ${dailyEngine.run.daily ? 'daily' : 'classic'}`);
+  console.log(`  primer ciego : ${round?.blind.id ?? '?'} (objetivo ${round?.target ?? '?'})`);
+  console.log(`  mano inicial : ${hand}`);
+  process.exit(0);
 }
 
 // --- 2. Prueba de stress ---

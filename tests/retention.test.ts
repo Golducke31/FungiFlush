@@ -311,6 +311,9 @@ test('un perfil viejo (sin daily ni achievements) migra con defaults', () => {
     streak: 0,
     bestStreak: 0,
     history: [],
+    // v8 (R1): el perfil viejo nunca jugo el desafio diario, asi que arranca
+    // sin intento consumido (inventarle uno le bloquearia el diario del dia).
+    playedDate: null,
   });
   assert.deepEqual(migrated.achievements, { unlockedIds: [], progress: {} });
   assert.deepEqual(migrated.collection.unlockSource, {});

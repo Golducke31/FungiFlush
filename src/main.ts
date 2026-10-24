@@ -55,6 +55,7 @@ import {
 } from '@meta/Colony';
 import { COLONY_REWARDS, claimColonyRewards, rewardDef, type ColonyRewardKind } from '@meta/ColonyRewards';
 import { cosmeticArtUrl } from '@meta/Cosmetics';
+import { dailyDateAt, dailyPlayedToday, dailySeedAt } from '@meta/DailyRun';
 import { createGooglePlayProvider, linkAccount, makeRunResult, queueRunResult, unlinkAccount } from '@meta/Account';
 import type { AccountIdentity } from '@meta/Account';
 import { formatRank, milestoneViews, percentileOf, rankTierFor, type LeaderboardBoard } from '@meta/Leaderboard';
@@ -579,6 +580,16 @@ async function boot(): Promise<void> {
       // asi que la rendicion final ACTUALIZA esa misma entrada (misma seed) en
       // vez de duplicar la partida. Es la misma run, no una nueva.
       const existing = p.history.find((h) => h.seed === engine.run.seed);
+      // R1/R4 — Contadores del perfil. Solo la PRIMERA vez que esta run queda
+      // anotada (`!existing`): un reemit de una run terminada sumaria dos veces
+      // `totalBlinds` y `dailyWins`. `dailyRuns` NO se toca aca: se cuenta al
+      // ARRANCAR el diario (si se contara al terminar, abandonar a mitad no
+      // dejaria rastro y el intento se podria repetir).
+      if (!endlessFinal && !existing) {
+        p.stats.bestScore = Math.max(p.stats.bestScore, engine.run.totalScore);
+        p.stats.totalBlinds += engine.run.stats.blindsCleared;
+        if (engine.run.daily && reason === 'victory') p.stats.dailyWins += 1;
+      }
       if (!existing) {
         const stats = engine.run.stats;
         p.history.unshift({
@@ -637,7 +648,7 @@ async function boot(): Promise<void> {
           runId: runColony.runId || `${engine.run.seed}-${Date.now()}`,
           startedAt: runColony.startedAt || new Date().toISOString(),
           completedAt: new Date().toISOString(),
-          mode: engine.run.ascension > 0 ? 'ascension' : 'classic',
+          mode: engine.run.daily ? 'daily' : engine.run.ascension > 0 ? 'ascension' : 'classic',
           highestBlind: ante,
           completedBlinds: engine.run.stats.blindsCleared,
           scoreSummary: engine.run.totalScore,
@@ -1723,6 +1734,41 @@ async function boot(): Promise<void> {
           // idioma viejo guardado y el proximo arranque lo revertia.
           void profileStore.saveNow();
         }),
+      // --- Desafio diario (R1) ---
+      //
+      // Es una run CLASICA con semilla derivada de la FECHA LOCAL: mismas
+      // reglas y mismo contenido para todos los que jueguen ese dia (misma
+      // version). Sin ascension y sin arquetipo —la dificultad y el mazo son
+      // progresion individual— y con el mazo base del perfil.
+      //
+      // El intento se consume al ARRANCAR: con la semilla fija no hay reroll
+      // del contenido, pero cerrar la app a mitad no debe permitir repetir la
+      // ejecucion hasta que salga mejor.
+      onStartDaily: () => {
+        const now = Date.now();
+        if (dailyPlayedToday(profileStore.current, now)) {
+          hud?.toast(t('daily.alreadyPlayed'), 'warn');
+          return;
+        }
+        void runStore.clear();
+        engine.setArchetypeLoadout(undefined, []);
+        engine.startRun(dailySeedAt(now), 0, '', true);
+        profileStore.patch((p) => {
+          p.daily.playedDate = dailyDateAt(now);
+          p.stats.dailyRuns += 1;
+        });
+        // Guardado INMEDIATO: consumir el intento es una accion DELIBERADA y el
+        // autosave es debounced 1.2 s. Si se perdiera, cerrar la app enseguida
+        // permitiria repetir el diario del dia.
+        void profileStore.saveNow();
+        // El menu se redibuja para que la tarjeta quede como "jugado hoy" si el
+        // jugador vuelve antes de la medianoche.
+        syncMenuMeta();
+        scene.setMode('run');
+        if (!profileStore.current.seenTutorial) {
+          window.setTimeout(() => hud?.showTutorial(), 420);
+        }
+      },
       // --- Pantalla de inicio ---
       onStartRun: () => {
         void runStore.clear();
@@ -2427,6 +2473,9 @@ async function boot(): Promise<void> {
       streak: p.daily.streak,
       achievements: { unlocked: views.filter((v) => v.unlocked).length, total: views.length },
       dailyPending: !daily.alreadyClaimedToday,
+      // Tarjeta "Diaria" del panel Desafios: si ya se jugo la run de hoy, la
+      // tarjeta lo dice y no arranca otra (el intento ya esta consumido).
+      dailyPlayed: dailyPlayedToday(p, Date.now()),
       // Mini Tarjeta de Jugador del menu: la misma identidad que el panel de
       // Cosmeticos, resuelta una sola vez.
       player: buildCosmeticsState().player,
