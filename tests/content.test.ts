@@ -199,7 +199,8 @@ test('el pack base real carga con el contenido esperado', () => {
   // Bundle completo incluye la expansion deep_mycelium (12 cartas, 5 jokers).
   assert.equal(bundle.cards.length, 77);
   assert.equal(allCards.filter((c) => c.tags?.includes('expansion') ?? false).length, 12);
-  assert.equal(bundle.blinds.length, 24);
+  // 24 base + 16 variantes sorteadas por ruta (2 small y 2 big por ante, R2).
+  assert.equal(bundle.blinds.length, 40);
   // 18 + el legendario del dado (`joker_loaded_die`) + 5 de la expansion.
   assert.equal(bundle.jokers.length, 30);
   assert.equal(bundle.upgrades?.length, 1);

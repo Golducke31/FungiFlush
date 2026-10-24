@@ -630,8 +630,9 @@ test('las reglas reales no dejan el juego base sin contenido jugable', () => {
       `${id} es una carta inicial y quedo bloqueada`,
     );
   }
-  // Y ningun ciego puede bloquearse: son la estructura de la run.
-  assert.equal(bundle.blinds.length, 24);
+  // Y ningun ciego puede bloquearse: son la estructura de la run. El pool tiene
+  // variantes por tier (R2), pero la ruta jugable sigue siendo de 3.
+  assert.equal(bundle.blinds.length, 40);
 });
 
 test('todos los logros y desbloqueos comparten el mismo catalogo de eventos', () => {

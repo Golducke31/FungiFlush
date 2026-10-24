@@ -127,8 +127,11 @@ test('los antes infinitos tienen objetivo y ruta (sin tabla declarada)', () => {
   assert.ok(base !== undefined && next !== undefined);
   assert.equal(next, Math.round((base ?? 0) * 2.4), 'extrapola x2.4 por ante');
 
-  // La ruta del ante infinito sigue teniendo 3 ciegos jugables.
-  const blinds = engine.registry.blindsForAnte(max + 1);
+  // La RUTA del ante infinito sigue teniendo 3 ciegos jugables (el pool tiene
+  // variantes por tier desde R2: sortear es justamente lo que acá se verifica).
+  engine.run.ante = max + 1;
+  engine.run.blindRoute = [];
+  const blinds = engine.availableBlinds();
   assert.equal(blinds.length, 3);
   assert.deepEqual(
     blinds.map((b) => String(b.tier)).sort(),

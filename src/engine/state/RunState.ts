@@ -48,6 +48,22 @@ export interface RunState {
    * limpiar el ante vuelve a 0.
    */
   blindIndex: number;
+  /**
+   * Ruta de ciegos SORTEADA del ante en curso: los ids en el orden en que se
+   * juegan ([small, big, boss]).
+   *
+   * El contenido declara VARIANTES por tier (p.ej. `blind_a3_small` y
+   * `blind_a3_small_v`): sortear cual toca es lo que hace que dos runs con
+   * distinta semilla vean ciegos distintos. Se sortea UNA vez al entrar al ante
+   * (`startRun` / `advanceAnte`) con un RNG dedicado derivado de la semilla de
+   * la run: misma semilla ⇒ misma ruta, y la pantalla de seleccion muestra el
+   * ciego que REALMENTE se va a jugar (una sola fuente). Viaja serializado
+   * (aditivo) para que una partida retomada no cambie de ruta.
+   *
+   * Vacio = todavia no se sorteo (run recien creada o guardado previo a R2):
+   * `availableBlinds()` lo resuelve al leer.
+   */
+  blindRoute: string[];
   money: number;
   jokers: JokerInstance[];
   jokerSlots: number;
@@ -210,6 +226,7 @@ export function createRunState(
     seed,
     ante: RUN_DEFAULTS.ante,
     blindIndex: 0,
+    blindRoute: [],
     // `moneyDelta` es un OVERRIDE del dinero inicial, no un delta: el numero se
     // escribe entero en el JSON y asi el balance de un nivel se lee de una.
     money: mods.moneyDelta ?? RUN_DEFAULTS.money,

@@ -31,7 +31,7 @@ import {
   RUN_DEFAULTS,
 } from './constants';
 import { bus } from './events';
-import { RNG } from './rng';
+import { RNG, hashString } from './rng';
 import { ResolutionContext } from './resolution';
 import { CardRegistry, type ContentBundle } from './cards/CardRegistry';
 import { Deck } from './cards/Deck';
@@ -283,6 +283,10 @@ export class GameEngine {
     const runRng = seed !== undefined ? new RNG(seed) : this.rng;
     const deck = new Deck(runRng);
     this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype, daily);
+    // R2: la ruta de ciegos del ante 1 se sortea ACA, al arrancar, y no al
+    // leerla: asi el estado ya la tiene aunque se guarde antes de pasar por la
+    // pantalla de seleccion.
+    this.run.blindRoute = this.rollBlindRoute(this.registry.blindsForAnte(this.run.ante));
     // El mazo del arquetipo gana sobre el del perfil: elegir arquetipo es
     // arrancar con ESE mazo, y las copias del pase no tienen por que mezclarse.
     const starter = this.archetypeStarter ?? this.starterOverrides;
@@ -373,9 +377,54 @@ export class GameEngine {
     };
   }
 
-  /** Blinds disponibles para el ante actual (los que la UI ofrece elegir). */
+  /**
+   * Blinds disponibles para el ante actual: la RUTA sorteada del ante.
+   *
+   * R2: el contenido declara variantes por tier (2 small, 2 big, 1 jefe por
+   * ante). Sortear cual toca es lo que varia la partida entre semillas, y se
+   * sortea AL ENTRAR AL ANTE (no al elegir): la pantalla de seleccion tiene que
+   * mostrar el ciego que REALMENTE se va a jugar, y `chooseBlind` sin id usa
+   * `candidates[blindIndex]` sobre esta misma lista (fuente unica).
+   *
+   * El sorteo es determinista por (semilla, ante) —RNG dedicado, no el de la
+   * run— asi que no desplaza ningun otro sorteo (misiones, tienda) y una run
+   * retomada o rehecha da la misma ruta.
+   */
   availableBlinds(): BlindDefinition[] {
-    return this.registry.blindsForAnte(this.run.ante);
+    const pool = this.registry.blindsForAnte(this.run.ante);
+    const drawn = this.run.blindRoute
+      .map((id) => pool.find((b) => b.id === id))
+      .filter((b): b is BlindDefinition => b !== undefined);
+    // Red de seguridad: sin ruta (run nueva, guardado viejo) o con una ruta de
+    // OTRO ante (tests que pisan `run.ante` a mano) se sortea ahora.
+    if (drawn.length > 0) return drawn;
+    this.run.blindRoute = this.rollBlindRoute(pool);
+    return this.run.blindRoute
+      .map((id) => pool.find((b) => b.id === id))
+      .filter((b): b is BlindDefinition => b !== undefined);
+  }
+
+  /**
+   * Sorteo de la ruta del ante: una variante por tier, en el orden del pool.
+   *
+   * Se sortea por TIER (no se baraja el pool entero) porque el orden de juego
+   * es por dificultad —small, big, jefe— y esa estructura no se puede perder.
+   * El RNG se deriva de la semilla de la run Y del ante, asi que cada ante
+   * tiene su propia tirada independiente y reproducible.
+   */
+  private rollBlindRoute(pool: readonly BlindDefinition[]): string[] {
+    if (pool.length === 0) return [];
+    const rng = new RNG(hashString(`fungiflush:blindRoute:${this.run.seed}:${this.run.ante}`));
+    const tiers = [...new Set(pool.map((b) => b.tier))];
+    const picked = new Set<string>();
+    for (const tier of tiers) {
+      const ofTier = pool.filter((b) => b.tier === tier);
+      const chosen = ofTier.length === 1 ? ofTier[0] : rng.pick(ofTier);
+      if (chosen) picked.add(chosen.id);
+    }
+    // El orden es el del pool (por `scoreMultiplier` ascendente): la posicion
+    // `blindIndex` 0/1/2 sigue siendo small/big/jefe.
+    return pool.filter((b) => picked.has(b.id)).map((b) => b.id);
   }
 
   /**
@@ -413,21 +462,23 @@ export class GameEngine {
   /**
    * Arranca la ronda del ciego que corresponde al ante actual.
    *
-   * Ya NO hay eleccion: cada ante juega sus 3 ciegos EN ORDEN (el de menor
-   * score, el del medio y el jefe). `blindsForAnte` los devuelve ordenados por
+   * Ya NO hay eleccion: cada ante juega su RUTA EN ORDEN (el small sorteado,
+   * el big sorteado y el jefe). `availableBlinds` devuelve la ruta ordenada por
    * `scoreMultiplier` ascendente, asi que el ciego es SIEMPRE
    * `candidates[blindIndex]`.
    *
    * Se acepta un `blindId` opcional solo por compatibilidad con tests que
-   * arman un pack ad-hoc y necesitan fijar un ciego concreto; en el juego real
-   * el HUD llama sin argumento.
+   * arman un pack ad-hoc y necesitan fijar un ciego concreto: si el id pedido
+   * no salio en la ruta, se busca en el pool completo del ante (el test manda
+   * sobre el sorteo). En el juego real el HUD llama sin argumento.
    */
   chooseBlind(blindId?: string): void {
     if (this.run.status !== 'blind_select' && this.run.status !== 'menu') return;
 
-    const candidates = this.registry.blindsForAnte(this.run.ante);
+    const candidates = this.availableBlinds();
+    const pool = this.registry.blindsForAnte(this.run.ante);
     const blind: BlindDefinition | undefined = blindId
-      ? candidates.find((b) => b.id === blindId)
+      ? (candidates.find((b) => b.id === blindId) ?? pool.find((b) => b.id === blindId))
       : (candidates[this.run.blindIndex] ?? candidates[candidates.length - 1]);
 
     if (!blind) {
@@ -1378,6 +1429,9 @@ export class GameEngine {
   private advanceAnte(): void {
     this.run.ante += 1;
     this.run.blindIndex = 0;
+    // R2: ante nuevo ⇒ ruta nueva. El sorteo es deterministico por
+    // (semilla, ante): la partida sigue siendo reproducible por semilla.
+    this.run.blindRoute = this.rollBlindRoute(this.registry.blindsForAnte(this.run.ante));
     // Ante NUEVO ⇒ se devuelven las purgas. El reset va EN LA RAMA del ante,
     // no en cada ciego: purgar es una decision de ante, no de ciego.
     this.run.purgesThisAnte = 0;
@@ -2197,6 +2251,10 @@ export class GameEngine {
       seed: this.run.seed,
       ante: this.run.ante,
       blindIndex: this.run.blindIndex,
+      // R2: ruta de ciegos sorteada del ante en curso (aditivo). Una run
+      // retomada sigue con la MISMA ruta: si se volviera a sortear, recargar
+      // la partida seria un reroll gratis de los ciegos del ante.
+      blindRoute: [...this.run.blindRoute],
       money: this.run.money,
       jokerSlots: this.run.jokerSlots,
       baseHandSize: this.run.baseHandSize,
@@ -2274,6 +2332,17 @@ export class GameEngine {
     this.run = createRunState(data.seed, deck, savedAscension, savedArchetype, savedDaily);
     this.run.ante = data.ante;
     this.run.blindIndex = data.blindIndex;
+    // R2: la ruta guardada manda. Se filtra por definiciones existentes (una
+    // variante borrada del contenido no puede romper la carga) y si queda vacia
+    // —guardado previo a R2, o ruta de otro ante— se sortea una nueva, que es
+    // determinista por (semilla, ante) y por tanto estable.
+    const routePool = this.registry.blindsForAnte(this.run.ante);
+    this.run.blindRoute = (data.blindRoute ?? []).filter((id) =>
+      routePool.some((b) => b.id === id),
+    );
+    if (this.run.blindRoute.length === 0) {
+      this.run.blindRoute = this.rollBlindRoute(routePool);
+    }
     this.run.money = data.money;
     this.run.jokerSlots = data.jokerSlots;
     this.run.baseHandSize = data.baseHandSize;
@@ -2392,6 +2461,11 @@ export interface RunSaveData {
   seed: number;
   ante: number;
   blindIndex: number;
+  /**
+   * Ruta de ciegos sorteada del ante en curso (R2, aditivo). Los guardados
+   * previos no lo traen: `restore` sortea una nueva, determinista por semilla.
+   */
+  blindRoute?: string[];
   money: number;
   jokerSlots: number;
   baseHandSize: number;

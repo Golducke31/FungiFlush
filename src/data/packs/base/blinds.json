@@ -6,6 +6,26 @@
     "tier": "big",
     "art": "blind_a1_big" },
   {
+    "id": "blind_a1_small_v",
+    "nameKey": "blind.blind_a1_small_v.name",
+    "descKey": "blind.blind_a1_small_v.desc",
+    "ante": 1,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a1_small"
+  },
+  {
+    "id": "blind_a1_big_v",
+    "nameKey": "blind.blind_a1_big_v.name",
+    "descKey": "blind.blind_a1_big_v.desc",
+    "ante": 1,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a1_big"
+  },
+  {
     "id": "blind_a1_boss",
     "nameKey": "blind.blind_a1_boss.name",
     "descKey": "blind.blind_a1_boss.desc",
@@ -61,6 +81,41 @@
     ]
   },
   {
+    "id": "blind_a2_small_v",
+    "nameKey": "blind.blind_a2_small_v.name",
+    "descKey": "blind.blind_a2_small_v.desc",
+    "ante": 2,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a2_small",
+    "effects": [
+      {
+        "id": "a2_small_v_tax",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.95 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a2_big_v",
+    "nameKey": "blind.blind_a2_big_v.name",
+    "descKey": "blind.blind_a2_big_v.desc",
+    "ante": 2,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a2_big",
+    "effects": [
+      {
+        "id": "a2_big_v_sterile",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "spore_lock", "value": 1, "turns": 1 }]
+      }
+    ]
+  },
+  {
     "id": "blind_a2_boss",
     "nameKey": "blind.blind_a2_boss.name",
     "descKey": "blind.blind_a2_boss.desc",
@@ -110,6 +165,41 @@
         "id": "a3_big_tax",
         "trigger": "ON_HAND_SCORED",
         "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.85 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a3_small_v",
+    "nameKey": "blind.blind_a3_small_v.name",
+    "descKey": "blind.blind_a3_small_v.desc",
+    "ante": 3,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a3_small",
+    "effects": [
+      {
+        "id": "a3_small_v_rot",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 1, "turns": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a3_big_v",
+    "nameKey": "blind.blind_a3_big_v.name",
+    "descKey": "blind.blind_a3_big_v.desc",
+    "ante": 3,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a3_big",
+    "effects": [
+      {
+        "id": "a3_big_v_drain",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": -5 }]
       }
     ]
   },
@@ -168,6 +258,42 @@
     ]
   },
   {
+    "id": "blind_a4_small_v",
+    "nameKey": "blind.blind_a4_small_v.name",
+    "descKey": "blind.blind_a4_small_v.desc",
+    "ante": 4,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a4_small",
+    "effects": [
+      {
+        "id": "a4_small_v_mud",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "ADD_DISCARDS", "value": -1 }],
+        "once": "per_round"
+      }
+    ]
+  },
+  {
+    "id": "blind_a4_big_v",
+    "nameKey": "blind.blind_a4_big_v.name",
+    "descKey": "blind.blind_a4_big_v.desc",
+    "ante": 4,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a4_big",
+    "effects": [
+      {
+        "id": "a4_big_v_thicket",
+        "trigger": "ON_ROUND_START",
+        "actions": [{ "type": "ADD_HANDS", "value": -1 }],
+        "once": "per_round"
+      }
+    ]
+  },
+  {
     "id": "blind_a4_boss",
     "nameKey": "blind.blind_a4_boss.name",
     "descKey": "blind.blind_a4_boss.desc",
@@ -217,6 +343,40 @@
         "id": "a5_big_leech",
         "trigger": "ON_CARD_DISCARDED",
         "actions": [{ "type": "ADD_SUBSTRATE", "value": -10 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a5_small_v",
+    "nameKey": "blind.blind_a5_small_v.name",
+    "descKey": "blind.blind_a5_small_v.desc",
+    "ante": 5,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a5_small",
+    "effects": [
+      {
+        "id": "a5_small_v_crust",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": -5 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a5_big_v",
+    "nameKey": "blind.blind_a5_big_v.name",
+    "descKey": "blind.blind_a5_big_v.desc",
+    "ante": 5,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a5_big",
+    "effects": [
+      {
+        "id": "a5_big_v_marsh",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.85 }]
       }
     ]
   },
@@ -275,6 +435,41 @@
     ]
   },
   {
+    "id": "blind_a6_small_v",
+    "nameKey": "blind.blind_a6_small_v.name",
+    "descKey": "blind.blind_a6_small_v.desc",
+    "ante": 6,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a6_small",
+    "effects": [
+      {
+        "id": "a6_small_v_tide",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.95 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a6_big_v",
+    "nameKey": "blind.blind_a6_big_v.name",
+    "descKey": "blind.blind_a6_big_v.desc",
+    "ante": 6,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a6_big",
+    "effects": [
+      {
+        "id": "a6_big_v_rot",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": 1 }]
+      }
+    ]
+  },
+  {
     "id": "blind_a6_boss",
     "nameKey": "blind.blind_a6_boss.name",
     "descKey": "blind.blind_a6_boss.desc",
@@ -329,6 +524,40 @@
     ]
   },
   {
+    "id": "blind_a7_small_v",
+    "nameKey": "blind.blind_a7_small_v.name",
+    "descKey": "blind.blind_a7_small_v.desc",
+    "ante": 7,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a7_small",
+    "effects": [
+      {
+        "id": "a7_small_v_cellar",
+        "trigger": "ON_CARD_DISCARDED",
+        "actions": [{ "type": "ADD_SUBSTRATE", "value": -10 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a7_big_v",
+    "nameKey": "blind.blind_a7_big_v.name",
+    "descKey": "blind.blind_a7_big_v.desc",
+    "ante": 7,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a7_big",
+    "effects": [
+      {
+        "id": "a7_big_v_roots",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.85 }]
+      }
+    ]
+  },
+  {
     "id": "blind_a7_boss",
     "nameKey": "blind.blind_a7_boss.name",
     "descKey": "blind.blind_a7_boss.desc",
@@ -377,6 +606,41 @@
         "id": "a8_big_leech",
         "trigger": "ON_CARD_DISCARDED",
         "actions": [{ "type": "ADD_SUBSTRATE", "value": -15 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a8_small_v",
+    "nameKey": "blind.blind_a8_small_v.name",
+    "descKey": "blind.blind_a8_small_v.desc",
+    "ante": 8,
+    "scoreMultiplier": 1.0,
+    "reward": 3,
+    "tier": "small",
+    "art": "blind_a8_small",
+    "effects": [
+      {
+        "id": "a8_small_v_ash",
+        "trigger": "ON_ROUND_START",
+        "target": "random_hand",
+        "actions": [{ "type": "APPLY_STATUS", "status": "decay", "value": 2, "turns": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "blind_a8_big_v",
+    "nameKey": "blind.blind_a8_big_v.name",
+    "descKey": "blind.blind_a8_big_v.desc",
+    "ante": 8,
+    "scoreMultiplier": 1.5,
+    "reward": 4,
+    "tier": "big",
+    "art": "blind_a8_big",
+    "effects": [
+      {
+        "id": "a8_big_v_oven",
+        "trigger": "ON_HAND_SCORED",
+        "actions": [{ "type": "MULTIPLY_SPORES", "value": 0.8 }]
       }
     ]
   },

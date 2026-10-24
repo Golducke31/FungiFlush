@@ -3,7 +3,7 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,576)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(41 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390; incluye LOS 14 interludios, forzados por id)·`probe-stats`(15).
+`typecheck`·`test`(tsx,586)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(41 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390; incluye LOS 14 interludios, forzados por id)·`probe-stats`(15)·`probe-blind-pool`(16).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
@@ -15,6 +15,7 @@ TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Goldu
 - Perfil **v7**. `migrateProfileSave` return EXPLÍCITO ⇒ campo TOP-LEVEL nuevo va ahí. `window.__fungiflush`(DEV). Panel abierto oculta run HUD (`is-panel-open`).
 - Puntuación `total=max(0,round(substrate*spores))`. `game:over`→`HUD.forceGameOver`; `score:settled` solo lo emite la timeline.
 - ⚠️ `dist/` OBSOLETO: tras tocar `public/`, `npm run build` (dev engaña). Rutas arte RELATIVAS (`art/...`, sin `/`).
+- **Ciegos (R2)**: 40 definiciones = 8 antes × (2 small + 2 big + 1 jefe; los jefes NO se sortean). `run.blindRoute: string[]` guarda la ruta [small,big,boss] del ante; se sortea **al entrar al ante** (`startRun`/`advanceAnte`), una por TIER, con RNG propio `hashString('fungiflush:blindRoute:'+seed+':'+ante)` (NO toca el RNG de la run). `availableBlinds()` devuelve la RUTA (3) — la UI muestra "n/3" con eso—; `chooseBlind(id)` con id explicito cae al pool completo (compat tests). Aditivo en serialize/restore; save viejo sin ruta ⇒ determinista. Variantes con la MISMA recompensa que su tier (nadie es estrictamente mejor).
 
 ## Combos / Orden (combos.ts, orderBonus.ts)
 - `element:*`(mult 5→3.0/4→2.2/3→1.6/2→1.25), `family:*`(flat 5→100/4→50/3→20), `diversity:5`(+25). Poker eliminado.

@@ -311,6 +311,14 @@
       "name": "The White Rot",
       "desc": "One of your cards is born sterile this round."
     },
+    "blind_a1_small_v": {
+      "name": "Spore Fog",
+      "desc": "The fog settles over the mulch. Harmless… for now."
+    },
+    "blind_a1_big_v": {
+      "name": "Cold Haze",
+      "desc": "A frozen breath drifts down from the cellar ceiling."
+    },
     "blind_a2_small": {
       "name": "Fallen Log",
       "desc": "One card in your hand is born sterile this round."
@@ -322,6 +330,14 @@
     "blind_a2_boss": {
       "name": "The Hungry Mycelium",
       "desc": "One card decays, bleeding 2 Substrate per trigger."
+    },
+    "blind_a2_small_v": {
+      "name": "Barren Plain",
+      "desc": "Every hand cuts your Spores by 5%."
+    },
+    "blind_a2_big_v": {
+      "name": "Reeking Pit",
+      "desc": "One card in your hand is born sterile this round."
     },
     "blind_a3_small": {
       "name": "Fairy Ring",
@@ -335,6 +351,14 @@
       "name": "The Spore Queen",
       "desc": "Every hand cuts your Spores by 25%."
     },
+    "blind_a3_small_v": {
+      "name": "Shaded Crypt",
+      "desc": "One card decays, bleeding 1 Substrate per trigger."
+    },
+    "blind_a3_big_v": {
+      "name": "Cracked Ground",
+      "desc": "Each discard costs you 5 Substrate."
+    },
     "blind_a4_small": {
       "name": "Dry Stone",
       "desc": "You start this round with one hand fewer."
@@ -345,6 +369,14 @@
     },
     "blind_a4_boss": {
       "name": "The Eyeless Fungus",
+      "desc": "You start this round with one hand fewer."
+    },
+    "blind_a4_small_v": {
+      "name": "Thick Mud",
+      "desc": "You start this round with one discard fewer."
+    },
+    "blind_a4_big_v": {
+      "name": "Blind Thicket",
       "desc": "You start this round with one hand fewer."
     },
     "blind_a5_small": {
@@ -359,6 +391,14 @@
       "name": "The Devouring Colony",
       "desc": "All Spores you gain are halved."
     },
+    "blind_a5_small_v": {
+      "name": "Saline Crust",
+      "desc": "Each discard costs you 5 Substrate."
+    },
+    "blind_a5_big_v": {
+      "name": "Salt Marsh",
+      "desc": "Every hand cuts your Spores by 15%."
+    },
     "blind_a6_small": {
       "name": "Ash Layer",
       "desc": "One card decays, bleeding 2 Substrate per trigger."
@@ -370,6 +410,14 @@
     "blind_a6_boss": {
       "name": "Soil Titan",
       "desc": "You start this round with one discard fewer."
+    },
+    "blind_a6_small_v": {
+      "name": "Black Tide",
+      "desc": "Every hand cuts your Spores by 5%."
+    },
+    "blind_a6_big_v": {
+      "name": "Sunken Log",
+      "desc": "One card decays, bleeding 2 Substrate per trigger."
     },
     "blind_a7_small": {
       "name": "Salt Flat",
@@ -383,6 +431,14 @@
       "name": "The Ash Ring",
       "desc": "Each discard costs you 15 Substrate."
     },
+    "blind_a7_small_v": {
+      "name": "Storage Cellar",
+      "desc": "Each discard costs you 10 Substrate."
+    },
+    "blind_a7_big_v": {
+      "name": "Root Hall",
+      "desc": "Every hand cuts your Spores by 15%."
+    },
     "blind_a8_small": {
       "name": "Final Bloom",
       "desc": "Every hand cuts your Spores by 15%."
@@ -394,6 +450,14 @@
     "blind_a8_boss": {
       "name": "Mycelium God",
       "desc": "All Spores you gain are reduced to 40%."
+    },
+    "blind_a8_small_v": {
+      "name": "Live Ash",
+      "desc": "One card decays, bleeding 2 Substrate per trigger."
+    },
+    "blind_a8_big_v": {
+      "name": "Compost Oven",
+      "desc": "Every hand cuts your Spores by 20%."
     }
   },
   "card": {

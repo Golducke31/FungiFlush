@@ -311,6 +311,14 @@
       "name": "La Podredumbre Blanca",
       "desc": "Una de tus cartas nace estéril esta ronda."
     },
+    "blind_a1_small_v": {
+      "name": "Niebla de Esporas",
+      "desc": "La niebla se posa sobre el mantillo. No molesta… todavía."
+    },
+    "blind_a1_big_v": {
+      "name": "Vaho Frío",
+      "desc": "Un aliento helado baja del techo del sótano."
+    },
     "blind_a2_small": {
       "name": "Tronco Caído",
       "desc": "Una carta de tu mano nace estéril esta ronda."
@@ -322,6 +330,14 @@
     "blind_a2_boss": {
       "name": "El Micelio Hambriento",
       "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
+    },
+    "blind_a2_small_v": {
+      "name": "Llanura Yerma",
+      "desc": "Cada mano reduce tus Esporas un 5%."
+    },
+    "blind_a2_big_v": {
+      "name": "Foso Hediondo",
+      "desc": "Una carta de tu mano nace estéril esta ronda."
     },
     "blind_a3_small": {
       "name": "Anillo de Hongos",
@@ -335,6 +351,14 @@
       "name": "La Reina Esporada",
       "desc": "Cada mano reduce tus Esporas un 25%."
     },
+    "blind_a3_small_v": {
+      "name": "Cripta Umbría",
+      "desc": "Una carta se pudre: resta 1 de Sustrato por cada disparo."
+    },
+    "blind_a3_big_v": {
+      "name": "Suelo Agrietado",
+      "desc": "Cada descarte te cuesta 5 de Sustrato."
+    },
     "blind_a4_small": {
       "name": "Piedra Seca",
       "desc": "Empezás esta ronda con una mano menos."
@@ -345,6 +369,14 @@
     },
     "blind_a4_boss": {
       "name": "El Hongo Ciego",
+      "desc": "Empezás esta ronda con una mano menos."
+    },
+    "blind_a4_small_v": {
+      "name": "Barro Espeso",
+      "desc": "Empezás esta ronda con un descarte menos."
+    },
+    "blind_a4_big_v": {
+      "name": "Matorral Ciego",
       "desc": "Empezás esta ronda con una mano menos."
     },
     "blind_a5_small": {
@@ -359,6 +391,14 @@
       "name": "La Colonia Devoradora",
       "desc": "Todas las Esporas que ganes se reducen a la mitad."
     },
+    "blind_a5_small_v": {
+      "name": "Costra Salina",
+      "desc": "Cada descarte te cuesta 5 de Sustrato."
+    },
+    "blind_a5_big_v": {
+      "name": "Pantano Salino",
+      "desc": "Cada mano reduce tus Esporas un 15%."
+    },
     "blind_a6_small": {
       "name": "Capa de Ceniza",
       "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
@@ -370,6 +410,14 @@
     "blind_a6_boss": {
       "name": "Titán del Suelo",
       "desc": "Empezás esta ronda con un descarte menos."
+    },
+    "blind_a6_small_v": {
+      "name": "Marea Negra",
+      "desc": "Cada mano reduce tus Esporas un 5%."
+    },
+    "blind_a6_big_v": {
+      "name": "Tronco Hundido",
+      "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
     },
     "blind_a7_small": {
       "name": "Salar",
@@ -383,6 +431,14 @@
       "name": "El Anillo de Ceniza",
       "desc": "Cada descarte te cuesta 15 de Sustrato."
     },
+    "blind_a7_small_v": {
+      "name": "Sótano Reserva",
+      "desc": "Cada descarte te cuesta 10 de Sustrato."
+    },
+    "blind_a7_big_v": {
+      "name": "Pasillo de Raíces",
+      "desc": "Cada mano reduce tus Esporas un 15%."
+    },
     "blind_a8_small": {
       "name": "Floración Final",
       "desc": "Cada mano reduce tus Esporas un 15%."
@@ -394,6 +450,14 @@
     "blind_a8_boss": {
       "name": "Dios Micelio",
       "desc": "Todas las Esporas que ganes se reducen al 40%."
+    },
+    "blind_a8_small_v": {
+      "name": "Ceniza Viva",
+      "desc": "Una carta se pudre: resta 2 de Sustrato por cada disparo."
+    },
+    "blind_a8_big_v": {
+      "name": "Horno de Compost",
+      "desc": "Cada mano reduce tus Esporas un 20%."
     }
   },
   "card": {
