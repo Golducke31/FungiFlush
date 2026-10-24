@@ -156,6 +156,71 @@ const COMPOSITE_FRAG = /* glsl */ `
   }
 `;
 
+/**
+ * PUNCH: el golpe de pantalla del cierre de combo (V4).
+ *
+ * Dos efectos en un solo quad, los dos RADIALES (offset desde el centro del
+ * cuadro), que es lo que hace que se lean como un golpe y no como un filtro:
+ *
+ *   1. aberracion cromatica: el rojo se va hacia afuera y el azul hacia
+ *      adentro, separados en la direccion del radio. En el centro no hay
+ *      offset, asi que el medio del cuadro queda nitido.
+ *   2. zoom blur: tres muestras tirando hacia el centro. La central pesa
+ *      doble, asi el desenfoque no lavaba el motivo.
+ *
+ * Son CINCO muestras de textura en total. Eso lo hace ponible en movil, pero
+ * sigue siendo un quad de pantalla completa: mientras no hay punch el pase
+ * esta DESHABILITADO (el composer lo salta) y no cuesta nada.
+ *
+ * El alpha sale del pixel CENTRAL, no de las muestras corridas. El canvas es
+ * transparente y deja ver el fondo de arena: si el alpha saliera de una
+ * muestra desplazada, el cuadro se volveria opaco justo en el golpe.
+ */
+const PUNCH_FRAG = /* glsl */ `
+  uniform sampler2D tDiffuse;
+  uniform float uPunch;
+  varying vec2 vUv;
+
+  void main() {
+    vec4 base = texture2D(tDiffuse, vUv);
+    // Sin punch es la identidad. El pase ademas esta deshabilitado desde JS:
+    // esto es la red de seguridad por si alguien lo fuerza igual.
+    if (uPunch <= 0.0) {
+      gl_FragColor = base;
+      return;
+    }
+
+    // Vector al centro: todos los offsets cuelgan de aca.
+    vec2 dir = vUv - 0.5;
+
+    // Zoom blur hacia el centro (3 muestras, la central pesa doble).
+    vec3 blurred = base.rgb * 2.0
+      + texture2D(tDiffuse, vUv - dir * (uPunch * 0.012)).rgb
+      + texture2D(tDiffuse, vUv - dir * (uPunch * 0.026)).rgb * 0.5;
+    blurred /= 3.5;
+
+    // Aberracion cromatica radial: rojo hacia afuera, azul hacia adentro.
+    vec2 off = dir * (uPunch * 0.045);
+    float r = texture2D(tDiffuse, vUv + off).r;
+    float b = texture2D(tDiffuse, vUv - off).b;
+
+    gl_FragColor = vec4(r, blurred.g, b, base.a);
+  }
+`;
+
+/**
+ * Sanea la fuerza del punch: finita y dentro de 0..1.
+ *
+ * Es PURO y esta exportado para poder testearlo sin navegador. Un NaN en el
+ * uniform apagaria el quadro con basura (y con `enabled` colgado en true, un
+ * quad de mas por frame para siempre); un negativo invertiria el offset y
+ * zarandearia la pantalla en cada mano.
+ */
+export function clampPunch(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
 // ---------------------------------------------------------------------------
 // Pases
 // ---------------------------------------------------------------------------
@@ -394,6 +459,71 @@ class GradePass extends Pass {
   }
 }
 
+/**
+ * El golpe de pantalla del cierre de combo. UN quad, cinco muestras.
+ *
+ * Arranca DESHABILITADO y solo se prende mientras hay punch: el composer
+ * salta los pases deshabilitados, asi que en reposo no existe. Cuando se
+ * apaga, `isLastEnabledPass` del composer vuelve a marcar el pase anterior
+ * (`GradePass`) como el que dibuja a pantalla.
+ */
+class PunchPass extends Pass {
+  private readonly material: THREE.ShaderMaterial;
+  private readonly quad: FullScreenQuad;
+  private value = 0;
+
+  constructor() {
+    super();
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: FULLSCREEN_VERT,
+      fragmentShader: PUNCH_FRAG,
+      uniforms: {
+        tDiffuse: { value: null },
+        uPunch: { value: 0 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.quad = new FullScreenQuad(this.material);
+    this.enabled = false;
+  }
+
+  /** Fuerza del golpe (0..1). En 0 el pase se saca de la cadena. */
+  setPunch(value: number): void {
+    // Se sanea en el unico punto que escribe el uniform, venga de donde
+    // venga (regla de `setStrength` del bloom).
+    const safe = clampPunch(value);
+    this.value = safe;
+    (this.material.uniforms['uPunch'] as { value: number }).value = safe;
+    this.enabled = safe > 0;
+  }
+
+  get punch(): number {
+    return this.value;
+  }
+
+  override render(
+    renderer: THREE.WebGLRenderer,
+    writeBuffer: THREE.WebGLRenderTarget,
+    readBuffer: THREE.WebGLRenderTarget,
+  ): void {
+    this.material.uniforms['tDiffuse']!.value = readBuffer.texture;
+
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (!this.needsSwap) renderer.clear();
+    }
+    this.quad.render(renderer);
+  }
+
+  override dispose(): void {
+    this.material.dispose();
+    this.quad.dispose();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fachada
 // ---------------------------------------------------------------------------
@@ -426,6 +556,12 @@ export class PostFx {
   private readonly composer: EffectComposer;
   private readonly bloomPass: BloomPass | null = null;
   private readonly gradePass: GradePass | null = null;
+  /**
+   * Golpe de pantalla del cierre de combo. Es el ULTIMO de la cadena (ve el
+   * cuadro ya tonemapeado y gradeado, que es donde se juzga un efecto de
+   * pantalla) y arranca deshabilitado: solo corre mientras hay pulso.
+   */
+  private readonly punchPass: PunchPass;
   private readonly lutPass: LUTPass | null = null;
   private readonly lutTexture: THREE.Data3DTexture | null = null;
   private readonly renderPass: RenderPass;
@@ -493,6 +629,12 @@ export class PostFx {
       this.composer.addPass(this.gradePass);
     }
 
+    // El punch va al FINAL, despues del grade. Con el pulso en 0 esta
+    // deshabilitado y el composer lo salta (no cuesta nada); cuando prende,
+    // `isLastEnabledPass` lo marca como el que dibuja a pantalla.
+    this.punchPass = new PunchPass();
+    this.composer.addPass(this.punchPass);
+
     this.composer.setPixelRatio(renderer.getPixelRatio());
     this.composer.setSize(width, height);
   }
@@ -536,10 +678,33 @@ export class PostFx {
     this.bloomPass.setStrength(this.baseBloomStrength + safe);
   }
 
+  /**
+   * Golpe de pantalla del cierre del combo. `0` lo apaga (y el pase sale de
+   * la cadena). Con el bloom desactivado sigue funcionando: no depende de el.
+   */
+  setPunch(value: number): void {
+    this.punchPass.setPunch(value);
+  }
+
+  /** Fuerza del punch en este momento (0 = apagado). */
+  get punch(): number {
+    return this.punchPass.punch;
+  }
+
+  /**
+   * `true` si el pase de punch esta EN la cadena del composer. Con punch 0 se
+   * saca (no corre en reposo); se expone para que el probe verifique el
+   * estado real del pase y no una inferencia.
+   */
+  get punchActive(): boolean {
+    return this.punchPass.enabled;
+  }
+
   dispose(): void {
     this.composer.dispose();
     this.bloomPass?.dispose();
     this.gradePass?.dispose();
+    this.punchPass.dispose();
     this.lutTexture?.dispose();
     this.transitionPass.dispose();
     this.renderPass.dispose();

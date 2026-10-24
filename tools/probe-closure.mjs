@@ -3,8 +3,10 @@
  *
  * Jugando una mano de verdad, comprueba que el ultimo paso animado dispara el
  * cierre:
- *   1. Pulso de fondo: `scene.bgPulse` llega cerca de 1 y el color de fondo se
- *      desvia del base durante el cierre y VUELVE al base (sin tinte permanente).
+ *   1. Pulso de fondo: `scene.bgPulse` llega cerca de 1 y la capa del flash
+ *      (`#arena-pulse`) se enciende durante el cierre y SE APAGA (sin tinte
+ *      permanente). El canvas es transparente desde la Fase A, asi que el
+ *      pulso vive en la capa DOM — `scene.background` ES `null` por diseno.
  *   2. Estallido doble: el pool de particulas transitorias sube mucho mas que en
  *      un paso normal (el burst de cierre es 160 + 80).
  *   3. El HUD marca el paso final (`.score-ticker.is-final`).
@@ -62,12 +64,17 @@ await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.leng
 await page.waitForTimeout(1500);
 
 // --- Observador: muestrea el cierre mientras corre el combo ---
+// El "fondo" del pulso es la capa DOM `#arena-pulse`: su opacidad inline es 0
+// en reposo (el CSS arranca en 0) y sube hasta ~0.85 con el cierre.
 const baseline = await page.evaluate(() => {
   const scene = window.__fungiflush.scene;
-  const bg = scene.scene.background;
+  const readPulse = () => {
+    const el = document.getElementById('arena-pulse');
+    return el ? (parseFloat(el.style.opacity || '0') || 0) : 0;
+  };
   window.__f5 = {
     maxBgPulse: 0, maxHitStop: 0, bgDeviation: 0, maxParticles: 0, finalSeen: false,
-    reduceMotion: scene.reduceMotion, base: [bg.r, bg.g, bg.b],
+    reduceMotion: scene.reduceMotion, base: readPulse(),
   };
   const base = window.__f5.base;
   const tick = () => {
@@ -78,8 +85,7 @@ const baseline = await page.evaluate(() => {
     let active = 0;
     for (const p of pool) if (p.active) active += 1;
     if (active > window.__f5.maxParticles) window.__f5.maxParticles = active;
-    const c = s.scene.background;
-    const dev = Math.abs(c.r - base[0]) + Math.abs(c.g - base[1]) + Math.abs(c.b - base[2]);
+    const dev = Math.abs(readPulse() - base);
     if (dev > window.__f5.bgDeviation) window.__f5.bgDeviation = dev;
     if (document.querySelector('.score-ticker.is-final')) window.__f5.finalSeen = true;
     requestAnimationFrame(tick);
@@ -102,27 +108,43 @@ console.log('cartas jugadas:', played.selected);
 
 await page.waitForTimeout(500);
 await page.screenshot({ path: join(shotsDir, 'closure-mid.png') });
-await page.waitForTimeout(4000);
+
+// El pulso decae a 3/s de tiempo de JUEGO. Bajo SwiftShader el reloj de juego
+// corre mucho mas lento que el real, asi que NO se puede asumir un tiempo
+// fijo: se espera a que la capa se apague de verdad (corte adaptativo, el
+// mismo patron de probe-card-anims). Si el pulso nunca arranco, el timeout
+// simplemente deja que los checks de abajo fallen con los datos recolectados.
+try {
+  await page.waitForFunction(
+    () => {
+      const el = document.getElementById('arena-pulse');
+      const op = el ? (parseFloat(el.style.opacity || '0') || 0) : 0;
+      return window.__f5.maxBgPulse > 0.5 && op < 0.001;
+    },
+    { timeout: 60000 },
+  );
+} catch {
+  console.log('(aviso: el pulso no llego a apagarse en 60 s)');
+}
 
 const data = await page.evaluate(() => {
-  const s = window.__fungiflush.scene;
-  const bg = s.scene.background;
+  const el = document.getElementById('arena-pulse');
   return {
     ...window.__f5,
-    bgNow: [Number(bg.r.toFixed(4)), Number(bg.g.toFixed(4)), Number(bg.b.toFixed(4))],
+    bgNow: el ? (parseFloat(el.style.opacity || '0') || 0) : 0,
   };
 });
 
 console.log('\nreduceMotion:', data.reduceMotion);
 console.log('bgPulse maximo:', Number(data.maxBgPulse.toFixed(3)), '(tiene que acercarse a 1)');
 console.log('hitStop maximo (s):', Number(data.maxHitStop.toFixed(3)), '(tiene que ser ~0.09 si no es reduced-motion)');
-console.log('desvio de fondo maximo:', Number(data.bgDeviation.toFixed(4)), '(tiene que ser > 0)');
+console.log('desvio del pulso maximo:', Number(data.bgDeviation.toFixed(4)), '(la capa #arena-pulse se enciende con el cierre)');
 console.log('particulas activas maximas:', data.maxParticles, '(el burst de cierre es 160+80, muy por encima de un paso)');
 console.log('paso final marcado (HUD):', data.finalSeen);
-console.log('fondo ahora:', JSON.stringify(data.bgNow), ' base:', JSON.stringify(data.base), '(tienen que coincidir)');
+console.log('pulso ahora:', data.bgNow, ' base:', data.base, '(tienen que coincidir: sin flash permanente)');
 
-const bgRestored = data.bgNow.every((v, i) => Math.abs(v - data.base[i]) < 0.001);
-console.log('fondo restaurado:', bgRestored);
+const bgRestored = Math.abs(data.bgNow - data.base) < 0.001;
+console.log('pulso restaurado:', bgRestored);
 
 console.log('\nerrores de consola:', errors.length ? errors.slice(0, 5) : 'ninguno');
 

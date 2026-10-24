@@ -2937,6 +2937,15 @@ async function boot(): Promise<void> {
         // Calidad y medicion: el smoke y el panel F3 leen de aca.
         quality: () => scene.quality(),
         perf: () => scene.perfReport(),
+        // Ilustraciones animadas: cuantas hojas hay declaradas, cuantas estan
+        // vivas y cuantas cartas las estan mostrando. El probe verifica que el
+        // presupuesto del tier no se desborde.
+        motion: () => scene.motionReport(),
+        fx: () => scene.fxReport(),
+        // Golpe de pantalla del cierre de combo (PunchPass): fuerza actual y
+        // si el pase esta en la cadena. El probe verifica que sube, que
+        // vuelve a 0 y que en reposo el pase se saca (no cuesta nada).
+        punch: () => scene.punchReport(),
         // i18n para tests: traducir nameKeys y verificar que el preview
         // del carrusel coincide con la carta enfocada.
         t,

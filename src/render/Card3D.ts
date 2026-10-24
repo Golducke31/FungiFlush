@@ -29,6 +29,7 @@ import { createHaloMaterial, tickShader } from './Shaders';
 import { ELEMENT_COLOR, RARITY_COLOR, SELECT_COLOR, hexToCss } from './palette';
 import * as anim from './anim';
 import type { TweenHandle, TweenManager } from './Tween';
+import { cellOffset, frameIndex, type MotionFrameCache, type MotionSheet } from './MotionFrames';
 
 export const CARD_WIDTH = 2.2;
 export const CARD_HEIGHT = 3.2;
@@ -43,6 +44,32 @@ const DRAG_SCALE = 1.08;
 const FLIP_DURATION = 0.34;
 
 const CARD_GEO = new THREE.PlaneGeometry(CARD_WIDTH, CARD_HEIGHT);
+
+/**
+ * Peso del destello del `pop()` por rareza (V4).
+ *
+ * NO es un espejo exacto de `foilAmount` (que es 0 para todo lo que no sea
+ * mitico o legendaria): el flash del pop es el golpe por carta de TODAS las
+ * cartas, asi que el piso de las comunes no puede ser cero —se apagaria el
+ * feedback base y una mano de comunes no festejaria nada—. Lo que hace la
+ * rareza es SUBIR el pico: un mitico pega mas del doble de fuerte que un comun.
+ *
+ * Es pura y esta exportada para poder testearla sin navegador.
+ */
+export function rarityPopWeight(rarity: Rarity): number {
+  switch (rarity) {
+    case 'mythic':
+      return 1;
+    case 'legendary':
+      return 0.8;
+    case 'rare':
+      return 0.6;
+    case 'uncommon':
+      return 0.45;
+    default:
+      return 0.35;
+  }
+}
 
 /**
  * ESPESOR de la carta, en unidades del mundo.
@@ -110,6 +137,22 @@ const CARD_RELIEF = 0.03;
  * relieve, o el arte atravesaria el texto al levantarse.
  */
 const CARD_TOP_OFFSET = CARD_THICKNESS / 2 + CARD_RELIEF + 0.02;
+
+/**
+ * Altura del quad de la ilustracion ANIMADA (MotionFrames).
+ *
+ * Tiene que quedar POR ENCIMA de los picos del relieve —que llegan a
+ * `CARD_THICKNESS / 2 + CARD_RELIEF` = 0.065— para que la ilustracion no
+ * atraviese el arte de abajo, y POR DEBAJO de la capa de texto
+ * (`CARD_TOP_OFFSET` = 0.085) para que el nombre y las estadisticas sigan
+ * arriba de todo.
+ *
+ * Es un quad PLANO (geometria `CARD_GEO`, un solo segmento): no lleva
+ * `displacementMap`. El volumen lo da el normal map, que ademas es el mismo
+ * que usa la cara. Subdividirlo para desplazarlo no valdria la pena: sus
+ * picos podrian llegar a la capa de texto y el relieve ya se lee con la luz.
+ */
+const CARD_MOTION_OFFSET = CARD_TOP_OFFSET - 0.012;
 
 /**
  * Escala del quad del halo respecto de la carta.
@@ -206,6 +249,28 @@ export interface CardHome {
 
 export type CardKind = 'card' | 'joker';
 
+/**
+ * Amplitud del tick de seleccion en el instante `t` (segundos desde el toque).
+ *
+ * Es una oscilacion AMORTIGUADA (`cos` que decae), no un pulso de un solo
+ * signo: un latido que solo crece y se apaga se lee como un fundido, y lo que
+ * hace satisfactorio tocar una carta es el pequeño rebote de vuelta. Que la
+ * curva pase por CERO y por un valle negativo es la parte que hay que
+ * conservar si alguien toca estos numeros.
+ *
+ * Exportada para poder verificarla sin navegador (ver `tests/cardFx.test.ts`):
+ * la forma de la curva ES el efecto, asi que se testea la curva.
+ */
+export function selectTickAmplitude(t: number): number {
+  if (t < 0) return 0;
+  // 34 rad/s ~ 5.4 Hz: un rebote neto, no un zapateo. El decaimiento (11)
+  // deja la oscilacion invisible antes de los 0.55 s.
+  return Math.exp(-t * 11) * Math.cos(t * 34);
+}
+
+/** Instante a partir del cual el tick se da por terminado (invisible). */
+export const SELECT_TICK_END = 0.55;
+
 export class Card3D {
   readonly group = new THREE.Group();
   readonly kind: CardKind;
@@ -255,6 +320,11 @@ export class Card3D {
   private dragging = false;
   /** Tween del giro. Va aparte para poder cancelarlo sin tocar el vuelo. */
   private flipHandle: TweenHandle | null = null;
+  /**
+   * Reloj del tick de seleccion. `-1` = inactivo; al seleccionar arranca en 0
+   * y `update()` lo avanza hasta que la oscilacion amortiguada es invisible.
+   */
+  private selectT = -1;
 
   private readonly face: THREE.Mesh;
   private readonly faceMaterial: THREE.MeshStandardMaterial;
@@ -266,6 +336,27 @@ export class Card3D {
   /** Capa de TEXTO que flota sobre el arte: es la que produce el parallax. */
   private readonly top: THREE.Mesh;
   private readonly topMaterial: THREE.MeshStandardMaterial;
+  /**
+   * Quad de la ilustracion ANIMADA (MotionFrames). Invisible mientras no haya
+   * hoja para el archivo de arte de la carta, y en ese caso no cuesta nada:
+   * un mesh oculto no genera draw call.
+   */
+  private readonly motion: THREE.Mesh;
+  private readonly motionMaterial: THREE.MeshStandardMaterial;
+  /** Cache de hojas de frames. La inyecta el SceneManager. */
+  private motionSource: MotionFrameCache | null = null;
+  /** Hoja activa (null = la carta muestra el arte estatico). */
+  private motionSheet: MotionSheet | null = null;
+  /** `src` del arte con el que se resolvio la hoja. */
+  private motionSrc: string | undefined;
+  /** Ultimo arte visto: lo necesita `refreshMotion()`. */
+  private lastArt: HTMLImageElement | undefined;
+  /** `true` = hay que volver a resolver la hoja (cargo el manifiesto / cambio el tier). */
+  private motionDirty = true;
+  /** Frame dibujado ahora (-1 = ninguno). */
+  private motionFrame = -1;
+  /** Espejo de `reduceMotion`: congela la animacion en el frame 0. */
+  private motionReduced = false;
   private readonly halo: THREE.Mesh;
   private readonly haloMaterial: THREE.ShaderMaterial;
   /** Badge con el numero de orden de la seleccion (1-5). */
@@ -379,6 +470,28 @@ export class Card3D {
     this.top = new THREE.Mesh(CARD_GEO, this.topMaterial);
     this.top.position.z = CARD_TOP_OFFSET;
 
+    // --- Ilustracion ANIMADA (MotionFrames) ---
+    // Mismos parametros de material que la cara: es la MISMA ilustracion, solo
+    // que en movimiento. `transparent` porque los frames traen las esquinas
+    // redondeadas recortadas, y `depthWrite: false` porque es una capa que
+    // flota: si escribiera profundidad, el texto y el halo de adelante se
+    // recortarian contra ella.
+    this.motionMaterial = new THREE.MeshStandardMaterial({
+      roughness: 0.58,
+      metalness: 0.12,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 0.32,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.motion = new THREE.Mesh(CARD_GEO, this.motionMaterial);
+    this.motion.position.z = CARD_MOTION_OFFSET;
+    this.motion.visible = false;
+    // Dibuja ANTES de la capa de texto (renderOrder 0): si no, el nombre
+    // quedaria debajo de la ilustracion animada.
+    this.motion.renderOrder = -1;
+
+    this.group.add(this.motion);
     this.group.add(this.halo);
     this.group.add(this.badge);
     this.group.add(this.top);
@@ -521,6 +634,8 @@ export class Card3D {
 
     this.faceMaterial.needsUpdate = true;
 
+    this.applyMotion(art);
+
     const elementColor = ELEMENT_COLOR[element as keyof typeof ELEMENT_COLOR] ?? 0x9aa5b1;
     // Color del halo: el de RAREZA cuando lo hay (es lo que distingue a un
     // joker legendario), con el del elemento como respaldo. OJO: en las cartas
@@ -542,6 +657,111 @@ export class Card3D {
   }
 
   // -------------------------------------------------------------------------
+  // Ilustracion animada (MotionFrames)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Cache de hojas de frames. La inyecta el SceneManager una sola vez, antes
+   * del primer `setCard`.
+   */
+  setMotionSource(cache: MotionFrameCache | null): void {
+    if (cache === this.motionSource) return;
+    // La hoja reservada pertenece al cache viejo: hay que devolverla ahi, no
+    // al nuevo (si no, el presupuesto del viejo queda falseado).
+    if (this.motionSrc !== undefined) this.motionSource?.release(this.motionSrc);
+    this.motionSrc = undefined;
+    this.motionSheet = null;
+    this.motion.visible = false;
+    this.motionSource = cache;
+    this.motionDirty = true;
+    this.applyMotion(this.lastArt);
+  }
+
+  /**
+   * Reintenta resolver la hoja animada SI TODAVIA NO LA TIENE.
+   *
+   * Es el camino "suave": se llama cuando el manifiesto termina de cargar o
+   * cuando llega una hoja, y solo les sirve a las cartas que se quedaron con
+   * el arte estatico. A una que ya esta animada no la toca — volver a pedir la
+   * hoja podria dejarla sin presupuesto si otras la ocuparon mientras tanto.
+   */
+  refreshMotion(): void {
+    if (this.motionSheet) return;
+    this.motionDirty = true;
+    this.applyMotion(this.lastArt);
+  }
+
+  /**
+   * Suelta la hoja y vuelve al arte estatico.
+   *
+   * Es el camino "duro": lo usa el SceneManager al bajar a un tier sin
+   * animacion (`low`). Ahi no alcanza con dejar de pedir hojas: la que ya
+   * estaba puesta tiene que irse.
+   */
+  clearMotion(): void {
+    if (this.motionSrc !== undefined) this.motionSource?.release(this.motionSrc);
+    this.motionSrc = undefined;
+    this.motionSheet = null;
+    this.motionFrame = -1;
+    this.motion.visible = false;
+    this.motionDirty = true;
+  }
+
+  /** Espejo de `reduceMotion` del SceneManager. */
+  setReduceMotion(value: boolean): void {
+    this.motionReduced = value;
+  }
+
+  /**
+   * Resuelve la hoja animada del arte actual.
+   *
+   * Sale temprano si el ARCHIVO no cambio: `setCard` se vuelve a llamar en
+   * cada cambio de estado (subir de nivel, acumular putrefaccion) y resolver
+   * de mas gastaria presupuesto del tier. Sin hoja —animacion apagada, sin
+   * manifiesto, presupuesto lleno o arte procedural— el quad queda invisible
+   * y la carta muestra el arte estatico de siempre.
+   */
+  private applyMotion(art: HTMLImageElement | undefined): void {
+    this.lastArt = art;
+    const next = art?.src;
+    if (!this.motionDirty && next === this.motionSrc) return;
+    this.motionDirty = false;
+
+    // Siempre se devuelve la reserva anterior y se pide la nueva: si el archivo
+    // es el mismo (reintento) el balance queda en cero, y si es otro la vieja
+    // queda libre para el presupuesto.
+    if (this.motionSrc !== undefined) this.motionSource?.release(this.motionSrc);
+    this.motionSrc = undefined;
+    this.motionFrame = -1;
+    const sheet = this.motionSource?.acquire(next);
+    this.motionSheet = sheet ?? null;
+
+    // `motionSrc` guarda SOLO lo que el cache reservo de verdad. Si `acquire`
+    // fallo (presupuesto lleno, o la hoja todavia no decodifico) NO se reservo
+    // nada, y guardar `next` igual seria una reserva FANTASMA: el `release` de
+    // mas tarde borraria la reserva de OTRA carta que muestre el mismo archivo
+    // —le dispose su textura en uso— y esa textura quedaria huerfana, fuera de
+    // la cache y sin nadie que la libere (V5, probe-leak: +3 texturas vivas en
+    // `medium`, donde la animacion existe; en `low` no se llega a este camino).
+    if (sheet) this.motionSrc = next;
+
+    if (!sheet) {
+      this.motion.visible = false;
+      return;
+    }
+    // El `repeat` recorta la celda de la grilla; el `offset` lo mueve por frame
+    // en `update()`. Se escribe aca una sola vez porque no cambia.
+    sheet.texture.repeat.set(1 / sheet.cols, 1 / sheet.rows);
+    this.motionMaterial.map = sheet.texture;
+    this.motionMaterial.emissiveMap = sheet.texture;
+    // El volumen de la ilustracion: el normal map del arte ESTATICO. Los frames
+    // son variaciones de la misma imagen, asi que el relieve coincide.
+    this.motionMaterial.normalMap = normalMapFor(art);
+    this.motionMaterial.needsUpdate = true;
+    this.motion.visible = true;
+  }
+
+  // -------------------------------------------------------------------------
   // Estado visual
   // -------------------------------------------------------------------------
 
@@ -550,7 +770,22 @@ export class Card3D {
   }
 
   setSelected(value: boolean): void {
+    // El "tick" solo al SELECCIONAR, no al deseleccionar: quitar la carta de
+    // la seleccion no es un evento que necesite feedback propio (ya lo da el
+    // badge que desaparece).
+    if (value && !this.selected) this.selectT = 0;
     this.selected = value;
+  }
+
+  /**
+   * Amplitud actual del tick de seleccion (-1..1, 0 = reposo).
+   *
+   * NO usa tween a proposito: `home` lo escribe el layout de la mano en cada
+   * reacomodo, y un tween de escala sobre `home.sx` pelearia con el. Este
+   * valor vive aparte y `applyTransform()` lo compone.
+   */
+  private selectTick(): number {
+    return selectTickAmplitude(this.selectT);
   }
 
   /**
@@ -710,9 +945,15 @@ export class Card3D {
    * El destello tinta `emissive` (el material usa la cara como emissiveMap). Al
    * terminar se restaura TODO: si una mano larga interrumpiera el tween, la
    * carta no puede quedar deformada.
+   *
+   * El pico del destello lo ESCALA la rareza (`rarityPopWeight`): un mitico
+   * pega mas del doble de fuerte que un comun. El squash no se toca —la goma
+   * es la misma para todas— porque lo que cambia con la rareza es el GOLPE,
+   * no la forma.
    */
   pop(tint: number): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    const weight = this.popWeight;
     const restore = () => {
       this.home.sx = 1;
       this.home.sy = 1;
@@ -728,15 +969,29 @@ export class Card3D {
       this.home.sx = s;
       this.home.sy = 2 - s;
       this.home.sz = s;
-      this.faceMaterial.emissiveIntensity = 0.32 + (1 - p) * (1 - p) * 1.9;
+      this.faceMaterial.emissiveIntensity = 0.32 + (1 - p) * (1 - p) * 1.9 * weight;
       this.applyTransform();
     }).then(restore, restore);
+  }
+
+  /**
+   * Peso del golpe visual de la carta actual, por rareza.
+   *
+   * Se resuelve en cada consulta (y no se guarda en el constructor) porque la
+   * rareza vive en el `def`: una evolucion puede cambiarla sin reconstruir la
+   * carta.
+   */
+  get popWeight(): number {
+    return rarityPopWeight(this.joker?.def.rarity ?? this.card?.def.rarity ?? 'common');
   }
 
   /** Fuerza el estado visual al instante (al repartir, para evitar saltos). */
   snapToHome(): void {
     this.lift = this.selected ? 1 : 0;
     this.selectGlow = this.selected ? 1 : 0;
+    // El tick es una animacion de entrada: un snap lo cancela, o la carta
+    // apareceria estirandose desde el reposo.
+    this.selectT = -1;
     this.applyTransform();
   }
 
@@ -757,6 +1012,13 @@ export class Card3D {
     this.lift += (targetLift - this.lift) * k;
     this.selectGlow += (targetGlow - this.selectGlow) * k;
     this.compatibleGlow += (targetCompatible - this.compatibleGlow) * kc;
+
+    // Tick de seleccion: se apaga solo cuando la oscilacion ya no se ve
+    // (0.55 s), no cuando llega a cero matematico. Asi el corte es invisible.
+    if (this.selectT >= 0) {
+      this.selectT += dt;
+      if (this.selectT > SELECT_TICK_END) this.selectT = -1;
+    }
 
     tickShader(this.haloMaterial, time);
 
@@ -789,6 +1051,31 @@ export class Card3D {
     (this.haloMaterial.uniforms['uFoilAmount'] as { value: number }).value =
       this.home.flip < 0.5 ? this.foilAmount : 0;
 
+    // Pulso de baja frecuencia del FOIL: es el "marco con vida" de las rarezas
+    // altas. Se apaga con `reduceMotion` (regla del proyecto: lo que informa
+    // no se apaga, solo deja de moverse) y boca abajo, donde no se ve.
+    (this.haloMaterial.uniforms['uPulse'] as { value: number }).value =
+      this.foilAmount > 0 && this.home.flip < 0.5 && !this.motionReduced
+        ? 0.5 + 0.5 * Math.sin(time * 1.1)
+        : 0;
+
+    // --- Ilustracion animada (MotionFrames) ---
+    // El frame sale del reloj del juego, el MISMO que alimenta el halo: se
+    // congela con el hit-stop y arranca de 0 en `start()`. La textura es
+    // COMPARTIDA por archivo, asi que todas las cartas que la usan escriben el
+    // mismo offset (la escritura es idempotente). Ver MotionFrames.ts.
+    if (this.motionSheet && this.motion.visible) {
+      const sheet = this.motionSheet;
+      const frame = this.motionReduced
+        ? 0
+        : frameIndex(time, sheet.fps, sheet.cols * sheet.rows, sheet.pingPong);
+      if (frame !== this.motionFrame) {
+        this.motionFrame = frame;
+        const cell = cellOffset(frame, sheet.cols, sheet.rows);
+        sheet.texture.offset.set(cell.x, cell.y);
+      }
+    }
+
     this.applyTransform();
   }
 
@@ -808,9 +1095,13 @@ export class Card3D {
     // que pisaba cualquier escala escrita por fuera: los jokers quedaban al
     // doble de lo disenado y el pulso de joker era invisible.
     const liftBoost = (this.dragging ? DRAG_SCALE : 1) + this.lift * 0.05;
+    // Tick de seleccion: se ESTIRA en x y se APACHINA en y (el volumen se
+    // conserva, que es lo que hace que se lea como un rebote elastico y no
+    // como un zoom). Multiplicativo para no pisar el squash del aterrizaje.
+    const tick = this.selectTick();
     this.group.scale.set(
-      this.baseScale * this.home.sx * liftBoost,
-      this.baseScale * this.home.sy * liftBoost,
+      this.baseScale * this.home.sx * liftBoost * (1 + tick * 0.1),
+      this.baseScale * this.home.sy * liftBoost * (1 - tick * 0.09),
       this.baseScale * this.home.sz * liftBoost,
     );
   }
@@ -852,6 +1143,42 @@ export class Card3D {
     return ELEMENT_COLOR[(this.card?.def.element ?? 'neutral') as keyof typeof ELEMENT_COLOR];
   }
 
+  /** `true` si la carta esta mostrando una hoja de frames ahora mismo. */
+  get hasMotionArt(): boolean {
+    return this.motionSheet !== null && this.motion.visible;
+  }
+
+  /**
+   * Foto del estado animado (frame, grilla y offset UV de la textura).
+   *
+   * Es solo para los probes y el panel de debug: es la unica forma de verificar
+   * desde afuera que el frame AVANZA, que el offset cae en una celda valida y
+   * que el hit-stop y `reduceMotion` lo congelan.
+   */
+  get motionState(): {
+    frame: number;
+    cols: number;
+    rows: number;
+    offsetX: number;
+    offsetY: number;
+    uploaded: boolean;
+  } | null {
+    if (!this.motionSheet) return null;
+    const texture = this.motionSheet.texture;
+    const image = texture.image as HTMLImageElement | null;
+    return {
+      frame: this.motionFrame,
+      cols: this.motionSheet.cols,
+      rows: this.motionSheet.rows,
+      offsetX: texture.offset.x,
+      offsetY: texture.offset.y,
+      // `false` = la textura nunca llego a la GPU y el quad se dibuja NEGRO,
+      // sin error ni warning. Es la trampa de `new THREE.Texture()` sin
+      // `needsUpdate`: nace con `version = 0` y three no la sube.
+      uploaded: texture.version > 0 && !!image && image.complete && image.naturalWidth > 0,
+    };
+  }
+
   get statuses(): StatusType[] {
     return (this.card?.statuses ?? []).map((s) => s.type);
   }
@@ -868,10 +1195,16 @@ export class Card3D {
     // Cortar tambien lo de GSAP: si no, una secuencia pendiente escribiria
     // sobre un material ya liberado.
     anim.killOf(this.home);
+    // La hoja animada vuelve al cache: si no, el presupuesto del tier se
+    // llenaria con cartas que ya no existen.
+    if (this.motionSrc !== undefined) this.motionSource?.release(this.motionSrc);
+    this.motionSrc = undefined;
+    this.motionSheet = null;
     this.faceMaterial.dispose();
     this.backMaterial.dispose();
     this.edgeMaterial.dispose();
     this.topMaterial.dispose();
+    this.motionMaterial.dispose();
     this.haloMaterial.dispose();
     this.badgeMaterial.dispose();
     this.group.clear();

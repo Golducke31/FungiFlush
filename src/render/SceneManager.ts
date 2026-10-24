@@ -32,10 +32,12 @@ import { victoryFxPreset, type VictoryFxPreset } from './VictoryFx';
 import { isCoarsePointer, isTouchOnly } from '../pointer';
 import { CARD_HALO_WIDTH, CARD_HEIGHT, CARD_WIDTH, Card3D, disposeSharedGeometry } from './Card3D';
 import { CardTextureCache, createCardBackCanvas, createShadowCanvas } from './CardTexture';
-import { CameraRig } from './CameraRig';
+import { MotionFrameCache } from './MotionFrames';
+import { CameraRig, axisShakeDir, type ShakeAxis } from './CameraRig';
 import { DropZone, rectContains, type DropZoneHandle, type DropZoneId, type ZoneRect } from './DropZone';
 import { Interaction } from './Interaction';
 import { SporeField } from './Particles';
+import { ImpactRings } from './ImpactRings';
 import { Mycelium } from './Mycelium';
 import { PostFx } from './PostFx';
 import { TRANSITION_SECONDS } from './Transition';
@@ -419,7 +421,21 @@ export class SceneManager {
   private readonly assets: ArtAssets;
   private readonly callbacks: SceneCallbacks;
   private readonly textures = new CardTextureCache();
+  /**
+   * Hojas de ilustraciones animadas (MotionFrames). Cache PROPIA y separada de
+   * la de texturas de carta: se dimensiona por archivo de arte, no por estado
+   * ni por idioma, y se vacia solo al cerrar el juego.
+   */
+  private readonly motionFrames = new MotionFrameCache();
   private readonly particles: SporeField;
+  /** Anillos de impacto: pool de 8, se recicla solo. */
+  private readonly rings = new ImpactRings();
+  /**
+   * Estelas vivas. Guarda la ULTIMA posicion de cada carta en vuelo para poder
+   * calcular su velocidad: la estela nace con esa velocidad invertida, asi que
+   * el reguero se curva hacia atras en vez de salir disparado.
+   */
+  private readonly trails = new Map<Card3D, { x: number; y: number; z: number; color: number }>();
   private readonly interaction: Interaction;
 
   private readonly handCards = new Map<string, Card3D>();
@@ -721,6 +737,13 @@ export class SceneManager {
     this.buildDropZones();
     this.subscribe();
     this.applyQuality(detected.tier, detected.reason, false);
+    // Manifiesto de ilustraciones animadas. Carga en segundo plano: si no
+    // existe (o falla una imagen) las cartas se quedan con el arte estatico,
+    // que es exactamente el juego de siempre. Las hojas en si se descargan
+    // cuando una carta las pide, y `onSheetReady` re-resuelve las que estaban
+    // esperando.
+    this.motionFrames.onSheetReady = () => this.refreshMotionArt();
+    void this.motionFrames.load().then(() => this.refreshMotionArt());
     this.resize();
   }
 
@@ -752,7 +775,43 @@ export class SceneManager {
     this.syncPostFx();
     if (this.shadowMesh) this.shadowMesh.visible = config.contactShadows;
 
+    // Ilustraciones animadas: se prenden/apagan con el tier y se re-resuelven
+    // las cartas vivas (una que se quedo sin hoja por presupuesto puede pasar
+    // a tenerla, y una que la tenia debe soltarla al bajar a `low`).
+    this.motionFrames.setEnabled(config.animatedArt, config.motionBudget);
+    this.refreshMotionArt();
+
+    // Anillos de impacto: en `low` son aditivos sobre una mesa ya oscura y se
+    // comen el poco presupuesto que hay. Se apagan enteros (el grupo deja de
+    // dibujarse, no es que los anillos se hagan invisibles uno por uno).
+    this.rings.setEnabled(tier !== 'low');
+
     if (resizeNow) this.resize();
+  }
+
+  /**
+   * Re-resuelve la ilustracion animada de TODAS las cartas vivas.
+   *
+   * Se llama cuando el manifiesto termina de cargar, cuando llega una hoja y
+   * cuando cambia el tier. Con la animacion PRENDIDA solo reintenta las cartas
+   * que se quedaron sin hoja; con la animacion APAGADA (`low`) suelta las que
+   * la tenian, porque ahi el camino de render tiene que ser el de siempre.
+   */
+  private refreshMotionArt(): void {
+    const on = this.tierConfig.animatedArt;
+    this.eachCard((card3d) => {
+      if (on) card3d.refreshMotion();
+      else card3d.clearMotion();
+    });
+  }
+
+  /** Recorre TODAS las cartas vivas: mano, jokers, zona de puntuacion, vuelo y menu. */
+  private eachCard(fn: (card3d: Card3D) => void): void {
+    for (const card3d of this.handCards.values()) fn(card3d);
+    for (const card3d of this.jokerCards.values()) fn(card3d);
+    for (const card3d of this.scoringCards) fn(card3d);
+    for (const card3d of this.flyingCards) fn(card3d);
+    for (const card3d of this.menuCards) fn(card3d);
   }
 
   // ==========================================================================
@@ -928,6 +987,79 @@ export class SceneManager {
     return { frames: sorted.length, p50: at(0.5), p95: at(0.95), tier: this.tier };
   }
 
+  /**
+   * Estado de las ilustraciones animadas (MotionFrames).
+   *
+   * Lo leen el panel de debug y los probes. `animated` es el dato que importa:
+   * cuantas cartas VIVAS estan mostrando una hoja de frames ahora mismo. Tiene
+   * que ser `<= budget` y `active <= budget` siempre: si se pasa, el
+   * presupuesto del tier no esta funcionando y en un celular se paga en frames.
+   */
+  motionReport(): {
+    enabled: boolean;
+    budget: number;
+    declared: number;
+    active: number;
+    textures: number;
+    cards: number;
+    animated: number;
+  } {
+    let cards = 0;
+    let animated = 0;
+    this.eachCard((card3d) => {
+      cards += 1;
+      if (card3d.hasMotionArt) animated += 1;
+    });
+    return {
+      enabled: this.tierConfig.animatedArt,
+      budget: this.tierConfig.motionBudget,
+      declared: this.motionFrames.declared,
+      active: this.motionFrames.active,
+      textures: this.motionFrames.size,
+      cards,
+      animated,
+    };
+  }
+
+  /**
+   * Estado del frente de animaciones de VUELO (estelas y anillos).
+   *
+   * Existe para el probe: desde afuera no hay forma de saber si una estela se
+   * esta emitiendo (las particulas del pool son anonimas) ni si los anillos se
+   * liberan. Sin este reporte, "la estela funciona" seria una opinion.
+   */
+  fxReport(): {
+    trails: number;
+    rings: number;
+    ringPool: { active: number; size: number };
+    transient: number;
+  } {
+    return {
+      trails: this.trails.size,
+      rings: this.rings.activeCount,
+      // El pool entero ({active, size}), no solo el total: lo interesante es
+      // ver si los 8 slots llegan a ocuparse todos en una mano grande.
+      ringPool: this.rings.poolUsage,
+      transient: this.particles.activeCount,
+    };
+  }
+
+  /**
+   * Estado del golpe de pantalla del cierre de combo (PunchPass, V4).
+   *
+   * Existe para el probe: desde afuera no hay forma de saber si el punch esta
+   * corrierto ni de que fuerza. `active` dice si el pase esta EN la cadena
+   * (con punch 0 se saca, y en reposo tiene que ser `false`: un quad de
+   * pantalla completa no puede correr en todo frame para no hacer nada).
+   */
+  punchReport(): { punch: number; active: boolean } {
+    return {
+      punch: this.postFx?.punch ?? 0,
+      // Sin composer (`low`) no hay pase: `active` en false es correcto.
+      active: this.postFx?.punchActive ?? false,
+    };
+  }
+
   // ==========================================================================
   // Construccion de la escena
   // ==========================================================================
@@ -957,6 +1089,9 @@ export class SceneManager {
 
     // --- Particulas ---
     this.scene.add(this.particles.group);
+
+    // --- Anillos de impacto ---
+    this.scene.add(this.rings.group);
 
     // --- Micelio del combo ---
     this.scene.add(this.mycelium.group);
@@ -1182,6 +1317,16 @@ export class SceneManager {
       anim.setReduceMotion(reduceMotion);
       this.tweens.setReduceMotion(reduceMotion);
       this.syncAmbient();
+      // Las ilustraciones animadas se congelan en su primer frame: es el mismo
+      // criterio que el CSS y los tweens.
+      this.eachCard((card3d) => card3d.setReduceMotion(reduceMotion));
+      // Los anillos de impacto dejan de ensancharse: pasan a ser un destello
+      // corto, que sigue comunicando el golpe sin movimiento.
+      this.rings.setReducedMotion(reduceMotion);
+      // El shake de camara se apaga (V5): es movimiento subito, el mismo tipo
+      // de efecto que `hitStop` y que la gente pide apagar. El gate vive en
+      // `CameraRig.addShake`, asi que cubre los ~14 call sites de una.
+      this.rig.setReducedMotion(reduceMotion);
     }
     if (this.mode === mode) return;
     this.mode = mode;
@@ -1686,10 +1831,15 @@ export class SceneManager {
    * Cancela TODO lo que mueva a una carta: el motor propio Y las secuencias de
    * GSAP. Sin esto, una timeline vieja pelea con el dedo durante el arrastre o
    * escribe sobre una carta que ya salio de la mano.
+   *
+   * La estela tambien (V5): si la carta vuelve a entrar (otro descarte), el
+   * `Map` conservaria la entrada vieja y `updateTrails` seguiria emitindo
+   * esporas desde una carta destruida — ademas de retenerla en memoria.
    */
   private stopCard(card3d: Card3D): void {
     this.tweens.cancelFor(card3d.home);
     anim.killOf(card3d.home);
+    this.trails.delete(card3d);
   }
 
   private clearMenuDecor(): void {
@@ -1774,7 +1924,18 @@ export class SceneManager {
       }),
 
       bus.on('card:discarded', ({ card, index }) => {
-        this.queueFx(index * 0.06, () => this.flyToDiscard(card.uid));
+        const card3d = this.handCards.get(card.uid);
+        if (!card3d) return;
+        // A `flyingCards` ANTES de que el motor emita `state:changed`: al
+        // rellenar la mano, `syncHand` destruye toda carta que no este en
+        // ninguna lista. Sin esta linea el descarte nunca volaba —la carta
+        // desaparecia en el acto (la destruia el barrido sincronico) y el FX
+        // encolado no encontrada nada—. El vuelo ademas necesita que `update()`
+        // la recorra, y eso solo pasa desde una lista.
+        this.flyingCards.add(card3d);
+        // Se pasa la CARTA, no el uid: cuando el FX encolado corre, el barrido
+        // de la mano ya la saco de `handCards`.
+        this.queueFx(index * 0.06, () => this.flyToDiscard(card3d));
       }),
 
       bus.on('card:drawn', ({ card }) => {
@@ -2336,6 +2497,9 @@ export class SceneManager {
       rarity,
       this.layoutProfile !== 'desktop',
     );
+    // La animacion de la ilustracion es opcional: sin manifiesto (o en tier
+    // `low`) el quad se queda invisible y la carta muestra el arte estatico.
+    card3d.setMotionSource(this.motionFrames);
     if (this.backTexture) card3d.setBackTexture(this.backTexture);
     if (card) card3d.setCard(card, this.textures, this.lang(), this.artForCard(card));
     if (joker) card3d.setJoker(joker, this.textures, this.lang(), this.artForJoker(joker));
@@ -2645,6 +2809,10 @@ export class SceneManager {
     }
 
     // La que LLEGA: anticipacion -> arco -> aterrizaje con squash.
+    //
+    // La estela se prende ACA, antes del arco: la idea es que el reguero
+    // acompanie TODO el vuelo, no solo la mitad. Se apaga al aterrizar.
+    this.startTrail(card3d, card3d.elementColor);
     anim
       .sequence()
       .to(card3d.home, { sx: 0.9, sy: 1.12, duration: anim.d(0.09), ease: anim.EASE.quadOut }, 0)
@@ -2675,24 +2843,38 @@ export class SceneManager {
       .to(card3d.home, { sx: 1.14, sy: 0.86, duration: anim.d(0.07), ease: anim.EASE.quadOut })
       .to(card3d.home, { sx: 1, sy: 1, duration: anim.d(0.24), ease: anim.EASE.elasticOut })
       .add(() => {
-        this.particles.burst(card3d.worldPosition(), 14, {
+        this.stopTrail(card3d);
+        const at = card3d.worldPosition();
+        this.particles.burst(at, 14, {
           color: card3d.elementColor,
           speed: 1.9,
           upward: 1.6,
           size: 0.07,
           life: 0.85,
         });
+        // Anillo de choque en el suelo: es el remate del aterrizaje. Sin el,
+        // el squash dice "la carta toco" pero no "con cuanta fuerza".
+        this.rings.spawn(at, card3d.elementColor, 1);
         this.rig.addShake(0.035);
       });
   }
 
-  private flyToDiscard(uid: string): void {
-    const card3d = this.handCards.get(uid);
-    if (!card3d) return;
-    this.handCards.delete(uid);
+  private flyToDiscard(card3d: Card3D): void {
+    this.handCards.delete(card3d.uid);
 
     const jitter = (Math.random() - 0.5) * 0.4;
+    // GIRO EN PLANO: una vuelta completa sobre el eje VERTICAL (`rz`), no
+    // sobre `ry`. Verificado contra three: con la carta acostada (`rx=-PI/2`),
+    // `ry` es el eje que la DA VUELTA (la normal pasa de apuntar arriba a
+    // apuntar abajo) — es el eje del flip— y `rz` es el que la hace girar
+    // sobre la mesa. Animar `ry` aca habria sido un flip, no un giro.
+    //
+    // Una vuelta COMPLETA (2*PI) y no media: asi la carta aterriza con el
+    // mismo angulo de siempre (el jitter) pero se la ve dar la vuelta. El
+    // signo es aleatorio para que no todas caigan girando igual.
+    const spin = (Math.random() < 0.5 ? -1 : 1) * Math.PI * 2;
     const rz = (Math.random() - 0.5) * 0.5;
+    this.startTrail(card3d, 0x7a8794);
     anim
       .sequence()
       .to(
@@ -2704,10 +2886,19 @@ export class SceneManager {
           // `rx` explicito: si la carta venia de un arrastre esta inclinada, y
           // sin esto volaria al descarte torcida.
           rx: -Math.PI / 2,
-          rz,
           duration: anim.d(0.45),
           ease: anim.EASE.quadOut,
         },
+        0,
+      )
+      // El giro va en su PROPIO tween y arrastra el jitter de aterrizaje: si
+      // el jitter se quedara en el tween de posicion, los dos pelearian por
+      // `rz` y ganaria el ultimo (la carta perderia el giro o el angulo).
+      // Curva LINEAL a proposito: una rotacion con ease arranca y frena, y un
+      // descarte que empieza girando lento no se lee como una carta volando.
+      .to(
+        card3d.home,
+        { rz: card3d.home.rz + spin + rz, duration: anim.d(0.45), ease: anim.EASE.linear },
         0,
       )
       // Arco por encima del borde de la mesa, en vez de una linea recta.
@@ -2722,6 +2913,7 @@ export class SceneManager {
         0,
       )
       .add(() => {
+        this.stopTrail(card3d);
         this.particles.burst(card3d.worldPosition(), 8, {
           color: 0x7a8794,
           speed: 1.1,
@@ -2824,6 +3016,58 @@ export class SceneManager {
       .to(group.scale, { x: 1, y: 1, z: 1, duration: anim.d(0.26), ease: anim.EASE.backOut });
   }
 
+  // -------------------------------------------------------------------------
+  // Estelas de vuelo
+  // -------------------------------------------------------------------------
+
+  /**
+   * Empieza a dejar una estela de esporas detras de una carta.
+   *
+   * Se llama al DESPEGAR (jugar o descartar) y `stopTrail` al aterrizar. La
+   * estela se emite desde el bucle, no desde el tween, porque quien sabe
+   * donde esta la carta en cada frame es `update()`.
+   *
+   * En `low` no se prende: es el camino de render de siempre y las estelas
+   * son jugo nuevo. Ademas comparten el pool transitorio con los `burst`, asi
+   * que en el tier mas justo habria que repartirlas.
+   */
+  private startTrail(card3d: Card3D, color: number): void {
+    if (this.reduceMotion || this.tier === 'low') return;
+    const p = card3d.worldPosition();
+    this.trails.set(card3d, { x: p.x, y: p.y, z: p.z, color });
+  }
+
+  private stopTrail(card3d: Card3D): void {
+    this.trails.delete(card3d);
+  }
+
+  /**
+   * Emite la estela de cada carta en vuelo.
+   *
+   * La cantidad sale de la DISTANCIA recorrida desde el frame anterior, no de
+   * un `count` fijo: asi la estela tiene densidad constante en el espacio y no
+   * se rafa cuando el framerate baja (ni deja un reguero gigante en un tiron).
+   */
+  private updateTrails(): void {
+    if (this.trails.size === 0) return;
+    const velocity = new THREE.Vector3();
+    for (const [card3d, last] of this.trails) {
+      const p = card3d.worldPosition();
+      velocity.set(p.x - last.x, p.y - last.y, p.z - last.z);
+      const dist = velocity.length();
+      if (dist > 0.001) {
+        // Una espora cada ~0.12 unidades de vuelo, con tope: un tiron de
+        // frames (dt acotado a 0.05 pero la carta puede haber volado lejos)
+        // no debe llenar el pool transitorio de golpe.
+        const count = Math.min(4, Math.floor(dist / 0.12));
+        if (count > 0) this.particles.trail(p, velocity, count, last.color);
+        last.x = p.x;
+        last.y = p.y;
+        last.z = p.z;
+      }
+    }
+  }
+
   private onScoreStep(step: ScoreStep): void {
     const index = this.stepIndex++;
     if (index >= MAX_ANIMATED_STEPS) return;
@@ -2893,6 +3137,13 @@ export class SceneManager {
       const source = this.handCards.get(step.sourceId) ?? this.scoringCards.find((x) => x.uid === step.sourceId);
       if (source && !step.sourceId.startsWith('combo:') && !step.sourceId.startsWith('order:')) {
         void source.pop(color);
+        // HIT-STOP EXTRA POR RAREZA (V4): una carta rara que puntua golpea mas
+        // fuerte. Nada para comun/infrecuente —congelar cada paso de una mano
+        // larga se lee como un tiron, no como un golpe— y creciente para
+        // rara/legendaria/mitica. `hitStop` es no-op con `reduceMotion` y se
+        // queda con el MAXIMO, asi que varios no apilan el congelamiento.
+        const w = source.popWeight;
+        if (w >= 0.6) this.hitStop(30 + (w - 0.6) * 175);
       }
 
       // HABILIDAD ACTIVADA. Si la carta que origina este paso trae efectos
@@ -2974,7 +3225,7 @@ export class SceneManager {
    * es lo que permite escalar la intensidad: un x1.25 se nota y un x3 se siente
    * enorme.
    */
-  private comboOf(sourceId: string): { axis: 'element' | 'family' | 'diversity'; tier: number } | null {
+  private comboOf(sourceId: string): { axis: ShakeAxis; tier: number } | null {
     const parts = sourceId.split(':');
     if (parts[0] !== 'combo') return null;
     const axis = parts[1];
@@ -3047,7 +3298,10 @@ export class SceneManager {
       // Un poco mas de hit-stop y de shake que el cierre base: es exactamente
       // ese exceso lo que se lee como "esta mano armo algo".
       this.hitStop(50 + Math.round(weight * 70));
-      this.rig.addShake(0.06 + weight * 0.1);
+      // Shake DIRECCIONAL (V4): el eje del combo dice hacia donde golpea la
+      // camara. Elemento barre en horizontal, familia empuja en vertical.
+      const dir = axisShakeDir(axis);
+      this.rig.addShake(0.06 + weight * 0.1, dir.x, dir.y);
     }
 
     // El pulso de fondo se refuerza (decae solo en el loop).
@@ -3100,6 +3354,9 @@ export class SceneManager {
       if (this.bgPulseActive) {
         this.applyBgPulse(0);
         this.postFx?.pulseBloom(0);
+        // El golpe de pantalla se apaga con el pulso (y el pase sale de la
+        // cadena: en reposo no existe).
+        this.postFx?.setPunch(0);
         this.bgPulseActive = false;
       }
       return;
@@ -3108,6 +3365,11 @@ export class SceneManager {
     this.bgPulse = Math.max(0, this.bgPulse - step * 3);
     this.applyBgPulse(this.bgPulse);
     this.postFx?.pulseBloom(this.bgPulse * 0.5);
+    // PUNCH (V4): aberracion cromatica + zoom blur escalados por el mismo
+    // pulso que mueve el fondo y el bloom. Con `reduceMotion` el pulso nunca
+    // arranca (todas las escrituras de `bgPulse` lo respetan), asi que el
+    // punch se apaga solo. En `low` no hay composer: es un no-op.
+    this.postFx?.setPunch(this.bgPulse);
   }
 
   /**
@@ -3280,6 +3542,9 @@ export class SceneManager {
         duration: anim.d(0.35),
         ease: anim.EASE.quadIn,
         onComplete: () => {
+          // La estela se apaga ANTES de dispose: si no, la entrada queda en el
+          // `Map` para siempre (V5, probe-leak) reteniendo la carta destruida.
+          this.stopTrail(card3d);
           this.flyingCards.delete(card3d);
           card3d.dispose();
           this.scene.remove(card3d.group);
@@ -3312,10 +3577,16 @@ export class SceneManager {
       cards.forEach((card3d, i) => {
         const jitter = (Math.random() - 0.5) * 0.5;
         const rz = (Math.random() - 0.5) * 0.5;
+        // Medio giro en plano (PI, no 2*PI): la carta viene del centro ya
+        // dando vueltas por el flip, y sumarle una vuelta entera la haria
+        // girar demasiado rapida para 0.46 s. Medio giro la deja caer
+        // "tumbada", que es como caen las cartas de verdad.
+        const spin = (Math.random() < 0.5 ? -1 : 1) * Math.PI;
         // Stagger CORTO y con tope: con la mano llena (6+) un stagger lineal
         // empujaba la ultima carta casi un segundo, y el vuelo se leia como una
         // cola lenta. El tope mantiene la cascada sin estirar el final.
         const stagger = Math.min(i * 0.06, 0.24);
+        this.startTrail(card3d, 0x7a8794);
         // El giro va EN LA MISMA timeline que el vuelo (no por `TweenManager`):
         // asi los dos corren con el MISMO reloj y la carta no llega al descarte
         // con el flip a medias cuando el framerate baja (el caso de movil).
@@ -3337,13 +3608,20 @@ export class SceneManager {
               y: 0.4,
               z: DISCARD_Z,
               // `rx`/`ry` explicitos: la carta viene del centro y sin esto
-              // volaria torcida al descarte.
+              // volaria torcida al descarte. `ry` en 0 porque el flip ya lo
+              // animo: escribirlo aca lo pisaria a mitad del giro.
               rx: -Math.PI / 2,
               ry: 0,
-              rz,
               duration: anim.d(0.46),
               ease: anim.EASE.quadOut,
             },
+            stagger,
+          )
+          // Giro en plano sobre `rz` (el eje de la mesa; `ry` es el del flip).
+          // Lleva el jitter incluido para no pelear por la propiedad.
+          .to(
+            card3d.home,
+            { rz: card3d.home.rz + spin + rz, duration: anim.d(0.46), ease: anim.EASE.linear },
             stagger,
           )
           // Arco por encima del borde de la mesa. El pico va a mitad del vuelo
@@ -3361,6 +3639,7 @@ export class SceneManager {
           // Se achica al aterrizar y se libera.
           .to(card3d.home, { sx: 0.7, sy: 0.7, sz: 0.7, duration: anim.d(0.1) }, stagger + 0.46)
           .add(() => {
+            this.stopTrail(card3d);
             this.particles.burst(card3d.worldPosition(), 6, {
               color: 0x7a8794,
               speed: 1.0,
@@ -3678,6 +3957,8 @@ export class SceneManager {
 
       this.updateShadows();
       this.particles.update(step);
+      this.updateTrails();
+      this.rings.update(step);
       // La fisica del dado va con el MISMO dt acotado: es lo que impide que un
       // tiron de frames la mande al infinito.
       this.die3d?.update(step);
@@ -3739,6 +4020,13 @@ export class SceneManager {
     }
 
     if (!this.frameMonitor) return;
+    // El monitor protege el camino AUTO. Si el tier lo eligio el jugador (el
+    // ajuste de calidad, o el override por URL que usan los probes), su
+    // eleccion gana: degradar igual significaba que un `?quality=medium` se
+    // caia a `low` a los 3 s de arrancar y las animaciones de ese tier no se
+    // podian verificar —ni jugar—. Ademas el perfil sigue diciendo `medium`,
+    // asi que cada arranque repetia la degradacion.
+    if (this.tierReason === 'manual') return;
     const downgraded = this.frameMonitor.sample(seconds);
     if (!downgraded) return;
 
@@ -4195,12 +4483,18 @@ export class SceneManager {
     this.jokerSlotsBuilt = -1;
 
     this.textures.clear();
+    this.motionFrames.dispose();
     for (const zone of this.dropZones) zone.dispose();
     this.dropZones.length = 0;
     this.postFx?.dispose();
     this.postFx = null;
     this.backTexture = null;
     this.particles.dispose();
+    // Las estelas apuntan a cartas que ya se disposearon: si quedaran, el
+    // bucle seguiria pidiendoles `worldPosition()` (y el mapa creceria para
+    // siempre entre partidas).
+    this.trails.clear();
+    this.rings.dispose();
     this.mycelium.dispose();
     for (const item of this.disposables) item.dispose();
     disposeSharedGeometry();

@@ -5,6 +5,9 @@ export { ArtAssets, CARD_BACK_KEY, TABLE_KEY, artKeysFor, artKeysForJoker, blind
 export type { ArtKey, CardArtKey, LegacyArtKey } from './ArtAssets';
 export { Card3D, CARD_WIDTH, CARD_HEIGHT } from './Card3D';
 export type { CardHome, CardKind } from './Card3D';
+export { ImpactRings } from './ImpactRings';
+export { MotionFrameCache, cellOffset, frameIndex } from './MotionFrames';
+export type { MotionSheet, MotionSheetMeta } from './MotionFrames';
 export {
   CARD_DISPLAY_FONT,
   CARD_TEXT_FONT,

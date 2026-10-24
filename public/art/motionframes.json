@@ -1,0 +1,459 @@
+{
+  "sheets": {
+    "art_card_crystal_common.webp": {
+      "file": "mf_art_card_crystal_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_crystal_legendary.webp": {
+      "file": "mf_art_card_crystal_legendary.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_crystal_rare.webp": {
+      "file": "mf_art_card_crystal_rare.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_crystal_uncommon.webp": {
+      "file": "mf_art_card_crystal_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_decay_common.webp": {
+      "file": "mf_art_card_decay_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_decay_legendary.webp": {
+      "file": "mf_art_card_decay_legendary.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_decay_uncommon.webp": {
+      "file": "mf_art_card_decay_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_mycelium_common.webp": {
+      "file": "mf_art_card_mycelium_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_mycelium_legendary.webp": {
+      "file": "mf_art_card_mycelium_legendary.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_mycelium_rare.webp": {
+      "file": "mf_art_card_mycelium_rare.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_mycelium_uncommon.webp": {
+      "file": "mf_art_card_mycelium_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_amanita_apex_toxica.webp": {
+      "file": "mf_art_card_own_amanita_apex_toxica.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_bridge_saprophyte.webp": {
+      "file": "mf_art_card_own_bridge_saprophyte.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_agaric_thread.webp": {
+      "file": "mf_art_card_own_colony_agaric_thread.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_amanita_web.webp": {
+      "file": "mf_art_card_own_colony_amanita_web.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_boletus_root.webp": {
+      "file": "mf_art_card_own_colony_boletus_root.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_clavaria_filament.webp": {
+      "file": "mf_art_card_own_colony_clavaria_filament.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_network_node.webp": {
+      "file": "mf_art_card_own_colony_network_node.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_colony_rhizomorph.webp": {
+      "file": "mf_art_card_own_colony_rhizomorph.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_cordyceps_mind.webp": {
+      "file": "mf_art_card_own_cordyceps_mind.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_agaric_facet.webp": {
+      "file": "mf_art_card_own_crystal_agaric_facet.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_amanita_shard.webp": {
+      "file": "mf_art_card_own_crystal_amanita_shard.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_boletus_prism.webp": {
+      "file": "mf_art_card_own_crystal_boletus_prism.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_glasscap.webp": {
+      "file": "mf_art_card_own_crystal_glasscap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_grand_coral.webp": {
+      "file": "mf_art_card_own_crystal_grand_coral.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_prism_gill.webp": {
+      "file": "mf_art_card_own_crystal_prism_gill.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_shard_bloom.webp": {
+      "file": "mf_art_card_own_crystal_shard_bloom.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_crystal_tricholoma_lens.webp": {
+      "file": "mf_art_card_own_crystal_tricholoma_lens.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_agaric_mould.webp": {
+      "file": "mf_art_card_own_decay_agaric_mould.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_amanita_blight.webp": {
+      "file": "mf_art_card_own_decay_amanita_blight.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_ancient_stump.webp": {
+      "file": "mf_art_card_own_decay_ancient_stump.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_boletus_slime.webp": {
+      "file": "mf_art_card_own_decay_boletus_slime.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_carrion_bloom.webp": {
+      "file": "mf_art_card_own_decay_carrion_bloom.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_clavaria_ash.webp": {
+      "file": "mf_art_card_own_decay_clavaria_ash.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_compost_heap.webp": {
+      "file": "mf_art_card_own_decay_compost_heap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_inkcap.webp": {
+      "file": "mf_art_card_own_decay_inkcap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_decay_rotwood.webp": {
+      "file": "mf_art_card_own_decay_rotwood.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_ergot_rye.webp": {
+      "file": "mf_art_card_own_ergot_rye.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_ghost_fungus.webp": {
+      "file": "mf_art_card_own_ghost_fungus.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_mycelium_truffle.webp": {
+      "file": "mf_art_card_own_mycelium_truffle.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_mycelium_webcap.webp": {
+      "file": "mf_art_card_own_mycelium_webcap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_poison_goldcap.webp": {
+      "file": "mf_art_card_own_poison_goldcap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_shiitake_hearty.webp": {
+      "file": "mf_art_card_own_shiitake_hearty.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_amanita_veil.webp": {
+      "file": "mf_art_card_own_spore_amanita_veil.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_archetype_burst_cap.webp": {
+      "file": "mf_art_card_own_spore_archetype_burst_cap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_archetype_signal.webp": {
+      "file": "mf_art_card_own_spore_archetype_signal.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_boletus_puff.webp": {
+      "file": "mf_art_card_own_spore_boletus_puff.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_clavaria_spray.webp": {
+      "file": "mf_art_card_own_spore_clavaria_spray.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_fairycake.webp": {
+      "file": "mf_art_card_own_spore_fairycake.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_psilocybe_dust.webp": {
+      "file": "mf_art_card_own_spore_psilocybe_dust.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_spore_veilcap.webp": {
+      "file": "mf_art_card_own_spore_veilcap.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_symbiosis_mycorrhiza.webp": {
+      "file": "mf_art_card_own_symbiosis_mycorrhiza.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_own_wild_dung_beetle.webp": {
+      "file": "mf_art_card_own_wild_dung_beetle.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_parasite_rare.webp": {
+      "file": "mf_art_card_parasite_rare.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_parasite_uncommon.webp": {
+      "file": "mf_art_card_parasite_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_poison_common.webp": {
+      "file": "mf_art_card_poison_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_poison_legendary.webp": {
+      "file": "mf_art_card_poison_legendary.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_poison_mythic.webp": {
+      "file": "mf_art_card_poison_mythic.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_poison_uncommon.webp": {
+      "file": "mf_art_card_poison_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_spore_common.webp": {
+      "file": "mf_art_card_spore_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_spore_rare.webp": {
+      "file": "mf_art_card_spore_rare.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_spore_uncommon.webp": {
+      "file": "mf_art_card_spore_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_symbiosis_common.webp": {
+      "file": "mf_art_card_symbiosis_common.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_symbiosis_rare.webp": {
+      "file": "mf_art_card_symbiosis_rare.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    },
+    "art_card_symbiosis_uncommon.webp": {
+      "file": "mf_art_card_symbiosis_uncommon.webp",
+      "cols": 3,
+      "rows": 2,
+      "fps": 6.0,
+      "pingPong": true
+    }
+  }
+}

@@ -289,6 +289,42 @@ export class SporeField {
     }
   }
 
+  /**
+   * Estela: esporas que se QUEDAN ATRAS mientras algo se mueve.
+   *
+   * La diferencia con `stream` es el objetivo: aca no hay homing. Las
+   * particulas nacen con la velocidad INVERTIDA del emisor, asi que la carta
+   * que vuela deja un reguero que se curva hacia atras y cae. Con homing
+   * (o sin velocidad) saldrian disparadas hacia el destino y se leeria como
+   * otra cosa, no como la estela de ese vuelo.
+   *
+   * `velocity` es el desplazamiento del emisor en el ultimo frame.
+   */
+  trail(from: THREE.Vector3, velocity: THREE.Vector3, count: number, color: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const p = this.allocate();
+      if (!p) return;
+
+      // 0.35 de la velocidad del emisor, invertida: la espora "se suelta" y
+      // la inercia la deja atras. El jitter evita que el reguero sea una
+      // linea perfecta (se veria como un cable).
+      p.vx = -velocity.x * 0.35 + (Math.random() - 0.5) * 0.5;
+      p.vy = -velocity.y * 0.35 + 0.35 + Math.random() * 0.4;
+      p.vz = -velocity.z * 0.35 + (Math.random() - 0.5) * 0.5;
+      p.gravity = -1.6;
+      p.homing = 0;
+      // Vida CORTA: una estela que dura mas que el vuelo que la genera deja
+      // basura colgada en el sitio equivocado.
+      p.maxLife = 0.3 + Math.random() * 0.28;
+      p.life = p.maxLife;
+
+      const spawn = from.clone();
+      spawn.y += (Math.random() - 0.5) * 0.3;
+
+      this.writeParticle(p, spawn, color, 0.045 + Math.random() * 0.04);
+    }
+  }
+
   setAmbientEnabled(value: boolean): void {
     this.ambient.points.visible = value;
   }

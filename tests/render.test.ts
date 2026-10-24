@@ -22,6 +22,9 @@ import * as THREE from 'three';
 
 import { SporeField } from '../src/render/Particles.ts';
 import { ArtAssets, artFileFor, artKeysFor } from '../src/render/ArtAssets.ts';
+import { clampPunch } from '../src/render/PostFx.ts';
+import { rarityPopWeight } from '../src/render/Card3D.ts';
+import { CameraRig, axisShakeDir } from '../src/render/CameraRig.ts';
 import {
   FRAME_BUDGET_MS,
   FrameMonitor,
@@ -457,4 +460,165 @@ test('getFirst devuelve el primer eslabon disponible y undefined si no hay ningu
   // Y con el especifico, gana ese.
   assets.set('card_poison_rare', fake('raro'));
   assert.equal(nameOf(assets.getFirst(keys)), 'raro');
+});
+
+// ---------------------------------------------------------------------------
+// V4 — Punch: saneo del uniform
+// ---------------------------------------------------------------------------
+
+test('clampPunch deja el uniform siempre en 0..1 y finito', () => {
+  // Un NaN pintaria el quadro con basura (y con `enabled` colgado en true, un
+  // quad de mas por frame para siempre); un negativo invertiria el offset.
+  assert.equal(clampPunch(0.5), 0.5, 'un valor valido pasa igual');
+  assert.equal(clampPunch(0), 0);
+  assert.equal(clampPunch(1), 1);
+  assert.equal(clampPunch(4), 1, 'por arriba se clampea a 1');
+  assert.equal(clampPunch(-3), 0, 'por abajo se clampea a 0');
+  assert.equal(clampPunch(Number.NaN), 0);
+  // Infinito tambien es "no finito": se apaga en vez de maxearse. Un punch
+  // maximo por error llenaria la pantalla de aberracion; apagado, no se ve.
+  assert.equal(clampPunch(Number.POSITIVE_INFINITY), 0);
+  assert.equal(clampPunch(Number.NEGATIVE_INFINITY), 0);
+});
+
+// ---------------------------------------------------------------------------
+// V4 — Pop por rareza
+// ---------------------------------------------------------------------------
+
+test('el peso del pop crece con la rareza y NUNCA es cero', () => {
+  // El piso de las comunes no puede ser cero: el flash del pop es el golpe
+  // por carta de TODAS las cartas. Si las comunes no destellaran, una mano de
+  // comunes no festejaria nada.
+  const common = rarityPopWeight('common');
+  assert.ok(common > 0, `comun peso ${common}`);
+
+  const uncommon = rarityPopWeight('uncommon');
+  const rare = rarityPopWeight('rare');
+  const legendary = rarityPopWeight('legendary');
+  const mythic = rarityPopWeight('mythic');
+
+  assert.ok(common < uncommon, 'uncommon pega mas que common');
+  assert.ok(uncommon < rare, 'rare pega mas que uncommon');
+  assert.ok(rare < legendary, 'legendary pega mas que rare');
+  assert.ok(legendary < mythic, 'mythic pega mas que legendary');
+
+  // Y la diferencia arriba es grande: un mitico tiene que sentirse mitico.
+  assert.ok(mythic > common * 2, `mitico ${mythic} vs comun ${common}`);
+  // Ningun peso puede pasarse de 1: el pico del destello esta calibrado con 1.
+  assert.ok(mythic <= 1, 'el techo es 1');
+});
+
+// ---------------------------------------------------------------------------
+// V4 — Shake direccional por eje de combo
+// ---------------------------------------------------------------------------
+
+test('el eje del combo decide hacia donde golpea la camara', () => {
+  // Elemento multiplica (× Esporas): barre en horizontal.
+  assert.deepEqual(axisShakeDir('element'), { x: 1, y: 0 });
+  // Familia suma (+ Sustrato): empuja en vertical.
+  assert.deepEqual(axisShakeDir('family'), { x: 0, y: 1 });
+  // Diversidad: repartido, en diagonal.
+  const div = axisShakeDir('diversity');
+  assert.ok(div.x > 0 && div.y > 0, 'la diversidad pega en los dos ejes');
+});
+
+test('el shake direccional mueve MAS el eje del combo que el perpendicular', () => {
+  // Mide el desplazamiento real de la camara durante el golpe. Con direccion
+  // horizontal, |dx| tiene que dominar; si el shake fuera isotropico (el bug
+  // que este test protege), los dos darian parecido.
+  //
+  // La respiracion ambiente (sin(breath)*0.16 / cos(breath)*0.1) tambien mueve
+  // la camara y contaminaba la medicion: con un seed de ruido desafortunado el
+  // eje perpendicular llegaba a 0.2 (0.15 de ruido sombreado + 0.1 de
+  // respiracion) y el 2x fallaba sin que el shake estuviera mal. Se mide la
+  // DIFERENCIA contra un rig sin golpe en la misma secuencia de tiempo: la
+  // respiracion es determinista (mismo dt, mismo time) y se cancela exacto,
+  // y el ruido del rig sin golpe es cero (amplitud 0).
+  const maxSwing = (dx: number, dy: number): { x: number; y: number } => {
+    const track = (withShake: boolean) => {
+      const rig = new CameraRig(2.2);
+      if (withShake) rig.addShake(0.6, dx, dy);
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (let i = 0; i < 120; i += 1) {
+        rig.update(1 / 60, i / 60);
+        xs.push(rig.camera.position.x);
+        ys.push(rig.camera.position.y);
+      }
+      return { xs, ys };
+    };
+    const hit = track(true);
+    const calm = track(false);
+    let mx = 0;
+    let my = 0;
+    for (let i = 0; i < hit.xs.length; i += 1) {
+      const hx = hit.xs[i] ?? 0;
+      const hy = hit.ys[i] ?? 0;
+      const cx = calm.xs[i] ?? 0;
+      const cy = calm.ys[i] ?? 0;
+      mx = Math.max(mx, Math.abs(hx - cx));
+      my = Math.max(my, Math.abs(hy - cy));
+    }
+    return { x: mx, y: my };
+  };
+
+  const horizontal = maxSwing(1, 0);
+  assert.ok(
+    horizontal.x > horizontal.y * 2,
+    `elemento: |dx|=${horizontal.x.toFixed(3)} vs |dy|=${horizontal.y.toFixed(3)}`,
+  );
+
+  const vertical = maxSwing(0, 1);
+  assert.ok(
+    vertical.y > vertical.x * 2,
+    `familia: |dy|=${vertical.y.toFixed(3)} vs |dx|=${vertical.x.toFixed(3)}`,
+  );
+
+  // Sin direccion, el shake de siempre: los dos ejes se mueven.
+  const neutral = maxSwing(0, 0);
+  assert.ok(neutral.x > 0.1 && neutral.y > 0.1, `neutro mueve los dos (${neutral.x.toFixed(3)}/${neutral.y.toFixed(3)})`);
+});
+
+test('el shake direccional decae: no queda temblando para siempre', () => {
+  const rig = new CameraRig(2.2);
+  rig.addShake(0.6, 1, 0);
+  assert.ok(rig.shake > 0, 'arranca con amplitud');
+  assert.deepEqual(rig.shakeDir, { x: 1, y: 0 }, 'guarda la direccion del golpe');
+
+  // Medio segundo a 60 FPS: la amplitud decae exponencialmente (5.2/s).
+  for (let i = 0; i < 30; i += 1) rig.update(1 / 60, i / 60);
+  assert.ok(rig.shake < 0.05, `decayo a ${rig.shake.toFixed(4)}`);
+});
+
+// ---------------------------------------------------------------------------
+// V5 — Shake apagado con reduceMotion
+// ---------------------------------------------------------------------------
+
+test('con reduceMotion el shake no arranca (gate central de CameraRig)', () => {
+  const rig = new CameraRig(2.2);
+  rig.setReducedMotion(true);
+  // El gate vive en `addShake`, no en los ~14 call sites: asi los sacudones
+  // viejos (que tampoco lo respetaban) quedan cubiertos para siempre.
+  rig.addShake(0.6, 1, 0);
+  assert.equal(rig.shake, 0, 'el golpe ni se registra');
+
+  // La camara NO se mueve por shake (la respiracion lenta sigue, que no es golpe).
+  const base = rig.camera.position.clone();
+  for (let i = 0; i < 60; i += 1) rig.update(1 / 60, i / 60);
+  const dx = Math.abs(rig.camera.position.x - base.x);
+  const dy = Math.abs(rig.camera.position.y - base.y);
+  assert.ok(dx < 0.2 && dy < 0.2, `solo respira: dx=${dx.toFixed(3)} dy=${dy.toFixed(3)}`);
+});
+
+test('prender reduceMotion corta un shake a medio decaer', () => {
+  const rig = new CameraRig(2.2);
+  rig.addShake(0.6, 0, 0);
+  assert.ok(rig.shake > 0, 'arranca temblando');
+  rig.setReducedMotion(true);
+  assert.equal(rig.shake, 0, 'se corta en seco: media sacudida prohibida');
+
+  // Y al apagarlo vuelve a aceptar golpes.
+  rig.setReducedMotion(false);
+  rig.addShake(0.3, 0, 0);
+  assert.ok(rig.shake > 0, 'al volver, acepta golpes de nuevo');
 });

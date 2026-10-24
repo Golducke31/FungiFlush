@@ -329,6 +329,34 @@ había que mirar; cada punto quedó cubierto por `docs/DESIGN_ESCRITORIO.md` y l
     `audit-mobile-buttons.mjs` acepta `FF_HEIGHT` para correr a 360px, donde el panel del jefe sí
     desborda (a 412 entra).
 
+- **MotionFrames + animaciones de carta + efectos 3D (2026-10-23)** — fases V1–V5 del plan
+  de rejugabilidad/animaciones (`~/.workbuddy-ai/plans/radiant-nebula-curie-fyvcM3i2.md`).
+  **Todo render 3D, nada de CSS: no hay impacto de layout en ninguna plataforma** (escritorio
+  hereda, igual que la celebración de combos de arriba).
+  - **MotionFrames** (V1/V2): 65 ilustraciones animadas (spritesheet 4×2, frame por
+    `texture.offset/repeat`). Mesh nuevo en `Card3D`, invisible en tier `low` (costo 0).
+  - **Animaciones de carta** (V3): anillo de impacto (pool de 8, `ImpactRings.ts`), estela de
+    esporas, descarte con giro, tick de selección, arco al puntuar. Todo gateado por tier
+    (`low` = apagado) y por `reduceMotion`.
+  - **Efectos 3D** (V4): `PunchPass` (aberracion cromática + zoom blur) al final del composer,
+    shake direccional por eje de combo, flash del `pop()` por rareza, hit-stop por rareza.
+    El pase arranca **deshabilitado** y solo se prende con el pulso del cierre.
+  - **V5 (endurecimiento)**: el shake de cámara quedó gateado por `reduceMotion` en
+    `CameraRig.addShake` (gate central: cubre los ~14 call sites, incluidos los viejos que
+    tampoco lo respetaban). Probe nuevo `tools/probe-leak.mjs` (20 manos sin crecimiento de
+    `renderer.info` ni de `.hud-popups` + 3 manos en `medium` para el camino del composer).
+  - **V5 (bug real que encontró el probe)**: `Card3D.applyMotion` registraba `motionSrc`
+    incluso cuando el cache NO concedía la hoja (presupuesto lleno o imagen sin
+    decodificar) ⇒ reserva fantasma ⇒ el `release` posterior borraba la reserva de otra
+    carta con el mismo archivo y su textura quedaba huérfana (nadie la liberaba). Fix:
+    `motionSrc` solo si la reserva se concedió + `release()` ignora archivos sin reserva.
+    **Lección para el gate**: el crecimiento de texturas se mide por **residuo** (cada
+    archivo de arte cuesta 3 texturas —arte + normal + height— y cada hoja animada 1), y
+    la fase `medium` se compara contra la mano 1 de `medium`: el composer es costo fijo que
+    entra en los dos lados.
+  - **Verificación**: `gate:desktop` 31/31 y `gate:parity` 117 checks (drift máx 0.042 < 0.12)
+    en verde tras cada fase ⇒ **nada que pulir en escritorio**.
+
 ---
 
 ## 7. Relación con los planes anteriores

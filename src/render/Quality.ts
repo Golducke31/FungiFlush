@@ -52,6 +52,19 @@ export interface TierConfig {
   /** Esporas transitorias (burst/stream), simuladas en CPU. */
   transientSpores: number;
   contactShadows: boolean;
+  /**
+   * Ilustraciones de carta ANIMADAS por frames (MotionFrames).
+   *
+   * `false` en `low`: ahi el camino de render tiene que seguir siendo
+   * EXACTAMENTE el de siempre. En `medium`/`high` se prende y el presupuesto
+   * de hojas distintas lo limita.
+   */
+  animatedArt: boolean;
+  /**
+   * Maximo de ilustraciones animadas DISTINTAS a la vez. Las cartas que
+   * comparten archivo de arte comparten hoja y no gastan del presupuesto.
+   */
+  motionBudget: number;
 }
 
 /**
@@ -80,6 +93,8 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     ambientSpores: 0,
     transientSpores: 1200,
     contactShadows: false,
+    animatedArt: false,
+    motionBudget: 0,
   },
   medium: {
     maxDpr: 1.75,
@@ -95,6 +110,8 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     ambientSpores: 400,
     transientSpores: 1200,
     contactShadows: true,
+    animatedArt: true,
+    motionBudget: 4,
   },
   high: {
     maxDpr: 2,
@@ -110,6 +127,8 @@ export const TIER_CONFIG: Record<QualityTier, TierConfig> = {
     ambientSpores: 900,
     transientSpores: 2000,
     contactShadows: true,
+    animatedArt: true,
+    motionBudget: 8,
   },
 };
 

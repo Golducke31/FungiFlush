@@ -56,6 +56,12 @@ export const HALO_FRAG = /* glsl */ `
   uniform float uRingIntensity;
   uniform float uFoilAmount;
   uniform float uTime;
+  /**
+   * Pulso OPT-IN del foil (0 = apagado, el historico). Lo escribe Card3D con
+   * una senoidal de baja frecuencia para las rarezas altas: es el "marco con
+   * vida" de MotionFrames. Con 0 el shader es EXACTAMENTE el de antes.
+   */
+  uniform float uPulse;
   uniform vec2  uInnerHalo;
   uniform vec2  uInnerRing;
   uniform float uFalloff;
@@ -86,15 +92,16 @@ export const HALO_FRAG = /* glsl */ `
     float sdfRing = max(dRing.x, dRing.y);
     float ring    = exp(-abs(sdfRing) * uRingFalloff);
 
-    // Pulso apagado. Antes era 'sin(uTime * 2.6 + p.y * 3.4)': a 2.6 Hz un
+    // Pulso del HALO apagado. Antes era 'sin(uTime * 2.6 + p.y * 3.4)': a 2.6 Hz un
     // recorrido vertical leia como parpadeo al pasar el cursor sobre la carta.
     // La respiracion la maneja uIntensity desde JS (hover/seleccion con factor
-    // exponencial). Si en algun momento se quiere un pulso real, es opt-in.
+    // exponencial). El pulso que si existe es el del FOIL (uPulse), escrito por
+    // Card3D a baja frecuencia y solo para las rarezas que lo llevan.
     float pulse = 1.0;
 
     float aHalo = halo * uIntensity * pulse;
     float aRing = ring * uRingIntensity;
-    float aFoil = halo * uFoilAmount;
+    float aFoil = halo * uFoilAmount * (1.0 + uPulse * 0.35);
 
     // --- Putrefaccion (P2.6): aura que supura ---
     // Una banda que BAJA por la carta (1.0 - fract(...) la empuja del borde
@@ -141,6 +148,7 @@ export function createHaloMaterial(options: {
   intensity?: number;
   falloff?: number;
   foil?: number;
+  pulse?: number;
 }): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: HALO_VERT,
@@ -152,6 +160,7 @@ export function createHaloMaterial(options: {
       uRingIntensity: { value: 0 },
       uFoilAmount: { value: options.foil ?? 0 },
       uTime: { value: 0 },
+      uPulse: { value: options.pulse ?? 0 },
       uInnerHalo: { value: new THREE.Vector2(HALO_INNER_HALO, HALO_INNER_HALO) },
       uInnerRing: { value: new THREE.Vector2(HALO_INNER_RING, HALO_INNER_RING) },
       uFalloff: { value: options.falloff ?? 9 },

@@ -23,6 +23,11 @@ const ART = join(ROOT, 'public', 'art');
 
 const files = readdirSync(ART)
   .filter((name) => name.endsWith('.webp'))
+  // Las hojas de MotionFrames (`mf_*.webp`) NO van al indice: no son arte de
+  // carta sino spritesheets, y las carga `MotionFrameCache` desde
+  // `motionframes.json`. Si entraran aca, `ArtAssets` las pediria como si
+  // fueran ilustraciones y se bajararian al arrancar sin que nadie las use.
+  .filter((name) => !name.startsWith('mf_'))
   .sort();
 
 writeFileSync(join(ART, 'index.json'), `${JSON.stringify({ files }, null, 2)}\n`, 'utf8');
