@@ -31,6 +31,12 @@ export interface HistoryEntryView {
   cardsDestroyed?: number;
   /** Id del arquetipo jugado (`''` o ausente = clasico). */
   archetype?: string;
+  /**
+   * Modo de la run (R4). Ausente en partidas anteriores al diario: se leen
+   * como clasicas. La ascension ya tiene su etiqueta A1..A8; el dato que
+   * aporta la fila es `daily`.
+   */
+  mode?: 'classic' | 'daily' | 'ascension';
 }
 
 export interface HistoryCallbacks {
@@ -71,8 +77,14 @@ function archetypeNameKey(id: string | undefined): string {
   return `archetype.${id}.name`;
 }
 
-/** Formatea numeros grandes igual que el HUD (K/M/B) para la fila del historial. */
-function formatScore(value: number): string {
+/**
+ * Formatea numeros grandes igual que el HUD (K/M/B) para la fila del historial.
+ *
+ * Exportada: el panel de PERFIL muestra el mejor score con el mismo criterio
+ * (un 1.2M en el historial y un 1.200.000 en el perfil serian el mismo numero
+ * escrito de dos formas distintas en dos pantallas contiguas).
+ */
+export function formatScore(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
   if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
@@ -105,6 +117,15 @@ function historyRow(entry: HistoryEntryView): HTMLElement {
     ascTag.className = 'history-asc';
     ascTag.textContent = asc;
     head.appendChild(ascTag);
+  }
+  // R4 — El modo: una diaria y una clasica con la misma semilla y el mismo ante
+  // se verian IDENTICAS. Solo se marca la diaria; la ascension ya la dice `asc`.
+  if (entry.mode === 'daily') {
+    const modeTag = document.createElement('span');
+    modeTag.className = 'history-mode';
+    modeTag.dataset['mode'] = 'daily';
+    modeTag.textContent = t('history.mode.daily');
+    head.appendChild(modeTag);
   }
   // El arquetipo es lo que hace comparables dos runs: "perdi en el ante 3" se
   // lee MUY distinto si fue con Esporas o con Colonia.

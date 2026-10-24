@@ -2623,6 +2623,16 @@ body {
   margin: 0 0 18px;
 }
 
+/* R4 — Boton de copiar la semilla. Vive DENTRO del subtitulo del panel de
+   resultado: tiene que ser chico y no empujar la linea (por eso no usa el
+   tamano normal de `.btn`). */
+.panel-subtitle .seed-copy {
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
 /* Propuesta del modo infinito (panel de victoria del ultimo ante): la linea
    que le dice al jugador que su partida PUEDE seguir. Va despues del resumen
    y antes de los botones, con el mismo gris del subtitulo pero mas presencia. */
@@ -7921,6 +7931,18 @@ body {
   background: rgba(255, 200, 87, 0.16);
 }
 
+/* R4 — Modo de la run. Solo se pinta la diaria: la ascension ya tiene su
+   etiqueta (`history-asc`), y "clasica" es el default que no hace falta decir. */
+.history-mode {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5fd8e8;
+  background: rgba(95, 216, 232, 0.16);
+}
+
 .history-meta {
   font-size: 12px;
   color: var(--frame-dim);
@@ -10464,12 +10486,49 @@ body {
   }
 }
 
-/* En un celular horizontal el panel tiene ~220px utiles: la linea de stats es
-   lo unico prescindible (el ante/victorias/racha ya viven en Historial), y sin
-   ella entran el bloque de la Colonia, los cuatro accesos y la cuenta SIN
-   scroll. Un control recortado por el scroller no se puede tocar. */
+/* En un celular horizontal el panel tiene ~180px utiles. La fila de stats NO
+   se oculta: desde R4 es la unica casa del MEJOR SCORE, los ciegos totales y
+   las diarias (el ante/victorias/racha tambien estan en el Historial, pero
+   esos tres no). Se aplana (valor + etiqueta, sin caja, con wrap) y el resto
+   del panel se aprieta lo justo para que la cuenta SIGA entrando sin scroll
+   en 412px de alto. */
 @media (pointer: coarse) and (max-height: 560px) {
+  .profile-body {
+    gap: 6px;
+  }
+  .profile-colony {
+    padding: 8px 12px;
+  }
+  .profile-colony-top {
+    margin-bottom: 4px;
+  }
+  .profile-card {
+    min-height: 26px;
+    padding: 6px 8px;
+  }
+  .profile-account {
+    padding: 8px 12px;
+  }
   .profile-stats {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 2px 12px;
+    padding: 0;
+  }
+  .profile-stat {
+    flex: 0 0 auto;
+  }
+  .profile-stat-value {
+    font-size: 13px;
+  }
+  .profile-stat-label {
+    font-size: 9px;
+  }
+  /* "Proximo desbloqueo" es lo unico que esta DUPLICADO (vive en el panel de
+     Recompensas de Colonia, a un toque desde aca) y lo que menos se consulta
+     de un vistazo. Se sacrifica ESTA linea, no las stats: el mejor score, los
+     ciegos y las diarias no estan en ningun otro lado. */
+  .profile-colony-next {
     display: none;
   }
 }

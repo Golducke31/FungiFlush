@@ -384,6 +384,13 @@ export interface RunHistoryEntry {
    * partidas viejas —de antes de que existiera el arquetipo— no lo tienen.
    */
   archetype?: string;
+  /**
+   * Modo de la run (R4). Opcional: las partidas anteriores al diario no lo
+   * tienen y se leen como `classic`. `ascension` ya se deduce de `ascension > 0`
+   * (la fila muestra la etiqueta A1..A8); el que aporta informacion nueva es
+   * `daily`, que sin este campo seria indistinguible de una clasica.
+   */
+  mode?: 'classic' | 'daily' | 'ascension';
 }
 
 export const DEFAULT_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;

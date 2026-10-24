@@ -137,7 +137,10 @@
     "handsPlayed": "Manos jugadas",
     "totalScore": "Score total",
     "bestHand": "Mejor mano",
-    "cardsDestroyed": "Cartas destruidas"
+    "cardsDestroyed": "Cartas destruidas",
+    "copySeed": "Copiar",
+    "seedCopied": "Semilla copiada",
+    "seedCopyFailed": "No se pudo copiar la semilla"
   },
   "shop": {
     "title": "El Mercado del Micelio",
@@ -870,7 +873,10 @@
     "progress": {
       "bestAnte": "Mejor ante",
       "wins": "Victorias",
-      "streak": "Racha"
+      "streak": "Racha",
+      "bestScore": "Mejor score",
+      "blinds": "Ciegos",
+      "daily": "Diarias"
     },
     "recommend": {
       "daily": "Reclamá tu recompensa diaria",
@@ -1411,6 +1417,7 @@
     "win": "Victoria",
     "loss": "Derrota",
     "detail": "Ante {ante} · Semilla {seed}",
+    "mode": { "daily": "Diaria" },
     "stat": {
       "bestHand": "Mejor mano",
       "totalScore": "Puntaje total",

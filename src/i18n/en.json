@@ -137,7 +137,10 @@
     "handsPlayed": "Hands played",
     "totalScore": "Total score",
     "bestHand": "Best hand",
-    "cardsDestroyed": "Cards destroyed"
+    "cardsDestroyed": "Cards destroyed",
+    "copySeed": "Copy",
+    "seedCopied": "Seed copied",
+    "seedCopyFailed": "Couldn't copy the seed"
   },
   "shop": {
     "title": "The Mycelium Market",
@@ -870,7 +873,10 @@
     "progress": {
       "bestAnte": "Best ante",
       "wins": "Wins",
-      "streak": "Streak"
+      "streak": "Streak",
+      "bestScore": "Best score",
+      "blinds": "Blinds",
+      "daily": "Dailies"
     },
     "recommend": {
       "daily": "Claim your daily reward",
@@ -1411,6 +1417,7 @@
     "win": "Victory",
     "loss": "Defeat",
     "detail": "Ante {ante} · Seed {seed}",
+    "mode": { "daily": "Daily" },
     "stat": {
       "bestHand": "Best hand",
       "totalScore": "Total score",

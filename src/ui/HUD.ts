@@ -125,6 +125,12 @@ export interface MenuMetaState {
   bestAnte: number;
   wins: number;
   streak: number;
+  /** R4: mejor score de una run y ciegos superados en total. */
+  bestScore: number;
+  totalBlinds: number;
+  /** R4: desafios diarios jugados / ganados. */
+  dailyRuns: number;
+  dailyWins: number;
   achievements: { unlocked: number; total: number };
   /** Hay recompensa diaria sin reclamar. */
   dailyPending: boolean;
@@ -311,6 +317,41 @@ function formatNumber(value: number): string {
  */
 function formatMultiplier(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+/**
+ * Copia texto al portapapeles. Devuelve `false` si NO se pudo.
+ *
+ * `navigator.clipboard` solo existe en contexto seguro (https o localhost); el
+ * webview de Tauri puede no exponerlo, asi que hay un fallback con un textarea
+ * temporal + `execCommand('copy')`. Si los dos fallan se devuelve `false` y el
+ * llamador lo dice: un boton de copiar que no copia y no avisa es peor que no
+ * tener el boton.
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Cae al fallback (permiso denegado, contexto no seguro, etc.).
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '-1000px';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 export class HUD {
@@ -524,6 +565,10 @@ export class HUD {
     bestAnte: 0,
     wins: 0,
     streak: 0,
+    bestScore: 0,
+    totalBlinds: 0,
+    dailyRuns: 0,
+    dailyWins: 0,
     achievements: { unlocked: 0, total: 0 },
     dailyPending: false,
     dailyPlayed: false,
@@ -2752,6 +2797,10 @@ export class HUD {
         bestAnte: meta.bestAnte,
         wins: meta.wins,
         streak: meta.streak,
+        bestScore: meta.bestScore,
+        totalBlinds: meta.totalBlinds,
+        dailyRuns: meta.dailyRuns,
+        dailyWins: meta.dailyWins,
         achievements: { ...meta.achievements },
       },
       {
@@ -4606,12 +4655,27 @@ export class HUD {
     // Desafio diario (R1): el panel tiene que decir QUE se jugo. Va en el
     // subtitulo (no en un elemento nuevo) para no mover el layout del panel,
     // y con `data-mode` para que el probe lo pueda aseverar sin leer texto.
+    const seedText = document.createElement('span');
     if (run.daily) {
       subtitle.dataset['mode'] = 'daily';
-      subtitle.textContent = `${t('daily.modeLabel')} · ${t('ui.seed')}: ${run.seed}`;
+      seedText.textContent = `${t('daily.modeLabel')} · ${t('ui.seed')}: ${run.seed}`;
     } else {
-      subtitle.textContent = `${t('ui.seed')}: ${run.seed}`;
+      seedText.textContent = `${t('ui.seed')}: ${run.seed}`;
     }
+    // R4 — La semilla se puede COPIAR. Es la unica forma de que otro jugador
+    // repita TU run exacta (el `?seed=` de la URL existe, pero nadie lo escribe
+    // a mano desde una captura).
+    const copySeed = document.createElement('button');
+    copySeed.type = 'button';
+    copySeed.className = 'btn is-ghost is-small seed-copy';
+    copySeed.dataset['act'] = 'copy-seed';
+    copySeed.textContent = t('result.copySeed');
+    copySeed.addEventListener('click', () => {
+      void copyToClipboard(String(run.seed)).then((copied) => {
+        this.toast(t(copied ? 'result.seedCopied' : 'result.seedCopyFailed'), copied ? 'info' : 'warn');
+      });
+    });
+    subtitle.append(seedText, ' ', copySeed);
 
     const grid = document.createElement('div');
     grid.className = 'stat-grid';

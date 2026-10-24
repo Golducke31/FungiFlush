@@ -31,6 +31,7 @@
 import { currentLanguage, t } from '@i18n/index';
 import type { PlayerCardState } from './PlayerCard';
 import { buildMiniPlayerCard } from './PlayerCard';
+import { formatScore } from './HistoryScreen';
 import type { ColonyRewardKind } from '../meta/ColonyRewards';
 import {
   DECK_MAX,
@@ -637,6 +638,12 @@ export interface ProfilePanelState {
   bestAnte?: number;
   wins?: number;
   streak?: number;
+  /** R4: mejor score de una run y ciegos superados en total. */
+  bestScore?: number;
+  totalBlinds?: number;
+  /** R4: desafios diarios jugados / ganados. */
+  dailyRuns?: number;
+  dailyWins?: number;
   achievements?: { unlocked: number; total: number };
 }
 
@@ -767,6 +774,12 @@ export function buildProfilePanel(
     stat(t('menu.progress.bestAnte'), String(state.bestAnte ?? 0)),
     stat(t('menu.progress.wins'), String(state.wins ?? 0)),
     stat(t('menu.progress.streak'), String(state.streak ?? 0)),
+    // R4 — La run tambien se mide por SCORE y por ciegos: dos jugadores con el
+    // mismo ante maximo pueden estar a mundos de distancia. Y las diarias van
+    // como "ganadas/jugadas": un solo numero no diria si las juega o las gana.
+    stat(t('menu.progress.bestScore'), formatScore(state.bestScore ?? 0)),
+    stat(t('menu.progress.blinds'), String(state.totalBlinds ?? 0)),
+    stat(t('menu.progress.daily'), `${state.dailyWins ?? 0}/${state.dailyRuns ?? 0}`),
   );
 
   // --- Accesos: Recompensas / Personalizar / Logros / Historial ---

@@ -3,7 +3,7 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,571)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(28 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390).
+`typecheck`·`test`(tsx,572)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(28 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390)·`probe-stats`(15).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
@@ -111,3 +111,11 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 - ⚠️ **Modelo P8** (`@media (pointer: coarse)`, y su gemelo en `(pointer: fine)`): `.panel` es columna flex con `max-height:100%` y `overflow:hidden`; cabecera y `.panel-actions` son `flex:0 0 auto`; el CUERPO va en una lista explícita con `flex:1 1 auto; min-height:0; overflow-y:auto`. **Un cuerpo que no esté en esa lista se encoge por debajo de su contenido y lo recorta si tiene overflow propio** — así se rompió `.details-list` (última fila cortada 5px). Todo cuerpo nuevo va a la lista (coarse Y fine).
 - ⚠️ **El game over tiene contenido VARIABLE** (la caja de Colonia crece con los bonos de la run): el grid de 7 stats en 2 filas no entraba y scrolleaba unos px sin señal. En táctil va **una sola fila de 7 columnas** (`repeat(7, minmax(0,1fr))`): alto fijo, entra siempre. Escritorio intacto (5+2).
 - Un cuerpo que scrollea NO es un bug por sí solo (colección, logros, guía, tienda scrollean por diseño); lo que se persigue es el corte **sin** scroll.
+
+## Stats/historial + semilla — R4 ✅
+
+`RunHistoryEntry.mode` ('classic'|'daily'|'ascension'; se escribe en `game:over`, la fila marca solo `daily` porque la ascensión ya tiene su `A1..A8`). Perfil con **6 stats** (ante/victorias/racha + mejor score/ciegos/diarias "ganadas/jugadas") empujadas por `menuMeta`. `formatScore` (K/M/B) exportado de `HistoryScreen` y reusado por el perfil. Semilla **copiable** en el resultado (`[data-act="copy-seed"]` + `copyToClipboard` con fallback textarea/execCommand y toast siempre, nunca silencio).
+
+- ⚠️ **BUG de R5 corregido**: `syncHistory()` (push del historial al HUD) se llamaba **solo al boot** ⇒ una run recién terminada no aparecía en el panel Historial hasta recargar. Ahora se llama al final del handler de `game:over`. El HUD no conoce el perfil: TODO dato suyo se empuja desde `main.ts` y hay que refrescarlo en el punto donde cambia.
+- Gate: `tools/probe-stats.mjs` (15 checks: contadores, historial con seed/score/modo, etiqueta diaria, botón de copiar, 6 stats del perfil). Test de migración: una entrada vieja sin `mode` no lo inventa.
+- ⚠️ **Perfil en ≤560px**: la fila de stats NO se puede ocultar (desde R4 es la única casa del mejor score / ciegos totales / diarias). Va plana con wrap (valor 13px, etiqueta 9px) y se oculta `.profile-colony-next` (duplicado). 915×412 entra con 0px de scroll; 844×390 con 14px.

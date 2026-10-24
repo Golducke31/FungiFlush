@@ -608,6 +608,10 @@ async function boot(): Promise<void> {
           blindsCleared: stats.blindsCleared,
           cardsDestroyed: stats.cardsDestroyed,
           archetype: engine.run.archetype,
+          // R4: el modo viaja con la entrada. Sin esto, una run diaria y una
+          // clasica se ven identicas en el historial (misma semilla, mismo ante)
+          // y el jugador no puede separar lo que jugo por el desafio.
+          mode: engine.run.daily ? 'daily' : engine.run.ascension > 0 ? 'ascension' : 'classic',
         });
         if (p.history.length > HISTORY_CAP) p.history.length = HISTORY_CAP;
       } else if (endlessFinal) {
@@ -659,6 +663,10 @@ async function boot(): Promise<void> {
     });
     // El desglose de la run ya esta cerrado: el panel de resultados lo lee.
     pushColonyResult();
+    // R4 — El HUD no conoce el perfil: el historial se le EMPUJA. Sin esta
+    // linea el panel mostraba la lista del ARRANQUE y la run recien terminada
+    // no aparecia hasta recargar (bug de R5 que el probe de R4 destapo).
+    syncHistory();
     // Ranking (V1.3): subir el resultado y refrescar los tableros. Es
     // best-effort y no bloquea el panel: sin cuenta o sin servidor no hace nada.
     if (leaderboardTransport.enabled && accountIdentity()) void syncLeaderboard();
@@ -2471,6 +2479,12 @@ async function boot(): Promise<void> {
       bestAnte: p.stats.bestAnte,
       wins: p.stats.wins,
       streak: p.daily.streak,
+      // R4: el perfil suma score y ciegos totales. Se empujan aca (snapshot)
+      // como el resto de las stats: el HUD no conoce el perfil.
+      bestScore: p.stats.bestScore,
+      totalBlinds: p.stats.totalBlinds,
+      dailyRuns: p.stats.dailyRuns,
+      dailyWins: p.stats.dailyWins,
       achievements: { unlocked: views.filter((v) => v.unlocked).length, total: views.length },
       dailyPending: !daily.alreadyClaimedToday,
       // Tarjeta "Diaria" del panel Desafios: si ya se jugo la run de hoy, la

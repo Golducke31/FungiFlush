@@ -418,6 +418,23 @@ test('arquetipos: un perfil v1 que nunca jugo llega BLOQUEADO (cadena entera)', 
   assert.equal(migrated.archetypesUnlocked, false);
 });
 
+test('v8: las entradas de historial conservan `mode` y las viejas quedan sin el', () => {
+  // R4: `mode` vive DENTRO de cada entrada. `migrateProfileSave` pasa el array
+  // tal cual (el merge no toca los elementos), asi que el campo sobrevive sin
+  // migracion propia; lo que se protege aca es que NO se descarte al
+  // reconstruir el perfil (la trampa del return explicito).
+  const migrated = migrateProfileSave({
+    version: 7,
+    history: [
+      { seed: 1, ante: 3, ascension: 0, win: false, reason: 'loss', at: 1000, mode: 'daily' },
+      { seed: 2, ante: 5, ascension: 0, win: true, reason: 'victory', at: 2000 },
+    ],
+  });
+  assert.equal(migrated.history.length, 2);
+  assert.equal(migrated.history[0]?.mode, 'daily');
+  assert.equal(migrated.history[1]?.mode, undefined, 'una entrada vieja no inventa modo');
+});
+
 test('EntitlementStore es serializable y estable', () => {
   const store = new EntitlementStore({ owned: ['pack.base'] });
   store.addXp('season_01', 120);
