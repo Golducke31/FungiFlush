@@ -38,7 +38,12 @@ export class CameraRig {
   private readonly currentTarget = new THREE.Vector3();
 
   private shakeAmplitude = 0;
-  private shakeSeed = Math.random() * 1000;
+  /**
+   * Semilla del ruido del shake. En produccion es aleatoria (dos partidas no
+   * deberian temblar igual); los tests la fijan para poder medir. No es RNG
+   * del motor: el shake es puramente cosmético y no toca ninguna regla.
+   */
+  private shakeSeed: number;
   /** Direccion del ultimo golpe (-1..1 por eje). 0,0 = shake neutro. */
   private shakeDirX = 0;
   private shakeDirY = 0;
@@ -54,7 +59,8 @@ export class CameraRig {
    */
   private reduced = false;
 
-  constructor(aspect: number, fov = 40) {
+  constructor(aspect: number, fov = 40, shakeSeed = Math.random() * 1000) {
+    this.shakeSeed = shakeSeed;
     this.camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 200);
     // Angulo de ~54 grados sobre la mesa: suficiente para leer las cartas y
     // bastante alto para que la profundidad no se estire de mas en pantalla.

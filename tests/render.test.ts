@@ -535,8 +535,14 @@ test('el shake direccional mueve MAS el eje del combo que el perpendicular', () 
   // respiracion es determinista (mismo dt, mismo time) y se cancela exacto,
   // y el ruido del rig sin golpe es cero (amplitud 0).
   const maxSwing = (dx: number, dy: number): { x: number; y: number } => {
+    // Semilla FIJA: el ruido del shake se corre con `shakeSeed`, asi que con
+    // una semilla aleatoria el pico del eje perpendicular cambiaba de corrida
+    // en corrida (se vio |dx|/|dy| entre 1.9 y 8) y el 2x de abajo fallaba ~1
+    // de cada 7 veces sin que el shake estuviera mal. Con 0 el cociente queda
+    // en ~6.7, holgado. Los otros tests del archivo no dependen de la semilla.
+    const SEED = 0;
     const track = (withShake: boolean) => {
-      const rig = new CameraRig(2.2);
+      const rig = new CameraRig(2.2, 40, SEED);
       if (withShake) rig.addShake(0.6, dx, dy);
       const xs: number[] = [];
       const ys: number[] = [];
