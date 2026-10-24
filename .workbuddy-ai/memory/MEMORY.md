@@ -3,7 +3,7 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,571)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa).
+`typecheck`·`test`(tsx,571)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(28 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
@@ -103,3 +103,11 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 - ⚠️ **Recompensa diaria ≠ run diaria**: `lastClaimDate` vs `playedDate`, campos separados a proposito.
 - UI: la tarjeta "Diaria" de Desafios ARRANCA la run; el chip del menu abre la recompensa. Game over marca `data-mode="daily"`.
 - Gates: `tests/dailyRun.test.ts` (9) · `tools/simulate.ts --daily [fecha]` (imprime la firma) · `tools/probe-daily.mjs` (10 checks; la fecha fijada va con `page.clock.setFixedTime` y en la MISMA pagina: dos contextos WebGL en SwiftShader no inicializan).
+
+## Paneles que se ven cortados (modelo P8 móvil)
+
+`tools/probe-panels-fit.mjs` es el gate: recorre 28 pantallas y falla si el panel se sale del viewport, el pie queda cortado, un texto queda **cortado por un contenedor con `overflow: hidden`** (corte silencioso: está en el DOM pero no se llega ni scrolleando), dos hijos directos del panel se solapan, o un panel de RESUMEN (`is-gameover`, `is-cleared`) scrollea. Corre en 915×412 y en `FF_VIEWPORT=smoke` (844×390).
+
+- ⚠️ **Modelo P8** (`@media (pointer: coarse)`, y su gemelo en `(pointer: fine)`): `.panel` es columna flex con `max-height:100%` y `overflow:hidden`; cabecera y `.panel-actions` son `flex:0 0 auto`; el CUERPO va en una lista explícita con `flex:1 1 auto; min-height:0; overflow-y:auto`. **Un cuerpo que no esté en esa lista se encoge por debajo de su contenido y lo recorta si tiene overflow propio** — así se rompió `.details-list` (última fila cortada 5px). Todo cuerpo nuevo va a la lista (coarse Y fine).
+- ⚠️ **El game over tiene contenido VARIABLE** (la caja de Colonia crece con los bonos de la run): el grid de 7 stats en 2 filas no entraba y scrolleaba unos px sin señal. En táctil va **una sola fila de 7 columnas** (`repeat(7, minmax(0,1fr))`): alto fijo, entra siempre. Escritorio intacto (5+2).
+- Un cuerpo que scrollea NO es un bug por sí solo (colección, logros, guía, tienda scrollean por diseño); lo que se persigue es el corte **sin** scroll.

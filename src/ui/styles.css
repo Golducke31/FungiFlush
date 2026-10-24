@@ -9437,6 +9437,7 @@ body {
   .panel > .profile-body,
   .panel > .challenges-body,
   .panel > .cleared-body,
+  .panel > .details-list,
   .panel > .tutorial-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -9457,6 +9458,28 @@ body {
   .panel > .leaderboard-shell {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  /* --- Panel de RESULTADO (game over / victoria) -------------------------
+     El grid de 7 celdas en DOS filas no entra en 412px de alto, y como la
+     caja de Colonia crece con los bonos de la run, el deficit cambia en cada
+     partida: el cuerpo scrolleaba unos pocos px y la segunda fila se leia
+     como "cortada" (el valor si, la etiqueta no). En tactil se pasa a UNA
+     fila de 7 columnas (`minmax(0, 1fr)`), que tiene alto FIJO: entra siempre,
+     aunque la Colonia sume bonos. Los demas paneles con `stat-grid` no se
+     tocan. */
+  .panel.is-gameover .stat-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+    margin: 8px 0 0;
+  }
+
+  .panel.is-gameover .stat-cell {
+    padding: 6px 8px;
+  }
+
+  .panel.is-gameover .stat-cell-value {
+    font-size: 17px;
   }
 
   .ascension-list,
@@ -11640,6 +11663,7 @@ body {
   .panel > .profile-body,
   .panel > .challenges-body,
   .panel > .cleared-body,
+  .panel > .details-list,
   .panel > .tutorial-body {
     flex: 1 1 auto;
     min-height: 0;
