@@ -3,7 +3,7 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,572)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(28 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390)·`probe-stats`(15).
+`typecheck`·`test`(tsx,576)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(41 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390; incluye LOS 14 interludios, forzados por id)·`probe-stats`(15).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
@@ -119,3 +119,10 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 - ⚠️ **BUG de R5 corregido**: `syncHistory()` (push del historial al HUD) se llamaba **solo al boot** ⇒ una run recién terminada no aparecía en el panel Historial hasta recargar. Ahora se llama al final del handler de `game:over`. El HUD no conoce el perfil: TODO dato suyo se empuja desde `main.ts` y hay que refrescarlo en el punto donde cambia.
 - Gate: `tools/probe-stats.mjs` (15 checks: contadores, historial con seed/score/modo, etiqueta diaria, botón de copiar, 6 stats del perfil). Test de migración: una entrada vieja sin `mode` no lo inventa.
 - ⚠️ **Perfil en ≤560px**: la fila de stats NO se puede ocultar (desde R4 es la única casa del mejor score / ciegos totales / diarias). Va plana con wrap (valor 13px, etiqueta 9px) y se oculta `.profile-colony-next` (duplicado). 915×412 entra con 0px de scroll; 844×390 con 14px.
+
+## Interludios — R5 ✅ (6 → 14)
+
+8 eventos nuevos en `src/data/packs/base/interludes.json` (mismo archivo, ya estaba en `pack.json`; **no** hace falta regenerar índice). Combina los 8 tipos de efecto existentes — **el motor no se tocó**: `parseInterludes` clampea, el registro valida (≥2 opciones, una sin efectos, y las 4 claves i18n por opción en AMBOS idiomas vía `contentKeys`→`validate`). Primer evento de **3 opciones**: `growers_market` (frasco -8/+1 ranura de simbionte, batea -6/+1 carta en mano, salida). El sorteo es por peso con `seenInterludes` (no se repiten en la run) y 40% de parada.
+
+- ⚠️ `tools/probe-panels-fit.mjs` **fuerza los 14 por id** desde el dev API (`ff.engine.pendingInterlude = def; run.status='interlude'; ff.bus.emit('interlude:enter')`; `pendingInterlude` es privado en TS pero un campo más en JS) y resuelve por `.interlude-choice.is-decline` (nunca falla por dinero). Audita 41 pantallas por viewport. Si se agrega un evento, el probe lo cubre solo.
+- Un `art` de interludio que no exista en `blinds.json` NO rompe nada: la cabecera sale sin dibujo en silencio (hay test que lo verifica).

@@ -1568,6 +1568,64 @@
       "accept": "Aceptar el pacto",
       "acceptDetail": "+1 carta en mano, pero los proximos Ciegos piden un 20% mas",
       "decline": "Rechazar el pacto"
+    },
+    "spore_toll": {
+      "name": "Peaje de esporas",
+      "desc": "Un puente de micelio cobra por cruzarlo. Del otro lado, el camino respeta tus tiempos.",
+      "accept": "Pagar el peaje",
+      "acceptDetail": "-3 Fungis, +1 mano por Ciego",
+      "decline": "Rodear el puente"
+    },
+    "bittersweet_cap": {
+      "name": "Gorrito agridulce",
+      "desc": "Una seta rara asoma entre el musgo. Arrancarla cuesta, pero el mazo no vuelve a ser el mismo.",
+      "accept": "Arrancar la seta",
+      "acceptDetail": "-7 Fungis, agrega una carta rara al mazo",
+      "decline": "Dejarla estar"
+    },
+    "pruning": {
+      "name": "Poda",
+      "desc": "El cuidador ofrece cambiar una espora al azar por una mas fuerte. No podes elegir cual se va.",
+      "accept": "Aceptar el cambio",
+      "acceptDetail": "Destruye 1 carta al azar y agrega una poco comun",
+      "decline": "No tocar el mazo"
+    },
+    "greedy_cap": {
+      "name": "Gorrito codicioso",
+      "desc": "Un nido de esporas te pagaria mucho por alimentarlo. Lo que pida despues no va a ser poco.",
+      "accept": "Tomar el pago",
+      "acceptDetail": "+10 Fungis, pero los proximos Ciegos piden un 30% mas",
+      "decline": "No alimentarlo"
+    },
+    "second_wind": {
+      "name": "Segundo aliento",
+      "desc": "Un respiro del bosque te devuelve fuerzas. Los ciegos, mientras tanto, tambien se avivan.",
+      "accept": "Tomar el respiro",
+      "acceptDetail": "+1 mano por Ciego, el objetivo sube un 15%",
+      "decline": "Seguir al ritmo"
+    },
+    "growers_market": {
+      "name": "Mercado de cultivadores",
+      "desc": "Dos cultivadores rematan lo que no pueden cargar. Hay una sola vuelta a la red.",
+      "jar": "Comprar el frasco grande",
+      "jarDetail": "-8 Fungis, +1 ranura de simbionte",
+      "bed": "Comprar la batea",
+      "bedDetail": "-6 Fungis, +1 carta en mano",
+      "decline": "No comprar nada"
+    },
+    "mycelial_feast": {
+      "name": "Banquete de micelio",
+      "desc": "La red comparte su mesa: dos esporas poco comunes por un precio moderado.",
+      "accept": "Sentarse a la mesa",
+      "acceptDetail": "-6 Fungis, agrega 2 cartas poco comunes",
+      "decline": "Pasar de largo"
+    },
+    "last_rites": {
+      "name": "Ritos finales",
+      "desc": "Un ritual antiguo aplaca al sustrato. Los preparativos, claro, no son gratis.",
+      "accept": "Pagar el ritual",
+      "acceptDetail": "-6 Fungis, el objetivo de los proximos Ciegos baja un 20%",
+      "decline": "Ahorrar el dinero"
     }
   },
   "common": {

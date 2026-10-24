@@ -142,5 +142,206 @@
         "detailKey": "common.declineDetail"
       }
     ]
+  },
+  {
+    "id": "interlude_spore_toll",
+    "nameKey": "interlude.spore_toll.name",
+    "descKey": "interlude.spore_toll.desc",
+    "art": "blind_a1_big",
+    "minAnte": 1,
+    "weight": 8,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.spore_toll.accept",
+        "detailKey": "interlude.spore_toll.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": -3 },
+          { "type": "HANDS_DELTA", "value": 1 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.spore_toll.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_bittersweet_cap",
+    "nameKey": "interlude.bittersweet_cap.name",
+    "descKey": "interlude.bittersweet_cap.desc",
+    "art": "blind_a2_boss",
+    "minAnte": 2,
+    "weight": 7,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.bittersweet_cap.accept",
+        "detailKey": "interlude.bittersweet_cap.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": -7 },
+          { "type": "CARD", "rarity": "rare" }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.bittersweet_cap.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_pruning",
+    "nameKey": "interlude.pruning.name",
+    "descKey": "interlude.pruning.desc",
+    "art": "blind_a3_big",
+    "minAnte": 3,
+    "weight": 7,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.pruning.accept",
+        "detailKey": "interlude.pruning.acceptDetail",
+        "effects": [
+          { "type": "PURGE_RANDOM", "count": 1 },
+          { "type": "CARD", "rarity": "uncommon" }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.pruning.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_greedy_cap",
+    "nameKey": "interlude.greedy_cap.name",
+    "descKey": "interlude.greedy_cap.desc",
+    "art": "blind_a4_boss",
+    "minAnte": 4,
+    "weight": 6,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.greedy_cap.accept",
+        "detailKey": "interlude.greedy_cap.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": 10 },
+          { "type": "TARGET_MULTIPLIER", "value": 1.3 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.greedy_cap.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_second_wind",
+    "nameKey": "interlude.second_wind.name",
+    "descKey": "interlude.second_wind.desc",
+    "art": "blind_a5_big",
+    "minAnte": 5,
+    "weight": 6,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.second_wind.accept",
+        "detailKey": "interlude.second_wind.acceptDetail",
+        "effects": [
+          { "type": "HANDS_DELTA", "value": 1 },
+          { "type": "TARGET_MULTIPLIER", "value": 1.15 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.second_wind.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_growers_market",
+    "nameKey": "interlude.growers_market.name",
+    "descKey": "interlude.growers_market.desc",
+    "art": "blind_a8_big",
+    "minAnte": 5,
+    "weight": 5,
+    "choices": [
+      {
+        "id": "jar",
+        "labelKey": "interlude.growers_market.jar",
+        "detailKey": "interlude.growers_market.jarDetail",
+        "effects": [
+          { "type": "MONEY", "value": -8 },
+          { "type": "JOKER_SLOT", "value": 1 }
+        ]
+      },
+      {
+        "id": "bed",
+        "labelKey": "interlude.growers_market.bed",
+        "detailKey": "interlude.growers_market.bedDetail",
+        "effects": [
+          { "type": "MONEY", "value": -6 },
+          { "type": "HAND_SIZE", "value": 1 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.growers_market.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_mycelial_feast",
+    "nameKey": "interlude.mycelial_feast.name",
+    "descKey": "interlude.mycelial_feast.desc",
+    "art": "blind_a6_big",
+    "minAnte": 6,
+    "weight": 6,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.mycelial_feast.accept",
+        "detailKey": "interlude.mycelial_feast.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": -6 },
+          { "type": "CARD", "rarity": "uncommon", "count": 2 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.mycelial_feast.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
+  },
+  {
+    "id": "interlude_last_rites",
+    "nameKey": "interlude.last_rites.name",
+    "descKey": "interlude.last_rites.desc",
+    "art": "blind_a7_small",
+    "minAnte": 7,
+    "weight": 5,
+    "choices": [
+      {
+        "id": "accept",
+        "labelKey": "interlude.last_rites.accept",
+        "detailKey": "interlude.last_rites.acceptDetail",
+        "effects": [
+          { "type": "MONEY", "value": -6 },
+          { "type": "TARGET_MULTIPLIER", "value": 0.8 }
+        ]
+      },
+      {
+        "id": "decline",
+        "labelKey": "interlude.last_rites.decline",
+        "detailKey": "common.declineDetail"
+      }
+    ]
   }
 ]

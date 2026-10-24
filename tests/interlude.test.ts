@@ -13,7 +13,7 @@
  *   - que el debuff de objetivo sobreviva al guardado,
  *   - que la opcion de declinar siempre exista (si no, es un castigo disfrazado).
  *
- * Contenido de referencia: `src/data/packs/base/interludes.json` (6 eventos).
+ * Contenido de referencia: `src/data/packs/base/interludes.json` (14 eventos).
  */
 
 import assert from 'node:assert/strict';
@@ -85,6 +85,58 @@ test('cada interludio tiene al menos una opcion con efectos', () => {
     const hasPayoff = def.choices.some((c) => (c.effects?.length ?? 0) > 0);
     assert.ok(hasPayoff, `${def.id} no hace nada: ocupa el lugar de una decision real`);
   }
+});
+
+test('R5: el pack trae 12+ interludios con ids unicos', () => {
+  // R5 ensancho la tabla de 6 a 14: con 6, una run larga veia TODOS los eventos
+  // y a partir del ante 5 no habia novedad. El piso de 12 es el contrato: si el
+  // contenido se vuelve a achicar, el sorteo se empobrece y nadie lo nota.
+  assert.ok(INTERLUDE_DATA.length >= 12, `esperaba 12+ interludios, hay ${INTERLUDE_DATA.length}`);
+  const ids = INTERLUDE_DATA.map((d) => d.id);
+  assert.equal(new Set(ids).size, ids.length, 'hay ids repetidos: el sorteo los duplicaria');
+});
+
+test('R5: el arte de cada interludio es una ilustracion de ciego que existe', () => {
+  // El `art` reusa el pool de ciegos: una clave inventada no rompe nada (la
+  // cabecza sale sin dibujo), asi que silenciamente el evento se ve vacio.
+  const blinds = readData('blinds.json') as Array<{ art?: string }>;
+  const artKeys = new Set(blinds.map((b) => b.art).filter((k): k is string => typeof k === 'string'));
+  for (const def of INTERLUDE_DATA) {
+    if (def.art === undefined) continue;
+    assert.ok(artKeys.has(def.art), `${def.id} apunta a un arte inexistente: ${def.art}`);
+  }
+});
+
+test('R5: un interludio de tres opciones aplica SOLO la elegida', () => {
+  // `growers_market` es el primer evento con dos tratos + salida: el motor tiene
+  // que resolver la opcion pedida, no la primera con efectos.
+  const engine = engineWithInterludes(17);
+  const def = INTERLUDE_DATA.find((d) => d.id === 'interlude_growers_market');
+  assert.ok(def, 'interlude_growers_market deberia existir');
+  assert.equal(def.choices.length, 3, 'el mercado ofrece dos tratos y la salida');
+
+  forceInterlude(engine, def);
+  engine.run.money = 10;
+
+  const ok = engine.chooseInterlude('jar');
+  assert.equal(ok, true);
+  assert.equal(engine.run.money, 2, 'el frasco cuesta 8');
+  assert.equal(engine.run.jokerSlots, 6, 'el frasco da una ranura (arranca con 5)');
+  assert.equal(engine.run.baseHandSize, 6, 'la batea NO se aplico: se eligio el frasco');
+});
+
+test('R5: la segunda opcion del mercado aplica la otra mejora', () => {
+  const engine = engineWithInterludes(19);
+  const def = INTERLUDE_DATA.find((d) => d.id === 'interlude_growers_market');
+  assert.ok(def);
+  forceInterlude(engine, def);
+  engine.run.money = 10;
+
+  const ok = engine.chooseInterlude('bed');
+  assert.equal(ok, true);
+  assert.equal(engine.run.money, 4, 'la batea cuesta 6');
+  assert.equal(engine.run.baseHandSize, 7, 'la batea da una carta en mano (arranca con 6)');
+  assert.equal(engine.run.jokerSlots, 5, 'el frasco NO se aplico: se eligio la batea');
 });
 
 // ---------------------------------------------------------------------------

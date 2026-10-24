@@ -1568,6 +1568,64 @@
       "accept": "Take the bargain",
       "acceptDetail": "+1 card in hand, but the next Blinds ask for 20% more",
       "decline": "Refuse the bargain"
+    },
+    "spore_toll": {
+      "name": "Spore toll",
+      "desc": "A mycelium bridge charges to let you cross. On the other side, the path respects your pace.",
+      "accept": "Pay the toll",
+      "acceptDetail": "-3 Fungis, +1 hand per Blind",
+      "decline": "Go around the bridge"
+    },
+    "bittersweet_cap": {
+      "name": "Bittersweet cap",
+      "desc": "A rare mushroom peeks out of the moss. Pulling it costs, but the deck is never the same.",
+      "accept": "Pull the mushroom",
+      "acceptDetail": "-7 Fungis, adds a rare card to the deck",
+      "decline": "Leave it be"
+    },
+    "pruning": {
+      "name": "Pruning",
+      "desc": "The keeper offers to swap one random spore for a stronger one. You do not pick which one goes.",
+      "accept": "Take the swap",
+      "acceptDetail": "Destroys 1 random card and adds an uncommon one",
+      "decline": "Keep the deck as is"
+    },
+    "greedy_cap": {
+      "name": "Greedy cap",
+      "desc": "A spore nest would pay you well to feed it. What it asks for afterwards will not be small.",
+      "accept": "Take the payment",
+      "acceptDetail": "+10 Fungis, but the next Blinds ask for 30% more",
+      "decline": "Do not feed it"
+    },
+    "second_wind": {
+      "name": "Second wind",
+      "desc": "A breather from the forest gives you strength back. The Blinds, meanwhile, wake up too.",
+      "accept": "Take the breather",
+      "acceptDetail": "+1 hand per Blind, the target rises 15%",
+      "decline": "Keep the pace"
+    },
+    "growers_market": {
+      "name": "Growers' market",
+      "desc": "Two growers are clearing out what they cannot carry. The network loops around only once.",
+      "jar": "Buy the big jar",
+      "jarDetail": "-8 Fungis, +1 simbiont slot",
+      "bed": "Buy the tray",
+      "bedDetail": "-6 Fungis, +1 card in hand",
+      "decline": "Buy nothing"
+    },
+    "mycelial_feast": {
+      "name": "Mycelial feast",
+      "desc": "The network shares its table: two uncommon spores for a moderate price.",
+      "accept": "Sit at the table",
+      "acceptDetail": "-6 Fungis, adds 2 uncommon cards",
+      "decline": "Walk past"
+    },
+    "last_rites": {
+      "name": "Last rites",
+      "desc": "An old ritual placates the substrate. The preparations, of course, are not free.",
+      "accept": "Pay for the ritual",
+      "acceptDetail": "-6 Fungis, the target of the next Blinds drops 20%",
+      "decline": "Save the money"
     }
   },
   "common": {

@@ -14,6 +14,10 @@
  *   5. Los paneles de RESUMEN (game over) no scrollean: si hay mas contenido
  *      del que entra, el jugador ve una fila a medias y lo lee como roto.
  *
+ * Los INTERLUDIOS se auditan TODOS (R5): se fuerza cada definicion por id, con
+ * las opciones que traiga, y se resuelve por la salida para no dejar ninguno
+ * abierto.
+ *
  *   node tools/probe-panels-fit.mjs
  *   FF_VIEWPORT=smoke node tools/probe-panels-fit.mjs   # 844x390
  *
@@ -383,16 +387,39 @@ await page.evaluate(() => {
   if (ff.engine.run.status === 'shop') ff.engine.leaveShop();
 });
 await page.waitForTimeout(900);
-let sawInterlude = false;
-for (let i = 0; i < 10; i += 1) {
-  const status = await page.evaluate(() => window.__fungiflush.engine.run.status);
-  if (status === 'playing') break;
-  if (status === 'blind_select') await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
-  else if (await has('.panel.is-interlude')) {
-    if (!sawInterlude) { await visit('interlude'); sawInterlude = true; }
-    await click('.panel.is-interlude [data-act="interlude-choice"]');
-  }
-  await page.waitForTimeout(900);
+
+// ------------------------------------------------------------ INTERLUDIOS
+// R5: con 14 eventos ya no se espera a que el sorteo depare uno — el panel que
+// saldria dependeria de la semilla y el probe auditaria uno distinto en cada
+// corrida. Se FUERZA cada definicion por id (mismo camino que el motor:
+// `pendingInterlude` + estado + evento), asi la auditoria recorre los paneles
+// REALES con el numero de opciones que traiga cada uno (2, 3, las que sean).
+const interludeIds = await page.evaluate(() =>
+  (window.__fungiflush.content?.registry?.toBundle?.().interludes ?? []).map((d) => d.id),
+);
+for (const id of interludeIds) {
+  const opened = await page.evaluate((i) => {
+    const ff = window.__fungiflush;
+    const defs = ff.content?.registry?.toBundle?.().interludes ?? [];
+    const def = defs.find((d) => d.id === i);
+    if (!def) return false;
+    // `pendingInterlude` es privado en TS pero un campo mas en JS.
+    ff.engine.pendingInterlude = def;
+    ff.engine.run.status = 'interlude';
+    ff.bus.emit('interlude:enter', { interlude: def });
+    return true;
+  }, id);
+  if (!opened) continue;
+  await waitPanel('.panel.is-interlude', 5000);
+  // La entrada anima las tarjetas (y:16 -> 0): se mide cuando terminan.
+  await page.waitForTimeout(650);
+  await visit(`interlude-${id.replace(/^interlude_/, '')}`);
+  // Se resuelve por la SALIDA: no tiene efectos, asi que nunca falla por
+  // dinero (un trato impago dejaria el panel abierto y el siguiente lo taparia).
+  await page.evaluate(() => {
+    document.querySelector('.panel.is-interlude .interlude-choice.is-decline .btn')?.click();
+  });
+  await page.waitForTimeout(250);
 }
 
 // ------------------------------------------------------------------ GAME OVER
