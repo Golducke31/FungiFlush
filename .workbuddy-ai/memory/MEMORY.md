@@ -3,11 +3,12 @@
 TS + Vite + Three.js + Tauri 2 roguelite deckbuilder (Balatro-like). Repo `Golducke31/FungiFlush` (`main`). **Escritorio CONGELADO**; móvil primero. Unico CSS: `src/ui/styles.css` (base=escritorio; móvil `@media (pointer:coarse)`; tablet `(pointer:coarse) and (min-height:600px)`; escritorio final `@media (pointer:fine)`). `src/pointer.ts`=única fuente de puntero (nunca `matchMedia`).
 
 ## Gates (prefijo `CODEBUDDY_SAFE_DELETE_ENABLED=0`)
-`typecheck`·`test`(tsx,586)·`validate`·`audit:desc`·`smoke`·`sim:balance`(500)·`sim:hands`·`sim:board`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(41 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390; incluye LOS 14 interludios, forzados por id)·`probe-stats`(15)·`probe-blind-pool`(16).
+`typecheck`·`test`(tsx,609)·`validate`·`audit:desc`·`audit:behavior`·`sim:balance`(500)·`sim:hands`·`sim:board`·`smoke`·`gate:desktop`(31)·`gate:parity`(baseline `tools/parity-baseline.json`, `--update` re-basa)·`probe-panels-fit`(41 pantallas × 2 viewports: 915×412 y `FF_VIEWPORT=smoke` 844×390; incluye LOS 14 interludios, forzados por id)·`probe-stats`(15)·`probe-blind-pool`(16)·`probe-daily`(10)·`probe-draft`(18 ofertas)·`probe-joker-slots`·`probe-leak`(20 manos + medium).
 - Smoke server **127.0.0.1:1420** (`npm run dev`); no lo arranca. Nunca en paralelo con `cargo`.
 - ⚠️ Nunca `sed -i`. `waitForTimeout` no mide render→`waitForFunction`. Botón animado→`boundingBox()`+`mouse.click`.
 - ⚠️ Playwright: `playwright-core` desde `C:/Users/emanu/.workbuddy-ai/binaries/node/workspace/node_modules/`; ejecutar DESDE el repo. Móvil: `newContext({viewport:{915,412},isMobile:true,hasTouch:true})`. Dos contextos NO (SwiftShader).
 - ⚠️ Arte venv `.../python/envs/fungiflush/Scripts/python.exe` (Pillow/numpy/cv2); `npm run art*` usa `python` pelado.
+- `probe-leak`: modelo de crecimiento LEGITIMO — geometrias a 2 por ranura de Simbionte (`GEO_POR_RANURA`, la bendicion `extra_pot` y el voucher cambian el conteo) y texturas a 3 por archivo de arte + 1 por estado de carta + 1 por hoja. El veredicto es el RESIDUO. Si el `settle` agota el timeout, vuelca `scene.gsapDebug()` dos veces (`anim.describeActive()`: type/dur/progress/paused/repeat/target + reloj) y la vivacidad del loop ⇒ un `gsap=1` fantasma se distingue de un tween LENTO (medium corre a ~0.25x real en SwiftShader) porque el progress avanza o no con el reloj andando.
 
 ## Invariantes
 - Engine puro (sin DOM/Three); mulberry32 sembrado; VFX no usa RNG engine. Strings `t()` (ES+EN o `validate` falla); balance en JSON. Tap ≤6px/700ms.
@@ -104,6 +105,7 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 - ⚠️ **Recompensa diaria ≠ run diaria**: `lastClaimDate` vs `playedDate`, campos separados a proposito.
 - UI: la tarjeta "Diaria" de Desafios ARRANCA la run; el chip del menu abre la recompensa. Game over marca `data-mode="daily"`.
 - Gates: `tests/dailyRun.test.ts` (9) · `tools/simulate.ts --daily [fecha]` (imprime la firma) · `tools/probe-daily.mjs` (10 checks; la fecha fijada va con `page.clock.setFixedTime` y en la MISMA pagina: dos contextos WebGL en SwiftShader no inicializan).
+- ⚠️ **Bomba de tiempo corregida (2026-10-25)**: el probe fijaba la "otra fecha" en `new Date(2026, 9, 25)` DURA ⇒ el dia que esa fecha coincidio con la real, el check "con otra fecha la mano inicial cambia" fallaba sin que el juego hubiera cambiado. Ahora sale de MANANA (`setDate(getDate()+1)`, mediodia): siempre distinta de la de la primera run.
 
 ## Paneles que se ven cortados (modelo P8 móvil)
 
@@ -127,3 +129,16 @@ Paleta fijada: bg `#080b10`/`#0d141c`; neutral `#9aa5b1`, poison `#8ce63f`, spor
 
 - ⚠️ `tools/probe-panels-fit.mjs` **fuerza los 14 por id** desde el dev API (`ff.engine.pendingInterlude = def; run.status='interlude'; ff.bus.emit('interlude:enter')`; `pendingInterlude` es privado en TS pero un campo más en JS) y resuelve por `.interlude-choice.is-decline` (nunca falla por dinero). Audita 41 pantallas por viewport. Si se agrega un evento, el probe lo cubre solo.
 - Un `art` de interludio que no exista en `blinds.json` NO rompe nada: la cabecera sale sin dibujo en silencio (hay test que lo verifica).
+
+## Borrador de reglas (bendiciones / maldiciones) — R3 ✅
+
+Al arrancar la run se sortean **3 bendiciones** y se elige 1 (`run.blessing`); cada **3 antes** se ofrecen **2 maldiciones** y elegir es obligatorio (`run.curses`, `run.curseDraftAnte`). Panel `.is-draft` (HUD + 7 clases en `styles.css`). Contenido data-driven: `blessings.json` (10) + `curses.json` (8) en `packs/base`, declarados en `pack.json`. Motor: `src/engine/draft/draft.ts` (puro).
+
+- ⚠️ **Regla de oro**: un draft NO tiene efectos inmediatos. Entra al agregado `GameEngine.modifiers` por el MISMO `combineModifiers` que los vouchers (`{ runModifiers: def.modifiers }`). **LIVE** (`targetMultiplier`, `rerollCostDelta`, `shopDiscount`) se leen del agregado; **BAKED** (`extraHands/Discards/HandSize/JokerSlots/Money`) se aplican UNA vez sobre el `RunState` (`applyDraftModifiers`). Si un BAKED se leyera del agregado Y se aplicara, contaría doble.
+- ⚠️ **RNG DEDICADO** (`new RNG(hashString('fungiflush:draft:blessing:'+seed))` / `:curse:${seed}:${ante}`): si consumiera `this.rng`, sortear una bendicion desplazaria mazo/tienda/misiones de TODAS las partidas. Una run sin draft (tutorial o pack sin blessings) es IDENTICA a como era antes de R3.
+- El tutorial lo suprime: `startRun(seed, ascension, archetype, daily, tutorial=true)`. En el navegador los probes resuelven con `ff.engine.chooseDraft(d.offers[0].id)`; en Node se puede pasar el flag.
+- ⚠️ `curseDraftAnte` se MARCA aunque no haya ofertas: si no, un ante multiplo de 3 sin maldiciones elegibles volveria a sortear en cada `enterBlindSelect` (al resolver un interludio, por ejemplo).
+- ⚠️ El `advance()` de los probes NO maneja el status `draft` ⇒ al tocar una maldicion el probe reinicia la run (mismo criterio que un gameover; los contadores son acumulativos).
+- Save ADITIVO (sin bump de version): viaja la ELECCION (`blessing`/`curses`/`curseDraftAnte`) y tambien el panel ABIERTO (`draft: {kind, offers:[ids]}`) ⇒ recargar no regala reroll. Los ids se filtran por `tryGetDraft` (un draft borrado del contenido no rompe la carga).
+- ⚠️ **BUG latente arreglado**: `packSource.allContentPaths` no pedia `vouchers`/`ascensions`/`interludes` ⇒ un pack remoto cargaba a medias y EN SILENCIO. Ahora cubre `PackContents` campo por campo.
+- Gate: `tools/probe-draft.mjs` (las 18 ofertas caben en 915×412, aplican, se acumulan; determinismo por semilla).
