@@ -795,6 +795,13 @@ export interface RunSnapshot {
     | 'scoring'
     | 'reward'
     | 'interlude'
+    /**
+     * R3 — Borrador de reglas abierto (bendicion o maldicion). Espeja
+     * `GameStatus` (que vive en `state/RunState.ts` y es la fuente real): esta
+     * copia existe porque `types.ts` no puede importar de `RunState.ts` sin
+     * volver circular la dependencia.
+     */
+    | 'draft'
     | 'shop'
     | 'game_over'
     | 'victory'

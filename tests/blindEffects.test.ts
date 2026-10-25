@@ -27,7 +27,10 @@ const REAL = buildRegistry().toBundle();
 /** Motor en el ante pedido, recien salido del blind select. */
 function atAnte(ante: number, seed = 9): GameEngine {
   const engine = new GameEngine({ seed, bundle: REAL });
-  engine.startRun(seed, 0);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: estos tests miden los
+  // efectos de los ciegos y necesitan la run en `blind_select`. El flag no
+  // cambia ninguna regla, solo suprime el sorteo del borrador.
+  engine.startRun(seed, 0, '', false, true);
   engine.run.ante = ante;
   return engine;
 }

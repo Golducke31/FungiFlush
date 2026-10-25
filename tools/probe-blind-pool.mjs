@@ -79,6 +79,27 @@ const routesFor = (seed) => page.evaluate((s) => {
 const waitBlindSelect = () =>
   page.waitForFunction(() => Boolean(document.querySelector('.panel.is-blind-select')), null, { timeout: 15000 });
 
+/**
+ * R3 — `startRun` deja la run en estado 'draft' (borrador de bendicion), asi
+ * que el panel de seleccion de ciego no aparece hasta resolverlo. Se elige la
+ * PRIMERA oferta: determinista para la semilla y no toca la ruta de ciegos.
+ */
+const resolveDraft = async () => {
+  const picked = await page.evaluate(() => {
+    const e = window.__fungiflush.engine;
+    const d = e.currentDraft;
+    if (!d?.offers?.length) return null;
+    e.chooseDraft(d.offers[0].id);
+    return d.offers[0].id;
+  });
+  if (picked === null) return false;
+  await page
+    .waitForFunction(() => window.__fungiflush.engine.run?.status === 'blind_select', null, { timeout: 8000 })
+    .catch(() => {});
+  await page.waitForTimeout(400);
+  return true;
+};
+
 /** Panel de seleccion: marcas de ruta + ciego en curso. */
 const blindSelectDom = () => page.evaluate(() => {
   const panel = document.querySelector('.panel.is-blind-select');
@@ -106,6 +127,7 @@ await page.waitForTimeout(200);
 
 const SEED = 20261024;
 await page.evaluate((s) => window.__fungiflush.engine.startRun(s, 0, ''), SEED);
+await resolveDraft();
 await waitBlindSelect();
 await page.waitForTimeout(500);
 

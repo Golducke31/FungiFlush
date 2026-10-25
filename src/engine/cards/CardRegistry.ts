@@ -26,6 +26,7 @@ import type {
 } from '../types';
 import { TRIGGER_EVENTS, type TriggerEvent } from '../types';
 import type { InterludeDefinition } from '../interlude/interlude';
+import type { DraftDefinition } from '../draft/draft';
 import { supportedActions } from '../triggers/actions';
 import type { RNG } from '../rng';
 
@@ -71,6 +72,14 @@ export interface ContentBundle {
    * pack que no declara `interludes` no cambia el juego.
    */
   interludes?: InterludeDefinition[];
+  /**
+   * Bendiciones del borrador de arranque (R3). Opcional: sin tabla, la run
+   * arranca sin borrador y el flujo es el de siempre. Un pack que no declara
+   * `blessings` no cambia el juego.
+   */
+  blessings?: DraftDefinition[];
+  /** Maldiciones del borrador periodico (R3). Ver `blessings`. */
+  curses?: DraftDefinition[];
 }
 
 export interface ValidationIssue {
@@ -105,6 +114,9 @@ export class CardRegistry {
   private readonly vouchers = new Map<string, VoucherDefinition>();
   private readonly ascensions = new Map<number, AscensionDefinition>();
   private readonly interludes: InterludeDefinition[] = [];
+  /** Borrador de reglas (R3): bendiciones y maldiciones. */
+  private readonly blessings: DraftDefinition[] = [];
+  private readonly curses: DraftDefinition[] = [];
   private anteTargets: Record<number, number> | null = null;
 
   private uidCounter = 0;
@@ -117,6 +129,10 @@ export class CardRegistry {
     for (const asc of bundle.ascensions ?? []) this.ascensions.set(asc.level, asc);
     this.interludes.length = 0;
     for (const inter of bundle.interludes ?? []) this.interludes.push(inter);
+    this.blessings.length = 0;
+    for (const def of bundle.blessings ?? []) this.blessings.push(def);
+    this.curses.length = 0;
+    for (const def of bundle.curses ?? []) this.curses.push(def);
     this.anteTargets = bundle.anteTargets ?? null;
   }
 
@@ -128,6 +144,28 @@ export class CardRegistry {
   /** Hay al menos un interludio jugable? Evita el sorteo cuando no hay tabla. */
   get hasInterludes(): boolean {
     return this.interludes.length > 0;
+  }
+
+  // --- Borrador de reglas (R3) ----------------------------------------------
+
+  /** Bendiciones declaradas por el contenido. */
+  get blessingDefs(): readonly DraftDefinition[] {
+    return this.blessings;
+  }
+
+  /** Maldiciones declaradas por el contenido. */
+  get curseDefs(): readonly DraftDefinition[] {
+    return this.curses;
+  }
+
+  /** Hay borrador que sortear? Evita el sorteo cuando no hay tabla. */
+  get hasDrafts(): boolean {
+    return this.blessings.length > 0 || this.curses.length > 0;
+  }
+
+  /** Definicion de un draft por id, de cualquiera de las dos listas. */
+  tryGetDraft(id: string): DraftDefinition | undefined {
+    return this.blessings.find((d) => d.id === id) ?? this.curses.find((d) => d.id === id);
   }
 
   /**

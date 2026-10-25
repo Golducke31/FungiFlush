@@ -21,12 +21,15 @@ import {
   type BlindDefinition,
   type CardDefinition,
   type ContentBundle,
+  type DraftDefinition,
+  type DraftKind,
   type EvolutionRule,
   type InterludeDefinition,
   type JokerDefinition,
   type UpgradeTrack,
   type VoucherDefinition,
 } from '@engine/index';
+import { hasModifiers } from '@engine/index';
 // El validador vive en la capa de contenido y solo toma el TIPO del tablero:
 // asi el arranque no arrastra el chunk diferido del duelo.
 import { validateBoardDefs } from './boardValidation';
@@ -56,7 +59,7 @@ export interface PackIssue {
 }
 
 export interface Collision {
-  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante' | 'ascension' | 'interlude';
+  kind: 'card' | 'joker' | 'blind' | 'voucher' | 'ante' | 'ascension' | 'interlude' | 'draft';
   id: string;
   winner: string;
   loser: string;
@@ -92,6 +95,14 @@ export class ContentRegistry {
   private readonly vouchers = new Map<string, Tagged<VoucherDefinition>>();
   /** Eventos entre Ciegos (P2.4). Se acumulan: el validador detecta duplicados. */
   private readonly interludes: InterludeDefinition[] = [];
+  /**
+   * Borrador de reglas (R3). Se acumulan como los interludios, PERO el id
+   * tiene que ser unico entre las DOS listas: `run.blessing` y `run.curses`
+   * guardan ids sueltos y una bendicion con el mismo id que una maldicion
+   * seria ambigua al restaurar.
+   */
+  private readonly blessings: Tagged<DraftDefinition>[] = [];
+  private readonly curses: Tagged<DraftDefinition>[] = [];
   /**
    * Niveles de ascension, indexados por nivel. Se guarda el `__pack` de quien
    * los aporto para poder reportar un duplicado: dos packs con el MISMO nivel
@@ -136,6 +147,8 @@ export class ContentRegistry {
     this.vouchers.clear();
     this.ascensions.clear();
     this.interludes.length = 0;
+    this.blessings.length = 0;
+    this.curses.length = 0;
     this.board.length = 0;
     this.collisions.length = 0;
     this.skipped.length = 0;
@@ -174,6 +187,10 @@ export class ContentRegistry {
       // Interludios: se acumulan como upgrades/evolutions. Un id repetido entre
       // packs es un error de contenido, y `validate` lo reporta.
       for (const def of pack.interludes) this.insertInterlude(def, id, pack.manifest);
+      // R3 — Borrador: mismo criterio, con el id compartido entre bendiciones
+      // y maldiciones (ver `insertDraft`).
+      for (const def of pack.blessings) this.insertDraft(def, 'blessing', id, pack.manifest);
+      for (const def of pack.curses) this.insertDraft(def, 'curse', id, pack.manifest);
       // Mismo criterio que upgrades y evolutions: se acumulan y el validador
       // del tipo detecta duplicados. Un `cardId` repetido entre packs es un
       // error de contenido, no un override silencioso.
@@ -301,6 +318,20 @@ export class ContentRegistry {
             ),
           }
         : {}),
+      ...(this.blessings.length > 0
+        ? {
+            blessings: this.blessings.map(
+              (d) => stripPack(d as Tagged<DraftDefinition>) as DraftDefinition,
+            ),
+          }
+        : {}),
+      ...(this.curses.length > 0
+        ? {
+            curses: this.curses.map(
+              (d) => stripPack(d as Tagged<DraftDefinition>) as DraftDefinition,
+            ),
+          }
+        : {}),
     };
   }
 
@@ -334,6 +365,46 @@ export class ContentRegistry {
       return;
     }
     this.collisions.push({ kind: 'interlude', id: def.id, winner: incumbent.__pack, loser: packId });
+  }
+
+  /**
+   * Inserta un draft (bendicion o maldicion) validando el id duplicado.
+   *
+   * El id se valida contra las DOS listas: una bendicion y una maldicion no
+   * pueden compartirlo, porque el guardado los distingue solo por el campo
+   * donde estan (`blessing` vs `curses`) y un id repetido haria que restaurar
+   * una run eligiera definiciones distintas a las que se aplicaron.
+   */
+  private insertDraft(
+    def: DraftDefinition,
+    kind: DraftKind,
+    packId: string,
+    manifest: PackManifest,
+  ): void {
+    const list = kind === 'blessing' ? this.blessings : this.curses;
+    const incumbent =
+      (list.find((d) => d.id === def.id) as Tagged<DraftDefinition> | undefined) ??
+      ([...this.blessings, ...this.curses].find((d) => d.id === def.id) as
+        | Tagged<DraftDefinition>
+        | undefined);
+
+    if (!incumbent) {
+      list.push({ ...def, __pack: packId } as Tagged<DraftDefinition>);
+      return;
+    }
+    // Mismo criterio que `insert`: pisa solo si el pack lo pide Y es mas nuevo.
+    const canOverride =
+      manifest.gating?.allowOverride === true &&
+      manifest.version > (this.versionOf(incumbent.__pack) ?? 0);
+    if (canOverride) {
+      const target = kind === 'blessing' ? this.blessings : this.curses;
+      const idx = target.indexOf(incumbent);
+      if (idx >= 0) target[idx] = { ...def, __pack: packId } as Tagged<DraftDefinition>;
+      else target.push({ ...def, __pack: packId } as Tagged<DraftDefinition>);
+      this.collisions.push({ kind: 'draft', id: def.id, winner: packId, loser: incumbent.__pack });
+      return;
+    }
+    this.collisions.push({ kind: 'draft', id: def.id, winner: incumbent.__pack, loser: packId });
   }
 
   /**
@@ -665,6 +736,48 @@ export class ContentRegistry {
       }
     }
 
+    // --- Borrador de reglas (R3): bendiciones y maldiciones ---
+    //
+    // Un draft sin modificadores no hace nada: es contenido muerto que ocupa un
+    // lugar en el sorteo. Es la misma trampa que un voucher vacio.
+    const draftIds = new Set<string>();
+    for (const [kind, list] of [
+      ['blessing', this.blessings],
+      ['curse', this.curses],
+    ] as const) {
+      for (const def of list) {
+        const owner = (def as Tagged<DraftDefinition>).__pack;
+        const where = `${kind}:${def.id}`;
+        if (draftIds.has(def.id)) {
+          issues.push({
+            level: 'error',
+            pack: owner,
+            where,
+            message: 'el id ya lo usa otro draft (bendicion y maldicion comparten espacio de ids)',
+          });
+        }
+        draftIds.add(def.id);
+
+        if (!def.nameKey || !def.descKey) {
+          issues.push({ level: 'error', pack: owner, where, message: 'falta nameKey o descKey' });
+        }
+        if (!hasModifiers(def)) {
+          issues.push({
+            level: 'error',
+            pack: owner,
+            where,
+            message: 'sin modifiers: no cambia ninguna regla',
+          });
+        }
+        if (def.minAnte !== undefined && (!Number.isInteger(def.minAnte) || def.minAnte < 1)) {
+          issues.push({ level: 'error', pack: owner, where, message: 'minAnte debe ser un entero >= 1' });
+        }
+        if (def.weight !== undefined && def.weight <= 0) {
+          issues.push({ level: 'error', pack: owner, where, message: 'weight debe ser > 0' });
+        }
+      }
+    }
+
     // --- Validacion semantica del motor, etiquetada por pack ---
     const registry = new CardRegistry();
     registry.load(this.toBundle());
@@ -702,6 +815,10 @@ export class ContentRegistry {
       keys.push(def.nameKey, def.descKey);
       for (const choice of def.choices) keys.push(choice.labelKey, choice.detailKey);
     }
+    // R3 — Los drafts se traducen como cualquier otra definicion de contenido.
+    for (const def of [...this.blessings, ...this.curses]) {
+      keys.push(def.nameKey, def.descKey);
+    }
     return keys;
   }
 
@@ -720,6 +837,10 @@ export class ContentRegistry {
       (d) => where.includes(d.nameKey) || where.includes(d.descKey),
     );
     if (interlude) return (interlude as Tagged<InterludeDefinition>).__pack;
+    const draft = [...this.blessings, ...this.curses].find(
+      (d) => where.includes(d.nameKey) || where.includes(d.descKey),
+    );
+    if (draft) return (draft as Tagged<DraftDefinition>).__pack;
     return '<registry>';
   }
 
@@ -727,13 +848,14 @@ export class ContentRegistry {
   // Indice para gating (DLC)
   // -------------------------------------------------------------------------
 
-  /** Pack al que pertenece una carta/joker/blind. */
+  /** Pack al que pertenece una carta/joker/blind/voucher/draft. */
   packOf(contentId: string): string | undefined {
     return (
       this.cards.get(contentId)?.__pack ??
       this.jokers.get(contentId)?.__pack ??
       this.blinds.get(contentId)?.__pack ??
-      this.vouchers.get(contentId)?.__pack
+      this.vouchers.get(contentId)?.__pack ??
+      [...this.blessings, ...this.curses].find((d) => d.id === contentId)?.__pack
     );
   }
 
@@ -776,6 +898,11 @@ export class ContentRegistry {
       // Las ascensiones se indexan por nivel, no por id: se empuja el nivel como
       // string para que el gating pueda listarlas igual que el resto.
       for (const [level, def] of this.ascensions) if (def.__pack === id) contentIds.push(`a${level}`);
+      // Los drafts tambien son contenido del pack: si un pack bloqueado trajera
+      // bendiciones, el gating tiene que poder verlas para no filtrar a ciegas.
+      for (const def of [...this.blessings, ...this.curses]) {
+        if (def.__pack === id) contentIds.push(def.id);
+      }
       return {
         id,
         titleKey: manifest.titleKey,
@@ -801,6 +928,8 @@ export class ContentRegistry {
     upgrades: number;
     evolutions: number;
     interludes: number;
+    blessings: number;
+    curses: number;
     board: number;
   } {
     return {
@@ -815,6 +944,8 @@ export class ContentRegistry {
       upgrades: this.upgrades.length,
       evolutions: this.evolutions.length,
       interludes: this.interludes.length,
+      blessings: this.blessings.length,
+      curses: this.curses.length,
       board: this.board.length,
     };
   }

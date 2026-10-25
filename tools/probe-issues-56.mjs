@@ -61,7 +61,14 @@ const overlaps = (a, b) => {
 console.log(`\n=== VIEWPORT ${W}x${H} (${PORTRAIT ? 'portrait' : 'landscape'}) ===`);
 
 // Iniciar run y entrar a JUGANDO (cierra el panel blind_select y muestra el toggle).
-await page.evaluate(() => { const ff = window.__fungiflush; ff.engine.startRun(); ff.engine.chooseBlind(); });
+// R3 — el borrador de bendicion se resuelve con la primera oferta antes de elegir ciego.
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  ff.engine.startRun();
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
+  ff.engine.chooseBlind();
+});
 await page.waitForTimeout(900);
 
 // ---------------- ISSUE 5: misiones ----------------

@@ -57,6 +57,14 @@ import {
   type MissionState,
 } from './missions/missions';
 import {
+  BLESSING_OFFERS,
+  CURSE_EVERY_ANTES,
+  CURSE_OFFERS,
+  pickDraftOffers,
+  type DraftDefinition,
+  type DraftKind,
+} from './draft/draft';
+import {
   combineModifiers,
   createRunState,
   discountedCost,
@@ -189,6 +197,17 @@ export class GameEngine {
   /** Interludio pendiente de decision (P2.4). */
   private pendingInterlude: InterludeDefinition | null = null;
 
+  /**
+   * R3 — Borrador de reglas pendiente de decision. Se sortea al arrancar la
+   * run (bendicion) o al entrar a un ante multiplo de 3 (maldicion) y vive
+   * fuera del `RunState` serializable, igual que `pendingInterlude`: lo que se
+   * serializa es la ELECCION (`run.blessing` / `run.curses`), no el sorteo.
+   *
+   * La excepcion es una partida guardada con el panel abierto: ahi si viaja,
+   * porque si no, recargar regalaria un borrador nuevo (y distinto).
+   */
+  private pendingDraft: { kind: DraftKind; offers: DraftDefinition[] } | null = null;
+
   /** Definiciones de mision cargadas desde el contenido (P2.6). */
   private missionDefs: MissionDef[] = [];
   /** `true` mientras `restore` reconstruye la run: suprime el sorteo de misiones. */
@@ -272,8 +291,12 @@ export class GameEngine {
    * semilla ya viene derivada de la fecha y el flag solo hace que el resultado
    * salga con `mode: 'daily'`. El motor no sabe que dia es hoy ni si el jugador
    * ya lo jugo: eso lo decide el controlador, que es quien conoce el perfil.
+   *
+   * `tutorial` (R3) suprimer el borrador de bendiciones: el guion guiado tiene
+   * su propia secuencia y un panel de por medio la romperia. No es una regla
+   * del juego: es la misma marca que viaja en `run.tutorial`.
    */
-  startRun(seed?: number, ascension = 0, archetype = '', daily = false): void {
+  startRun(seed?: number, ascension = 0, archetype = '', daily = false, tutorial = false): void {
     const level = Math.max(0, Math.min(Math.floor(ascension), this.registry.maxAscension()));
     // El RNG de la RUN: con semilla explicita (desafio diario, tests, sims) el
     // mazo INICIAL tambien sale de ella. Antes `buildStarterDeck` barajaba con
@@ -282,7 +305,7 @@ export class GameEngine {
     // mismo para todos. Sin semilla se cae al RNG del motor, como siempre.
     const runRng = seed !== undefined ? new RNG(seed) : this.rng;
     const deck = new Deck(runRng);
-    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype, daily);
+    this.run = createRunState(seed ?? this.rng.getSeed(), deck, level, archetype, daily, tutorial);
     // R2: la ruta de ciegos del ante 1 se sortea ACA, al arrancar, y no al
     // leerla: asi el estado ya la tiene aunque se guarde antes de pasar por la
     // pantalla de seleccion.
@@ -300,6 +323,12 @@ export class GameEngine {
     this.dispatchGlobal('ON_RUN_START');
     bus.emit('run:start', { seed: this.run.seed, ante: this.run.ante });
 
+    // R3 — Antes de la seleccion de ciego, el BORRADOR: tres bendiciones y el
+    // jugador se queda con una. Si sortea (hay tabla y no es tutorial) la run
+    // se queda en estado 'draft' y `chooseDraft` la retoma; si no, se sigue al
+    // flujo de siempre.
+    if (this.rollBlessingDraft()) return;
+
     // No se elige el blind automaticamente: el jugador decide (Blind Select).
     this.enterBlindSelect();
   }
@@ -309,6 +338,7 @@ export class GameEngine {
     this.reward = null;
     this.rewardPicked = 0;
     this.pendingInterlude = null;
+    this.pendingDraft = null;
     // El contador del Simbionte del dado tambien vive fuera del `RunState`
     // serializable: si no se resetea, una run nueva heredaria la carga de la
     // anterior y la habilidad arrancaria armada. Se vuelve a 0 (listo) para que
@@ -337,6 +367,11 @@ export class GameEngine {
    */
   private enterBlindSelect(): void {
     this.run.status = 'blind_select';
+    // R3 — Al entrar a un ante multiplo de 3 toca una MALDICION. Va antes de
+    // reponer misiones para que, si sortea, las misiones del ante se sorteen
+    // cuando el jugador ya eligio (una mision pensada para el ante que viene
+    // no tiene que sortearse con el panel de la maldicion en pantalla).
+    if (!this.restoring && this.curseDue() && this.tryEnterCurseDraft()) return;
     // P2.6 — Es el momento natural para reponer misiones: el jugador esta a
     // punto de enfrentar el siguiente ciego, asi que un objetivo corto nuevo se
     // puede cumplir DENTRO de lo que viene, no despues de la run entera.
@@ -347,6 +382,15 @@ export class GameEngine {
     // restauradas se perderian al pisarlas.
     if (!this.restoring) this.rollMissions();
     this.emitState();
+  }
+
+  /** ¿Toca maldicion en el ante actual y todavia no se sorteo? (R3) */
+  private curseDue(): boolean {
+    return (
+      this.run.ante > 0 &&
+      this.run.ante % CURSE_EVERY_ANTES === 0 &&
+      this.run.curseDraftAnte !== this.run.ante
+    );
   }
 
   /**
@@ -448,15 +492,35 @@ export class GameEngine {
   }
 
   /**
-   * Modificadores de run activos (vouchers). Se recalcula en cada consulta: son
-   * como mucho una decena de objetos y el coste es despreciable frente a la
-   * alternativa de cachear y tener que invalidar.
+   * Modificadores de run activos (vouchers + drafts). Se recalcula en cada
+   * consulta: son como mucho una decena de objetos y el coste es despreciable
+   * frente a la alternativa de cachear y tener que invalidar.
+   *
+   * R3 — Los drafts entran por el MISMO `combineModifiers` que los vouchers,
+   * con un adaptador de una linea (`{ runModifiers: def.modifiers }`). No hay
+   * una segunda suma: "objetivo -10%" significa lo mismo venga de un voucher
+   * comprado o de una bendicion sorteada, y dos fuentes se componen.
    */
   get modifiers(): VoucherRunModifiers {
-    const defs = this.run.vouchers
+    const defs: Array<{ runModifiers?: VoucherRunModifiers }> = this.run.vouchers
       .map((id) => this.registry.tryGetVoucher(id))
       .filter((d): d is VoucherDefinition => d !== undefined);
+    for (const draft of this.draftDefs()) defs.push({ runModifiers: draft.modifiers });
     return combineModifiers(defs);
+  }
+
+  /** Definiciones de draft activas en esta run (bendicion + maldiciones). */
+  private draftDefs(): DraftDefinition[] {
+    const out: DraftDefinition[] = [];
+    if (this.run.blessing) {
+      const def = this.registry.tryGetDraft(this.run.blessing);
+      if (def) out.push(def);
+    }
+    for (const id of this.run.curses) {
+      const def = this.registry.tryGetDraft(id);
+      if (def) out.push(def);
+    }
+    return out;
   }
 
   /**
@@ -1630,6 +1694,138 @@ export class GameEngine {
     return true;
   }
 
+  // ==========================================================================
+  // Borrador de reglas: bendiciones y maldiciones (R3)
+  // ==========================================================================
+
+  /**
+   * Sorteo de la BENDICION de arranque. Devuelve `true` si dejo la run en
+   * estado 'draft' (hay panel que resolver).
+   *
+   * El RNG es DEDICADO, derivado de la semilla de la run, y no el de la run:
+   * si el borrador consumiera `this.rng`, sortear una bendicion desplazaria la
+   * tirada del mazo inicial, la primera tienda y las misiones de TODAS las
+   * partidas. Con un RNG propio, una run sin borrador (tutorial, o pack sin
+   * blessings) es IDENTICA a como era antes de R3.
+   */
+  private rollBlessingDraft(): boolean {
+    if (this.run.tutorial) return false;
+    if (!this.registry.hasDrafts) return false;
+    if (this.run.blessing) return false;
+
+    const rng = new RNG(hashString(`fungiflush:draft:blessing:${this.run.seed}`));
+    const offers = pickDraftOffers(
+      this.registry.blessingDefs,
+      this.run.ante,
+      [],
+      BLESSING_OFFERS,
+      rng,
+    );
+    return this.openDraft('blessing', offers);
+  }
+
+  /**
+   * Sorteo de la MALDICION periodica (cada 3 antes). Mismo RNG dedicado, con
+   * el ante en la clave: la del ante 3 y la del ante 6 son sorteos distintos y
+   * ambos reproducibles.
+   */
+  private tryEnterCurseDraft(): boolean {
+    if (this.run.tutorial) return false;
+    if (!this.registry.hasDrafts) return false;
+    if (this.pendingDraft) return false;
+
+    const rng = new RNG(hashString(`fungiflush:draft:curse:${this.run.seed}:${this.run.ante}`));
+    const offers = pickDraftOffers(
+      this.registry.curseDefs,
+      this.run.ante,
+      this.run.curses,
+      CURSE_OFFERS,
+      rng,
+    );
+    // Se MARCA el ante aunque no haya ofertas: sin la marca, un ante multiplo
+    // de 3 sin maldiciones elegibles volveria a sortear en cada
+    // `enterBlindSelect` (al resolver un interludio, por ejemplo).
+    this.run.curseDraftAnte = this.run.ante;
+    return this.openDraft('curse', offers);
+  }
+
+  /** Abre el panel del borrador. Devuelve false si no habia nada que ofrecer. */
+  private openDraft(kind: DraftKind, offers: readonly DraftDefinition[]): boolean {
+    if (offers.length === 0) return false;
+    this.pendingDraft = { kind, offers: [...offers] };
+    this.run.status = 'draft';
+    bus.emit('draft:enter', { kind, offers: [...offers] });
+    this.emitState();
+    return true;
+  }
+
+  /** Borrador pendiente de decision, o null. Para la UI. */
+  get currentDraft(): { kind: DraftKind; offers: DraftDefinition[] } | null {
+    return this.pendingDraft;
+  }
+
+  /**
+   * Resuelve el borrador con la opcion elegida y vuelve a la seleccion de
+   * ciego. Devuelve `false` si no hay borrador, la opcion no esta entre las
+   * ofrecidas, o la bendicion/maldicion ya estaba aplicada.
+   */
+  chooseDraft(id: string): boolean {
+    const draft = this.pendingDraft;
+    if (!draft || this.run.status !== 'draft') return false;
+
+    const def = draft.offers.find((d) => d.id === id);
+    if (!def) return false;
+
+    if (draft.kind === 'blessing') {
+      if (this.run.blessing) return false;
+      this.run.blessing = def.id;
+    } else {
+      if (this.run.curses.includes(def.id)) return false;
+      this.run.curses.push(def.id);
+    }
+
+    this.applyDraftModifiers(def);
+
+    this.pendingDraft = null;
+    bus.emit('draft:choose', { kind: draft.kind, draft: def });
+    // Se vuelve a la seleccion. Si la maldicion se sorteo en este mismo ante,
+    // `curseDue()` ya es falso ( `curseDraftAnte` quedo marcada) y no se abre
+    // otro panel.
+    this.enterBlindSelect();
+    this.emitState();
+    return true;
+  }
+
+  /**
+   * Aplica los modificadores que se escriben UNA vez sobre el estado de la run.
+   *
+   * Los otros (`targetMultiplier`, `rerollCostDelta`, `shopDiscount`) NO se
+   * tocan aca: se leen del agregado `this.modifiers` en cada consulta, porque
+   * son tasas y tienen que componer con los vouchers. Ver `BAKED_MODIFIER_KEYS`.
+   *
+   * No hace falta refresjar una ronda en curso: el borrador solo se abre entre
+   * ciegos (`enterBlindSelect`), donde `this.round` es siempre null. Si algun
+   * dia se abriera durante una ronda, el status 'playing' lo impediria igual:
+   * `chooseDraft` exige status 'draft'.
+   */
+  private applyDraftModifiers(def: DraftDefinition): void {
+    const mods = def.modifiers;
+    if (!mods) return;
+
+    if (mods.extraMoney) this.setMoney(mods.extraMoney);
+    if (mods.extraHands) this.run.baseHands = Math.max(1, this.run.baseHands + mods.extraHands);
+    if (mods.extraDiscards) {
+      this.run.baseDiscards = Math.max(0, this.run.baseDiscards + mods.extraDiscards);
+    }
+    if (mods.extraHandSize) {
+      this.run.baseHandSize = Math.max(1, this.run.baseHandSize + mods.extraHandSize);
+    }
+    if (mods.extraJokerSlots) {
+      // El suelo es 1, no 0: una run con cero espacios de simbionte no es mas
+      // dificil, es rota (la UI y el render asumen que hay fila).
+      this.run.jokerSlots = Math.max(1, this.run.jokerSlots + mods.extraJokerSlots);
+    }
+  }
 
   // ==========================================================================
   // Internos
@@ -2280,6 +2476,22 @@ export class GameEngine {
       // --- P2.4: interludios (aditivo, sin bump de version como vouchers) ---
       interludeTargetMultiplier: this.run.interludeModifiers.targetMultiplier,
       seenInterludes: [...this.run.seenInterludes],
+      // --- R3: borrador de reglas (aditivo, sin bump de version) ---
+      // La ELECCION viaja, no el sorteo: una run retomada sigue con la misma
+      // bendicion y las mismas maldiciones, o recargar seria un reroll gratis.
+      blessing: this.run.blessing,
+      curses: [...this.run.curses],
+      curseDraftAnte: this.run.curseDraftAnte,
+      // El panel ABIERTO tambien viaja: si el jugador guarda con el borrador en
+      // pantalla, al retomar ve las mismas ofertas (y no otras sorteadas).
+      ...(this.pendingDraft
+        ? {
+            draft: {
+              kind: this.pendingDraft.kind,
+              offers: this.pendingDraft.offers.map((d) => d.id),
+            },
+          }
+        : {}),
       // --- P2.6: misiones de run (aditivo) ---
       missions: this.run.missions.map((m) => ({ ...m })),
       // --- v2: trazabilidad de contenido (DLC / rebalanceos) ---
@@ -2391,6 +2603,24 @@ export class GameEngine {
     this.run.seenInterludes = (data.seenInterludes ?? []).filter((id) =>
       this.registry.interludeDefs.some((def) => def.id === id),
     );
+    // R3 — Borrador: aditivo. Un guardado previo no trae los campos y la run
+    // sigue sin bendicion ni maldiciones. Los ids se filtran por definiciones
+    // existentes (un draft borrado del contenido no puede romper la carga).
+    this.run.blessing = this.registry.tryGetDraft(data.blessing ?? '') ? (data.blessing ?? '') : '';
+    this.run.curses = (data.curses ?? []).filter((id) => !!this.registry.tryGetDraft(id));
+    this.run.curseDraftAnte = Number.isFinite(data.curseDraftAnte) ? (data.curseDraftAnte ?? 0) : 0;
+    // Panel abierto al guardar: se reconstruye con las MISMAS ofertas. Si alguna
+    // ya no existe en el contenido se descarta; si no queda ninguna, el borrador
+    // se cae y la run sigue a la seleccion de ciego (sin regalarte otro sorteo).
+    if (data.draft) {
+      const offers = (data.draft.offers ?? [])
+        .map((id) => this.registry.tryGetDraft(id))
+        .filter((d): d is DraftDefinition => d !== undefined);
+      if (offers.length > 0) {
+        this.pendingDraft = { kind: data.draft.kind === 'curse' ? 'curse' : 'blessing', offers };
+        this.run.status = 'draft';
+      }
+    }
     // Cupo de purgas: aditivo (los guardados previos no lo traen ⇒ 0 usadas).
     // Se clampea a [0, tope] por si un guardado manipul ado trae basura.
     this.run.purgesThisAnte = Math.min(
@@ -2426,7 +2656,13 @@ export class GameEngine {
     // vienen del guardado son las que valen.
     this.restoring = true;
     try {
-      this.enterBlindSelect();
+      // R3 — Si el guardado traia el borrador ABIERTO, la run se queda en
+      // 'draft' y el panel se reconstruye con las mismas ofertas. Llamar a
+      // `enterBlindSelect` pisaria el status y el jugador perderia la decision
+      // (con la bendicion ya sorteada de fondo, que es peor: se juega con una
+      // regla que nadie eligio).
+      if (this.pendingDraft) this.emitState();
+      else this.enterBlindSelect();
     } finally {
       this.restoring = false;
     }
@@ -2531,6 +2767,26 @@ export interface RunSaveData {
   interludeTargetMultiplier?: number;
   /** Ids de interludios ya vistos (P2.4). OPCIONAL, mismo motivo. */
   seenInterludes?: string[];
+  /**
+   * R3 — Bendicion elegida al arrancar. OPCIONAL y aditivo: los guardados
+   * previos no lo tienen y `restore` cae a `''` (ninguna). NO hace falta subir
+   * `SAVE_VERSION`.
+   */
+  blessing?: string;
+  /** R3 — Maldiciones elegidas (acumulativas). OPCIONAL y aditivo. */
+  curses?: string[];
+  /**
+   * R3 — Ante en el que se sorteo la ultima maldicion. Opcional y aditivo: un
+   * guardado previo cae a 0, que es "ninguna", y la parada del ante multiplo
+   * de 3 se ofrece normalmente.
+   */
+  curseDraftAnte?: number;
+  /**
+   * R3 — Borrador ABIERTO al guardar (tipo + ids de las ofertas). Opcional y
+   * aditivo: existe solo para que una partida retomada con el panel en pantalla
+   * no reciba un sorteo nuevo.
+   */
+  draft?: { kind: 'blessing' | 'curse'; offers: string[] };
   /**
    * Misiones activas en la run (P2.6). OPCIONAL y aditivo: los guardados
    * previos no lo tienen y `restore` cae a una lista vacia.

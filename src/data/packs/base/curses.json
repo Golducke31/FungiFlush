@@ -1,0 +1,74 @@
+[
+  {
+    "id": "curse_thin_air",
+    "nameKey": "curse.thin_air.name",
+    "descKey": "curse.thin_air.desc",
+    "kind": "curse",
+    "weight": 12,
+    "minAnte": 3,
+    "modifiers": { "targetMultiplier": 1.08 }
+  },
+  {
+    "id": "curse_rusty_tools",
+    "nameKey": "curse.rusty_tools.name",
+    "descKey": "curse.rusty_tools.desc",
+    "kind": "curse",
+    "weight": 12,
+    "minAnte": 3,
+    "modifiers": { "rerollCostDelta": 2 }
+  },
+  {
+    "id": "curse_stiff_fingers",
+    "nameKey": "curse.stiff_fingers.name",
+    "descKey": "curse.stiff_fingers.desc",
+    "kind": "curse",
+    "weight": 10,
+    "minAnte": 3,
+    "modifiers": { "extraDiscards": -1 }
+  },
+  {
+    "id": "curse_narrow_shelf",
+    "nameKey": "curse.narrow_shelf.name",
+    "descKey": "curse.narrow_shelf.desc",
+    "kind": "curse",
+    "weight": 10,
+    "minAnte": 3,
+    "modifiers": { "extraHandSize": -1 }
+  },
+  {
+    "id": "curse_lean_pantry",
+    "nameKey": "curse.lean_pantry.name",
+    "descKey": "curse.lean_pantry.desc",
+    "kind": "curse",
+    "weight": 9,
+    "minAnte": 3,
+    "modifiers": { "extraMoney": -4 }
+  },
+  {
+    "id": "curse_tired_arms",
+    "nameKey": "curse.tired_arms.name",
+    "descKey": "curse.tired_arms.desc",
+    "kind": "curse",
+    "weight": 8,
+    "minAnte": 6,
+    "modifiers": { "extraHands": -1 }
+  },
+  {
+    "id": "curse_broken_tools",
+    "nameKey": "curse.broken_tools.name",
+    "descKey": "curse.broken_tools.desc",
+    "kind": "curse",
+    "weight": 8,
+    "minAnte": 6,
+    "modifiers": { "rerollCostDelta": 4 }
+  },
+  {
+    "id": "curse_heavy_fog",
+    "nameKey": "curse.heavy_fog.name",
+    "descKey": "curse.heavy_fog.desc",
+    "kind": "curse",
+    "weight": 6,
+    "minAnte": 6,
+    "modifiers": { "targetMultiplier": 1.15 }
+  }
+]

@@ -43,7 +43,10 @@ function engineWithMissions(seed = 1): GameEngine {
     bundle: buildRegistry().toBundle(),
     missions: MISSION_DATA,
   });
-  engine.startRun(seed);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: estos tests cuentan
+  // con que `startRun` llega a `blind_select`, que es donde se reparten las
+  // misiones. El flag no cambia ninguna regla, solo suprime el sorteo.
+  engine.startRun(seed, 0, '', false, true);
   return engine;
 }
 
@@ -285,7 +288,7 @@ test('una mision que ya no existe en el contenido se descarta al cargar', () => 
 
 test('sin definiciones de mision, el motor no rompe', () => {
   const engine = new GameEngine({ seed: 1, bundle: buildRegistry().toBundle() });
-  engine.startRun(1);
+  engine.startRun(1, 0, '', false, true);
   assert.deepEqual(engine.run.missions, []);
   assert.deepEqual(engine.advanceMissionsOn('round:win', { reward: 10 }), []);
 });

@@ -12,9 +12,11 @@
 
 import {
   bus,
+  draftModifierLines,
   jokerSellValue,
   type CardDefinition,
   type CardInstance,
+  type DraftDefinition,
   type GameEngine,
   type InterludeChoice,
   type InterludeEffect,
@@ -235,6 +237,8 @@ export interface HudCallbacks {
   onUseFungiFlush: () => void;
   /** El jugador eligio una opcion del interludio (P2.4). */
   onChooseInterlude: (choiceId: string) => void;
+  /** R3 — El jugador eligio su bendicion o su maldicion del borrador. */
+  onChooseDraft: (draftId: string) => void;
   // --- Fase 5: duelo micelial (hot-seat) ---
   onOpenBoard: () => void;
   // --- R4b: cosméticos (dorso de carta / tapete) ---
@@ -1071,6 +1075,14 @@ export class HUD {
         // el jugador sepa que la decision quedo registrada.
         const tookDeal = (choice.effects?.length ?? 0) > 0;
         this.toast(t(tookDeal ? 'interlude.accepted' : 'interlude.declined'), 'info');
+      }),
+      // R3 — Borrador de reglas: el motor sorteó las ofertas y espera que el
+      // jugador elija una. No hay forma de declinar: el panel no tiene salida
+      // por el borde, se cierra solo al elegir.
+      bus.on('draft:enter', () => this.showDraft()),
+      bus.on('draft:choose', ({ draft }) => {
+        const curse = draft.kind === 'curse';
+        this.toast(t(curse ? 'draft.chosenCurse' : 'draft.chosenBlessing'), curse ? 'warn' : 'info');
       }),      bus.on('shop:reroll', ({ offers }) => this.showShop(offers)),
       // Comprar cambia el estado de la OFERTA (vendida) y el dinero. El refresco
       // no puede depender solo de `money:changed`: ese evento lo dispara el
@@ -2034,6 +2046,12 @@ export class HUD {
         // P2.4 — El interludio ya abrio su panel por `interlude:enter`; si el
         // HUD llega a este estado sin panel (ej. recarga), se muestra igual.
         if (!this.elOverlay?.querySelector('.panel.is-interlude')) this.showInterlude();
+        break;
+      // R3 — Borrador de reglas (bendicion/maldicion). Mismo patron que el
+      // interludio: el panel lo abre `draft:enter`; esta rama solo cubre la
+      // recarga, cuando el motor restaura la run con el panel pendiente.
+      case 'draft':
+        if (!this.elOverlay?.querySelector('.panel.is-draft')) this.showDraft();
         break;
       case 'reward':
         // Primero el aviso de superacion, despues el draft: sin esto el panel
@@ -3176,7 +3194,13 @@ export class HUD {
     // funcionar siempre, que es justamente para lo que sirve el boton del menu.
     if (this.tutorialShown && !force) return;
     this.tutorialShown = true;
-    const fromRun = !force && this.engine.run?.status === 'blind_select';
+    // `fromRun` = "cerrar te devuelve a la partida". Se mide por el ESTADO del
+    // motor, no por un estado concreto: con R3 una run arranca en 'draft' (la
+    // bendicion de arranque) y la guia automatica se abria encima de ese panel.
+    // Con la condicion anterior (`=== 'blind_select'`) cerrar la guia ahi
+    // llamaba a `showMenu()`: se perdia la partida recien empezada. Cualquier
+    // estado que no sea el menu es "hay partida en curso".
+    const fromRun = !force && this.engine.run != null && this.engine.run.status !== 'menu';
 
     const panel = document.createElement('div');
     panel.className = 'panel is-tutorial';
@@ -3929,6 +3953,104 @@ export class HUD {
       if (effect.type === 'MONEY') money += effect.value;
     }
     return money >= 0;
+  }
+
+  /**
+   * R3 — Panel del borrador de reglas: "Elegí tu bendición" / "Elegí tu maldición".
+   *
+   * La estructura calca la del interludio a proposito (tarjetas de opcion con
+   * etiqueta, detalle, lineas de efecto y boton), porque es el mismo gesto: una
+   * decision entre pocas opciones. Lo que cambia es el contenido de cada
+   * tarjeta: aca NO hay coste que pagar ni forma de declinar — la bendición o
+   * maldición se aplica al elegir, y el botón lleva directo al siguiente estado.
+   */
+  private showDraft(): void {
+    const draft = this.engine.currentDraft;
+    if (!draft) return;
+    const curse = draft.kind === 'curse';
+
+    const panel = document.createElement('div');
+    panel.className = `panel is-draft is-${draft.kind}`;
+
+    const title = document.createElement('h2');
+    title.className = 'panel-title';
+    title.textContent = t(curse ? 'draft.titleCurse' : 'draft.title');
+    title.dataset['act'] = 'draft-title';
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'panel-subtitle';
+    subtitle.textContent = t(curse ? 'draft.subtitleCurse' : 'draft.subtitle');
+
+    // El aviso de "no se puede declinar" es lo que distingue el borrador de un
+    // interludio: sin el, el jugador busca el boton de rechazar y no esta.
+    const hint = document.createElement('p');
+    hint.className = 'draft-hint';
+    hint.textContent = t('draft.hint');
+
+    const choices = document.createElement('div');
+    choices.className = 'draft-choices';
+    for (const offer of draft.offers) {
+      choices.appendChild(this.buildDraftChoice(offer));
+    }
+
+    panel.append(title, subtitle, hint, choices);
+    this.openOverlay(panel);
+    // La arena ya no esta en juego entre ciegos: se corta el render de fondo.
+    this.callbacks.onArenaCovered?.(true);
+
+    anim
+      .sequence()
+      .fromTo(
+        choices.querySelectorAll('.draft-choice'),
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: anim.d(0.28),
+          ease: anim.EASE.cssOut,
+          stagger: { amount: anim.d(0.14) },
+        },
+      );
+  }
+
+  /** Una oferta del borrador: nombre, descripcion, efectos en datos y boton. */
+  private buildDraftChoice(def: DraftDefinition): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'draft-choice';
+    card.dataset['act'] = 'draft-choice';
+    card.dataset['draft'] = def.id;
+
+    const label = document.createElement('div');
+    label.className = 'draft-choice-label';
+    label.textContent = t(def.nameKey);
+
+    const detail = document.createElement('div');
+    detail.className = 'draft-choice-detail';
+    detail.textContent = t(def.descKey);
+
+    card.append(label, detail);
+
+    // Las lineas salen del MOTOR (`draftModifierLines`), no de una tabla en el
+    // HUD: si el JSON del pack cambia, el texto cambia con el sin tocar la UI.
+    const lines = draftModifierLines(def.modifiers);
+    if (lines.length > 0) {
+      const list = document.createElement('ul');
+      list.className = 'draft-effects';
+      for (const line of lines) {
+        const item = document.createElement('li');
+        item.textContent = t(line.key, line.params);
+        list.appendChild(item);
+      }
+      card.appendChild(list);
+    }
+
+    const button = document.createElement('button');
+    button.className = 'btn is-play';
+    button.textContent = t('draft.choose');
+    button.addEventListener('click', () => this.callbacks.onChooseDraft(def.id));
+    card.appendChild(button);
+
+    return card;
   }
 
   private showBlindSelect(): void {

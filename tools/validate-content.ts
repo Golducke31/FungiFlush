@@ -91,6 +91,8 @@ function main(): void {
   console.log(`mejoras    ${stats.upgrades}`);
   console.log(`evoluciones ${stats.evolutions}`);
   console.log(`interludios ${stats.interludes}`);
+  console.log(`bendiciones ${stats.blessings}`);
+  console.log(`maldiciones ${stats.curses}`);
   console.log(`tablero    ${stats.board}`);
   console.log(`arte       ${cards.length} cartas / ${art.byFile.size} ilustraciones distintas`);
   console.log(`hash       ${registry.contentHash()}`);

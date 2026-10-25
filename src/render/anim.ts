@@ -158,6 +158,54 @@ export function activeCount(): number {
   return gsap.globalTimeline.getChildren(false, true, true).length;
 }
 
+/** Descripcion legible de un target, para el volcado de `describeActive`. */
+function describeTarget(t: unknown): string {
+  if (t === null || t === undefined) return String(t);
+  if (typeof t !== 'object') return String(t);
+  const o = t as {
+    constructor?: { name?: string };
+    nodeName?: string;
+    className?: unknown;
+    uuid?: string;
+  };
+  if (typeof o.nodeName === 'string') {
+    const cls = typeof o.className === 'string' ? o.className.split(' ')[0] : '';
+    return `${o.nodeName}${cls ? `.${cls}` : ''}`;
+  }
+  const ctor = o.constructor?.name ?? '?';
+  const id = o.uuid ? `#${String(o.uuid).slice(0, 8)}` : '';
+  return `${ctor}${id}{${Object.keys(o).slice(0, 5).join(',')}}`;
+}
+
+/**
+ * Foto de las animaciones vivas de nivel superior (SOLO diagnostico).
+ *
+ * `activeCount()` dice CUANTAS quedan; esto dice CUALES. Un tween colgado
+ * (target borrado, `onComplete` que nunca dispara, duracion NaN o `repeat`
+ * infinito) se distingue de uno lento porque su `progress` no se mueve
+ * mientras el reloj (`now()`) si avanza. Lo usan los probes cuando el reposo
+ * no llega: sin esto, un `gsap=1` fantasma es un numero sin culpable.
+ */
+export function describeActive(): Array<Record<string, unknown>> {
+  return gsap.globalTimeline.getChildren(false, true, true).map((child) => {
+    const c = child as gsap.core.Tween;
+    const targets = typeof c.targets === 'function' ? c.targets() : [];
+    return {
+      type: child.constructor?.name ?? '?',
+      dur: Number(child.duration().toFixed(3)),
+      progress: Number(child.progress().toFixed(3)),
+      paused: child.paused(),
+      repeat: typeof child.repeat === 'function' ? child.repeat() : -1,
+      // Duracion NaN es el clasico: `time >= duration` es false para siempre y
+      // el tween vive eternamente en el timeline sin completarse.
+      nanDur: Number.isNaN(child.duration()),
+      vars: Object.keys(child.vars ?? {}).filter((k) => !k.startsWith('on')),
+      onComplete: typeof child.vars?.onComplete === 'function',
+      target: describeTarget(targets[0]),
+    };
+  });
+}
+
 export function now(): number {
   return time;
 }

@@ -27,6 +27,12 @@ export type GameStatus =
   | 'reward'
   /** Evento entre Ciegos: el jugador elige aceptar un trato o seguir (P2.4). */
   | 'interlude'
+  /**
+   * R3 — Borrador de reglas abierto: el jugador esta eligiendo su bendicion
+   * (al arrancar) o su maldicion (cada 3 antes). No se puede jugar hasta
+   * elegir: la run se juega con ESA regla.
+   */
+  | 'draft'
   | 'shop'
   | 'game_over'
   | 'victory'
@@ -161,6 +167,33 @@ export interface RunState {
   /** Ids de interludios ya vistos en esta run: no se repite el mismo trato. */
   seenInterludes: string[];
   /**
+   * R3 — Bendicion elegida en el borrador de arranque (id; ver
+   * `src/data/packs/base/blessings.json`). Vacio = ninguna.
+   *
+   * Es UNA sola porque el borrador de arranque se resuelve una vez: la run
+   * entera se juega con la bendicion que se eligio al principio. Se guarda en
+   * la run (y se serializa) porque sus modificadores cambian como se calcula
+   * el objetivo, el reroll y los precios: una run retomada tiene que seguir
+   * con las mismas reglas.
+   */
+  blessing: string;
+  /**
+   * R3 — Maldiciones elegidas (ids), ACUMULATIVAS: una cada 3 antes. No cabe
+   * en un id suelto porque dos maldiciones vivas tienen que convivir, y sus
+   * modificadores se combinan entre si (y con la bendicion y los vouchers) en
+   * el mismo `combineModifiers`.
+   */
+  curses: string[];
+  /**
+   * R3 — Ante en el que se sorteo la ULTIMA maldicion (0 = ninguna).
+   *
+   * Existe para que la parada sea "una por ante multiplo de 3" y no "una por
+   * cada vez que se pasa por `enterBlindSelect`", que se llama varias veces
+   * por ante (al resolver un interludio, al elegir el draft). Viaja serializado
+   * para que una run retomada no reciba una maldicion de mas.
+   */
+  curseDraftAnte: number;
+  /**
    * Misiones activas de la run (P2.6). Se guardan como `{id, progress,
    * completed}`: el id apunta al contenido y el progreso es el unico estado
    * mutable. Una run retomada sigue con las mismas misiones a medio hacer.
@@ -213,6 +246,11 @@ export interface RunState {
  * se fijan al nacer y despues los efectos los mueven. Si cada punto de uso
  * leyera la ascension, bastaria olvidarse de uno para que A5 fuera mas facil
  * que A4 sin que nadie lo note.
+ *
+ * `tutorial` NO es una regla: es la marca que usa la UI para saber que tiene
+ * que guiar. Se recibe aca (y no se pone despues desde fuera) porque el
+ * tutorial TAMBIEN suprimir el borrador de bendiciones: un guion de 25 pasos
+ * no puede arrancar con un panel de por medio.
  */
 export function createRunState(
   seed: number,
@@ -220,6 +258,7 @@ export function createRunState(
   ascension = 0,
   archetype = '',
   daily = false,
+  tutorial = false,
 ): RunState {
   const mods = ascensionModifiersFor(ascension);
   return {
@@ -252,9 +291,12 @@ export function createRunState(
     shop: null,
     interludeModifiers: { ...DEFAULT_INTERLUDE_MODIFIERS },
     seenInterludes: [],
+    blessing: '',
+    curses: [],
+    curseDraftAnte: 0,
     missions: [],
     totalScore: 0,
-    tutorial: false,
+    tutorial,
     endless: false,
     stats: {
       handsPlayed: 0,

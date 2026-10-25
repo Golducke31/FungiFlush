@@ -42,6 +42,9 @@ await page.evaluate(async () => {
   const ff = window.__fungiflush;
   await ff.runStore.clear();
   ff.engine.startRun(0xf00d, 0, '');
+  // R3 — sin borrador: se resuelve con la primera oferta para entrar al ciego.
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
   const blinds = ff.engine.availableBlinds();
   ff.engine.chooseBlind(blinds[1]?.id ?? blinds[0]?.id);
 });

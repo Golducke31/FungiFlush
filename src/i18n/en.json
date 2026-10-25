@@ -1692,6 +1692,108 @@
       "decline": "Save the money"
     }
   },
+  "draft": {
+    "title": "BLESSING",
+    "titleCurse": "CURSE",
+    "subtitle": "The grove offers you a gift before you begin",
+    "subtitleCurse": "The grove collects its toll: you choose how it hurts",
+    "hint": "Pick one. There is no declining.",
+    "choose": "Choose",
+    "expired": "That offer has expired",
+    "chosenBlessing": "Blessing received",
+    "chosenCurse": "Curse accepted",
+    "lineTargetUp": "The target of the next Blinds rises {pct}%",
+    "lineTargetDown": "The target of the next Blinds drops {pct}%",
+    "lineRerollCheaper": "Shop rerolls cost {n} less",
+    "lineRerollPricier": "Shop rerolls cost {n} more",
+    "lineShopDiscount": "Shop prices drop {pct}%",
+    "lineJokerSlotsPlus": "+{n} symbiote slot",
+    "lineJokerSlotsLess": "{n} symbiote slot",
+    "lineHandsPlus": "+{n} hand per Blind",
+    "lineHandsLess": "{n} hand per Blind",
+    "lineDiscardsPlus": "+{n} discard per Blind",
+    "lineDiscardsLess": "{n} discard per Blind",
+    "lineHandSizePlus": "+{n} card in hand",
+    "lineHandSizeLess": "{n} card in hand",
+    "lineMoneyPlus": "+{n} Fungis at the start",
+    "lineMoneyLess": "{n} Fungis at the start"
+  },
+  "blessing": {
+    "fertile_soil": {
+      "name": "Fertile Soil",
+      "desc": "A corner of the grove where the earth gives way: the next Blinds ask 8% less."
+    },
+    "wide_basket": {
+      "name": "Wide Basket",
+      "desc": "A woven basket with one more slot. One extra card in hand from the start."
+    },
+    "second_chance": {
+      "name": "Second Chance",
+      "desc": "The mycelium forgives one mistake per Blind. One extra discard each round."
+    },
+    "thrifty": {
+      "name": "Thrifty",
+      "desc": "You stash spores under the bark. Shop rerolls cost 3 less."
+    },
+    "seed_pouch": {
+      "name": "Seed Pouch",
+      "desc": "A forgotten pouch among the roots. You start with 8 more Fungis."
+    },
+    "deep_mycelium": {
+      "name": "Deep Mycelium",
+      "desc": "The net stretches underground and soaks up the strain: targets 4% lower."
+    },
+    "bargain": {
+      "name": "Bargain",
+      "desc": "You know how to haggle with traders: 20% off in the shop."
+    },
+    "lucky_grove": {
+      "name": "Lucky Grove",
+      "desc": "A clearing where everything comes easy: rerolls 2 cheaper and 10% off the shop."
+    },
+    "spare_hand": {
+      "name": "Spare Hand",
+      "desc": "A ghost hand helps you sort the spores. One extra hand per Blind."
+    },
+    "extra_pot": {
+      "name": "Extra Pot",
+      "desc": "An empty jar waiting for a symbiote. One more slot."
+    }
+  },
+  "curse": {
+    "thin_air": {
+      "name": "Thin Air",
+      "desc": "The substrate dries out and asks for more: targets 8% higher."
+    },
+    "rusty_tools": {
+      "name": "Rusty Tools",
+      "desc": "Nothing sharpens like it used to. Shop rerolls cost 2 more."
+    },
+    "stiff_fingers": {
+      "name": "Stiff Fingers",
+      "desc": "Your hands don't answer: one less discard per Blind."
+    },
+    "narrow_shelf": {
+      "name": "Narrow Shelf",
+      "desc": "Not everything fits on the table: one less card in hand."
+    },
+    "lean_pantry": {
+      "name": "Lean Pantry",
+      "desc": "You start with 4 fewer Fungis."
+    },
+    "tired_arms": {
+      "name": "Tired Arms",
+      "desc": "The effort takes its toll: one less hand per Blind."
+    },
+    "broken_tools": {
+      "name": "Broken Tools",
+      "desc": "Shop rerolls cost 4 more."
+    },
+    "heavy_fog": {
+      "name": "Heavy Fog",
+      "desc": "The grove darkens and demands more: targets 15% higher."
+    }
+  },
   "common": {
     "declineDetail": "No cost. You keep your deck and target as they are."
   },

@@ -21,6 +21,7 @@ import type {
   AscensionDefinition,
   BlindDefinition,
   CardDefinition,
+  DraftDefinition,
   EvolutionRule,
   InterludeDefinition,
   JokerDefinition,
@@ -67,6 +68,10 @@ export interface PackContents {
   ascensions?: string[];
   /** Eventos entre Ciegos (P2.4). */
   interludes?: string[];
+  /** Bendiciones del borrador de arranque (R3). */
+  blessings?: string[];
+  /** Maldiciones del borrador periodico (R3). */
+  curses?: string[];
   upgrades?: string[];
   board?: string[];
   antes?: string[];
@@ -136,6 +141,10 @@ export interface LoadedPack extends RawPack {
   ascensions: AscensionDefinition[];
   /** Eventos entre Ciegos (P2.4). Ver `InterludeDefinition`. */
   interludes: InterludeDefinition[];
+  /** Bendiciones del borrador de arranque (R3). Ver `DraftDefinition`. */
+  blessings: DraftDefinition[];
+  /** Maldiciones del borrador periodico (R3). Ver `DraftDefinition`. */
+  curses: DraftDefinition[];
   /** Flechas del modo tablero. Indexadas por `cardId`, no por posicion. */
   board: BoardCardDef[];
 }

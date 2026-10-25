@@ -45,6 +45,8 @@ export function loadPacksFromDisk(): RawPack[] {
       ...(manifest.contents?.vouchers ?? []),
       ...(manifest.contents?.ascensions ?? []),
       ...(manifest.contents?.interludes ?? []),
+      ...(manifest.contents?.blessings ?? []),
+      ...(manifest.contents?.curses ?? []),
       ...(manifest.contents?.upgrades ?? []),
       ...(manifest.contents?.board ?? []),
       ...(manifest.contents?.antes ?? []),

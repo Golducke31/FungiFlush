@@ -312,6 +312,16 @@ if (await has('.panel.is-archetypes')) {
   await page.waitForTimeout(1300);
 }
 await click('[data-act="tutorial-close"]');
+await page.waitForTimeout(300);
+// R3 — Con la guia cerrada queda el borrador de bendicion: se resuelve con la
+// primera oferta (determinista) para llegar a la seleccion de ciego.
+await page.evaluate(() => {
+  const e = window.__fungiflush.engine;
+  const d = e.currentDraft;
+  if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
+});
+await waitPanel('.panel.is-blind-select', 8000);
+await page.waitForTimeout(300);
 await visit('blind-select');
 
 await page.evaluate(() => {

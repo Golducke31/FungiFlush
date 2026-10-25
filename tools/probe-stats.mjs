@@ -79,6 +79,28 @@ const historyTop = () => page.evaluate(() => {
   return h ? { seed: h.seed, totalScore: h.totalScore, mode: h.mode ?? null, win: h.win } : null;
 });
 
+/**
+ * R3 — Resuelve el borrador (bendicion o maldicion) con la PRIMERA oferta.
+ * Es determinista para una semilla dada y deja la run en `blind_select`, que
+ * es donde este probe siempre esperaba estar: sin esto `startRun` se queda en
+ * estado 'draft' y `chooseBlind` no hace nada.
+ */
+const resolveDraft = async () => {
+  const picked = await page.evaluate(() => {
+    const e = window.__fungiflush.engine;
+    const d = e.currentDraft;
+    if (!d?.offers?.length) return null;
+    e.chooseDraft(d.offers[0].id);
+    return d.offers[0].id;
+  });
+  if (picked === null) return false;
+  await page
+    .waitForFunction(() => window.__fungiflush.engine.run?.status === 'blind_select', null, { timeout: 8000 })
+    .catch(() => {});
+  await page.waitForTimeout(400);
+  return true;
+};
+
 /** Gana el ciego en curso en el acto (target = 1) y sale del reward/tienda. */
 const clearBlind = async () => {
   await page.evaluate(() => {
@@ -89,7 +111,7 @@ const clearBlind = async () => {
     if (uid) { e.clearSelection(); e.toggleSelect(uid); e.playHand(); }
   });
   await page.waitForFunction(
-    () => ['reward', 'shop', 'blind_select', 'interlude'].includes(window.__fungiflush.engine.run?.status),
+    () => ['reward', 'shop', 'blind_select', 'interlude', 'draft'].includes(window.__fungiflush.engine.run?.status),
     null, { timeout: 25000 },
   ).catch(() => {});
   // Se salta la recompensa y la tienda hasta volver a blind_select.
@@ -103,6 +125,10 @@ const clearBlind = async () => {
       else if (e.run.status === 'interlude') {
         const c = e.pendingInterlude?.choices?.[0];
         if (c) e.chooseInterlude(c.id);
+      } else if (e.run.status === 'draft') {
+        // R3 — Una maldicion cada 3 antes: se resuelve con la primera oferta.
+        const d = e.currentDraft;
+        if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
       }
     });
     await page.waitForTimeout(400);
@@ -141,8 +167,9 @@ check('el perfil arranca en cero', before.runs === 0 && before.bestScore === 0 &
 await page.evaluate(() => {
   const e = window.__fungiflush.engine;
   e.startRun(424242, 0, '');
-  e.chooseBlind();
 });
+await resolveDraft();
+await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
 await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 15000 });
 await page.waitForTimeout(600);
 
@@ -208,6 +235,8 @@ const dailyStarted = await page.evaluate(() => ({
 }));
 check('la tarjeta Diaria arranca la run', dailyStarted.daily === true, `status=${dailyStarted.status}`);
 
+// R3 — La diaria tambien pasa por el borrador de bendicion.
+await resolveDraft();
 await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
 await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 15000 });
 await page.waitForTimeout(600);

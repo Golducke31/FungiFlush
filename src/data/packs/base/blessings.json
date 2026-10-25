@@ -1,0 +1,92 @@
+[
+  {
+    "id": "blessing_fertile_soil",
+    "nameKey": "blessing.fertile_soil.name",
+    "descKey": "blessing.fertile_soil.desc",
+    "kind": "blessing",
+    "weight": 10,
+    "minAnte": 1,
+    "modifiers": { "targetMultiplier": 0.92 }
+  },
+  {
+    "id": "blessing_wide_basket",
+    "nameKey": "blessing.wide_basket.name",
+    "descKey": "blessing.wide_basket.desc",
+    "kind": "blessing",
+    "weight": 9,
+    "minAnte": 1,
+    "modifiers": { "extraHandSize": 1 }
+  },
+  {
+    "id": "blessing_second_chance",
+    "nameKey": "blessing.second_chance.name",
+    "descKey": "blessing.second_chance.desc",
+    "kind": "blessing",
+    "weight": 8,
+    "minAnte": 1,
+    "modifiers": { "extraDiscards": 1 }
+  },
+  {
+    "id": "blessing_thrifty",
+    "nameKey": "blessing.thrifty.name",
+    "descKey": "blessing.thrifty.desc",
+    "kind": "blessing",
+    "weight": 8,
+    "minAnte": 1,
+    "modifiers": { "rerollCostDelta": -3 }
+  },
+  {
+    "id": "blessing_seed_pouch",
+    "nameKey": "blessing.seed_pouch.name",
+    "descKey": "blessing.seed_pouch.desc",
+    "kind": "blessing",
+    "weight": 7,
+    "minAnte": 1,
+    "modifiers": { "extraMoney": 8 }
+  },
+  {
+    "id": "blessing_deep_mycelium",
+    "nameKey": "blessing.deep_mycelium.name",
+    "descKey": "blessing.deep_mycelium.desc",
+    "kind": "blessing",
+    "weight": 6,
+    "minAnte": 1,
+    "modifiers": { "targetMultiplier": 0.96 }
+  },
+  {
+    "id": "blessing_bargain",
+    "nameKey": "blessing.bargain.name",
+    "descKey": "blessing.bargain.desc",
+    "kind": "blessing",
+    "weight": 5,
+    "minAnte": 1,
+    "modifiers": { "shopDiscount": 0.2 }
+  },
+  {
+    "id": "blessing_lucky_grove",
+    "nameKey": "blessing.lucky_grove.name",
+    "descKey": "blessing.lucky_grove.desc",
+    "kind": "blessing",
+    "weight": 5,
+    "minAnte": 1,
+    "modifiers": { "rerollCostDelta": -2, "shopDiscount": 0.1 }
+  },
+  {
+    "id": "blessing_spare_hand",
+    "nameKey": "blessing.spare_hand.name",
+    "descKey": "blessing.spare_hand.desc",
+    "kind": "blessing",
+    "weight": 4,
+    "minAnte": 1,
+    "modifiers": { "extraHands": 1 }
+  },
+  {
+    "id": "blessing_extra_pot",
+    "nameKey": "blessing.extra_pot.name",
+    "descKey": "blessing.extra_pot.desc",
+    "kind": "blessing",
+    "weight": 4,
+    "minAnte": 1,
+    "modifiers": { "extraJokerSlots": 1 }
+  }
+]

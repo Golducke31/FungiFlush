@@ -332,6 +332,18 @@ if (await has('.panel.is-archetypes')) {
   await page.waitForTimeout(1300);
 }
 await click('[data-act="tutorial-close"]');
+await page.waitForTimeout(300);
+// R3 — Con la guia cerrada queda el borrador de bendicion: se resuelve con la
+// primera oferta (determinista) para llegar a la seleccion de ciego, que es la
+// pantalla que se viene a medir. Sin esto el panel del borrador se mediria
+// con la etiqueta del blind-select y el draft quedaria huerfano.
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
+});
+await waitPanel('.panel.is-blind-select', 8000);
+await page.waitForTimeout(300);
 await visit('blind-select', 'blind');
 
 // JEFE del ante 1 (blindIndex 2).
@@ -424,7 +436,11 @@ for (let i = 0; i < 10; i++) {
   if (status === 'blind_select') await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
   else if (await has('.panel.is-interlude')) {
     if (!sawInterlude) { await visit('interlude', 'interlude'); sawInterlude = true; }
-    await click('.panel.is-interlude [data-act="interlude-choice"]');
+    // Se resuelve por la SALIDA: la opcion de declinar no tiene efectos, asi
+    // que nunca falla por dinero. Se clickea el BOTON del decline: el div con
+    // `data-act="interlude-choice"` no tiene listener (el click no hacia nada y
+    // el panel quedaba abierto para siempre, sin llegar al game over).
+    await click('.panel.is-interlude .interlude-choice.is-decline .btn');
   }
   await page.waitForTimeout(900);
 }

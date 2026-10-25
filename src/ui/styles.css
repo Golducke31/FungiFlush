@@ -3022,6 +3022,11 @@ body {
    Un panel de DECISION: cada opcion muestra etiqueta, detalle y el efecto en
    datos. El que declina va apagado (es la linea base), el que acepta va con el
    material de play.
+
+   R3 — El panel de borrador (bendiciones/maldiciones) comparte la planta a
+   proposito: es el mismo gesto (elegir una entre pocas). Por eso los selectores
+   de abajo llevan TAMBIEN la variante `.draft-*`: una sola definicion de la
+   tarjeta de opcion, dos paneles que la usan.
    -------------------------------------------------------------------------- */
 
 .interlude-head {
@@ -3050,14 +3055,16 @@ body {
   color: var(--frame-dim);
 }
 
-.interlude-choices {
+.interlude-choices,
+.draft-choices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin-bottom: 8px;
 }
 
-.interlude-choice {
+.interlude-choice,
+.draft-choice {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3075,7 +3082,8 @@ body {
   border-style: dashed;
 }
 
-.interlude-choice-label {
+.interlude-choice-label,
+.draft-choice-label {
   font-size: 14px;
   font-weight: 800;
   color: var(--tag-score);
@@ -3085,13 +3093,15 @@ body {
   color: var(--frame-dim);
 }
 
-.interlude-choice-detail {
+.interlude-choice-detail,
+.draft-choice-detail {
   font-size: 12px;
   line-height: 1.4;
   color: #b6c6d6;
 }
 
-.interlude-effects {
+.interlude-effects,
+.draft-effects {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3100,7 +3110,8 @@ body {
   gap: 3px;
 }
 
-.interlude-effects li {
+.interlude-effects li,
+.draft-effects li {
   position: relative;
   font-size: 11.5px;
   font-weight: 700;
@@ -3109,7 +3120,8 @@ body {
   padding-left: 13px;
 }
 
-.interlude-effects li::before {
+.interlude-effects li::before,
+.draft-effects li::before {
   content: '';
   position: absolute;
   left: 3px;
@@ -3120,9 +3132,40 @@ body {
   background: var(--tag-ability);
 }
 
-.interlude-choice .btn {
+.interlude-choice .btn,
+.draft-choice .btn {
   margin-top: auto;
   width: 100%;
+}
+
+/* --- R3 — Borrador de reglas: lo PROPIO del panel ---
+   El aviso de que no se puede declinar (es la unica diferencia de reglas contra
+   el interludio, y sin el aviso el jugador se pasa buscando el boton de rechazar)
+   y el acento de color, que es la señal visual que separa un regalo de una condena. */
+.draft-hint {
+  margin: -6px 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--frame-dim);
+}
+
+.panel.is-draft.is-blessing .panel-title {
+  color: var(--tag-buff);
+}
+
+.panel.is-draft.is-curse .panel-title {
+  color: var(--tag-penalty);
+}
+
+/* La maldicion duele: sus lineas de efecto se pintan con el color de castigo,
+   no con el lila neutro de "te aporta algo". */
+.panel.is-draft.is-curse .draft-effects li {
+  color: var(--tag-penalty);
+}
+
+.panel.is-draft.is-curse .draft-effects li::before {
+  background: var(--tag-penalty);
 }
 
 .stat-grid {
@@ -9994,7 +10037,11 @@ body {
      cubre y el `overflow: hidden` del panel le cortaba el boton. Medido a
      915x412: 4 de los 6 interludios desbordaban 85px y el ultimo boton caia
      29-41px fuera del viewport. El culpable es la banda de arte (130px de alto a
-     todo el ancho): pasa a franja fina. */
+     todo el ancho): pasa a franja fina.
+
+     R3 — El panel de borrador comparte planta con el interludio (no trae arte:
+     no hay dibujo asignado a una bendicion), asi que recibe EXACTAMENTE el mismo
+     tratamiento en lo que comparte: mismos numeros, medidos a 915x412. */
   .panel.is-interlude .interlude-art {
     max-height: 54px;
     margin-bottom: 4px;
@@ -10005,11 +10052,13 @@ body {
     margin-bottom: 6px;
   }
 
-  .panel.is-interlude .panel-title {
+  .panel.is-interlude .panel-title,
+  .panel.is-draft .panel-title {
     font-size: 21px;
   }
 
-  .panel.is-interlude .panel-subtitle {
+  .panel.is-interlude .panel-subtitle,
+  .panel.is-draft .panel-subtitle {
     font-size: 11.5px;
     margin-bottom: 0;
   }
@@ -10020,31 +10069,42 @@ body {
     line-height: 1.35;
   }
 
-  .panel.is-interlude .interlude-choices {
+  .panel.is-draft .draft-hint {
+    margin: 0 0 8px;
+    font-size: 11.5px;
+  }
+
+  .panel.is-interlude .interlude-choices,
+  .panel.is-draft .draft-choices {
     gap: 8px;
     margin-bottom: 0;
   }
 
-  .panel.is-interlude .interlude-choice {
+  .panel.is-interlude .interlude-choice,
+  .panel.is-draft .draft-choice {
     gap: 5px;
     padding: 9px 11px;
   }
 
-  .panel.is-interlude .interlude-choice-label {
+  .panel.is-interlude .interlude-choice-label,
+  .panel.is-draft .draft-choice-label {
     font-size: 13px;
   }
 
-  .panel.is-interlude .interlude-choice-detail {
+  .panel.is-interlude .interlude-choice-detail,
+  .panel.is-draft .draft-choice-detail {
     font-size: 11px;
     line-height: 1.3;
   }
 
-  .panel.is-interlude .interlude-effects li {
+  .panel.is-interlude .interlude-effects li,
+  .panel.is-draft .draft-effects li {
     font-size: 10.5px;
     line-height: 1.25;
   }
 
-  .panel.is-interlude .interlude-choice .btn {
+  .panel.is-interlude .interlude-choice .btn,
+  .panel.is-draft .draft-choice .btn {
     min-height: 32px;
     padding: 5px 10px;
     font-size: 12px;
@@ -10054,7 +10114,8 @@ body {
      futuro trae mas texto se puede scrollear en vez de quedar con el boton
      recortado (sin salida). Si el contenido entra —que es el caso de los 6
      actuales— no hay barra y no se nota. */
-  .panel.is-interlude {
+  .panel.is-interlude,
+  .panel.is-draft {
     overflow-y: auto;
     overscroll-behavior: contain;
   }

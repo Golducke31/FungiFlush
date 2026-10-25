@@ -262,6 +262,17 @@ async function walk(s) {
     await s.page.waitForTimeout(1300);
   }
   await s.click('[data-act="tutorial-close"]');
+  await s.page.waitForTimeout(300);
+  // R3 — Con la guia cerrada queda el borrador de bendicion: se resuelve con la
+  // primera oferta (determinista) para llegar a la seleccion de ciego, que es
+  // la pantalla que mide el baseline.
+  await s.page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const d = ff.engine.currentDraft;
+    if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
+  });
+  await s.waitPanel('.panel.is-blind-select', 8000);
+  await s.page.waitForTimeout(300);
   await snap('blind-select');
 
   await s.page.evaluate(() => { const ff = window.__fungiflush; ff.engine.chooseBlind(ff.engine.availableBlinds()[0]?.id); });

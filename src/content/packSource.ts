@@ -137,7 +137,15 @@ export class HttpPackSource implements PackSource {
   }
 }
 
-/** Todos los archivos que un manifiesto declara (para fetch en paralelo). */
+/**
+ * Todos los archivos que un manifiesto declara (para fetch en paralelo).
+ *
+ * La lista tiene que cubrir `PackContents` COMPLETO. Si falta uno, `parsePack`
+ * revienta con "declara X pero el archivo no existe" —y peor: si el archivo
+ * existe pero no se pide, el pack carga a medias y en silencio (un pack remoto
+ * sin sus vouchers pareceria que "no tiene mejoras de run"). Por eso la lista
+ * se escribe campo por campo y no con un `Object.values`.
+ */
 function allContentPaths(manifest: PackManifest): string[] {
   const contents = manifest.contents ?? {};
   return [
@@ -147,6 +155,11 @@ function allContentPaths(manifest: PackManifest): string[] {
     ...(contents.blinds ?? []),
     ...(contents.offers ?? []),
     ...(contents.evolutions ?? []),
+    ...(contents.vouchers ?? []),
+    ...(contents.ascensions ?? []),
+    ...(contents.interludes ?? []),
+    ...(contents.blessings ?? []),
+    ...(contents.curses ?? []),
     ...(contents.upgrades ?? []),
     ...(contents.board ?? []),
     ...(contents.antes ?? []),

@@ -165,6 +165,9 @@ const run = await page.evaluate(() => {
   const ff = window.__fungiflush;
   const level = ff.profileStore.current.ascension.selected;
   ff.engine.startRun(999, level);
+  // R3 — sin borrador: se resuelve con la primera oferta para medir objetivos.
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
   const blind = ff.engine.registry.blindsForAnte(ff.engine.run.ante)[0];
   const base = ff.engine.targetFor(blind);
   // El mismo ciego en A0, para comparar.

@@ -2444,6 +2444,17 @@ export class SceneManager {
     for (const mesh of this.jokerSlotMeshes) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
+      // El contorno es un HIJO con su propia geometria (`EdgesGeometry`) y su
+      // propio material: si no se liberan aca, cada rebuild deja huerfanos los
+      // contornos viejos. La fuga no se veia porque el conteo de ranuras solo
+      // cambiaba con un voucher de +1 ranura (que el bot de la sim no compra);
+      // la bendicion `extra_pot` de R3 la hace reachable en cada partida.
+      // Medido: `probe-leak` veia crecer `gpuGeometries` 8 en 20 manos.
+      for (const child of mesh.children) {
+        const line = child as THREE.LineSegments;
+        line.geometry.dispose();
+        (line.material as THREE.Material).dispose();
+      }
       this.scene.remove(mesh);
     }
     this.jokerSlotMeshes.length = 0;
@@ -4597,5 +4608,17 @@ export class SceneManager {
       // dibujo para todas, pero el conteo tiene que seguir a las cartas vivas.
       shadows: this.shadowMesh?.visible ? this.shadowMesh.count : 0,
     };
+  }
+
+  /**
+   * Foto de las animaciones de GSAP vivas (solo diagnostico de probes).
+   *
+   * `stats().gsap` dice cuantas quedan; esto dice CUALES. Si el reposo no
+   * llega, un tween colgado se reconoce porque su `progress` no se mueve
+   * entre dos lecturas mientras `clock` (el acumulador de `updateAnim`) si
+   * avanza: el loop vive y la animacion no. Ver `anim.describeActive`.
+   */
+  gsapDebug(): { clock: number; active: Array<Record<string, unknown>> } {
+    return { clock: anim.now(), active: anim.describeActive() };
   }
 }

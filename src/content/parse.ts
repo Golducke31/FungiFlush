@@ -9,12 +9,13 @@ import type {
   AscensionDefinition,
   BlindDefinition,
   CardDefinition,
+  DraftDefinition,
   EvolutionRule,
   JokerDefinition,
   UpgradeTrack,
   VoucherDefinition,
 } from '@engine/index';
-import { parseInterludes } from '@engine/index';
+import { parseDrafts, parseInterludes } from '@engine/index';
 import type { BoardCardDef } from '@engine/board/types';
 
 import type { AnteRow, LoadedPack, OfferTable, RawPack } from './types';
@@ -81,6 +82,18 @@ export function parsePack(pack: RawPack): LoadedPack {
   }
   const interludes = parseInterludes(interludesRaw);
 
+  // R3 — Borrador de reglas: bendiciones (al arrancar) y maldiciones (cada 3
+  // antes). Se leen crudos y se validan con `parseDrafts`, que descarta en
+  // silencio las entradas mal formadas: contenido roto no puede impedir jugar.
+  // Sin tabla, la run simplemente no tiene borrador y el flujo es el de siempre.
+  const blessingsRaw: unknown[] = [];
+  for (const path of contents.blessings ?? []) blessingsRaw.push(...read<unknown>(pack, path));
+  const cursesRaw: unknown[] = [];
+  for (const path of contents.curses ?? []) cursesRaw.push(...read<unknown>(pack, path));
+
+  const blessings: DraftDefinition[] = parseDrafts(blessingsRaw, 'blessing');
+  const curses: DraftDefinition[] = parseDrafts(cursesRaw, 'curse');
+
   const board: BoardCardDef[] = [];
   for (const path of contents.board ?? []) board.push(...read<BoardCardDef>(pack, path));
 
@@ -97,6 +110,8 @@ export function parsePack(pack: RawPack): LoadedPack {
     vouchers,
     ascensions,
     interludes,
+    blessings,
+    curses,
     board,
   };
 }

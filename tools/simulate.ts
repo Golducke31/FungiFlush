@@ -20,6 +20,7 @@ import {
   type CardInstance,
   type InterludeEffect,
   type ResolutionContext,
+  type VoucherRunModifiers,
 } from '../src/engine/index.ts';
 import { validateDictionaryCoverage } from '../src/i18n/coverage.ts';
 import { dailySeed } from '../src/meta/DailyRun.ts';
@@ -185,6 +186,8 @@ interface RunResult {
   upgradesBought: number;
   /** Interludios resueltos (P2.3/P2.4): paradas de decision entre ciegos. */
   interludesResolved: number;
+  /** R3 — Borradores de reglas resueltos (bendicion de arranque + maldiciones). */
+  draftsResolved: number;
   /** Problemas reales: la partida no pudo continuar. */
   errores: string[];
   /** Cortes de seguridad del Trigger Engine (no son fallos). */
@@ -254,6 +257,49 @@ function bestInterludeChoice(
   return best ?? { id: 'decline', score: 0 };
 }
 
+/**
+ * Puntua los modificadores de un draft (bendicion o maldicion) desde el punto de
+ * vista del bot. Positivo = conviene; negativo = duele.
+ *
+ * Es la MISMA escala que `interludeEffectValue` a proposito: un "+1 mano" vale
+ * lo mismo venga de un trato entre ciegos o de una bendicion, y el bot no
+ * necesita dos opiniones sobre lo mismo. El objetivo de un ciego es lo que hay
+ * que batir, asi que subirlo es un coste; el reroll mas caro pesa poco (el bot
+ * casi no rerollea) pero no es gratis.
+ */
+function draftModifierValue(mods: VoucherRunModifiers): number {
+  let score = 0;
+  if (mods.targetMultiplier) score += (1 - mods.targetMultiplier) * 100;
+  if (mods.rerollCostDelta) score -= mods.rerollCostDelta * 5;
+  if (mods.shopDiscount) score += mods.shopDiscount * 100;
+  if (mods.extraJokerSlots) score += mods.extraJokerSlots * 25;
+  if (mods.extraHands) score += mods.extraHands * 30;
+  if (mods.extraDiscards) score += mods.extraDiscards * 20;
+  if (mods.extraHandSize) score += mods.extraHandSize * 20;
+  if (mods.extraMoney) score += mods.extraMoney;
+  return score;
+}
+
+/**
+ * R3 — Elige la oferta del borrador que el bot tomaria.
+ *
+ * En la bendicion se queda con la mejor. En la maldicion NO puede declinar:
+ * elige la que MENOS duele, que es exactamente la decision que se le plantea al
+ * jugador (una suba de objetivo no raspa a quien punta alto; un reroll mas caro
+ * no existe para quien no rerollea). El bot no modela esas sutilezas: usa la
+ * misma escala para las dos y listo.
+ */
+function bestDraftChoice(
+  offers: readonly { id: string; modifiers?: VoucherRunModifiers }[],
+): { id: string; score: number } {
+  let best: { id: string; score: number } | null = null;
+  for (const offer of offers) {
+    const score = draftModifierValue(offer.modifiers ?? {});
+    if (!best || score > best.score) best = { id: offer.id, score };
+  }
+  return best ?? { id: '', score: 0 };
+}
+
 /** A partir de este tamano de mazo el bot deja de tomar cartas en los drafts. */
 const DRAFT_DECK_LIMIT = 55;
 
@@ -272,6 +318,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
   let rewardsTaken = 0;
   let upgradesBought = 0;
   let interludesResolved = 0;
+  let draftsResolved = 0;
   // Mazo custom (modo "Mazo propio"): se inyecta ANTES de arrancar. El motor no
   // conoce perfiles; esto replica lo que hace `onStartRunWithDeck` en main.ts.
   if (CUSTOM_DECK) {
@@ -309,6 +356,29 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
         break;
       }
       interludesResolved += 1;
+      continue;
+    }
+
+    // R3 — Borrador de reglas (bendicion de arranque, maldicion cada 3 antes).
+    // El bot resuelve siempre: no hay forma de dejarlo pasar, y una partida que
+    // se traba aca no sirve para medir balance.
+    if (status === 'draft') {
+      const draft = engine.currentDraft;
+      if (!draft || draft.offers.length === 0) {
+        errores.push('estado draft sin ofertas pendientes');
+        break;
+      }
+      const choice = bestDraftChoice(draft.offers);
+      if (!engine.chooseDraft(choice.id)) {
+        errores.push(`chooseDraft("${choice.id}") fallo con una opcion valida`);
+        break;
+      }
+      draftsResolved += 1;
+      if (verbose) {
+        console.log(
+          `      ${C.dim}${draft.kind} -> ${choice.id} (${choice.score >= 0 ? '+' : ''}${choice.score.toFixed(0)})${C.reset}`,
+        );
+      }
       continue;
     }
 
@@ -461,6 +531,7 @@ function simulateRun(seed: number, verbose: boolean): RunResult {
     rewardsTaken,
     upgradesBought,
     interludesResolved,
+    draftsResolved,
     errores,
     overflows,
   };
@@ -682,7 +753,9 @@ if (DAILY !== undefined) {
   }
   const seed = dailySeed(date);
   const dailyEngine = new GameEngine({ seed, bundle: content });
-  dailyEngine.startRun(seed, 0, '', true);
+  // R3 — `tutorial: true` apaga el borrador: aca solo interesa la semilla, el
+  // ciego y la mano inicial del dia, que es lo que comparan los jugadores.
+  dailyEngine.startRun(seed, 0, '', true, true);
   dailyEngine.chooseBlind();
   const round = dailyEngine.round;
   const hand = (round?.hand ?? []).map((card) => card.def.id).sort().join(',');
@@ -745,6 +818,7 @@ console.log(
 );
 console.log(`  Mejoras compradas     : ${avg((r) => r.upgradesBought).toFixed(2)} promedio`);
 console.log(`  Interludios resueltos : ${avg((r) => r.interludesResolved).toFixed(2)} promedio`);
+console.log(`  Borradores resueltos  : ${avg((r) => r.draftsResolved).toFixed(2)} promedio (1 bendicion + maldiciones cada 3 antes)`);
 
 console.log(`\n  ${C.dim}Distribucion de ante alcanzado:${C.reset}`);
 for (let ante = 1; ante <= 8; ante++) {

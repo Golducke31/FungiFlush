@@ -1692,6 +1692,108 @@
       "decline": "Ahorrar el dinero"
     }
   },
+  "draft": {
+    "title": "BENDICIÓN",
+    "titleCurse": "MALDICIÓN",
+    "subtitle": "El bosque te ofrece un don antes de arrancar",
+    "subtitleCurse": "El bosque cobra su peaje: vos elegís cómo duele",
+    "hint": "Elegí una. No se puede declinar.",
+    "choose": "Elegir",
+    "expired": "Esa oferta ya expiró",
+    "chosenBlessing": "Bendición recibida",
+    "chosenCurse": "Maldición aceptada",
+    "lineTargetUp": "El objetivo de los próximos Ciegos sube un {pct}%",
+    "lineTargetDown": "El objetivo de los próximos Ciegos baja un {pct}%",
+    "lineRerollCheaper": "Renovar la tienda cuesta {n} menos",
+    "lineRerollPricier": "Renovar la tienda cuesta {n} más",
+    "lineShopDiscount": "Los precios de la tienda bajan un {pct}%",
+    "lineJokerSlotsPlus": "+{n} ranura de simbionte",
+    "lineJokerSlotsLess": "{n} ranura de simbionte",
+    "lineHandsPlus": "+{n} mano por Ciego",
+    "lineHandsLess": "{n} mano por Ciego",
+    "lineDiscardsPlus": "+{n} descarte por Ciego",
+    "lineDiscardsLess": "{n} descarte por Ciego",
+    "lineHandSizePlus": "+{n} carta en mano",
+    "lineHandSizeLess": "{n} carta en mano",
+    "lineMoneyPlus": "+{n} Fungis al arrancar",
+    "lineMoneyLess": "{n} Fungis al arrancar"
+  },
+  "blessing": {
+    "fertile_soil": {
+      "name": "Sustrato fértil",
+      "desc": "Un rincón del bosque donde la tierra cede: los próximos Ciegos piden un 8% menos."
+    },
+    "wide_basket": {
+      "name": "Cesta ancha",
+      "desc": "Una cesta de mimbre con un hueco más. Una carta extra en mano desde el arranque."
+    },
+    "second_chance": {
+      "name": "Segunda oportunidad",
+      "desc": "El micelio te perdona un error por Ciego. Un descarte más en cada ronda."
+    },
+    "thrifty": {
+      "name": "Ahorrativo",
+      "desc": "Guardás semillas bajo la corteza. Renovar la tienda cuesta 3 menos."
+    },
+    "seed_pouch": {
+      "name": "Bolsa de semillas",
+      "desc": "Una bolsa olvidada entre las raíces. Arrancás con 8 Fungis más."
+    },
+    "deep_mycelium": {
+      "name": "Micelio profundo",
+      "desc": "La red se estira bajo tierra y absorbe el esfuerzo: los objetivos bajan un 4%."
+    },
+    "bargain": {
+      "name": "Ganga",
+      "desc": "Sabés regatear con los comerciantes: la tienda te descuenta un 20%."
+    },
+    "lucky_grove": {
+      "name": "Arboleda de la suerte",
+      "desc": "Un claro donde todo se consigue fácil: renovar cuesta 2 menos y la tienda un 10% menos."
+    },
+    "spare_hand": {
+      "name": "Mano de sobra",
+      "desc": "Una mano fantasma te ayuda a ordenar las esporas. Una mano más por Ciego."
+    },
+    "extra_pot": {
+      "name": "Frasco extra",
+      "desc": "Un frasco vacío esperando simbionte. Una ranura más."
+    }
+  },
+  "curse": {
+    "thin_air": {
+      "name": "Aire fino",
+      "desc": "El sustrato se seca y pide más: los objetivos suben un 8%."
+    },
+    "rusty_tools": {
+      "name": "Herramientas oxidadas",
+      "desc": "Nada afila como antes. Renovar la tienda cuesta 2 más."
+    },
+    "stiff_fingers": {
+      "name": "Dedos rígidos",
+      "desc": "Las manos no responden: un descarte menos por Ciego."
+    },
+    "narrow_shelf": {
+      "name": "Estante angosto",
+      "desc": "No entra todo en la mesa: una carta menos en mano."
+    },
+    "lean_pantry": {
+      "name": "Despensa vacía",
+      "desc": "Arrancás con 4 Fungis menos."
+    },
+    "tired_arms": {
+      "name": "Brazos cansados",
+      "desc": "El esfuerzo se cobra su parte: una mano menos por Ciego."
+    },
+    "broken_tools": {
+      "name": "Herramientas rotas",
+      "desc": "Renovar la tienda cuesta 4 más."
+    },
+    "heavy_fog": {
+      "name": "Niebla espesa",
+      "desc": "El bosque se oscurece y exige más: los objetivos suben un 15%."
+    }
+  },
   "common": {
     "declineDetail": "Sin coste. Seguis con tu mazo y tu objetivo tal como estan."
   },

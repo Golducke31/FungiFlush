@@ -1137,10 +1137,10 @@ async function boot(): Promise<void> {
         starterFor(TUTORIAL_ADVANCED_ARCHETYPE),
         biasFor(TUTORIAL_ADVANCED_ARCHETYPE),
       );
-      engine.startRun(TUTORIAL_SEED, 0, TUTORIAL_ADVANCED_ARCHETYPE);
+      engine.startRun(TUTORIAL_SEED, 0, TUTORIAL_ADVANCED_ARCHETYPE, false, true);
     } else {
       engine.setArchetypeLoadout(undefined, []);
-      engine.startRun(TUTORIAL_SEED, 0, '');
+      engine.startRun(TUTORIAL_SEED, 0, '', false, true);
     }
     if (engine.run) engine.run.tutorial = true;
     tutorialChapter = chapter;
@@ -1655,6 +1655,14 @@ async function boot(): Promise<void> {
       onChooseInterlude: (choiceId) => {
         if (!engine.chooseInterlude(choiceId)) {
           hud?.toast(t('interlude.cantAfford'), 'warn');
+        }
+      },
+      // R3 — El HUD dibuja las ofertas; el MOTOR aplica la elegida y devuelve
+      // el flujo a la seleccion de ciego. `false` solo puede salir si la
+      // oferta dejo de existir entre que se dibujo el panel y el click.
+      onChooseDraft: (draftId) => {
+        if (!engine.chooseDraft(draftId)) {
+          hud?.toast(t('draft.expired'), 'warn');
         }
       },
       onRestart: () => {

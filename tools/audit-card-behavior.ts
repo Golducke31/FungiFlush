@@ -172,7 +172,10 @@ function runScenario(card: CardDefinition, scenario: Scenario, jokerDefs: Array<
     [{ cardId: card.id, copies: 1 }, ...[...copies].map(([id, n]) => ({ cardId: id, copies: n }))],
     [],
   );
-  engine.startRun(11);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: esta auditoria
+  // necesita la run en `blind_select` para medir el ciego. No cambia ninguna
+  // regla (el flag solo suprime el sorteo del draft).
+  engine.startRun(11, 0, '', false, true);
   for (const jd of jokerDefs) {
     try {
       engine.run.jokers.push(engine.registry.instantiateJoker(jd.id));
@@ -403,7 +406,8 @@ for (const joker of REAL.jokers ?? []) {
       [...jCopies].map(([id, n]) => ({ cardId: id, copies: n })),
       [],
     );
-    engine.startRun(13);
+    // R3 — sin borrador: la auditoria empieza en la seleccion de ciego.
+    engine.startRun(13, 0, '', false, true);
     try {
       engine.run.jokers.push(engine.registry.instantiateJoker(joker.id));
       for (const ej of extraJokers) engine.run.jokers.push(engine.registry.instantiateJoker(ej.id));
@@ -503,7 +507,8 @@ function countFires(card: CardDefinition, effectId: string, element: string, fam
   const f = filler('zz_other', other, otherFam, 'zz_other_money');
   const engine = new GameEngine({ seed: 3, bundle: bundleWith([card, f]) });
   engine.setArchetypeLoadout([{ cardId: card.id, copies: 1 }, { cardId: f.id, copies: 5 }], []);
-  engine.startRun(3);
+  // R3 — sin borrador: se mide el primer ciego directamente.
+  engine.startRun(3, 0, '', false, true);
   engine.chooseBlind('b1');
   const hand = engine.roundSnapshot().hand;
   const me = hand.find((c) => c.def.id === card.id);

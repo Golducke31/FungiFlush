@@ -501,6 +501,48 @@ if (tutorialStep.shown) {
   await page.waitForTimeout(900);
 }
 
+// --- R3: borrador de reglas (bendicion de arranque) ---
+// Al cerrar la guia, la run esta en 'draft': el motor sorteo 3 bendiciones y
+// espera que el jugador elija una. El smoke hace lo que el jugador (click real
+// sobre la primera oferta) y comprueba que la puerta de salida es la seleccion
+// de ciego. Antes de R3 este estado no existia: la run arrancaba directo en
+// 'blind_select'.
+const draftStep = await page.evaluate(() => {
+  const panel = document.querySelector('.panel.is-draft');
+  if (!panel) return { shown: false };
+  return {
+    shown: true,
+    kind: panel.classList.contains('is-curse') ? 'curse' : 'blessing',
+    offers: panel.querySelectorAll('.draft-choice').length,
+    buttons: panel.querySelectorAll('.draft-choice .btn').length,
+    lines: panel.querySelectorAll('.draft-effects li').length,
+  };
+});
+console.log('\n--- Borrador de reglas (R3) ---');
+console.log(JSON.stringify(draftStep, null, 2));
+
+if (draftStep.shown) {
+  const chooseBtn = page.locator('.panel.is-draft .draft-choice .btn').first();
+  await chooseBtn.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  const chooseBox = await chooseBtn.boundingBox();
+  const vhD = await page.evaluate(() => window.innerHeight);
+  if (chooseBox && chooseBox.y + chooseBox.height / 2 <= vhD) {
+    await page.mouse.click(chooseBox.x + chooseBox.width / 2, chooseBox.y + chooseBox.height / 2);
+  } else {
+    await chooseBtn.click();
+  }
+  await page.waitForSelector('.panel.is-blind-select', { timeout: 10000 });
+  await page.waitForTimeout(400);
+}
+const afterDraft = await page.evaluate(() => ({
+  status: window.__fungiflush.engine.run.status,
+  blessing: window.__fungiflush.engine.run.blessing,
+  draftGone: !document.querySelector('.panel.is-draft'),
+}));
+console.log(JSON.stringify(afterDraft, null, 2));
+await page.screenshot({ path: join(shotsDir, '03b-draft.png') });
+
 const afterStart = await page.evaluate(() => {
   const ff = window.__fungiflush;
   // El panel de ciego tiene que entrar ENTERO en un celular landscape
@@ -2010,6 +2052,19 @@ await page.evaluate(() => document.querySelector('.panel.is-menu [data-act="new"
 await page.waitForTimeout(600);
 await page.evaluate(() => document.querySelector('.panel.is-archetypes [data-act="archetypes-start"]')?.click());
 await page.waitForTimeout(2000);
+// R3 — La run arranca en 'draft' (la bendicion de arranque): hay que elegir una
+// para llegar a la seleccion de ciego. La guia de primera partida puede estar
+// abierta encima (esta recarga usa el mismo perfil, y el aviso automatico se
+// dispara por run hasta que el perfil la marca como vista): se cierra como
+// haria el jugador y recien despues se elige la bendicion.
+await page.evaluate(() =>
+  document.querySelector('.panel.is-tutorial [data-act="tutorial-close"]')?.click(),
+);
+await page.waitForTimeout(500);
+await page.evaluate(() => document.querySelector('.panel.is-draft .draft-choice .btn')?.click());
+await page.waitForFunction(() => window.__fungiflush.engine.run.status === 'blind_select', {
+  timeout: 10000,
+});
 await page.evaluate(() => {
   const ff = window.__fungiflush;
   ff.engine.chooseBlind(ff.engine.availableBlinds()[1]?.id);
@@ -2249,6 +2304,15 @@ const ok =
   // Las esporas de ambiente del tier alto: son 900 y las calcula la GPU.
   chk('(postFx?.particles ?? 0) >= 900', (postFx?.particles ?? 0) >= 900) &&
   chk("afterStart?.status === 'blind_select'", afterStart?.status === 'blind_select') &&
+  // --- R3: el borrador de arranque se resolvio y dejo la run en seleccion ---
+  chk('draftStep?.shown === true', draftStep?.shown === true) &&
+  chk('draftStep?.kind === "blessing"', draftStep?.kind === 'blessing') &&
+  chk('draftStep?.offers === 3', draftStep?.offers === 3) &&
+  chk('draftStep?.buttons === 3', draftStep?.buttons === 3) &&
+  chk('(draftStep?.lines ?? 0) >= 3', (draftStep?.lines ?? 0) >= 3) &&
+  chk('afterDraft?.status === "blind_select"', afterDraft?.status === 'blind_select') &&
+  chk('afterDraft?.draftGone === true', afterDraft?.draftGone === true) &&
+  chk('afterDraft?.blessing?.length > 0', (afterDraft?.blessing?.length ?? 0) > 0) &&
   chk('tutorialStep?.shown === true', tutorialStep?.shown === true) &&
   chk('tutorialStep?.hasClose === true', tutorialStep?.hasClose === true) &&
   chk('tutorialStep?.steps === 4', tutorialStep?.steps === 4) &&

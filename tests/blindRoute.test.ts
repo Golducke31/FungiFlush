@@ -27,7 +27,10 @@ const REAL = buildRegistry().toBundle();
 /** Motor recien arrancado con la semilla pedida. */
 function started(seed: number): GameEngine {
   const engine = new GameEngine({ seed, bundle: REAL });
-  engine.startRun(seed, 0);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: estos tests miden la
+  // ruta de ciegos y necesitan la run en `blind_select`, no en 'draft'. El
+  // flag no cambia ninguna regla, solo suprime el sorteo del borrador.
+  engine.startRun(seed, 0, '', false, true);
   return engine;
 }
 

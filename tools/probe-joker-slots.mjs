@@ -7,6 +7,10 @@
  *      JOKER_SCALE), o sea "misma huella" que un Simbionte real.
  *   3. Que una ranura VACIA este visible en partida (no oculta por el menu).
  *   4. Que al sumar una ranura (jokerSlots++) aparezca una nueva.
+ *   5. QUE RECONSTRUIR NO FUGE: cada ranura lleva un contorno con SU geometria
+ *      (`EdgesGeometry`) y SU material. Si el rebuild no los libera, `gpuGeometries`
+ *      crece en cada cambio de conteo (la bendicion `extra_pot` de R3 y cualquier
+ *      voucher de +1 ranura lo disparan). Se miden 6 ciclos de sube/baja.
  *
  *   FF_URL=http://127.0.0.1:1420/?daily=0 node tools/probe-joker-slots.mjs
  */
@@ -53,6 +57,13 @@ await page.evaluate(() => document.querySelector('.panel.is-archetypes [data-act
 await page.waitForTimeout(1200);
 await page.evaluate(() => document.querySelector('[data-act="tutorial-close"]')?.click());
 await page.waitForTimeout(400);
+// R3 — con la guia cerrada queda el borrador de bendicion: se resuelve con la
+// primera oferta para llegar a la seleccion de ciego.
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
+});
 await page.evaluate(() => {
   const ff = window.__fungiflush;
   ff.engine.chooseBlind(ff.engine.availableBlinds()[0]?.id);
@@ -92,10 +103,34 @@ const sizesOk = after.slots.length > 0 && after.slots.every((s) => s.w === EXPEC
 const grew = after.count === before.count + 1;
 const anyVisible = after.slots.some((s) => s.visible);
 
+// --- 5. Reconstruir no puede fugar geometrias ---
+// Cada ranura = 1 PlaneGeometry (se libera) + 1 EdgesGeometry de contorno con SU
+// material (estos eran los que quedaban huerfanos). 6 ciclos de sube/baja.
+const geoBefore = await page.evaluate(() => window.__fungiflush.scene.stats().gpuGeometries);
+for (let i = 0; i < 6; i += 1) {
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const base = ff.engine.run.jokerSlots ?? 0;
+    ff.engine.run.jokerSlots = base + 1;
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
+  });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => {
+    const ff = window.__fungiflush;
+    const base = ff.engine.run.jokerSlots ?? 0;
+    ff.engine.run.jokerSlots = Math.max(1, base - 1);
+    ff.scene.syncJokers(ff.engine.run.jokers, ff.engine.run.jokerSlots);
+  });
+  await page.waitForTimeout(120);
+}
+const geoAfter = await page.evaluate(() => window.__fungiflush.scene.stats().gpuGeometries);
+const noLeak = geoAfter <= geoBefore + 1;
+
 console.log('\n=== Veredicto ===');
 console.log(`  tamano esperado ${EXPECT_W} x ${EXPECT_H} -> ${sizesOk ? 'OK' : 'FALLA'}`);
 console.log(`  aparece 1 ranura nueva al sumar (${before.count} -> ${after.count}) -> ${grew ? 'OK' : 'FALLA'}`);
 console.log(`  al menos una ranura visible en partida -> ${anyVisible ? 'OK' : 'FALLA'}`);
+console.log(`  6 rebuilds no fugan geometrias (${geoBefore} -> ${geoAfter}) -> ${noLeak ? 'OK' : 'FALLA'}`);
 
 await browser.close();
-process.exit(sizesOk && grew && anyVisible ? 0 : 1);
+process.exit(sizesOk && grew && anyVisible && noLeak ? 0 : 1);

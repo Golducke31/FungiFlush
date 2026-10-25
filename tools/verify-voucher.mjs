@@ -71,7 +71,11 @@ await page.waitForTimeout(1500);
 // --- Arrancar una run y entrar a la tienda con vouchers forzados ---
 const setup = await page.evaluate(() => {
   const ff = window.__fungiflush;
+  // R3 — sin borrador: se resuelve con la primera oferta para entrar derecho a
+  // la seleccion de ciego (donde se fuerza la tienda).
   ff.engine.startRun(1234);
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
 
   // Se inyectan dos vouchers: uno de descuento (activo) y uno de efecto.
   // Se usa la API real del motor para armar las ofertas.

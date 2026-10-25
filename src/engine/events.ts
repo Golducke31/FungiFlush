@@ -26,6 +26,7 @@ import type {
   TriggerEvent,
 } from './types';
 import type { InterludeChoice, InterludeDefinition } from './interlude/interlude';
+import type { DraftDefinition } from './draft/draft';
 
 /**
  * `RetentionReward` vive en `src/retention/types.ts`, que NO importa nada: por
@@ -229,6 +230,16 @@ export interface GameEventMap {
   'interlude:choose': { interlude: InterludeDefinition; choice: InterludeChoice };
   /** El objetivo de los proximos ciegos cambio por un interludio. */
   'interlude:target': { multiplier: number };
+
+  // --- Borrador de reglas (R3): bendiciones y maldiciones ---
+  /**
+   * Se abrio un borrador (bendicion al arrancar, maldicion cada 3 antes). La UI
+   * abre el panel con las ofertas; el motor NO aplica nada hasta que el jugador
+   * elige (`chooseDraft`).
+   */
+  'draft:enter': { kind: 'blessing' | 'curse'; offers: DraftDefinition[] };
+  /** El jugador eligio. Se emite DESPUES de aplicar los modificadores. */
+  'draft:choose': { kind: 'blessing' | 'curse'; draft: DraftDefinition };
 
   // --- Misiones de run (P2.6) ---
   /** Aparece una mision nueva para el ante en curso. */

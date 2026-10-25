@@ -46,7 +46,10 @@ const INTERLUDE_DATA = readData('interludes.json') as InterludeDefinition[];
 
 function engineWithInterludes(seed = 1): GameEngine {
   const engine = new GameEngine({ seed, bundle: buildRegistry().toBundle() });
-  engine.startRun(seed);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: estos tests necesitan
+  // la run en `blind_select` para medir objetivos y elegir ciego. El flag no
+  // cambia ninguna regla, solo suprime el sorteo del borrador.
+  engine.startRun(seed, 0, '', false, true);
   return engine;
 }
 
@@ -378,7 +381,8 @@ test('un interludio que ya no existe en el contenido se descarta al cargar', () 
 test('interlude tras salir de la tienda cuando el sorteo lo decide', () => {
   const registry = buildRegistry().toBundle();
   const engine = new GameEngine({ seed: 3, bundle: registry });
-  engine.startRun(3);
+  // R3 — sin borrador: se va directo a la seleccion de ciego.
+  engine.startRun(3, 0, '', false, true);
   engine.chooseBlind(engine.availableBlinds()[0]!.id);
 
   // Fuerza el estado de tienda y sale: `leaveShop` intenta el interludio.
@@ -387,7 +391,7 @@ test('interlude tras salir de la tienda cuando el sorteo lo decide', () => {
   let sawInterlude = false;
   for (let seed = 1; seed <= 30 && !sawInterlude; seed++) {
     const e = new GameEngine({ seed, bundle: registry });
-    e.startRun(seed);
+    e.startRun(seed, 0, '', false, true);
     e.chooseBlind(e.availableBlinds()[0]!.id);
     e.enterShop();
     e.leaveShop();
@@ -402,7 +406,7 @@ test('el interludio no se repite en la misma run', () => {
   assert.ok(def);
 
   const engine = new GameEngine({ seed: 21, bundle: registry });
-  engine.startRun(21);
+  engine.startRun(21, 0, '', false, true);
   engine.run.seenInterludes = [def.id];
 
   const defs = registry.interludes ?? [];

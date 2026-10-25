@@ -15,6 +15,12 @@
  *      cuesta 1 (capa de texto, keyeada por bonus/estados). El detector es el
  *      RESIDUO: lo que crece sin que cambie ninguna cache. Eso tiene que ser
  *      ~0 (medido: residuo 0 en low, con 2 texturas fijas de fondo).
+ *      Las geometrias tienen SU modelo: casi todas son singletons de modulo
+ *      (las cartas comparten `CARD_GEO`) o pools de una sola creacion. La
+ *      unica fuente legitima de crecimiento son las ranuras de Simbionte, a 2
+ *      geometrias por ranura (plano + contorno): la bendicion `extra_pot` de
+ *      R3 y el voucher de +1 ranura cambian ese conteo, y tras un reinicio se
+ *      sortea otra bendicion. Ver `GEO_POR_RANURA`.
  *   3. `.hud-popups` no crece: los numeros flotantes se autodestruyen y el
  *      contenedor tiene que quedar vacio en reposo.
  *   4. Fase 2 en `medium` (donde vive el composer y el PunchPass de V4):
@@ -74,6 +80,12 @@ await page.waitForTimeout(700);
 await page.evaluate(() => document.querySelector('[data-act="archetypes-start"]')?.click());
 await page.waitForTimeout(1400);
 await click('[data-act="tutorial-close"]');
+// R3 — el borrador de bendicion se resuelve con la primera oferta antes de elegir ciego.
+await page.evaluate(() => {
+  const ff = window.__fungiflush;
+  const d = ff.engine.currentDraft;
+  if (d?.offers?.length) ff.engine.chooseDraft(d.offers[0].id);
+});
 await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
 await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, { timeout: 15000 });
 await page.waitForTimeout(1500);
@@ -136,7 +148,26 @@ const settle = async (timeoutMs = 90000) => {
     if ((live && rest) || last.status === 'game_over' || last.status === 'victory') return last;
     await page.waitForTimeout(1000);
   }
-  throw new Error(`settle timeout (${timeoutMs} ms). Quedo vivo: ${JSON.stringify(last)}`);
+  // Sin esto, un `gsap=1` fantasma es un numero sin culpable: el volcado dice
+  // CUAL es la animacion y si esta congelada (progress quieto con el reloj
+  // avanzando) o solo lenta (medium corre a ~0.25x en SwiftShader).
+  const dumpGsap = () => page.evaluate(() => {
+    const s = window.__fungiflush.scene;
+    const d = s.gsapDebug?.() ?? null;
+    return {
+      gsap: d,
+      frame: s.renderer?.info?.render?.frame ?? -1,
+      calls: s.renderer?.info?.render?.calls ?? -1,
+    };
+  });
+  const a = await dumpGsap();
+  await page.waitForTimeout(2000);
+  const b = await dumpGsap();
+  throw new Error(
+    `settle timeout (${timeoutMs} ms). Quedo vivo: ${JSON.stringify(last)}\n` +
+    `GSAP t=0 : ${JSON.stringify(a)}\nGSAP t=+2s: ${JSON.stringify(b)}\n` +
+    `loop render: frame ${a.frame} -> ${b.frame}, calls ${a.calls} -> ${b.calls}`,
+  );
 };
 
 /** Juega una mano: las 5 cartas de mayor sustrato x esporas (greedy). */
@@ -211,6 +242,12 @@ const measure = () => page.evaluate(() => {
   // los archivos reservados por cartas VIVAS. Texturas de mas = reservas
   // colgadas (la fuga de la reserva fantasma de V5).
   const mr = window.__fungiflush.scene.motionReport?.() ?? null;
+  // Ranuras de Simbionte construidas en la escena. CADA ranura cuesta 2
+  // geometrias de GPU (el plano + el contorno `EdgesGeometry` del hijo), asi
+  // que el conteo tiene que entrar en el modelo de crecimiento legitimo: la
+  // bendicion `extra_pot` de R3 (y el voucher de +1 ranura) lo cambian, y tras
+  // un reinicio de run se sortea otra bendicion con otro conteo.
+  const slots = window.__fungiflush.scene.jokerSlotDebug?.() ?? null;
   return {
     geo: st.gpuGeometries,
     tex: st.gpuTextures,
@@ -227,6 +264,8 @@ const measure = () => page.evaluate(() => {
     deck: e.deckSize ?? -1,
     jokers: e.run?.jokers?.length ?? -1,
     vouchers: e.run?.vouchers?.length ?? -1,
+    slots: slots?.count ?? -1,
+    slotsBuilt: slots?.built ?? -1,
   };
 });
 
@@ -235,7 +274,7 @@ const show = (label, m) => {
     `${label.padEnd(16)} geo=${m.geo} tex=${m.tex} (cara=${m.face} arte=${m.art} top=${m.top}) ` +
     `hojas=${m.mTex}/${m.mActive}/${m.mAnim} ` +
     `popups=${m.popups} particulas=${m.particles} tweens=${m.tweens} gsap=${m.gsap} ` +
-    `mazo=${m.deck} jokers=${m.jokers} vouchers=${m.vouchers}`,
+    `mazo=${m.deck} jokers=${m.jokers} vouchers=${m.vouchers} ranuras=${m.slots}(built=${m.slotsBuilt})`,
   );
 };
 
@@ -262,6 +301,9 @@ while (played < HANDS) {
     await page.evaluate(() => {
       const e = window.__fungiflush.engine;
       e.startRun();
+      // R3 — el borrador de bendicion se resuelve con la primera oferta.
+      const d = e.currentDraft;
+      if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
       e.chooseBlind();
     });
     await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 30000 });
@@ -288,6 +330,9 @@ while (played < HANDS) {
     await page.evaluate(() => {
       const e = window.__fungiflush.engine;
       e.startRun();
+      // R3 — el borrador de bendicion se resuelve con la primera oferta.
+      const d = e.currentDraft;
+      if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
       e.chooseBlind();
     });
     await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 30000 });
@@ -330,6 +375,9 @@ while (played2 < 3) {
     await page.evaluate(() => {
       const e = window.__fungiflush.engine;
       e.startRun();
+      // R3 — el borrador de bendicion se resuelve con la primera oferta.
+      const d = e.currentDraft;
+      if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
       e.chooseBlind();
     });
     await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 60000 });
@@ -352,6 +400,9 @@ while (played2 < 3) {
     await page.evaluate(() => {
       const e = window.__fungiflush.engine;
       e.startRun();
+      // R3 — el borrador de bendicion se resuelve con la primera oferta.
+      const d = e.currentDraft;
+      if (d?.offers?.length) e.chooseDraft(d.offers[0].id);
       e.chooseBlind();
     });
     await page.waitForFunction(() => (window.__fungiflush?.engine?.round?.hand?.length ?? 0) > 0, null, { timeout: 60000 });
@@ -398,14 +449,34 @@ const restOk =
   m1.particles === 0 && m1.tweens === 0 && m1.gsap === 0 &&
   m2.particles === 0 && m2.tweens === 0 && m2.gsap === 0;
 
+/**
+ * Crecimiento de geometrias que NO explica el modelo: el detector de fugas.
+ *
+ * A diferencia de las texturas, una geometria nueva casi nunca es legitima:
+ * las cartas comparten `CARD_GEO`/`CARD_FACE_GEO` (singletons de modulo) y los
+ * pools (anillos, particulas, sombra, fantasma del descarte) se crean una vez.
+ * La UNICA fuente de crecimiento legitimo son las RANURAS de Simbionte: cada
+ * una cuesta 2 geometrias (el plano + el contorno `EdgesGeometry` del hijo) y
+ * el conteo cambia con la bendicion `extra_pot` de R3, con el voucher de +1
+ * ranura y —tras un reinicio de run— con la bendicion que se sortea de nuevo.
+ * Descontarlo deja el residuo, que tiene que ser ~0.
+ */
+const GEO_POR_RANURA = 2;
+const geoResidual = geoGrew - (m2.slots - m1.slots) * GEO_POR_RANURA;
+
 console.log('\ncrecimiento geometrias (mano 3 -> 20):', geoGrew, '(tolerancia 2)');
+console.log(`  ranuras de Simbionte: ${m1.slots} -> ${m2.slots} (x${GEO_POR_RANURA} geometrias por ranura = ${(m2.slots - m1.slots) * GEO_POR_RANURA} de crecimiento legitimo)`);
+console.log('residuo geometrias   (mano 3 -> 20):', geoResidual, '(tiene que ser <=2: lo que crece sin modelo detras es fuga)');
 console.log('crecimiento texturas   (mano 3 -> 20):', texGrew,
   `= ${m2.art - m1.art} archivos de arte x3 + ${m2.top - m1.top} estados de carta + ${m2.mTex - m1.mTex} hojas (legitimo: recompensas y cartas nuevas)`);
 console.log('residuo texturas       (mano 3 -> 20):', resLow, '(tiene que ser ~0: lo que crece sin cache detras es fuga)');
 console.log('crecimiento .hud-popups(mano 3 -> 20):', popGrew, '(tiene que ser 0)');
 if (m2b && m3) {
   const resMed = residual(m2b, m3);
+  const geoResMed = (m3.geo - m2b.geo) - (m3.slots - m2b.slots) * GEO_POR_RANURA;
   console.log('crecimiento geometrias (medium 1 -> 3):', m3.geo - m2b.geo, '(tolerancia 2; el costo fijo del composer ya esta en los dos lados)');
+  console.log('  ranuras de Simbionte:', `${m2b.slots} -> ${m3.slots}`);
+  console.log('residuo geometrias     (medium 1 -> 3):', geoResMed, '(tiene que ser <=2)');
   console.log('residuo texturas       (medium 1 -> 3):', resMed, '(tiene que ser ~0)');
 }
 console.log('reposo verificado (pools/tweens en 0):', restOk);
@@ -414,10 +485,13 @@ console.log('hojas vivas == reservas (texturas huerfanas):',
 
 console.log('\nerrores de consola:', errors.length ? errors.slice(0, 5) : 'ninguno');
 
-const mediumOk = !m2b || !m3 || (m3.geo - m2b.geo <= 2 && residual(m2b, m3) <= 2);
+const mediumOk = !m2b || !m3 || (
+  ((m3.geo - m2b.geo) - (m3.slots - m2b.slots) * GEO_POR_RANURA) <= 2
+  && residual(m2b, m3) <= 2
+);
 const ok =
   restOk &&
-  geoGrew <= 2 &&
+  geoResidual <= 2 &&
   resLow <= 2 &&
   popGrew === 0 &&
   mediumOk &&

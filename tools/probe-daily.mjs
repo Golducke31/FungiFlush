@@ -114,6 +114,28 @@ const resetProfile = async () => {
 };
 
 /**
+ * R3 — Resuelve el borrador de bendicion con la PRIMERA oferta: es
+ * determinista para una semilla dada (el diario usa la de la fecha) y deja la
+ * run en `blind_select`. Sin esto la run se quedaba en 'draft' y `chooseBlind`
+ * no hacia nada.
+ */
+const resolveDraft = async () => {
+  const picked = await page.evaluate(() => {
+    const e = window.__fungiflush.engine;
+    const d = e.currentDraft;
+    if (!d?.offers?.length) return null;
+    e.chooseDraft(d.offers[0].id);
+    return d.offers[0].id;
+  });
+  if (picked === null) return false;
+  await page
+    .waitForFunction(() => window.__fungiflush.engine.run?.status === 'blind_select', null, { timeout: 8000 })
+    .catch(() => {});
+  await page.waitForTimeout(400);
+  return true;
+};
+
+/**
  * Abre Desafios y toca la tarjeta "Diaria". El selector va ESCOPEADO al panel:
  * el chip del menu tambien lleva `data-act="daily"`.
  */
@@ -122,6 +144,7 @@ const startDaily = async () => {
   await page.waitForFunction(() => Boolean(document.querySelector('.panel.is-challenges')), null, { timeout: 10000 });
   await page.evaluate(() => document.querySelector('.panel.is-challenges [data-act="daily"]')?.click());
   await page.waitForTimeout(700);
+  await resolveDraft();
   // Se elige el ciego para que exista la mano (la firma la incluye).
   await page.evaluate(() => window.__fungiflush.engine.chooseBlind());
   await page.waitForTimeout(400);
@@ -197,12 +220,21 @@ check('el segundo intento avisa por que', /already played|ya jugaste/i.test(afte
 // En la MISMA pagina: un segundo contexto con WebGL bajo SwiftShader no
 // inicializa (regla del proyecto: un solo contexto a la vez).
 // `setFixedTime` fija SOLO `Date.now()`; los timers siguen corriendo normales.
-await page.clock.setFixedTime(new Date(2026, 9, 25, 12, 0, 0));
+//
+// La "otra fecha" sale de MANANA y no de una fecha fija: si se hardcodea,
+// el dia que coincide con la fecha real del reloj el check falla sin que
+// haya cambiado nada del juego (paso hoy, 2026-10-25, con la fecha fija
+// siendo esa misma). Tomarla de manana garantiza que sea DISTINTA de la de
+// la primera run cualquier dia que se corra.
+const manana = new Date();
+manana.setDate(manana.getDate() + 1);
+manana.setHours(12, 0, 0, 0);
+await page.clock.setFixedTime(manana);
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'load' });
 await boot();
 const other = await startDaily();
-const expectedOther = dailySeed('2026-10-25');
+const expectedOther = dailySeed(dateKey(manana.getTime()));
 check('con otra fecha la semilla es la de ESA fecha', other.daily && other.seed === expectedOther, `${other.seed} vs ${expectedOther}`);
 check('con otra fecha la mano inicial cambia', other.hand !== first.hand, other.hand === first.hand ? 'IGUAL (mal)' : 'distinta');
 

@@ -81,7 +81,9 @@ function dailySignature(
 } {
   const seed = dailySeed(date);
   const engine = new GameEngine({ seed: engineSeed, bundle: content });
-  engine.startRun(seed, 0, '', true);
+  // R3 — `tutorial: true` apaga el borrador de bendicion: la firma del dia es
+  // semilla + primer ciego + mano inicial, y el borrador la retrasaria un paso.
+  engine.startRun(seed, 0, '', true, true);
   engine.chooseBlind();
   return {
     seed: engine.run.seed,
@@ -117,7 +119,7 @@ test('misma fecha = misma semilla, mismo primer ciego y misma mano inicial', () 
 
 test('la run diaria sobrevive al guardado (aditivo, sin bump de version)', () => {
   const engine = new GameEngine({ seed: dailySeed('2026-10-24'), bundle: content });
-  engine.startRun(dailySeed('2026-10-24'), 0, '', true);
+  engine.startRun(dailySeed('2026-10-24'), 0, '', true, true);
   engine.chooseBlind();
   const save = engine.serialize();
   assert.equal(save.daily, true);
@@ -131,7 +133,7 @@ test('la run diaria sobrevive al guardado (aditivo, sin bump de version)', () =>
 
 test('un guardado anterior al diario restaura como run clasica', () => {
   const engine = new GameEngine({ seed: 5, bundle: content });
-  engine.startRun(5, 0, '');
+  engine.startRun(5, 0, '', false, true);
   engine.chooseBlind();
   const save = engine.serialize();
   delete (save as { daily?: boolean }).daily;

@@ -204,7 +204,12 @@ function measure(arch: ArchetypeDef): ArchResult {
     const seed = ((i + 1) * 2654435761) % 2147483647 || 1;
     const engine = new GameEngine({ seed, bundle });
     engine.setArchetypeLoadout(starter, arch.bias);
-    engine.startRun(seed, 0, arch.id);
+    // R3 — `tutorial: true` suprime el borrador de bendiciones. Lo que se mide
+    // aca es el potencial de APERTURA del arquetipo, y una bendicion sorteada
+    // (ej. +1 carta en mano) cambiaria la forma de cada mano y volveria los
+    // numeros incomparables con los de antes. El flag no toca ninguna regla:
+    // solo apaga el sorteo (ver `rollBlessingDraft`).
+    engine.startRun(seed, 0, arch.id, false, true);
     engine.chooseBlind();
 
     const hand = engine.round?.hand ?? [];
